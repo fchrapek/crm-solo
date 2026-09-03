@@ -1,0 +1,25 @@
+.wrap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+}
+
+.row {
+    display: flex;
+    gap: var(--spacing-2);
+    align-items: stretch;
+}
+
+.input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.removeBtn {
+    flex: 0 0 auto;
+}
+
+.addBtn {
+    align-self: flex-start;
+    margin-top: var(--spacing-1);
+}

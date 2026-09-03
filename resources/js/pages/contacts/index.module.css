@@ -1,0 +1,16 @@
+.actionsCell {
+    position: relative;
+    z-index: 11;
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.deleteButton {
+    background-color: var(--color-destructive);
+    color: var(--color-white);
+}
+
+.deleteButton:hover {
+    background-color: color-mix(in srgb, var(--color-destructive) 80%, var(--color-black));
+}

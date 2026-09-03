@@ -1,0 +1,54 @@
+/* Textarea Component Styles */
+
+.textarea {
+  display: flex;
+  min-height: 5rem;
+  width: 100%;
+  min-width: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-input);
+  background-color: transparent;
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: var(--font-size-base);
+  box-shadow: var(--shadow-xs);
+  transition-property: color, box-shadow;
+  transition-duration: var(--duration-150);
+  transition-timing-function: var(--ease-in-out);
+  outline: none;
+  resize: vertical;
+}
+
+@media (min-width: 768px) {
+  .textarea {
+    font-size: var(--font-size-sm);
+  }
+}
+
+.textarea::placeholder {
+  color: var(--color-muted-foreground);
+}
+
+.textarea::selection {
+  background-color: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+.textarea:focus-visible {
+  border-color: var(--color-ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-ring) 45%, transparent);
+}
+
+.textarea:disabled {
+  pointer-events: none;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.textarea[aria-invalid="true"] {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 20%, transparent);
+  border-color: var(--color-destructive);
+}
+
+:global(.dark) .textarea[aria-invalid="true"] {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 40%, transparent);
+}

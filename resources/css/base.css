@@ -1,0 +1,209 @@
+/*
+ * Base Styles
+ * Global element styling applied after reset
+ */
+
+html {
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-normal);
+    color: var(--color-foreground);
+    background-color: var(--color-background);
+    tab-size: 4;
+}
+
+body {
+    min-height: 100vh;
+    min-height: 100dvh;
+}
+
+/* Default border color */
+*,
+*::before,
+*::after {
+    border-color: var(--color-border);
+}
+
+/* Focus outline styling */
+:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+}
+
+/* Selection styling */
+::selection {
+    background-color: var(--color-brand);
+    color: var(--color-brand-foreground);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--color-muted);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--color-gray-400);
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-gray-500);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: var(--color-gray-600);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-gray-500);
+}
+
+/* Typography defaults */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: var(--font-family-display);
+    font-weight: var(--display-weight);
+    text-transform: var(--display-transform);
+    line-height: var(--line-height-tight);
+}
+
+h1 {
+    font-size: var(--font-size-4xl);
+    letter-spacing: var(--display-tracking);
+}
+
+h2 {
+    font-size: var(--font-size-3xl);
+    letter-spacing: var(--display-tracking);
+}
+
+h3 {
+    font-size: var(--font-size-2xl);
+}
+
+h4 {
+    font-size: var(--font-size-xl);
+}
+
+h5 {
+    font-size: var(--font-size-lg);
+}
+
+h6 {
+    font-size: var(--font-size-base);
+}
+
+p {
+    margin-block: var(--spacing-4);
+}
+
+p:first-child {
+    margin-block-start: 0;
+}
+
+p:last-child {
+    margin-block-end: 0;
+}
+
+/* Code and pre styling */
+code {
+    font-family: var(--font-family-mono);
+    font-size: 0.875em;
+    background-color: var(--color-muted);
+    padding: var(--spacing-0-5) var(--spacing-1);
+    border-radius: var(--radius-sm);
+}
+
+pre {
+    font-family: var(--font-family-mono);
+    overflow-x: auto;
+    padding: var(--spacing-4);
+    background-color: var(--color-muted);
+    border-radius: var(--radius-md);
+}
+
+pre code {
+    background: none;
+    padding: 0;
+}
+
+/* Table defaults */
+table {
+    width: 100%;
+    text-align: left;
+}
+
+th {
+    font-weight: var(--font-weight-medium);
+}
+
+/* Form element defaults */
+input,
+textarea,
+select {
+    color: inherit;
+    background-color: transparent;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--color-muted-foreground);
+}
+
+/* Disabled state */
+:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+/* Screen reader only utility */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* Success icon starburst shape - 12 pointed sun */
+.success-burst {
+    clip-path: polygon(
+        50% 0%,
+        62% 12%,
+        75% 7%,
+        80% 22%,
+        93% 25%,
+        88% 40%,
+        100% 50%,
+        88% 60%,
+        93% 75%,
+        80% 78%,
+        75% 93%,
+        62% 88%,
+        50% 100%,
+        38% 88%,
+        25% 93%,
+        20% 78%,
+        7% 75%,
+        12% 60%,
+        0% 50%,
+        12% 40%,
+        7% 25%,
+        20% 22%,
+        25% 7%,
+        38% 12%
+    );
+}

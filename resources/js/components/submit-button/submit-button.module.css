@@ -1,0 +1,70 @@
+/* Submit Button Styles */
+
+.content {
+    display: inline-grid;
+    align-items: center;
+    grid-template-columns: 0px auto;
+    gap: 0;
+}
+
+.withTransition {
+    transition-property: grid-template-columns, gap, opacity;
+    transition-duration: var(--duration-150);
+    transition-timing-function: var(--ease-out);
+}
+
+.expanded {
+    grid-template-columns: 1rem auto;
+    gap: var(--spacing-2);
+}
+
+.iconWrapper {
+    overflow: hidden;
+    opacity: 0;
+}
+
+.iconVisible {
+    opacity: 1;
+}
+
+.successIcon {
+    display: flex;
+    width: 1rem;
+    height: 1rem;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-success);
+    animation: zoomIn 200ms ease-out;
+}
+
+.checkIcon {
+    width: 0.625rem;
+    height: 0.625rem;
+    stroke-width: 3;
+    color: var(--color-white);
+}
+
+.spinner {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes zoomIn {
+    from {
+        transform: scale(0);
+    }
+    to {
+        transform: scale(1);
+    }
+}

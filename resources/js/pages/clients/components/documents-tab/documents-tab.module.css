@@ -1,0 +1,124 @@
+.wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 720px;
+}
+
+.uploadRow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.categorySelect {
+    width: 170px;
+}
+
+.filterRow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.filterLabel {
+    color: var(--color-muted-foreground);
+    font-size: 0.8rem;
+}
+
+.hiddenFile {
+    display: none;
+}
+
+.hint {
+    color: var(--color-muted-foreground);
+    font-size: 0.8rem;
+}
+
+.empty {
+    color: var(--color-muted-foreground);
+    font-size: 0.9rem;
+    padding: 1rem 0;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    background: var(--color-card);
+}
+
+.fileIcon {
+    color: var(--color-muted-foreground);
+    flex-shrink: 0;
+}
+
+.meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.name {
+    font-weight: 500;
+    color: var(--color-foreground);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.name:hover {
+    text-decoration: underline;
+}
+
+.sub {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--color-muted-foreground);
+    font-size: 0.78rem;
+}
+
+.badge {
+    background: var(--color-muted);
+    color: var(--color-foreground);
+    border-radius: 0.35rem;
+    padding: 0.05rem 0.4rem;
+    font-size: 0.72rem;
+    font-weight: 500;
+}
+
+.iconBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 0.4rem;
+    color: var(--color-muted-foreground);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.iconBtn:hover {
+    background: var(--color-muted);
+    color: var(--color-foreground);
+}

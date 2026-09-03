@@ -1,0 +1,204 @@
+.wrap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3);
+}
+
+.addEntryButton {
+    align-self: flex-start;
+    padding: 6px 12px;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-muted-foreground);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition:
+        background 0.1s,
+        color 0.1s,
+        border-color 0.1s;
+}
+
+.addEntryButton:hover {
+    background: var(--color-muted);
+    color: var(--color-foreground);
+    border-color: var(--color-muted-foreground);
+}
+
+.noteBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--tone-grey-bg);
+    color: var(--tone-grey-fg);
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3);
+}
+
+.item {
+    display: grid;
+    grid-template-columns: 8px 1fr;
+    gap: var(--spacing-2);
+    padding: var(--spacing-1) 0;
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 6px;
+    background: var(--tone-grey-solid);
+    flex-shrink: 0;
+}
+
+.dot[data-tone='blue'] {
+    background: var(--color-info);
+}
+
+.dot[data-tone='green'] {
+    background: var(--color-success);
+}
+
+.dot[data-tone='amber'] {
+    background: var(--tone-amber-solid);
+}
+
+.dot[data-tone='grey'] {
+    background: var(--tone-grey-solid);
+}
+
+.dot[data-tone='neutral'] {
+    background: var(--tone-grey-solid);
+}
+
+.timestamp {
+    font-size: 0.75rem;
+    color: var(--color-muted-foreground);
+    white-space: nowrap;
+}
+
+.body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-1);
+    min-width: 0;
+}
+
+.transition {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-1);
+    flex-wrap: wrap;
+    font-size: 0.875rem;
+    color: var(--color-foreground);
+}
+
+.stagePill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--tone-grey-bg);
+    color: var(--tone-grey-fg);
+}
+
+.stagePill[data-tone='blue'] {
+    background: var(--tone-blue-bg);
+    color: var(--tone-blue-fg);
+}
+
+.stagePill[data-tone='green'] {
+    background: var(--tone-green-bg);
+    color: var(--tone-green-fg);
+}
+
+.stagePill[data-tone='amber'] {
+    background: var(--tone-amber-bg);
+    color: var(--tone-amber-fg);
+}
+
+.stagePill[data-tone='grey'] {
+    background: var(--tone-grey-bg);
+    color: var(--tone-grey-fg);
+}
+
+.arrow {
+    color: var(--color-muted-foreground);
+}
+
+.actor {
+    font-size: 0.75rem;
+    color: var(--color-muted-foreground);
+}
+
+/* Clamped preview; the full note opens in the dialog. */
+.notePreview {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    text-align: left;
+    font-size: 0.8125rem;
+    color: var(--color-foreground);
+    word-break: break-word;
+    padding: var(--spacing-1-5) var(--spacing-2);
+    background: var(--color-muted);
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+}
+
+.notePreview:hover {
+    background: color-mix(in srgb, var(--color-muted) 70%, var(--color-border));
+}
+
+.noteIconButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-muted-foreground);
+    cursor: pointer;
+    opacity: 0.55;
+    transition:
+        opacity 0.15s,
+        color 0.15s;
+}
+
+.noteIconButton:hover {
+    opacity: 1;
+    color: var(--color-foreground);
+}
+
+.noteDialog {
+    max-width: 32rem;
+}
+
+.dialogActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-2);
+    margin-top: var(--spacing-2);
+}
+
+.empty {
+    font-size: 0.875rem;
+    color: var(--color-muted-foreground);
+    padding: var(--spacing-3);
+}

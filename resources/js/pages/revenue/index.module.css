@@ -1,0 +1,133 @@
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.control {
+    width: 180px;
+}
+
+.fxNote {
+    font-size: var(--font-size-xs);
+    color: var(--color-muted-foreground);
+    margin-left: auto;
+}
+
+/* Segmented net/gross + invoiced/paid toggles */
+.toggleGroup {
+    display: inline-flex;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.toggleGroup button {
+    padding: 0.4rem 0.85rem;
+    font-size: var(--font-size-sm);
+    background: var(--color-card);
+    color: var(--color-muted-foreground);
+    border: none;
+    cursor: pointer;
+}
+
+.toggleGroup button + button {
+    border-left: 1px solid var(--color-border);
+}
+
+.toggleGroup button[data-active='true'] {
+    background: var(--color-foreground);
+    color: var(--color-background);
+    font-weight: var(--font-weight-semibold);
+}
+
+.kpiGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.kpiCard {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-card);
+    padding: 1rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.kpiLabel {
+    font-size: var(--font-size-xs);
+    color: var(--color-muted-foreground);
+    margin: 0 0 0.4rem;
+}
+
+.kpiValue {
+    font-size: 1.4rem;
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-none);
+    margin: 0;
+}
+
+.kpiTrend {
+    margin-top: 0.5rem;
+}
+
+.chartGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.chartCard {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-card);
+    padding: 1rem;
+    box-shadow: var(--shadow-sm);
+    min-width: 0;
+}
+
+.chartTitle {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    margin: 0 0 0.75rem;
+}
+
+.numCol {
+    text-align: right;
+}
+
+.clickableRow {
+    cursor: pointer;
+}
+
+.clickableRow:hover {
+    background: var(--color-muted);
+}
+
+.trendUp,
+.trendDown,
+.trendNeutral {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+}
+
+/* Monochrome: direction is conveyed by the arrow icon, not colour. */
+.trendUp {
+    color: var(--color-foreground);
+}
+
+.trendDown {
+    color: var(--color-muted-foreground);
+}
+
+.trendNeutral {
+    color: var(--color-muted-foreground);
+}

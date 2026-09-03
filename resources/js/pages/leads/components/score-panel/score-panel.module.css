@@ -1,0 +1,124 @@
+.panel {
+    border-top: 1px solid var(--color-border);
+    padding-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.scoreLine {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.total {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.pending {
+    font-size: 0.75rem;
+    color: var(--color-muted-foreground);
+    font-style: italic;
+}
+
+.routing {
+    font-size: 0.75rem;
+    color: var(--color-muted-foreground);
+}
+
+.categories {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.category {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 0.75rem;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.legend {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-muted-foreground);
+    padding: 0 0.25rem;
+}
+
+.factor {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.factorLabel {
+    flex: 1;
+    min-width: 0;
+}
+
+.points {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.75rem;
+    color: var(--color-muted-foreground);
+}
+
+/* The plan's one negative factor reads as a penalty, not a smaller bonus. */
+.pointsNegative {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-destructive);
+}
+
+.hint {
+    font-size: 0.75rem;
+    color: var(--color-muted-foreground);
+    margin: 0;
+}
+
+.headerToggle {
+    border: none;
+    background: none;
+    padding: 0;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-2);
+}
+
+.chevron {
+    color: var(--color-muted-foreground);
+    transition: transform var(--duration-150) var(--ease-in-out);
+}
+
+.chevronOpen {
+    transform: rotate(180deg);
+}

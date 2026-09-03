@@ -1,0 +1,120 @@
+.group {
+    margin-top: auto;
+}
+
+:global([data-collapsible='icon']) .group {
+    padding: 0;
+}
+
+.menuButton {
+    color: var(--color-gray-500);
+}
+
+.menuButton:hover {
+    color: var(--color-gray-800);
+}
+
+:global(.dark) .menuButton {
+    color: var(--color-gray-400);
+}
+
+:global(.dark) .menuButton:hover {
+    color: var(--color-gray-100);
+}
+
+.icon {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.smallIcon {
+    margin-left: auto;
+    width: 1rem;
+    height: 1rem;
+}
+
+.flag {
+    margin-right: var(--spacing-2);
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: var(--radius-sm);
+}
+
+.dropdownIcon {
+    margin-right: var(--spacing-2);
+    width: 1rem;
+    height: 1rem;
+}
+
+.themeToggle {
+    display: inline-flex;
+    width: 100%;
+    gap: var(--spacing-1);
+    border-radius: var(--radius-md);
+    background-color: var(--color-sidebar-accent);
+    padding: var(--spacing-1);
+}
+
+:global(.dark) .themeToggle {
+    background-color: var(--color-gray-800);
+}
+
+.themeButton {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    padding: var(--spacing-1) var(--spacing-3);
+    color: var(--color-gray-500);
+    transition:
+        background-color var(--duration-150),
+        color var(--duration-150);
+}
+
+.themeButton:hover {
+    background-color: color-mix(in srgb, var(--color-card) 60%, transparent);
+    color: var(--color-black);
+}
+
+:global(.dark) .themeButton {
+    color: var(--color-gray-400);
+}
+
+:global(.dark) .themeButton:hover {
+    background-color: color-mix(in srgb, var(--color-gray-700) 60%, transparent);
+}
+
+.themeButtonActive {
+    background-color: var(--color-card);
+    box-shadow: var(--shadow-xs);
+}
+
+:global(.dark) .themeButtonActive {
+    background-color: var(--color-gray-700);
+    color: var(--color-gray-100);
+}
+
+.themeButtonIcon {
+    width: 1rem;
+    height: 1rem;
+}
+
+.dropdownContentLang {
+    width: var(--radix-dropdown-menu-trigger-width);
+    min-width: 14rem;
+}
+
+.dropdownContentTheme {
+    min-width: 8rem;
+}
+
+/* Accent swatch in the picker: a filled dot so the ten options are
+   distinguishable without reading the labels. */
+.accentDot {
+    width: 0.75rem;
+    height: 0.75rem;
+    flex-shrink: 0;
+    border-radius: var(--radius-full);
+    border: 1px solid color-mix(in srgb, var(--color-foreground) 20%, transparent);
+}

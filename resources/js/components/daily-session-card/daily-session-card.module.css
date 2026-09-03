@@ -1,0 +1,222 @@
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3);
+    padding: var(--spacing-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-card);
+    margin-bottom: var(--spacing-5);
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-3);
+    flex-wrap: wrap;
+}
+
+.title {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+}
+
+.summary {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-normal);
+    color: var(--color-muted-foreground);
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+.agents {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-1-5);
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.agentRow {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    font-size: var(--font-size-sm);
+    min-width: 0;
+}
+
+.dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: var(--radius-full);
+    flex-shrink: 0;
+}
+
+.dotWorking {
+    background-color: var(--color-brand);
+    animation: dailyPulse 1.6s ease-in-out infinite;
+}
+
+.dotBlocked {
+    background-color: var(--color-warning);
+}
+
+.dotIdle {
+    background-color: var(--color-gray-400);
+}
+
+@keyframes dailyPulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.35;
+    }
+}
+
+.agentTitle {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.agentClient {
+    color: var(--color-brand);
+    text-decoration: none;
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+}
+
+.agentClient:hover {
+    text-decoration: underline;
+}
+
+.agentDir {
+    color: var(--color-muted-foreground);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-mono);
+    white-space: nowrap;
+}
+
+/* Fill the visible screen: viewport height minus what sits above the
+   terminal (top bar, card header, timers strip, paddings). dvh tracks the
+   real visible area on mobile; the vh line is the fallback. */
+.iframe {
+    width: 100%;
+    height: calc(100vh - 16rem);
+    height: calc(100dvh - 16rem);
+    min-height: 32rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-gray-950);
+}
+
+/* Terminal active: viewport wide on the left, the session list in a narrow
+   rail - the rows never needed the full card width. */
+.split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 20rem;
+    gap: var(--spacing-4);
+    align-items: start;
+}
+
+@media (max-width: 1100px) {
+    .split {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.rail {
+    min-width: 0;
+}
+
+/* Rail rows go two-line: dot + wrapping title, client/dir indented under. */
+.rail .agentRow {
+    flex-wrap: wrap;
+    row-gap: 2px;
+    padding: var(--spacing-1-5) 0;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.rail .agentRow:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.rail .agentRow:first-child {
+    padding-top: 0;
+}
+
+/* Basis 0, not auto: a long title's natural width would refuse to share the
+   first line with the dot and wrap as a whole item, orphaning the dot. */
+.rail .agentTitle {
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: normal;
+}
+
+.rail .agentClient,
+.rail .agentDir {
+    flex-basis: 100%;
+    padding-left: calc(0.5rem + var(--spacing-2));
+}
+
+.timers {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-1);
+    padding: var(--spacing-2) var(--spacing-3);
+    border: 1px solid color-mix(in srgb, var(--color-brand) 35%, transparent);
+    border-radius: var(--radius-md);
+    background-color: var(--tone-blue-bg);
+}
+
+.timersHeading {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-1-5);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    color: var(--tone-blue-fg);
+}
+
+.timerRow {
+    display: flex;
+    gap: var(--spacing-2);
+    font-size: var(--font-size-sm);
+    align-items: baseline;
+}
+
+.timerClient {
+    color: var(--color-brand);
+    text-decoration: none;
+}
+
+.timerClient:hover {
+    text-decoration: underline;
+}
+
+.timerMeta {
+    color: var(--color-muted-foreground);
+    font-size: var(--font-size-xs);
+}
+
+.freshDay {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-1);
+    font-size: var(--font-size-xs);
+    color: var(--color-success);
+}

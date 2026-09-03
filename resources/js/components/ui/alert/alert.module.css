@@ -1,0 +1,68 @@
+/* Alert Component Styles */
+
+.alert {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  padding: var(--spacing-3) var(--spacing-4);
+  font-size: var(--font-size-sm);
+  display: grid;
+  grid-template-columns: 0 1fr;
+  gap: var(--spacing-0-5) 0;
+  align-items: start;
+}
+
+.alert:has(> svg) {
+  grid-template-columns: 1rem 1fr;
+  column-gap: var(--spacing-3);
+}
+
+.alert svg {
+  width: 1rem;
+  height: 1rem;
+  transform: translateY(0.125rem);
+  color: currentColor;
+}
+
+/* Variants */
+.default {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+.destructive {
+  color: var(--color-destructive-foreground);
+}
+
+.destructive svg {
+  color: currentColor;
+}
+
+.title {
+  grid-column-start: 2;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 1rem;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-spacing-tight);
+}
+
+.description {
+  color: var(--color-muted-foreground);
+  grid-column-start: 2;
+  display: grid;
+  justify-items: start;
+  gap: var(--spacing-1);
+  font-size: var(--font-size-sm);
+}
+
+.description p {
+  line-height: var(--line-height-relaxed);
+}
+
+.destructive .description {
+  color: color-mix(in srgb, var(--color-destructive) 80%, transparent);
+}

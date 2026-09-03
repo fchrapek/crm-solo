@@ -1,0 +1,64 @@
+.container {
+    width: 16rem;
+}
+
+.inputWrapper {
+    position: relative;
+    display: flex;
+    width: 100%;
+    align-items: center;
+}
+
+.inputContainer {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    overflow: hidden;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background-color: var(--color-background);
+}
+
+.filterButton {
+    flex-shrink: 0;
+    border-radius: 0;
+    border-right: 1px solid var(--color-border);
+}
+
+.input {
+    min-width: 0;
+    flex: 1;
+    border-radius: 0;
+    border: 0;
+    padding-left: var(--spacing-3);
+    padding-right: var(--spacing-3);
+}
+
+.input:focus-visible {
+    box-shadow: none;
+}
+
+.clearButton {
+    flex-shrink: 0;
+    border-radius: 0;
+}
+
+.icon {
+    width: 1rem;
+    height: 1rem;
+}
+
+.popoverContent {
+    width: 18rem;
+    padding: var(--spacing-4);
+}
+
+.grid {
+    display: grid;
+    gap: var(--spacing-4);
+}
+
+.fieldGrid {
+    display: grid;
+    gap: var(--spacing-2);
+}

@@ -1,0 +1,131 @@
+# ===========================================
+# Stage 1: Build frontend assets (needs PHP for wayfinder)
+# ===========================================
+FROM php:8.4-cli AS frontend
+
+# Install Node.js and Bun
+RUN apt-get update && apt-get install -y curl unzip \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && curl -fsSL https://bun.sh/install | bash \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/root/.bun/bin:${PATH}"
+
+WORKDIR /app
+
+# Copy composer files and install PHP deps (needed for wayfinder)
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-scripts --ignore-platform-reqs
+
+# Copy package files and install JS deps
+COPY package.json bun.lock* ./
+RUN bun install
+
+# Copy source files
+COPY . .
+
+# Build frontend assets
+RUN bun run build
+RUN bun run build:ssr
+
+# ===========================================
+# Stage 2: Install PHP dependencies
+# ===========================================
+FROM composer:2 AS composer
+
+WORKDIR /app
+
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --ignore-platform-reqs
+
+COPY . .
+RUN composer dump-autoload --optimize --classmap-authoritative
+
+# ===========================================
+# Stage 3: Production image with FrankenPHP
+# ===========================================
+FROM dunglas/frankenphp:1-php8.4-alpine AS app
+
+# Install PHP extensions
+RUN install-php-extensions \
+    pcntl \
+    pdo_mysql \
+    redis \
+    zip \
+    gd \
+    bcmath \
+    opcache
+
+WORKDIR /var/www/html
+
+# Copy application
+COPY --from=composer /app /var/www/html
+COPY --from=frontend /app/public/build /var/www/html/public/build
+
+# Create storage directories
+RUN mkdir -p storage/app/private storage/app/public storage/framework/cache \
+    storage/framework/sessions storage/framework/views storage/logs \
+    bootstrap/cache
+
+# Set permissions (www-data user, uid 33)
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 775 storage bootstrap/cache
+
+# Install curl for healthchecks
+RUN apk add --no-cache curl
+
+# Healthcheck scripts
+COPY --chmod=755 <<'EOF' /usr/local/bin/healthcheck-octane
+#!/bin/sh
+curl -sf http://localhost:8000${HEALTHCHECK_PATH:-/up} || exit 1
+EOF
+
+COPY --chmod=755 <<'EOF' /usr/local/bin/healthcheck-horizon
+#!/bin/sh
+php /var/www/html/artisan horizon:status | grep -q "running" || exit 1
+EOF
+
+COPY --chmod=755 <<'EOF' /usr/local/bin/healthcheck-schedule
+#!/bin/sh
+pgrep -f "schedule:work" > /dev/null || exit 1
+EOF
+
+COPY --chmod=755 <<'EOF' /usr/local/bin/healthcheck-reverb
+#!/bin/sh
+pgrep -f "reverb:start" > /dev/null || exit 1
+EOF
+
+# PHP production config
+RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+
+# OPcache config for production
+RUN echo "opcache.enable=1" >> /usr/local/etc/php/conf.d/opcache.ini && \
+    echo "opcache.memory_consumption=128" >> /usr/local/etc/php/conf.d/opcache.ini && \
+    echo "opcache.interned_strings_buffer=16" >> /usr/local/etc/php/conf.d/opcache.ini && \
+    echo "opcache.max_accelerated_files=20000" >> /usr/local/etc/php/conf.d/opcache.ini && \
+    echo "opcache.validate_timestamps=0" >> /usr/local/etc/php/conf.d/opcache.ini && \
+    echo "opcache.save_comments=1" >> /usr/local/etc/php/conf.d/opcache.ini
+
+USER www-data
+
+EXPOSE 8000
+
+CMD ["php", "artisan", "octane:start", "--server=frankenphp", "--host=0.0.0.0", "--port=8000"]
+
+# ===========================================
+# Stage 4: SSR server
+# ===========================================
+FROM oven/bun:1-alpine AS ssr
+
+WORKDIR /app
+
+COPY package.json bun.lock* ./
+RUN bun install --no-save
+
+COPY --from=frontend /app/bootstrap/ssr /app/bootstrap/ssr
+
+EXPOSE 13714
+
+CMD ["bun", "run", "bootstrap/ssr/ssr.js"]

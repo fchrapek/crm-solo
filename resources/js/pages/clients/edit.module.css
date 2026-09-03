@@ -1,0 +1,142 @@
+/* Layout system for the client detail view (and any future record view):
+   - every tab's content sits in .tabColumn, one shared width cap, so
+     switching tabs never makes the content jump width;
+   - every logical block inside the column is a <SectionCard> (white card,
+     uppercase small heading — the Kontakty / Dokumenty anatomy);
+   - kanban boards are the only full-bleed surfaces: they own horizontal
+     scrolling and render outside the column (.boardSection);
+   - .recordColumns (main + narrow rail) is reserved for tabs with a natural
+     narrow companion — today only Dane (contacts + documents). */
+.tabColumn {
+    max-width: 80rem;
+}
+
+.boardSection {
+    margin-bottom: var(--spacing-5);
+}
+
+.boardHeading {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-muted-foreground);
+    margin: 0 0 var(--spacing-3) 0;
+}
+
+/* Name on its own line, status pills on a row below — the record-view
+   header anatomy shared with the lead page. */
+.clientHeader {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-2);
+    padding: var(--spacing-3) 0 var(--spacing-2);
+}
+
+.clientHeading {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.clientChips {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+}
+
+/* The Ustawienia trigger, shaped like its pill neighbours. It flips the tab
+   via the URL hash, which the Tabs component listens for. */
+.settingsButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-background);
+    color: var(--color-foreground);
+    cursor: pointer;
+    transition:
+        border-color 0.15s,
+        background 0.15s;
+}
+
+.settingsButton:hover {
+    border-color: var(--color-foreground);
+}
+
+/* Projects as compact rows inside the Projects card. The per-project board
+   lives on its own page, so this tab stays a summary. */
+.projectRows {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+}
+
+.projectsEmpty {
+    color: var(--color-muted-foreground);
+    text-align: center;
+    padding: var(--spacing-8);
+    margin: 0;
+}
+
+.iconLeading {
+    margin-right: 4px;
+}
+
+/* Inline-table cell helpers (used to replace per-cell inline styles) */
+.cellNowrap {
+    white-space: nowrap;
+}
+
+.clickableRow {
+    cursor: pointer;
+}
+
+.clickableRow:hover {
+    background: var(--color-muted);
+}
+
+.timeDescCell {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    min-width: 0;
+}
+
+.taskChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    background: var(--tone-blue-bg);
+    color: var(--tone-blue-fg);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.taskChip:hover {
+    background: var(--tone-blue-bg);
+    text-decoration: underline;
+}
+
+/* Time-entries pager (the shared InertiaPagination in partial-visit mode). */
+.pager {
+    margin-top: var(--spacing-3);
+}
+
+/* Label paired with its info affordance — the rationale lives one click away
+   instead of as a paragraph under every input. */
+.labelRow {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-1-5);
+}

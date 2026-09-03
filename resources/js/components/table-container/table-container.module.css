@@ -1,0 +1,13 @@
+.scrollArea {
+    overflow: contain;
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1fr;
+}
+
+.table {
+    width: 100%;
+    caption-side: bottom;
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-snug);
+}

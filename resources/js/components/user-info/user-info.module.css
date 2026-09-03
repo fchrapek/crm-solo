@@ -1,0 +1,41 @@
+.avatar {
+    width: var(--spacing-8);
+    height: var(--spacing-8);
+    overflow: hidden;
+    border-radius: 9999px;
+}
+
+.fallback {
+    border-radius: var(--radius-lg);
+    background-color: color-mix(in srgb, var(--color-border) 60%, var(--color-muted));
+    color: var(--color-black);
+}
+
+:global(.dark) .fallback {
+    background-color: var(--color-gray-700);
+    color: var(--color-white);
+}
+
+.textContainer {
+    display: grid;
+    flex: 1;
+    text-align: left;
+    font-size: var(--font-size-sm);
+    line-height: 1.25;
+}
+
+.name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-snug);
+    color: var(--color-muted-foreground);
+}

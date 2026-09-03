@@ -1,0 +1,305 @@
+import { Head, useForm, usePage } from '@inertiajs/react';
+import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { destroy, restore, update } from '@/actions/App/Http/Controllers/ContactsController';
+import { EmailListInput } from '@/components/email-list-input';
+import { Form, FormInput, FormLabel, FormMessage } from '@/components/form';
+import { SubmitButton } from '@/components/submit-button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { usePageActions } from '@/contexts/page-context';
+import { useDeletionControls } from '@/hooks/use-deletion-controls';
+import { useFormProcessing } from '@/hooks/use-form-processing';
+import contacts from '@/routes/contacts';
+import { BreadcrumbItem, Client, Contact, ContactFormData, SharedData } from '@/types';
+
+interface EditPageProps extends SharedData {
+    contact: Contact;
+    clients: Client[];
+}
+
+export default function Edit() {
+    const { t } = useTranslation();
+    const { setBreadcrumbs } = usePageActions();
+
+    const { contact, clients } = usePage<EditPageProps>().props;
+
+    const breadcrumbs: BreadcrumbItem[] = React.useMemo(
+        () => [
+            {
+                title: 'Contact',
+                count: 2,
+                href: contacts.index().url,
+            },
+            {
+                title: `${contact.first_name} ${contact.last_name}`,
+                href: contacts.edit(contact.id).url,
+            },
+        ],
+        [contact.first_name, contact.last_name, contact.id],
+    );
+
+    useEffect(() => {
+        setBreadcrumbs(breadcrumbs);
+    }, [breadcrumbs, setBreadcrumbs]);
+
+    const form = useForm<Required<ContactFormData>>({
+        first_name: contact.first_name || '',
+        last_name: contact.last_name || '',
+        client_id: contact.client_id ? contact.client_id.toString() : '',
+        emails: contact.emails ?? [],
+        phone: contact.phone || '',
+        address: contact.address || '',
+        city: contact.city || '',
+        region: contact.region || '',
+        country: contact.country || '',
+        postal_code: contact.postal_code || '',
+        position: contact.position || '',
+        phone_secondary: contact.phone_secondary || '',
+        notes: contact.notes || '',
+    });
+
+    const isProcessing = useFormProcessing(form.processing);
+
+    function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        form.submit(update(contact), {
+            preserveScroll: true,
+        });
+    }
+
+    const { showDeleteControls } = useDeletionControls({
+        isDeleted: !!contact.deleted_at,
+        resourceType: 'contact',
+        deleteAction: destroy(contact),
+        restoreAction: restore(contact),
+    });
+
+    return (
+        <>
+            <Head title={`${form.data.first_name} ${form.data.last_name}`} />
+
+            {contact.deleted_at && showDeleteControls()}
+
+            <div className="formContainer">
+                <h2 className="sectionTitle">{t('Edit Contact')}</h2>
+
+                <Form onSubmit={onSubmit}>
+                    <div className="formSection">
+                        <div className="formGrid">
+                            <div>
+                                <FormLabel htmlFor="first_name" error={form.errors.first_name}>
+                                    {t('First name')}
+                                </FormLabel>
+
+                                <FormInput
+                                    id="first_name"
+                                    type="text"
+                                    value={form.data.first_name}
+                                    onChange={(e) => form.setData('first_name', e.target.value)}
+                                    required
+                                    autoFocus
+                                    tabIndex={1}
+                                    maxLength={25}
+                                    disabled={isProcessing}
+                                    error={form.errors.first_name}
+                                />
+
+                                <FormMessage error={form.errors.first_name} />
+                            </div>
+
+                            <div>
+                                <FormLabel htmlFor="last_name" error={form.errors.last_name}>
+                                    {t('Last name')}
+                                </FormLabel>
+
+                                <FormInput
+                                    id="last_name"
+                                    type="text"
+                                    value={form.data.last_name}
+                                    onChange={(e) => form.setData('last_name', e.target.value)}
+                                    required
+                                    tabIndex={2}
+                                    maxLength={25}
+                                    disabled={isProcessing}
+                                    error={form.errors.last_name}
+                                />
+
+                                <FormMessage error={form.errors.last_name} />
+                            </div>
+                        </div>
+
+                        <div className="formGrid">
+                            <div>
+                                <FormLabel htmlFor="client_id" error={form.errors.client_id}>
+                                    {t('Client', { count: 1 })}
+                                </FormLabel>
+
+                                <Select
+                                    value={form.data.client_id || '0'}
+                                    onValueChange={(value) => form.setData('client_id', value === '0' ? '' : value)}
+                                    disabled={isProcessing}
+                                >
+                                    <SelectTrigger id="client_id" className={form.errors.client_id ? 'selectError' : ''}>
+                                        <SelectValue placeholder={t('None')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="0">{t('None')}</SelectItem>
+                                        {clients.map(({ id, name }) => (
+                                            <SelectItem key={id} value={id.toString()}>
+                                                {name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+
+                                <FormMessage error={form.errors.client_id} />
+                            </div>
+
+                            <div>
+                                <FormLabel htmlFor="email-0">{t('Emails')}</FormLabel>
+
+                                <EmailListInput
+                                    value={form.data.emails}
+                                    onChange={(next) => form.setData('emails', next)}
+                                    errors={form.errors as Record<string, string>}
+                                    disabled={isProcessing}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="formGrid">
+                            <div>
+                                <FormLabel htmlFor="phone" error={form.errors.phone}>
+                                    {t('Phone')}
+                                </FormLabel>
+
+                                <FormInput
+                                    id="phone"
+                                    type="tel"
+                                    value={form.data.phone}
+                                    onChange={(e) => form.setData('phone', e.target.value)}
+                                    tabIndex={5}
+                                    maxLength={50}
+                                    disabled={isProcessing}
+                                    error={form.errors.phone}
+                                />
+
+                                <FormMessage error={form.errors.phone} />
+                            </div>
+
+                            <div>
+                                <FormLabel htmlFor="address" error={form.errors.address}>
+                                    {t('Address')}
+                                </FormLabel>
+
+                                <FormInput
+                                    id="address"
+                                    type="text"
+                                    value={form.data.address}
+                                    onChange={(e) => form.setData('address', e.target.value)}
+                                    tabIndex={6}
+                                    maxLength={150}
+                                    disabled={isProcessing}
+                                    error={form.errors.address}
+                                />
+
+                                <FormMessage error={form.errors.address} />
+                            </div>
+                        </div>
+
+                        <div className="formGrid">
+                            <div>
+                                <FormLabel htmlFor="city" error={form.errors.city}>
+                                    {t('City')}
+                                </FormLabel>
+
+                                <FormInput
+                                    id="city"
+                                    type="text"
+                                    value={form.data.city}
+                                    onChange={(e) => form.setData('city', e.target.value)}
+                                    tabIndex={7}
+                                    maxLength={50}
+                                    disabled={isProcessing}
+                                    error={form.errors.city}
+                                />
+
+                                <FormMessage error={form.errors.city} />
+                            </div>
+
+                            <div>
+                                <FormLabel htmlFor="region" error={form.errors.region}>
+                                    {t('Province/State')}
+                                </FormLabel>
+
+                                <FormInput
+                                    id="region"
+                                    type="text"
+                                    value={form.data.region}
+                                    onChange={(e) => form.setData('region', e.target.value)}
+                                    tabIndex={8}
+                                    maxLength={50}
+                                    disabled={isProcessing}
+                                    error={form.errors.region}
+                                />
+
+                                <FormMessage error={form.errors.region} />
+                            </div>
+                        </div>
+
+                        <div className="formGrid">
+                            <div>
+                                <FormLabel htmlFor="country" error={form.errors.country}>
+                                    {t('Country')}
+                                </FormLabel>
+
+                                <Select
+                                    value={form.data.country || '0'}
+                                    onValueChange={(value) => form.setData('country', value === '0' ? '' : value)}
+                                    disabled={isProcessing}
+                                >
+                                    <SelectTrigger id="country" className={form.errors.country ? 'selectError' : ''}>
+                                        <SelectValue placeholder={t('None')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="0">{t('None')}</SelectItem>
+                                        <SelectItem value="CA">{t('Canada')}</SelectItem>
+                                        <SelectItem value="US">{t('United States')}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+
+                                <FormMessage error={form.errors.country} />
+                            </div>
+
+                            <div>
+                                <FormLabel htmlFor="postal_code" error={form.errors.postal_code}>
+                                    {t('Postal Code')}
+                                </FormLabel>
+
+                                <FormInput
+                                    id="postal_code"
+                                    type="text"
+                                    value={form.data.postal_code}
+                                    onChange={(e) => form.setData('postal_code', e.target.value)}
+                                    tabIndex={10}
+                                    maxLength={25}
+                                    disabled={isProcessing}
+                                    error={form.errors.postal_code}
+                                />
+
+                                <FormMessage error={form.errors.postal_code} />
+                            </div>
+                        </div>
+
+                        <div className="formActionsWithDelete">
+                            {!contact.deleted_at && showDeleteControls()}
+
+                            <SubmitButton processing={isProcessing}>{t('Update Contact')}</SubmitButton>
+                        </div>
+                    </div>
+                </Form>
+            </div>
+        </>
+    );
+}

@@ -1,0 +1,56 @@
+.deletedAlert {
+    margin-bottom: var(--spacing-6);
+    max-width: 48rem;
+    display: flex;
+    align-items: center;
+    border-color: var(--color-warning);
+    background-color: var(--color-warning-soft);
+    color: color-mix(in srgb, var(--color-warning) 85%, var(--color-black));
+}
+
+:global(.dark) .deletedAlert {
+    border-color: color-mix(in srgb, var(--color-warning) 30%, transparent);
+    background-color: var(--color-warning-soft);
+    color: var(--color-warning);
+}
+
+.alertIcon {
+    color: color-mix(in srgb, var(--color-warning) 85%, var(--color-black));
+}
+
+:global(.dark) .alertIcon {
+    color: var(--color-warning);
+}
+
+.alertDescription {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    color: color-mix(in srgb, var(--color-warning) 85%, var(--color-black));
+}
+
+:global(.dark) .alertDescription {
+    color: color-mix(in srgb, var(--color-warning) 90%, transparent);
+}
+
+.restoreButton {
+    margin-right: calc(-1 * var(--spacing-2));
+    color: color-mix(in srgb, var(--color-warning) 85%, var(--color-black));
+}
+
+.restoreButton:hover {
+    background-color: color-mix(in srgb, var(--color-warning) 50%, transparent);
+}
+
+:global(.dark) .restoreButton {
+    color: var(--color-warning);
+}
+
+:global(.dark) .restoreButton:hover {
+    background-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
+}
+
+.footerGap {
+    gap: var(--spacing-2);
+}

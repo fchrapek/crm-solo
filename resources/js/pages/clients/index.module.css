@@ -1,0 +1,91 @@
+.nameCell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-1);
+}
+
+.pinButton {
+    position: relative;
+    z-index: 11;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-muted-foreground);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.15s;
+}
+
+.pinButton:hover {
+    color: var(--color-foreground);
+}
+
+.pinButton[data-pinned='true'] {
+    color: var(--color-warning);
+}
+
+.pinButton[data-pinned='true']:hover {
+    color: var(--tone-amber-fg);
+}
+
+.actionsCell {
+    position: relative;
+    z-index: 11;
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.checkboxRow {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) 0;
+}
+
+.deleteButton {
+    background-color: var(--color-destructive);
+    color: var(--color-white);
+}
+
+.deleteButton:hover {
+    background-color: color-mix(in srgb, var(--color-destructive) 80%, var(--color-black));
+}
+
+.stageBadge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--tone-grey-bg);
+    color: var(--tone-grey-fg);
+    white-space: nowrap;
+}
+
+.stageBadge[data-tone='blue'] {
+    background: var(--tone-blue-bg);
+    color: var(--tone-blue-fg);
+}
+
+.stageBadge[data-tone='green'] {
+    background: var(--tone-green-bg);
+    color: var(--tone-green-fg);
+}
+
+.stageBadge[data-tone='amber'] {
+    background: var(--tone-amber-bg);
+    color: var(--tone-amber-fg);
+}
+
+.stageBadge[data-tone='grey'] {
+    background: var(--tone-grey-bg);
+    color: var(--tone-grey-fg);
+}

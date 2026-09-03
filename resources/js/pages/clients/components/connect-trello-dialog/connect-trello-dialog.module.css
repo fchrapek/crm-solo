@@ -1,0 +1,110 @@
+.body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-4);
+    min-width: 0;
+}
+
+.modeToggle {
+    display: inline-flex;
+    align-items: center;
+    background: var(--color-muted);
+    border-radius: var(--radius-lg);
+    padding: 2px;
+    gap: 2px;
+    width: 100%;
+    min-width: 0;
+}
+
+.modeButton {
+    flex: 1;
+    min-width: 0;
+    padding: var(--spacing-2) var(--spacing-3);
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    color: var(--color-muted-foreground);
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        color 0.15s ease;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.modeButton:hover:not(:disabled) {
+    color: var(--color-foreground);
+}
+
+.modeButtonActive {
+    background: var(--color-background);
+    color: var(--color-foreground);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-black) 4%, transparent);
+}
+
+.modeButtonActive:hover {
+    color: var(--color-foreground);
+}
+
+.modeHint {
+    font-size: 0.8rem;
+    color: var(--color-muted-foreground);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.boardPicker {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+    min-width: 0;
+}
+
+.boardSelectTrigger {
+    min-width: 0;
+}
+
+.boardSelectContent {
+    width: var(--radix-select-trigger-width);
+    max-width: calc(100vw - 2rem);
+}
+
+.boardSelectItem {
+    min-width: 0;
+}
+
+.boardSelectItem span:last-child {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.boardOptionText {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.boardLoading,
+.boardEmpty,
+.boardError {
+    font-size: 0.85rem;
+    color: var(--color-muted-foreground);
+}
+
+.boardError {
+    color: var(--color-destructive);
+}
+
+.errorBanner {
+    padding: var(--spacing-2) var(--spacing-3);
+    background: color-mix(in srgb, var(--color-destructive) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-destructive) 20%, transparent);
+    border-radius: var(--radius-lg);
+    color: var(--color-destructive);
+    font-size: 0.85rem;
+}

@@ -1,0 +1,227 @@
+
+.header {
+    margin-bottom: var(--spacing-6);
+}
+
+.container {
+    max-width: 48rem;
+}
+
+.titleRow {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--spacing-4);
+    margin-bottom: var(--spacing-6);
+}
+
+.title {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    margin-bottom: var(--spacing-1);
+}
+
+.description {
+    color: var(--color-muted-foreground);
+}
+
+.websiteLink {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-1);
+    color: var(--color-muted-foreground);
+    font-size: var(--font-size-sm);
+    text-decoration: none;
+    transition: color var(--duration-150) var(--ease-in-out);
+}
+
+.websiteLink:hover {
+    color: var(--color-foreground);
+}
+
+.statusCard {
+    padding: var(--spacing-4);
+    margin-bottom: var(--spacing-6);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    background-color: var(--color-card);
+}
+
+.statusRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-2) 0;
+}
+
+.statusRow:not(:last-child) {
+    border-bottom: 1px solid var(--color-border);
+}
+
+.statusLabel {
+    font-weight: 500;
+}
+
+.statusBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-1);
+    padding: var(--spacing-1) var(--spacing-2);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+}
+
+.statusEnabled {
+    background-color: var(--color-success-soft);
+    color: var(--color-success);
+}
+
+.statusDisabled {
+    background-color: var(--color-muted);
+    color: var(--color-muted-foreground);
+}
+
+.configured {
+    color: var(--color-success);
+}
+
+.notConfigured {
+    color: var(--color-muted-foreground);
+}
+
+.form {
+    margin-bottom: var(--spacing-8);
+}
+
+.formSection {
+    padding: var(--spacing-6);
+    margin-bottom: var(--spacing-6);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    background-color: var(--color-card);
+}
+
+.sectionTitle {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    margin-bottom: var(--spacing-4);
+}
+
+.field {
+    margin-bottom: var(--spacing-4);
+}
+
+.field:last-child {
+    margin-bottom: 0;
+}
+
+/* Label paired with its info affordance — rationale lives one click away
+   instead of as a paragraph under every input. */
+.labelRow {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-1-5);
+}
+
+.checkboxLabel {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    cursor: pointer;
+}
+
+.checkbox {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+}
+
+.actions {
+    display: flex;
+    gap: var(--spacing-3);
+}
+
+.features {
+    padding: var(--spacing-6);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    background-color: var(--color-card);
+}
+
+.featureList {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.featureItem {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) 0;
+}
+
+.featureIcon {
+    color: var(--color-success);
+}
+
+.warningTitle {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+.warningIcon {
+    color: var(--color-warning);
+}
+
+.oauthConnected {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-4);
+}
+
+.connectedText {
+    color: var(--color-muted-foreground);
+}
+
+.oauthActions {
+    display: flex;
+    gap: var(--spacing-2);
+}
+
+.oauthConnect {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-4);
+}
+
+.errorRow {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-3);
+    margin-top: var(--spacing-3);
+    border-radius: var(--radius-md);
+    background-color: color-mix(in srgb, var(--color-destructive) 10%, transparent);
+    color: var(--color-destructive);
+    font-size: var(--font-size-sm);
+}
+
+.errorIcon {
+    flex-shrink: 0;
+    color: var(--color-destructive);
+}
+
+.hintLink {
+    color: var(--color-info);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.hintLink:hover {
+    color: color-mix(in srgb, var(--color-info) 80%, var(--color-white));
+}

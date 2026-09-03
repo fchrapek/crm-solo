@@ -1,0 +1,25 @@
+.container {
+    display: flex;
+    min-height: 100vh;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-primary);
+    padding: var(--spacing-5);
+    color: var(--color-primary-foreground);
+}
+
+.content {
+    width: 100%;
+    max-width: 28rem;
+}
+
+.title {
+    font-size: var(--font-size-3xl);
+    line-height: var(--line-height-tight);
+}
+
+.description {
+    margin-top: var(--spacing-3);
+    font-size: var(--font-size-lg);
+    line-height: 1.25;
+}

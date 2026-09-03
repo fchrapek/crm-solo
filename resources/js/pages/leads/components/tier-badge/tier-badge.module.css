@@ -1,0 +1,44 @@
+.badge {
+    --tier-tint: 22%;
+    display: inline-flex;
+    color: var(--color-foreground);
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.0625rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+/* Lead temperature: Hot = act now, Warm = nurture, Cold = no minutes spent.
+   Slugs stay gold/oak/rowan (config keys).
+
+   The tier colour tints the FILL and the BORDER; the label itself stays
+   foreground. Deriving label colour from the tier hue was fragile - a theme
+   accent can be near-white (brutal's yellow) or near-black (ink's grey), so
+   the same rule produced anything from 1.4:1 to 5.7:1 depending on theme and
+   appearance. Marking the badge instead of the text is readable in every
+   combination, and does not rely on colour alone to convey the tier. */
+.gold {
+    background: color-mix(in srgb, var(--tone-tier-hot) var(--tier-tint), transparent);
+    border-color: color-mix(in srgb, var(--tone-tier-hot) 60%, transparent);
+}
+
+.oak {
+    background: color-mix(in srgb, var(--tone-tier-warm) var(--tier-tint), transparent);
+    border-color: color-mix(in srgb, var(--tone-tier-warm) 60%, transparent);
+}
+
+.rowan {
+    background: var(--color-muted);
+    border-color: var(--color-border);
+}
+
+.total {
+    opacity: 0.75;
+    font-weight: 500;
+}

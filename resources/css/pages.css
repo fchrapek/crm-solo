@@ -1,0 +1,229 @@
+/* Shared Page Styles */
+
+.pageContainer {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    flex-direction: column;
+}
+
+.headerBar {
+    margin-bottom: var(--spacing-6);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-2);
+}
+
+.formContainer {
+    max-width: 48rem;
+}
+
+/* Wide-main + short-rail record layout (client Dane / Raporty / Aktywność;
+   the lead view shares the anatomy). Width comes from the enclosing tab
+   column — this only splits it. */
+.recordColumns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 24rem;
+    gap: var(--spacing-5);
+    align-items: start;
+}
+
+@media (max-width: 1100px) {
+    .recordColumns {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.recordMain,
+.recordRail {
+    min-width: 0;
+}
+
+.sectionTitle {
+    margin-bottom: var(--spacing-6);
+    font-size: var(--font-size-xl);
+    line-height: var(--line-height-tight);
+    font-weight: 600;
+}
+
+.sectionTitleMarginTop {
+    margin-top: var(--spacing-12);
+    margin-bottom: var(--spacing-6);
+    font-size: var(--font-size-lg);
+    line-height: var(--line-height-tight);
+    font-weight: 600;
+}
+
+/* Form Layout */
+.formSection {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-6);
+}
+
+.formGrid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--spacing-6);
+}
+
+@media (min-width: 768px) {
+    .formGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.formActions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.formActionsWithDelete {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: var(--spacing-4);
+}
+
+@media (min-width: 640px) {
+    .formActionsWithDelete {
+        flex-direction: row;
+    }
+}
+
+.paginationContainer {
+    margin-top: var(--spacing-6);
+    margin-bottom: var(--spacing-6);
+}
+
+.createButtonContainer {
+    flex-shrink: 0;
+}
+
+/* Mobile/Desktop Toggle Text */
+.mobileOnly {
+    display: inline;
+}
+
+.desktopOnly {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .mobileOnly {
+        display: none;
+    }
+    .desktopOnly {
+        display: inline;
+    }
+}
+
+/* Table Cell Styles */
+.cellRelative {
+    position: relative;
+    padding: var(--spacing-2);
+}
+
+.cellOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+}
+
+.cellLink {
+    display: block;
+    height: 100%;
+    width: 100%;
+}
+
+.cellContent {
+    position: relative;
+    z-index: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cellIcon {
+    width: 1rem;
+    height: 1rem;
+}
+
+.trashIcon {
+    display: inline;
+    margin-left: var(--spacing-2);
+    width: 0.75rem;
+    height: 0.75rem;
+    flex-shrink: 0;
+    color: var(--color-muted-foreground);
+}
+
+/* Empty State */
+.emptyCell {
+    height: 6rem;
+    text-align: center;
+}
+
+/* Spinner */
+.spinner {
+    margin-right: var(--spacing-2);
+    width: 1rem;
+    height: 1rem;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.selectError {
+    border-color: var(--color-destructive);
+}
+
+/* Warning Alert */
+.warningAlert {
+    margin-bottom: var(--spacing-6);
+    max-width: 48rem;
+    display: flex;
+    align-items: center;
+    border-color: var(--color-warning);
+    background-color: var(--color-warning-soft);
+    color: hsl(45 93% 30%);
+}
+
+.dark .warningAlert {
+    border-color: color-mix(in srgb, var(--color-warning) 30%, transparent);
+    background-color: var(--color-warning-soft);
+    color: hsl(45 93% 55%);
+}
+
+.warningAlertDescription {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    color: hsl(45 93% 35%);
+}
+
+.dark .warningAlertDescription {
+    color: hsl(45 93% 55% / 0.9);
+}
+
+.srOnly {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

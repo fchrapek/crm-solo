@@ -1,0 +1,31 @@
+.trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.125rem;
+    height: 1.125rem;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--color-muted-foreground);
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+.trigger:hover {
+    background: var(--color-accent);
+    color: var(--color-foreground);
+}
+
+.trigger:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 1px;
+}
+
+.content {
+    max-width: 22rem;
+    font-size: var(--font-size-xs);
+    line-height: 1.5;
+    color: var(--color-muted-foreground);
+}

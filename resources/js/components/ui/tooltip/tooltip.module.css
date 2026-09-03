@@ -1,0 +1,86 @@
+/* Tooltip Component Styles */
+
+.content {
+  z-index: var(--z-50);
+  width: fit-content;
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary);
+  color: var(--color-primary-foreground);
+  padding: var(--spacing-1-5) var(--spacing-3);
+  font-size: var(--font-size-xs);
+  text-wrap: balance;
+}
+
+.content[data-state="delayed-open"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), zoomIn var(--duration-150) var(--ease-out);
+}
+
+.content[data-state="closed"] {
+  animation: fadeOut var(--duration-150) var(--ease-in), zoomOut var(--duration-150) var(--ease-in);
+}
+
+.content[data-side="bottom"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), slideFromTop var(--duration-150) var(--ease-out);
+}
+
+.content[data-side="left"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), slideFromRight var(--duration-150) var(--ease-out);
+}
+
+.content[data-side="right"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), slideFromLeft var(--duration-150) var(--ease-out);
+}
+
+.content[data-side="top"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), slideFromBottom var(--duration-150) var(--ease-out);
+}
+
+.arrow {
+  z-index: var(--z-50);
+  width: 0.625rem;
+  height: 0.625rem;
+  transform: translateY(calc(-50% - 2px)) rotate(45deg);
+  border-radius: 2px;
+  background-color: var(--color-primary);
+  fill: var(--color-primary);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes zoomIn {
+  from { transform: scale(0.95); }
+  to { transform: scale(1); }
+}
+
+@keyframes zoomOut {
+  from { transform: scale(1); }
+  to { transform: scale(0.95); }
+}
+
+@keyframes slideFromTop {
+  from { transform: translateY(-0.5rem); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slideFromBottom {
+  from { transform: translateY(0.5rem); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slideFromLeft {
+  from { transform: translateX(-0.5rem); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slideFromRight {
+  from { transform: translateX(0.5rem); }
+  to { transform: translateX(0); }
+}

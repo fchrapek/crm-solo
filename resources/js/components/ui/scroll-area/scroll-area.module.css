@@ -1,0 +1,45 @@
+/* Scroll Area Component Styles */
+
+.root {
+  position: relative;
+}
+
+.viewport {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  transition-property: color, box-shadow;
+  transition-duration: var(--duration-150);
+}
+
+.viewport:focus-visible {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-ring) 12%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--color-ring) 45%, transparent);
+}
+
+.scrollbar {
+  display: flex;
+  touch-action: none;
+  padding: 1px;
+  transition: background-color var(--duration-150);
+  user-select: none;
+}
+
+.scrollbarVertical {
+  height: 100%;
+  width: 0.625rem;
+  border-left: 1px solid transparent;
+}
+
+.scrollbarHorizontal {
+  height: 0.625rem;
+  flex-direction: column;
+  border-top: 1px solid transparent;
+}
+
+.thumb {
+  position: relative;
+  flex: 1;
+  border-radius: var(--radius-full);
+  background-color: var(--color-border);
+}

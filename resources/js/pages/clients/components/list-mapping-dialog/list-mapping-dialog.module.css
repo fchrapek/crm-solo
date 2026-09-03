@@ -1,0 +1,95 @@
+.form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-4);
+}
+
+.empty {
+    margin: 0;
+    text-align: center;
+    color: var(--color-muted-foreground);
+    padding: var(--spacing-4);
+    background: var(--color-muted);
+    border-radius: var(--radius-lg);
+}
+
+.table {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 1fr 200px;
+    gap: var(--spacing-3);
+    align-items: center;
+}
+
+.headerRow {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--color-muted-foreground);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-bottom: var(--spacing-1);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.listName {
+    font-size: 0.875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.customLanesSection {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+    padding-top: var(--spacing-3);
+    border-top: 1px solid var(--color-border);
+}
+
+.customLanesHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+.customLanesTitle {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--color-muted-foreground);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.customLanesHint {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--color-muted-foreground);
+}
+
+.customLaneRow {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--spacing-2);
+    align-items: center;
+}
+
+.addLaneRow {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--spacing-2);
+    align-items: center;
+}
+
+.customBadge {
+    margin-left: var(--spacing-1);
+    font-size: 0.625rem;
+    color: var(--color-muted-foreground);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}

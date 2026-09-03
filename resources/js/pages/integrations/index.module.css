@@ -1,0 +1,106 @@
+
+.title {
+    margin-bottom: var(--spacing-2);
+    font-size: var(--font-size-3xl);
+    line-height: var(--line-height-tight);
+    font-weight: 700;
+}
+
+.subtitle {
+    margin-bottom: var(--spacing-8);
+    color: var(--color-muted-foreground);
+}
+
+.grid {
+    display: grid;
+    gap: var(--spacing-6);
+}
+
+@media (min-width: 768px) {
+    .grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 1024px) {
+    .grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    padding: var(--spacing-6);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    background-color: var(--color-card);
+    transition: border-color var(--duration-150) var(--ease-in-out);
+}
+
+.card:hover {
+    border-color: var(--color-ring);
+}
+
+.cardHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-4);
+}
+
+.cardTitle {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+}
+
+.cardDescription {
+    flex: 1;
+    margin-bottom: var(--spacing-4);
+    color: var(--color-muted-foreground);
+    font-size: var(--font-size-sm);
+}
+
+.cardFooter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: auto;
+    padding-top: var(--spacing-4);
+    border-top: 1px solid var(--color-border);
+}
+
+.statusBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-1);
+    padding: var(--spacing-1) var(--spacing-2);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+}
+
+.statusEnabled {
+    background-color: var(--color-success-soft);
+    color: var(--color-success);
+}
+
+.statusDisabled {
+    background-color: var(--color-muted);
+    color: var(--color-muted-foreground);
+}
+
+.features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+    margin-bottom: var(--spacing-4);
+}
+
+.featureBadge {
+    padding: var(--spacing-1) var(--spacing-2);
+    border-radius: var(--radius-md);
+    background-color: var(--color-muted);
+    font-size: var(--font-size-xs);
+    color: var(--color-muted-foreground);
+}

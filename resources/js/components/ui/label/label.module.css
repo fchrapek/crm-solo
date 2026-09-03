@@ -1,0 +1,19 @@
+/* Label Component Styles */
+
+.label {
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-none);
+  font-weight: var(--font-weight-medium);
+  user-select: none;
+}
+
+:global([data-disabled="true"]) .label {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.label:has(~ :disabled),
+:disabled ~ .label {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

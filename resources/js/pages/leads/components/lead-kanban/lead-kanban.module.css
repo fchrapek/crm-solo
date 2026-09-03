@@ -1,0 +1,6 @@
+.board {
+    /* The KanbanBoard primitive scrolls horizontally on its own, but only if
+       every flex ancestor allows shrinking. */
+    min-width: 0;
+    width: 100%;
+}

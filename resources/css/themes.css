@@ -1,0 +1,428 @@
+/*
+ * Themes — the app's visual identity, switchable at runtime.
+ *
+ * Axis 2 of 2: `appearance` (light/dark/system) decides brightness, `theme`
+ * decides identity. They compose — every theme works in both appearances.
+ *
+ * PAPER IS THE DEFAULT and is applied by initializeTheme() before first paint,
+ * so there is no unthemed state. Keeping paper here rather than folding it into
+ * variables.css means all four themes read the same way and the default can be
+ * changed by editing one string in use-theme.tsx.
+ *
+ * STRUCTURE — a theme sets PRIMITIVES only:
+ *   --theme-hue / --theme-sat-strong / --theme-sat-soft   surface family
+ *   --theme-success/-warning/-info/-destructive  "hue sat" pairs; the shared
+ *       blocks add the lightness, and the whole tone palette in variables.css
+ *       aliases these, so four values re-colour every pill, dot and diff
+ *   --color-brand*                               accent (works in both modes)
+ *   --tint-strength, --chip-*, --card-*, --icon-stroke, --radius-*   form
+ *
+ * A theme must NOT set --color-* surfaces directly: `:root[data-theme=x]`
+ * outranks `.dark`, so a light canvas would survive into dark mode with light
+ * text on it — invisible. The two derived blocks below exist to prevent that.
+ */
+
+/* ============================================================
+ * PAPER (default) · warm editorial
+ * Ink-brown instead of black is the single change that most makes a screen
+ * read as printed rather than emitted. Terracotta accent, off-white cards.
+ * ============================================================ */
+:root[data-theme='paper'] {
+    --theme-hue: 38;
+    --theme-sat-strong: 22%;
+    --theme-sat-soft: 16%;
+
+    --theme-fg-light: hsl(28 22% 14%);
+    --theme-fg-dark: hsl(38 18% 92%);
+    --theme-card-light: hsl(40 40% 99%);
+
+    --color-brand: hsl(14 72% 50%);
+    --color-brand-hover: hsl(14 72% 44%);
+
+    --theme-success: 146 32%;
+    --theme-warning: 36 58%;
+    --theme-info: 206 32%;
+    --theme-destructive: 356 58%;
+    --tone-violet-solid: hsl(286 34% 48%);
+
+    --tint-strength: 10%;
+
+    --chip-radius: var(--radius-default);
+    --chip-padding: 1px 7px;
+    --chip-border-width: 1px;
+    --chip-border-color: color-mix(in srgb, var(--color-border) 80%, transparent);
+    --chip-bg: transparent;
+    --chip-fg: var(--color-muted-foreground);
+    --chip-category-bg: transparent;
+    --chip-category-fg: var(--color-muted-foreground);
+
+    --icon-stroke: 1.75;
+}
+
+/* ============================================================
+ * INK · monochrome
+ * Truly achromatic: every tone, status and accent is a grey. Meaning is
+ * carried by LIGHTNESS and position instead of hue, so the tone palette still
+ * separates — it just separates by value. Nothing in this theme has a hue,
+ * which `bun run lint:tokens` asserts.
+ * ============================================================ */
+:root[data-theme='ink'] {
+    --theme-hue: 0;
+    --theme-sat-strong: 0%;
+    --theme-sat-soft: 0%;
+
+    /* The accent is a near-black too: emphasis comes from contrast weight. */
+    --color-brand: hsl(0 0% 16%);
+    --color-brand-hover: hsl(0 0% 8%);
+    --color-brand-foreground: hsl(0 0% 100%);
+
+    /* Statuses fan out across the grey ramp rather than the colour wheel, so
+     * a chip set stays distinguishable side by side. */
+    --theme-success: 0 0%;
+    --theme-warning: 0 0%;
+    --theme-info: 0 0%;
+    --theme-destructive: 0 0%;
+    --tone-violet-solid: hsl(0 0% 46%);
+
+    --tint-strength: 10%;
+
+    --chip-radius: var(--radius-default);
+    --chip-border-width: 1px;
+    --chip-border-color: var(--color-border);
+    --chip-bg: transparent;
+    --chip-fg: var(--color-muted-foreground);
+    --chip-category-bg: transparent;
+    --chip-category-fg: var(--color-muted-foreground);
+
+    --icon-stroke: 1.75;
+}
+
+/* ============================================================
+ * BRUTAL · neo-brutalist slab
+ * Thick borders, hard offset shadows, zero radius, shouty uppercase chips.
+ * The shapes do the talking, so the palette stays nearly monochrome with a
+ * single high-voltage yellow.
+ * ============================================================ */
+:root[data-theme='brutal'] {
+    --theme-hue: 50;
+    --theme-sat-strong: 30%;
+    --theme-sat-soft: 18%;
+
+    --color-brand: hsl(52 100% 52%);
+    --color-brand-hover: hsl(52 100% 44%);
+    --color-brand-foreground: hsl(0 0% 4%);
+
+    --theme-success: 150 60%;
+    --theme-warning: 38 95%;
+    --theme-info: 225 70%;
+    --theme-destructive: 4 80%;
+    --tone-violet-solid: hsl(265 70% 52%);
+
+    --tint-strength: 0%;
+
+    --chip-radius: var(--radius-none);
+    --chip-padding: 1px 6px;
+    --chip-font-weight: var(--font-weight-bold);
+    --chip-font-size: 0.6rem;
+    --chip-letter-spacing: 0.06em;
+    --chip-text-transform: uppercase;
+    --chip-border-width: 1.5px;
+    --chip-border-color: var(--color-foreground);
+    --chip-bg: transparent;
+    --chip-fg: var(--color-foreground);
+    --chip-category-bg: var(--color-brand);
+    --chip-category-fg: var(--color-brand-foreground);
+
+    --radius-sm: 0;
+    --radius-default: 0;
+    --radius-md: 0;
+    --radius-lg: 0;
+    --radius-xl: 0;
+
+    --card-border-width: 2px;
+    --card-shadow: 4px 4px 0 var(--color-foreground);
+    --card-shadow-hover: 7px 7px 0 var(--color-brand);
+    --card-border-hover: var(--color-foreground);
+
+    /* Space Grotesk's odd, squarish counters do the brutalist work at body
+     * size; Archivo Black is a wall of ink for headings. */
+    --font-family-sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+    --font-family-display: 'Archivo Black', 'Space Grotesk', ui-sans-serif, sans-serif;
+    --display-weight: 400;
+    --display-transform: uppercase;
+    --display-tracking: -0.02em;
+
+    --icon-stroke: 2.5;
+    --icon-linecap: square;
+    --icon-linejoin: miter;
+}
+
+/* ============================================================
+ * BAUHAUS · primaries and geometry
+ * Red accent, hairline rules, tight corners, blue category chips. The most
+ * deliberately "designed" of the four.
+ * ============================================================ */
+:root[data-theme='bauhaus'] {
+    --theme-hue: 40;
+    --theme-sat-strong: 16%;
+    --theme-sat-soft: 10%;
+
+    --color-brand: hsl(4 78% 50%);
+    --color-brand-hover: hsl(4 78% 43%);
+
+    /* "Success" reads as a neutral slate here so the primaries stay the only
+     * saturated marks on screen. */
+    --theme-success: 200 8%;
+    --theme-warning: 44 92%;
+    --theme-info: 222 78%;
+    --theme-destructive: 4 78%;
+    --tone-violet-solid: hsl(222 78% 42%);
+
+    --tint-strength: 10%;
+
+    --chip-radius: var(--radius-none);
+    --chip-padding: 1px 6px;
+    --chip-font-weight: var(--font-weight-semibold);
+    --chip-letter-spacing: 0.03em;
+    --chip-border-width: 1px;
+    --chip-border-color: var(--color-foreground);
+    --chip-bg: transparent;
+    --chip-fg: var(--color-foreground);
+    --chip-category-bg: hsl(222 78% 42%);
+    --chip-category-fg: var(--color-white);
+
+    --radius-sm: 0;
+    --radius-default: 0;
+    --radius-md: 0.125rem;
+    --radius-lg: 0.125rem;
+
+    --card-border-width: 1.5px;
+    --card-shadow: none;
+    --card-shadow-hover: 0 0 0 2.5px var(--color-brand);
+    --card-border-hover: var(--color-foreground);
+
+    /* Outfit is built from circles and straight lines - the Bauhaus alphabet.
+     * Wide uppercase tracking on headings finishes the poster look. */
+    --font-family-sans: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+    --font-family-display: 'Outfit', ui-sans-serif, sans-serif;
+    --display-weight: 800;
+    --display-transform: uppercase;
+    --display-tracking: 0.08em;
+
+    --icon-stroke: 2;
+    --icon-linecap: butt;
+    --icon-linejoin: miter;
+}
+
+/* ============================================================
+ * Derived surfaces — LIGHT
+ * One lightness ladder; hue and saturation come from the active theme.
+ * ============================================================ */
+:root[data-theme]:not(.dark) {
+    --color-background: hsl(var(--theme-hue) var(--theme-sat-strong) 96%);
+    --color-card: var(--theme-card-light, var(--color-white));
+    --color-popover: var(--theme-card-light, var(--color-white));
+    --color-foreground: var(--theme-fg-light, var(--color-gray-950));
+    --color-card-foreground: var(--color-foreground);
+    --color-popover-foreground: var(--color-foreground);
+
+    --color-muted: hsl(var(--theme-hue) var(--theme-sat-soft) 93%);
+    --color-secondary: hsl(var(--theme-hue) var(--theme-sat-soft) 93%);
+    --color-accent: hsl(var(--theme-hue) var(--theme-sat-soft) 93%);
+    --color-secondary-hover: hsl(var(--theme-hue) var(--theme-sat-soft) 86%);
+    --color-border: hsl(var(--theme-hue) var(--theme-sat-soft) 88%);
+    --color-input: hsl(var(--theme-hue) var(--theme-sat-soft) 88%);
+
+    --color-sidebar: hsl(var(--theme-hue) var(--theme-sat-strong) 92%);
+    --color-sidebar-foreground: var(--color-foreground);
+    --color-sidebar-accent: hsl(var(--theme-hue) var(--theme-sat-soft) 87%);
+    --color-sidebar-border: hsl(var(--theme-hue) var(--theme-sat-soft) 86%);
+
+    --color-success: hsl(var(--theme-success) 34%);
+    --color-warning: hsl(var(--theme-warning) 42%);
+    --color-info: hsl(var(--theme-info) 44%);
+    --color-destructive: hsl(var(--theme-destructive) 48%);
+}
+
+/* ============================================================
+ * Derived surfaces — DARK
+ * Same primitives, inverted ladder, brighter statuses.
+ * ============================================================ */
+:root[data-theme].dark {
+    --color-background: hsl(var(--theme-hue) var(--theme-sat-soft) 7%);
+    --color-card: hsl(var(--theme-hue) var(--theme-sat-soft) 10%);
+    --color-popover: hsl(var(--theme-hue) var(--theme-sat-soft) 10%);
+    --color-foreground: var(--theme-fg-dark, var(--color-gray-50));
+    --color-card-foreground: var(--color-foreground);
+    --color-popover-foreground: var(--color-foreground);
+
+    --color-muted: hsl(var(--theme-hue) var(--theme-sat-soft) 17%);
+    --color-secondary: hsl(var(--theme-hue) var(--theme-sat-soft) 17%);
+    --color-accent: hsl(var(--theme-hue) var(--theme-sat-soft) 17%);
+    --color-secondary-hover: hsl(var(--theme-hue) var(--theme-sat-soft) 22%);
+    --color-border: hsl(var(--theme-hue) var(--theme-sat-soft) 19%);
+    --color-input: hsl(var(--theme-hue) var(--theme-sat-soft) 19%);
+
+    --color-sidebar: hsl(var(--theme-hue) var(--theme-sat-soft) 11%);
+    --color-sidebar-foreground: var(--color-foreground);
+    --color-sidebar-accent: hsl(var(--theme-hue) var(--theme-sat-soft) 18%);
+    --color-sidebar-border: hsl(var(--theme-hue) var(--theme-sat-soft) 20%);
+
+    --color-success: hsl(var(--theme-success) 54%);
+    --color-warning: hsl(var(--theme-warning) 56%);
+    --color-info: hsl(var(--theme-info) 64%);
+    --color-destructive: hsl(var(--theme-destructive) 56%);
+    --color-destructive-foreground: var(--color-white);
+}
+
+/* ------------------------------------------------------------
+ * Ink's grey ramp. The derived blocks give every status the same lightness,
+ * which for a hueless theme would render four identical greys — so ink spreads
+ * them across the ramp instead. Written after the derived blocks so it wins.
+ * ------------------------------------------------------------ */
+:root[data-theme='ink']:not(.dark) {
+    --color-success: hsl(0 0% 30%);
+    --color-warning: hsl(0 0% 44%);
+    --color-info: hsl(0 0% 37%);
+    --color-destructive: hsl(0 0% 12%);
+    --color-destructive-foreground: hsl(0 0% 100%);
+}
+
+:root[data-theme='ink'].dark {
+    --color-success: hsl(0 0% 78%);
+    --color-warning: hsl(0 0% 62%);
+    --color-info: hsl(0 0% 70%);
+    --color-destructive: hsl(0 0% 92%);
+    --color-destructive-foreground: hsl(0 0% 8%);
+}
+
+/* Ink overrides any chosen accent back to grey. The accent axis is free to
+ * compose with every other theme, but "only shades of black" outranks it -
+ * otherwise one saturated button would be the sole hue on the screen. */
+:root[data-theme='ink'][data-accent] {
+    --color-brand: hsl(0 0% 16%);
+    --color-brand-hover: hsl(0 0% 8%);
+    --color-brand-foreground: hsl(0 0% 100%);
+}
+
+:root[data-theme='ink'][data-accent].dark {
+    --color-brand: hsl(0 0% 88%);
+    --color-brand-hover: hsl(0 0% 96%);
+    --color-brand-foreground: hsl(0 0% 8%);
+}
+
+/* Ink keeps its terminal chrome hueless as well. */
+:root[data-theme='ink'] {
+    --terminal-link: hsl(0 0% 82%);
+    --tone-tier-hot: hsl(0 0% 22%);
+    --tone-tier-warm: hsl(0 0% 46%);
+    --tone-tier-cold: hsl(0 0% 64%);
+}
+
+/* ============================================================
+ * ACCENTS — third axis, `data-accent` on <html>.
+ *
+ * The accent is the one saturated colour in the UI: primary buttons, active
+ * nav, focus rings, hot-tier badges. Each theme ships its own; setting an
+ * accent overrides just that, so accent and theme compose freely. Omitting
+ * data-accent leaves the theme's own choice in place.
+ *
+ * Every accent below is SOLVED, not eyeballed: --accent-fg is whichever of
+ * white / near-black clears 4.5:1 against the fill, and the lightness is the
+ * closest value to the intended one where that holds. Four accents need dark
+ * text - including ember, where white text measures only 2.8:1 (the value this
+ * app shipped before 2026-07-30).
+ *
+ * The fill is IDENTICAL in light and dark mode on purpose. An earlier version
+ * lifted lightness in dark mode for vibrancy, which made white-on-accent worse
+ * in exactly the place it was already weakest.
+ * ============================================================ */
+:root[data-accent='ember'] {
+    /* the 2026-07-28 signature orange — near-black text, 6.19:1 */
+    --accent-hs: 18 100%;
+    --accent-l: 59%;
+    --accent-fg: hsl(18 90% 10%);
+}
+
+:root[data-accent='crimson'] {
+    /* red that still reads as deliberate, not error — white text, 4.96:1 */
+    --accent-hs: 348 79%;
+    --accent-l: 48%;
+    --accent-fg: hsl(0 0% 100%);
+}
+
+:root[data-accent='magenta'] {
+    /* loud without being pink — white text, 4.77:1 */
+    --accent-hs: 322 72%;
+    --accent-l: 48%;
+    --accent-fg: hsl(0 0% 100%);
+}
+
+:root[data-accent='violet'] {
+    /* the SaaS default, included as a baseline — white text, 5.47:1 */
+    --accent-hs: 268 62%;
+    --accent-l: 55%;
+    --accent-fg: hsl(0 0% 100%);
+}
+
+:root[data-accent='indigo'] {
+    /* calm and corporate — white text, 5.81:1 */
+    --accent-hs: 232 68%;
+    --accent-l: 56%;
+    --accent-fg: hsl(0 0% 100%);
+}
+
+:root[data-accent='azure'] {
+    /* classic link-blue — white text, 4.58:1 */
+    --accent-hs: 205 82%;
+    --accent-l: 42%;
+    --accent-fg: hsl(0 0% 100%);
+}
+
+:root[data-accent='teal'] {
+    /* cool and technical — near-black text, 4.66:1 */
+    --accent-hs: 178 62%;
+    --accent-l: 38%;
+    --accent-fg: hsl(178 62% 10%);
+}
+
+:root[data-accent='pine'] {
+    /* the success green, promoted to accent — white text, 4.5:1 */
+    --accent-hs: 152 55%;
+    --accent-l: 34%;
+    --accent-fg: hsl(0 0% 100%);
+}
+
+:root[data-accent='lime'] {
+    /* high-visibility, needs dark text — near-black text, 6.78:1 */
+    --accent-hs: 74 68%;
+    --accent-l: 44%;
+    --accent-fg: hsl(74 68% 10%);
+}
+
+:root[data-accent='amber'] {
+    /* high-visibility, needs dark text — near-black text, 7.59:1 */
+    --accent-hs: 38 96%;
+    --accent-l: 50%;
+    --accent-fg: hsl(38 90% 10%);
+}
+
+/* Compose the brand tokens once; same fill in both appearances so the
+ * accent-text contrast solved above holds everywhere. */
+:root[data-accent] {
+    --color-brand: hsl(var(--accent-hs) var(--accent-l));
+    --color-brand-hover: hsl(var(--accent-hs) calc(var(--accent-l) - 7%));
+    --color-brand-foreground: var(--accent-fg);
+}
+
+/*
+ * Icon treatment. Lucide is the only icon set (64 files import it directly), so
+ * themes restyle the strokes rather than swap packages: weight plus cap/join
+ * geometry. Round caps read hand-drawn; square caps with mitred joins read
+ * technical and blocky, which is most of what a different icon set would buy.
+ */
+svg.lucide {
+    stroke-width: var(--icon-stroke);
+    stroke-linecap: var(--icon-linecap);
+    stroke-linejoin: var(--icon-linejoin);
+}

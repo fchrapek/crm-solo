@@ -1,0 +1,18 @@
+.toggleArchived {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: var(--spacing-2);
+    padding: 4px 10px;
+    font-size: 0.7rem;
+    color: var(--color-muted-foreground);
+    background: none;
+    border: 0;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+}
+
+.toggleArchived:hover {
+    background: var(--color-muted);
+    color: var(--color-foreground);
+}

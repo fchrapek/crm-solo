@@ -1,0 +1,128 @@
+/* The baseline preview in the rail: readable but capped — the full text is a
+   dialog away. */
+.baselinePreview {
+    max-height: 24rem;
+    overflow-y: auto;
+    font-size: var(--font-size-sm);
+    color: var(--color-foreground);
+}
+
+.baselinePreview :is(h1, h2, h3, h4) {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    margin: var(--spacing-3) 0 var(--spacing-1);
+}
+
+.baselinePreview :is(p, ul, ol) {
+    margin: 0 0 var(--spacing-2);
+}
+
+.baselinePreview ul,
+.baselinePreview ol {
+    padding-left: var(--spacing-5);
+}
+
+.baselineEmpty {
+    color: var(--color-muted-foreground);
+    font-size: var(--font-size-sm);
+    margin: 0;
+}
+
+.baselineDialog {
+    max-width: 42rem;
+}
+
+.dialogActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-2);
+    margin-top: var(--spacing-3);
+}
+
+.configHeading {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: var(--spacing-3);
+    padding: var(--spacing-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-background);
+    text-decoration: none;
+    color: inherit;
+    transition:
+        border-color 0.15s ease,
+        background 0.15s ease;
+}
+
+.row:hover {
+    border-color: var(--color-foreground);
+    background: var(--color-muted);
+}
+
+.rowMain {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.rowTitle {
+    font-weight: 600;
+    color: var(--color-foreground);
+}
+
+.rowMeta {
+    font-size: 0.8125rem;
+    color: var(--color-muted-foreground);
+}
+
+.statusChip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--color-muted);
+    color: var(--color-muted-foreground);
+}
+
+.statusChip[data-status='finalized'] {
+    background: var(--tone-green-bg);
+    color: var(--tone-green-fg);
+}
+
+.statusChip[data-status='sent'] {
+    background: var(--tone-blue-bg);
+    color: var(--tone-blue-fg);
+}
+
+.hours {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-muted-foreground);
+    font-size: 0.875rem;
+}
+
+.empty {
+    padding: var(--spacing-6) var(--spacing-3);
+    text-align: center;
+    color: var(--color-muted-foreground);
+    font-size: 0.9375rem;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+}

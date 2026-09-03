@@ -1,0 +1,40 @@
+/* Card Component Styles */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-6);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-card);
+  color: var(--color-card-foreground);
+  padding-block: var(--spacing-6);
+  box-shadow: var(--shadow-sm);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1-5);
+  padding-inline: var(--spacing-6);
+}
+
+.title {
+  line-height: var(--line-height-none);
+  font-weight: var(--font-weight-semibold);
+}
+
+.description {
+  color: var(--color-muted-foreground);
+  font-size: var(--font-size-sm);
+}
+
+.content {
+  padding-inline: var(--spacing-6);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  padding-inline: var(--spacing-6);
+}

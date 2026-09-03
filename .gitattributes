@@ -1,0 +1,37 @@
+* text=auto eol=lf
+
+*.blade.php diff=html
+*.css diff=css
+*.html diff=html
+*.md diff=markdown
+*.php diff=php
+
+
+# Excluded from `git archive`, which is how the public snapshot is cut.
+#
+# Two kinds of thing. Private material: the work journal, personal notes,
+# per-client production scripts, the server runbook, and the agent skill
+# copies that deploy from a separate repository. And internal planning:
+# roadmap, audit, demo and bug notes are a running account of one person's
+# quarters, not reference documentation for a reader of the code.
+#
+# What stays public under docs/ is docs/development and docs/integrations.
+# Anything public that links into an excluded path becomes a dead link, so
+# check for those when adding a rule here.
+docs/session-log.md    export-ignore
+docs/deploy/           export-ignore
+docs/development/deployment.md export-ignore
+docs/vision/           export-ignore
+docs/prompts/          export-ignore
+docs/handoffs/         export-ignore
+docs/archive/          export-ignore
+docs/bugs/             export-ignore
+docs/audit/            export-ignore
+docs/demo/             export-ignore
+docs/roadmap/          export-ignore
+scripts/prod/sites/    export-ignore
+# The export script carries the blocklist of real client names it hunts for,
+# so publishing it would publish exactly what it exists to keep out.
+scripts/public-export.sh export-ignore
+.claude/               export-ignore
+.agents/               export-ignore

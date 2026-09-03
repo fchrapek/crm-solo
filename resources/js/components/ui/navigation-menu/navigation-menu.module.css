@@ -1,0 +1,245 @@
+/* Navigation Menu Component Styles */
+
+.root {
+  position: relative;
+  display: flex;
+  max-width: max-content;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+}
+
+.list {
+  display: flex;
+  flex: 1;
+  list-style: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-1);
+}
+
+.item {
+  position: relative;
+}
+
+.trigger {
+  display: inline-flex;
+  height: 2.25rem;
+  width: max-content;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background-color: var(--color-background);
+  padding: var(--spacing-2) var(--spacing-4);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  transition-property: color, box-shadow;
+  transition-duration: var(--duration-150);
+}
+
+.trigger:hover {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.trigger:focus {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.trigger:disabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.trigger[data-active="true"],
+.trigger[data-state="open"] {
+  background-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
+  color: var(--color-accent-foreground);
+}
+
+.trigger:focus-visible {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-ring) 12%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--color-ring) 45%, transparent);
+}
+
+.triggerIcon {
+  position: relative;
+  top: 1px;
+  margin-left: var(--spacing-1);
+  width: 0.75rem;
+  height: 0.75rem;
+  transition: transform var(--duration-300);
+}
+
+.trigger[data-state="open"] .triggerIcon {
+  transform: rotate(180deg);
+}
+
+.content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding: var(--spacing-2);
+  padding-right: var(--spacing-2-5);
+}
+
+@media (min-width: 768px) {
+  .content {
+    width: auto;
+  }
+}
+
+.content[data-motion^="from-"] {
+  animation: fadeIn var(--duration-200) var(--ease-out);
+}
+
+.content[data-motion^="to-"] {
+  animation: fadeOut var(--duration-200) var(--ease-in);
+}
+
+.content[data-motion="from-end"] {
+  animation: fadeIn var(--duration-200) var(--ease-out), slideInFromRight var(--duration-200) var(--ease-out);
+}
+
+.content[data-motion="from-start"] {
+  animation: fadeIn var(--duration-200) var(--ease-out), slideInFromLeft var(--duration-200) var(--ease-out);
+}
+
+.viewportWrapper {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  isolation: isolate;
+  z-index: var(--z-50);
+  display: flex;
+  justify-content: center;
+}
+
+.viewport {
+  transform-origin: top center;
+  position: relative;
+  margin-top: var(--spacing-1-5);
+  height: var(--radix-navigation-menu-viewport-height);
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-popover);
+  color: var(--color-popover-foreground);
+  box-shadow: var(--shadow-md);
+}
+
+@media (min-width: 768px) {
+  .viewport {
+    width: var(--radix-navigation-menu-viewport-width);
+  }
+}
+
+.viewport[data-state="open"] {
+  animation: fadeIn var(--duration-200) var(--ease-out), zoomIn90 var(--duration-200) var(--ease-out);
+}
+
+.viewport[data-state="closed"] {
+  animation: fadeOut var(--duration-200) var(--ease-in), zoomOut95 var(--duration-200) var(--ease-in);
+}
+
+.link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-2);
+  font-size: var(--font-size-sm);
+  transition-property: color, box-shadow;
+  transition-duration: var(--duration-150);
+}
+
+.link:hover {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.link:focus {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.link[data-active="true"] {
+  background-color: color-mix(in srgb, var(--color-accent) 50%, transparent);
+  color: var(--color-accent-foreground);
+}
+
+.link:focus-visible {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-ring) 12%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--color-ring) 45%, transparent);
+}
+
+.link svg:not([class*="text-"]) {
+  color: var(--color-muted-foreground);
+}
+
+.link svg:not([class*="size-"]) {
+  width: 1rem;
+  height: 1rem;
+}
+
+.indicator {
+  top: 100%;
+  z-index: 1;
+  display: flex;
+  height: var(--spacing-1-5);
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.indicator[data-state="visible"] {
+  animation: fadeIn var(--duration-200) var(--ease-out);
+}
+
+.indicator[data-state="hidden"] {
+  animation: fadeOut var(--duration-200) var(--ease-in);
+}
+
+.indicatorArrow {
+  position: relative;
+  top: 60%;
+  width: var(--spacing-2);
+  height: var(--spacing-2);
+  transform: rotate(45deg);
+  border-top-left-radius: var(--radius-sm);
+  background-color: var(--color-border);
+  box-shadow: var(--shadow-md);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes zoomIn90 {
+  from { transform: scale(0.9); }
+  to { transform: scale(1); }
+}
+
+@keyframes zoomOut95 {
+  from { transform: scale(1); }
+  to { transform: scale(0.95); }
+}
+
+@keyframes slideInFromRight {
+  from { transform: translateX(13rem); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slideInFromLeft {
+  from { transform: translateX(-13rem); }
+  to { transform: translateX(0); }
+}

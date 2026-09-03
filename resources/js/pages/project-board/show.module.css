@@ -1,0 +1,162 @@
+.header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-1);
+    margin-bottom: var(--spacing-6);
+}
+
+.backLink {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-muted-foreground);
+    font-size: 0.85rem;
+    text-decoration: none;
+    width: fit-content;
+}
+
+.backLink:hover {
+    color: var(--color-foreground);
+}
+
+.titleRow {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    flex-wrap: wrap;
+}
+
+.title {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.subtitle {
+    margin: 0;
+    color: var(--color-muted-foreground);
+    font-size: 0.85rem;
+}
+
+.boardLink {
+    display: inline-flex;
+    align-items: center;
+    color: var(--color-muted-foreground);
+}
+
+.boardLink:hover {
+    color: var(--color-brand);
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    margin-left: auto;
+}
+
+/* Board | List switcher — the board stays full-bleed, the list reads in the
+   shared record column width. */
+.viewToggle {
+    display: inline-flex;
+    align-items: center;
+    background: var(--color-muted);
+    border-radius: var(--radius-lg);
+    padding: 2px;
+    gap: 2px;
+}
+
+.viewPill {
+    padding: var(--spacing-1) var(--spacing-3);
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    color: var(--color-muted-foreground);
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        color 0.15s ease;
+    line-height: 1.4;
+}
+
+.viewPill:hover {
+    color: var(--color-foreground);
+}
+
+.viewPillActive {
+    background: var(--color-background);
+    color: var(--color-foreground);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-black) 4%, transparent);
+}
+
+.viewPillActive:hover {
+    color: var(--color-foreground);
+}
+
+.taskList {
+    max-width: 80rem;
+}
+
+.taskListEmpty {
+    color: var(--color-muted-foreground);
+    text-align: center;
+    padding: var(--spacing-8);
+    margin: 0;
+}
+
+/* Same table anatomy as the Leads list. */
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.table th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    color: var(--color-muted-foreground);
+    font-weight: 500;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.table td {
+    padding: 0.625rem 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.rowLink {
+    color: var(--color-foreground);
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.rowLink:hover {
+    text-decoration: underline;
+}
+
+.cellMuted {
+    color: var(--color-muted-foreground);
+}
+
+.priorityHigh {
+    color: var(--color-destructive);
+    font-weight: 500;
+}
+
+.dateOverdue {
+    color: var(--color-destructive);
+    font-weight: 600;
+}
+
+.editCell {
+    width: 1%;
+    text-align: right;
+}
+
+.iconLeading {
+    margin-right: var(--spacing-1);
+}

@@ -1,0 +1,133 @@
+.root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3);
+}
+
+/* Three revenue stats, one card each (Infakt-sourced). Card chrome matches
+   <SectionCard> so the tab reads as one system; no headings — the stat
+   labels carry it. */
+.statsGrid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--spacing-4);
+}
+
+@media (max-width: 720px) {
+    .statsGrid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.statCard {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-card);
+    padding: var(--spacing-4) var(--spacing-5);
+}
+
+.revenueLabel {
+    font-size: var(--font-size-xs);
+    color: var(--color-muted-foreground);
+}
+
+.revenueValue {
+    font-size: 1.25rem;
+    font-weight: var(--font-weight-semibold);
+}
+
+.revenueSub {
+    font-size: var(--font-size-xs);
+    color: var(--color-muted-foreground);
+}
+
+/* Year + month side by side; everything below them (stat cards + table)
+   follows the selected window. */
+.filterBar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    flex-wrap: wrap;
+}
+
+/* The SelectTrigger inside is width: 100%; this wrapper is the actual size. */
+.filterSelect {
+    width: 10.5rem;
+}
+
+/* One quiet sentence so no table column needs a per-cell VAT caveat. */
+.nettoNote {
+    margin: 0 0 0 auto;
+    font-size: var(--font-size-xs);
+    color: var(--color-muted-foreground);
+}
+
+.count {
+    font-size: var(--font-size-xs);
+    color: var(--color-muted-foreground);
+    white-space: nowrap;
+}
+
+.empty {
+    padding: var(--spacing-4);
+    text-align: center;
+    font-size: var(--font-size-sm);
+    color: var(--color-muted-foreground);
+}
+
+/* Amounts read as a column of figures, so they align right and share the
+   tabular figures the rest of the money surfaces use. */
+.amount {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.number {
+    font-weight: var(--font-weight-medium);
+}
+
+.date {
+    white-space: nowrap;
+    color: var(--color-muted-foreground);
+}
+
+/* Paid vs everything else, styled as the overview card's chip so the same
+   invoice reads the same in both places. Status is the only payment signal
+   Infakt keeps reliable, so it is the only thing this reflects. */
+.status {
+    font-size: var(--chip-font-size);
+    font-family: var(--chip-font-family);
+    text-transform: var(--chip-text-transform);
+    letter-spacing: var(--chip-letter-spacing);
+    padding: var(--chip-padding);
+    border-radius: var(--chip-radius);
+    border: var(--chip-border-width) solid var(--chip-border-color);
+    background: var(--chip-bg);
+    color: var(--chip-fg);
+    white-space: nowrap;
+}
+
+.status[data-paid='true'] {
+    background: var(--tone-green-bg);
+    color: var(--tone-green-fg);
+    border-color: transparent;
+}
+
+.link {
+    display: inline-flex;
+    align-items: center;
+    color: var(--color-muted-foreground);
+}
+
+.link:hover {
+    color: var(--color-brand);
+}
+
+.linkCell {
+    width: 1%;
+    text-align: right;
+}

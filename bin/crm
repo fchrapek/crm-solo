@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+# Agent-facing CRM verb shim: `crm brief <client>`, `crm today --json`, …
+# Resolves the repo through the symlink, so artisan loads crm-solo's own
+# .env even inside env-i agent sessions (the stripped environment can't
+# leak another project's DB into these calls).
+SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+DIR="$(cd "$(dirname "$SELF")/.." && pwd)"
+FIRST="$1"
+case "$FIRST" in
+    brief|today|note|task-done|lead-capture|lead-stage|timer-start|timer-stop)
+        shift
+        exec php "$DIR/artisan" "crm:$FIRST" "$@"
+        ;;
+    *)
+        exec php "$DIR/artisan" "$@"
+        ;;
+esac

@@ -1,0 +1,8 @@
+.message {
+    height: var(--spacing-5);
+    margin-bottom: calc(-1 * var(--spacing-5));
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-snug);
+    font-weight: 500;
+    color: var(--color-destructive);
+}

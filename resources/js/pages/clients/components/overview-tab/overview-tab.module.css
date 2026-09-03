@@ -1,0 +1,217 @@
+/* Width comes from the shared tab column; this only splits it. */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--spacing-4);
+}
+
+@media (max-width: 720px) {
+    .grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+    padding: var(--spacing-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-card);
+}
+
+.cardWide {
+    grid-column: 1 / -1;
+}
+
+.cardHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-2);
+}
+
+.cardTitle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-1-5);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-muted-foreground);
+}
+
+.cardAction {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-1);
+    font-size: var(--font-size-xs);
+    color: var(--color-brand);
+    text-decoration: none;
+}
+
+.cardAction:hover {
+    text-decoration: underline;
+}
+
+.bigStat {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-tight);
+    margin-block: 0;
+}
+
+.bigStatSmall {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-medium);
+    margin-block: 0;
+}
+
+.statMain {
+    color: var(--color-foreground);
+}
+
+.statOver {
+    color: var(--color-warning);
+}
+
+.statLimit {
+    font-size: var(--font-size-lg);
+    color: var(--color-muted-foreground);
+    font-weight: var(--font-weight-normal);
+}
+
+/* The pool-plus-carryover breakdown: present but subordinate to the total. */
+.statCarried {
+    margin-left: var(--spacing-2);
+    font-size: var(--font-size-xs);
+    color: var(--color-muted-foreground);
+    font-weight: var(--font-weight-normal);
+    white-space: nowrap;
+}
+
+.cardHint {
+    font-size: var(--font-size-xs);
+    color: var(--color-muted-foreground);
+    margin-block: 0;
+}
+
+.reportLink {
+    color: var(--color-brand);
+    text-decoration: none;
+}
+
+.reportLink:hover {
+    text-decoration: underline;
+}
+
+.eventList,
+.projectList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-1-5);
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.eventRow {
+    display: flex;
+    gap: var(--spacing-3);
+    font-size: var(--font-size-sm);
+    align-items: baseline;
+}
+
+.eventDate {
+    color: var(--color-muted-foreground);
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+}
+
+.eventText {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.projectRow {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spacing-3);
+    font-size: var(--font-size-sm);
+}
+
+.projectCount {
+    color: var(--color-muted-foreground);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Faktury: date, number, amount, status, external link. A dense row rather
+   than a table - four invoices should read at a glance, not be scanned. */
+.cardMeta {
+    font-size: var(--font-size-xs);
+    color: var(--color-muted-foreground);
+}
+
+.invoiceList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-1-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.invoiceRow {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto auto;
+    align-items: center;
+    gap: var(--spacing-2);
+    font-size: var(--font-size-sm);
+}
+
+.invoiceDate {
+    font-size: var(--font-size-xs);
+    color: var(--color-muted-foreground);
+    font-variant-numeric: tabular-nums;
+}
+
+.invoiceNumber {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.invoiceAmount {
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--font-weight-medium);
+}
+
+.invoiceStatus {
+    font-size: var(--chip-font-size);
+    font-family: var(--chip-font-family);
+    text-transform: var(--chip-text-transform);
+    letter-spacing: var(--chip-letter-spacing);
+    padding: var(--chip-padding);
+    border-radius: var(--chip-radius);
+    border: var(--chip-border-width) solid var(--chip-border-color);
+    background: var(--chip-bg);
+    color: var(--chip-fg);
+    white-space: nowrap;
+}
+
+.invoiceStatus[data-paid='true'] {
+    background: var(--tone-green-bg);
+    color: var(--tone-green-fg);
+    border-color: transparent;
+}
+
+.invoiceLink {
+    display: inline-flex;
+    color: var(--color-muted-foreground);
+}
+
+.invoiceLink:hover {
+    color: var(--color-brand);
+}

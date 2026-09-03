@@ -1,0 +1,184 @@
+.page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-6);
+    max-width: 44rem;
+}
+
+.title {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-semibold);
+}
+
+.section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-4);
+    padding: var(--spacing-5);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background-color: var(--color-card);
+}
+
+.sectionTitle {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+}
+
+.chipRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-1-5);
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--spacing-0-5) var(--spacing-2);
+    border-radius: var(--radius-full);
+    background-color: var(--color-muted);
+    color: var(--color-muted-foreground);
+    font-size: var(--font-size-xs);
+}
+
+.hint {
+    color: var(--color-muted-foreground);
+    font-size: var(--font-size-xs);
+    margin-block: 0;
+}
+
+.sourceRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: var(--spacing-2);
+    align-items: center;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* Display section: language + accent as inline pill rows, themes as cards
+   because each needs a sentence of explanation. */
+.optionRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+}
+
+.option,
+.accentOption {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-1-5) var(--spacing-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-card);
+    color: var(--color-foreground);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+}
+
+.option:hover,
+.accentOption:hover {
+    background: var(--color-accent);
+}
+
+.optionActive {
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 1px var(--color-brand);
+}
+
+.accentSwatch {
+    width: 0.85rem;
+    height: 0.85rem;
+    flex-shrink: 0;
+    border-radius: var(--radius-full);
+    border: 1px solid color-mix(in srgb, var(--color-foreground) 20%, transparent);
+}
+
+.themeGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+    gap: var(--spacing-2);
+}
+
+/* Compact cards: a three-colour preview plus the name. The full description
+   moved to the title attribute and the section's info hint - four sentences of
+   body copy made the page unreadable. */
+.themeCard {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-2-5);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-card);
+    text-align: left;
+    cursor: pointer;
+    color: var(--color-foreground);
+}
+
+.themeCard:hover {
+    background: var(--color-accent);
+}
+
+.themeCardActive {
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 1px var(--color-brand);
+}
+
+.themeSwatches {
+    display: inline-flex;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--color-foreground) 15%, transparent);
+}
+
+.themeSwatch {
+    width: 0.6rem;
+    height: 1.05rem;
+}
+
+.themeName {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+.themeCheck {
+    flex-shrink: 0;
+    color: var(--color-brand);
+}
+
+/* Label paired with its info affordance. */
+.labelRow,
+.titleRow {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-1-5);
+}
+
+.titleRow {
+    margin-bottom: var(--spacing-4);
+}
+
+/* Each tab panel owns the vertical rhythm between its fields. Without this the
+   fields sit flush against each other: they used to be children of .section,
+   which supplied the gap, and moving them into tab panels dropped it. */
+.tabPanel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-7);
+    padding-top: var(--spacing-2);
+}

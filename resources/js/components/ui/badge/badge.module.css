@@ -1,0 +1,99 @@
+/* Badge Component Styles */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  padding: var(--spacing-0-5) var(--spacing-2);
+  font-family: inherit;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-normal);
+  width: fit-content;
+  height: fit-content;
+  white-space: nowrap;
+  flex-shrink: 0;
+  gap: var(--spacing-1);
+  transition-property: color, box-shadow;
+  transition-duration: var(--duration-150);
+  overflow: auto;
+}
+
+.badge svg {
+  width: 0.75rem;
+  height: 0.75rem;
+  pointer-events: none;
+}
+
+.badge:focus-visible {
+  border-color: var(--color-ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-ring) 45%, transparent);
+}
+
+.badge[aria-invalid="true"] {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 20%, transparent);
+  border-color: var(--color-destructive);
+}
+
+:global(.dark) .badge[aria-invalid="true"] {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 40%, transparent);
+}
+
+/* Variants */
+.default {
+  border-color: transparent;
+  background-color: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+a.default:hover {
+  background-color: var(--color-primary-hover);
+}
+
+:global(.dark) a.default:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.secondary {
+  border-color: transparent;
+  background-color: var(--color-secondary);
+  color: var(--color-secondary-foreground);
+}
+
+a.secondary:hover {
+  background-color: var(--color-secondary-hover);
+}
+
+:global(.dark) a.secondary:hover {
+  background-color: var(--color-secondary-hover);
+}
+
+.destructive {
+  border-color: transparent;
+  background-color: var(--color-destructive);
+  color: var(--color-white);
+}
+
+a.destructive:hover {
+  background-color: color-mix(in srgb, var(--color-destructive) 88%, var(--color-black));
+}
+
+.destructive:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 20%, transparent);
+}
+
+:global(.dark) .destructive:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-destructive) 40%, transparent);
+}
+
+.outline {
+  color: var(--color-foreground);
+  border-color: var(--color-border);
+}
+
+a.outline:hover {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}

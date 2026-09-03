@@ -1,0 +1,63 @@
+.root {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-background);
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, monospace;
+    font-size: 0.75rem;
+    line-height: 1.45;
+    overflow-x: auto;
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+.line {
+    display: flex;
+    gap: var(--spacing-2);
+    padding: 1px var(--spacing-3) 1px var(--spacing-2);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.line[data-kind='context'] {
+    color: var(--color-muted-foreground);
+}
+
+.line[data-kind='added'] {
+    background: var(--tone-diff-added-bg);
+    color: var(--tone-diff-added-fg);
+}
+
+.line[data-kind='added'] .marker {
+    color: var(--tone-diff-added-fg);
+}
+
+.line[data-kind='removed'] {
+    background: var(--tone-diff-removed-bg);
+    color: var(--tone-diff-removed-fg);
+}
+
+.line[data-kind='removed'] .marker {
+    color: var(--tone-diff-removed-fg);
+}
+
+.marker {
+    flex-shrink: 0;
+    width: 1ch;
+    text-align: center;
+    user-select: none;
+    color: var(--color-border);
+}
+
+.text {
+    flex: 1;
+    min-width: 0;
+}
+
+.empty {
+    padding: var(--spacing-3);
+    color: var(--color-muted-foreground);
+    font-style: italic;
+    font-family: var(--font-family-sans);
+    font-size: 0.8125rem;
+    text-align: center;
+}

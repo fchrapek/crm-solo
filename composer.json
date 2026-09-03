@@ -1,0 +1,104 @@
+{
+    "name": "laravel/laravel",
+    "type": "project",
+    "description": "The skeleton application for the Laravel framework.",
+    "keywords": ["laravel", "framework"],
+    "license": "MIT",
+    "require": {
+        "php": ">=8.4",
+        "ext-posix": "*",
+        "barryvdh/laravel-dompdf": "^3.1",
+        "fakerphp/faker": "^1.24",
+        "inertiajs/inertia-laravel": "^2.0",
+        "laravel-lang/common": "^6.7",
+        "laravel/framework": "^12.0",
+        "laravel/horizon": "^5.41",
+        "laravel/mcp": "^0.9.1",
+        "laravel/octane": "^2.13",
+        "laravel/reverb": "^1.6",
+        "laravel/sanctum": "^4.2",
+        "laravel/tinker": "^2.10",
+        "laravel/wayfinder": "^0.1.12",
+        "pacerit/laravel-polish-validation-rules": "^8.0",
+        "predis/predis": "^3.3"
+    },
+    "require-dev": {
+        "laravel/breeze": "^2.3",
+        "laravel/pint": "^1.26",
+        "laravel/sail": "^1.51",
+        "mockery/mockery": "^1.6",
+        "nunomaduro/collision": "^8.8",
+        "pestphp/pest": "^4.2",
+        "pestphp/pest-plugin-laravel": "^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/"
+        },
+        "files": [
+            "app/Helpers/functions.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "post-update-cmd": [
+            "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
+        ],
+        "post-root-package-install": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+        ],
+        "post-create-project-cmd": [
+            "@php artisan key:generate --ansi",
+            "@php -r \"file_exists('database/database.sqlite') || touch('database/database.sqlite');\"",
+            "@php artisan migrate --graceful --ansi"
+        ],
+        "setup": [
+            "composer install",
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
+            "@php artisan key:generate",
+            "@php artisan migrate --force",
+            "@php artisan db:seed --force",
+            "bun install",
+            "bun run build"
+        ],
+        "dev": [
+            "Composer\\Config::disableProcessTimeout",
+            "docker compose up -d",
+            "bunx concurrently -c \"#c4b5fd,#fdba74,#93c5fd,#86efac,#fca5a5\" \"php -d upload_max_filesize=2G -d post_max_size=2G -d memory_limit=512M -S 127.0.0.1:8000 -t public server.php\" \"php artisan horizon\" \"bun run dev\" \"php artisan schedule:work\" \"php artisan reverb:start\" --names=server,horizon,vite,scheduler,reverb --kill-others"
+        ],
+        "dev:ssr": [
+            "bun run build:ssr",
+            "Composer\\Config::disableProcessTimeout",
+            "bunx concurrently -c \"#c4b5fd,#fdba74,#93c5fd\" \"php artisan horizon\" \"php artisan inertia:start-ssr\" \"php artisan schedule:work\" --names=horizon,ssr,scheduler --kill-others"
+        ],
+        "lint": [
+            "pint"
+        ]
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": []
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "php-http/discovery": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

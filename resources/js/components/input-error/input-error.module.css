@@ -1,0 +1,9 @@
+.error {
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-snug);
+    color: var(--color-destructive);
+}
+
+:global(.dark) .error {
+    color: var(--color-destructive-foreground);
+}

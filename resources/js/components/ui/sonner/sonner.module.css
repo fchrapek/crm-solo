@@ -1,0 +1,25 @@
+.toaster {
+}
+
+.toaster [data-sonner-toast] {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-lg);
+}
+
+.toaster [data-sonner-toast] [data-description] {
+    color: var(--color-muted-foreground);
+}
+
+.toaster [data-sonner-toast] [data-button] {
+    background-color: var(--color-primary);
+    color: var(--color-primary-foreground);
+    font-weight: 500;
+}
+
+.toaster [data-sonner-toast] [data-cancel] {
+    background-color: var(--color-muted);
+    color: var(--color-muted-foreground);
+    font-weight: 500;
+}

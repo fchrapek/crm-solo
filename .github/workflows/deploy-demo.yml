@@ -1,0 +1,96 @@
+name: Deploy Demo
+
+# The demo branch is a deployment pointer: fast-forward it from develop
+# (`git push origin develop:demo`) to refresh demo.crm-solo.com. Every deploy
+# reseeds the fictional dataset via demo:reset — the demo never accumulates
+# visitor edits across deploys (and self-heals nightly via the scheduler).
+
+on:
+  push:
+    branches:
+      - demo
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.prod
+          target: app
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:demo
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: development
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sync compose file to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: compose.demo.yaml
+          target: ${{ secrets.DEPLOY_PATH || '/srv/crm-solo-demo' }}/
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.DEPLOY_PATH || '/srv/crm-solo-demo' }}
+
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            docker compose -f compose.demo.yaml pull
+            docker compose -f compose.demo.yaml up -d --remove-orphans
+
+            # note: the remote shell is zsh, where $status is read-only
+            for i in $(seq 1 30); do
+              app_health=$(docker inspect -f '{{.State.Health.Status}}' crm-solo-demo-app 2>/dev/null || echo starting)
+              [ "$app_health" = "healthy" ] && break
+              sleep 5
+            done
+
+            docker compose -f compose.demo.yaml exec -T app php artisan demo:reset
+            docker compose -f compose.demo.yaml exec -T app php artisan config:cache
+            docker compose -f compose.demo.yaml exec -T app php artisan route:cache
+            docker compose -f compose.demo.yaml exec -T app php artisan view:cache
+
+            echo "Demo deployed and reseeded."

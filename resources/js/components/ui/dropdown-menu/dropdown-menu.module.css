@@ -1,0 +1,313 @@
+/* Dropdown Menu Component Styles */
+
+.content {
+  z-index: var(--z-50);
+  min-width: 8rem;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-popover);
+  color: var(--color-popover-foreground);
+  padding: var(--spacing-1);
+  box-shadow: var(--shadow-md);
+}
+
+.content[data-state="open"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), zoomIn var(--duration-150) var(--ease-out);
+}
+
+.content[data-state="closed"] {
+  animation: fadeOut var(--duration-150) var(--ease-in), zoomOut var(--duration-150) var(--ease-in);
+}
+
+.content[data-side="bottom"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), slideFromTop var(--duration-150) var(--ease-out);
+}
+
+.content[data-side="top"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), slideFromBottom var(--duration-150) var(--ease-out);
+}
+
+.content[data-side="left"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), slideFromRight var(--duration-150) var(--ease-out);
+}
+
+.content[data-side="right"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), slideFromLeft var(--duration-150) var(--ease-out);
+}
+
+.item {
+  position: relative;
+  display: flex;
+  cursor: default;
+  align-items: center;
+  gap: var(--spacing-2);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-1-5) var(--spacing-2);
+  font-size: var(--font-size-sm);
+  outline: none;
+  user-select: none;
+}
+
+.item:focus {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.item[data-disabled] {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.item[data-inset="true"] {
+  padding-left: var(--spacing-8);
+}
+
+.item svg:not([class*="text-"]) {
+  color: var(--color-muted-foreground);
+}
+
+.item svg {
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.item svg:not([class*="size-"]) {
+  width: 1rem;
+  height: 1rem;
+}
+
+.itemDestructive[data-variant="destructive"] {
+  color: var(--color-destructive);
+}
+
+.itemDestructive[data-variant="destructive"]:focus {
+  background-color: color-mix(in srgb, var(--color-destructive) 10%, transparent);
+  color: var(--color-destructive);
+}
+
+:global(.dark) .itemDestructive[data-variant="destructive"]:focus {
+  background-color: color-mix(in srgb, var(--color-destructive) 20%, transparent);
+}
+
+.itemDestructive[data-variant="destructive"] svg {
+  color: var(--color-destructive) !important;
+}
+
+.checkboxItem {
+  position: relative;
+  display: flex;
+  cursor: default;
+  align-items: center;
+  gap: var(--spacing-2);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-1-5) var(--spacing-2) var(--spacing-1-5) var(--spacing-8);
+  font-size: var(--font-size-sm);
+  outline: none;
+  user-select: none;
+}
+
+.checkboxItem:focus {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.checkboxItem[data-disabled] {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.checkboxItem svg {
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.checkboxItem svg:not([class*="size-"]) {
+  width: 1rem;
+  height: 1rem;
+}
+
+.radioItem {
+  position: relative;
+  display: flex;
+  cursor: default;
+  align-items: center;
+  gap: var(--spacing-2);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-1-5) var(--spacing-2) var(--spacing-1-5) var(--spacing-8);
+  font-size: var(--font-size-sm);
+  outline: none;
+  user-select: none;
+}
+
+.radioItem:focus {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.radioItem[data-disabled] {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.radioItem svg {
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.radioItem svg:not([class*="size-"]) {
+  width: 1rem;
+  height: 1rem;
+}
+
+.indicator {
+  position: absolute;
+  left: var(--spacing-2);
+  display: flex;
+  width: 0.875rem;
+  height: 0.875rem;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.indicatorIcon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.radioIndicatorIcon {
+  width: 0.5rem;
+  height: 0.5rem;
+  fill: currentColor;
+}
+
+.label {
+  padding: var(--spacing-1-5) var(--spacing-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.label[data-inset="true"] {
+  padding-left: var(--spacing-8);
+}
+
+.separator {
+  margin: var(--spacing-1) calc(var(--spacing-1) * -1);
+  height: 1px;
+  background-color: var(--color-border);
+}
+
+.shortcut {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  letter-spacing: var(--letter-spacing-wide);
+  color: var(--color-muted-foreground);
+}
+
+.subTrigger {
+  display: flex;
+  cursor: default;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-1-5) var(--spacing-2);
+  font-size: var(--font-size-sm);
+  outline: none;
+  user-select: none;
+}
+
+.subTrigger:focus {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.subTrigger[data-state="open"] {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.subTrigger[data-inset="true"] {
+  padding-left: var(--spacing-8);
+}
+
+.subTriggerIcon {
+  margin-left: auto;
+  width: 1rem;
+  height: 1rem;
+}
+
+.subContent {
+  z-index: var(--z-50);
+  min-width: 8rem;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-popover);
+  color: var(--color-popover-foreground);
+  padding: var(--spacing-1);
+  box-shadow: var(--shadow-lg);
+}
+
+.subContent[data-state="open"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), zoomIn var(--duration-150) var(--ease-out);
+}
+
+.subContent[data-state="closed"] {
+  animation: fadeOut var(--duration-150) var(--ease-in), zoomOut var(--duration-150) var(--ease-in);
+}
+
+.subContent[data-side="bottom"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), slideFromTop var(--duration-150) var(--ease-out);
+}
+
+.subContent[data-side="top"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), slideFromBottom var(--duration-150) var(--ease-out);
+}
+
+.subContent[data-side="left"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), slideFromRight var(--duration-150) var(--ease-out);
+}
+
+.subContent[data-side="right"] {
+  animation: fadeIn var(--duration-150) var(--ease-out), slideFromLeft var(--duration-150) var(--ease-out);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes zoomIn {
+  from { transform: scale(0.95); }
+  to { transform: scale(1); }
+}
+
+@keyframes zoomOut {
+  from { transform: scale(1); }
+  to { transform: scale(0.95); }
+}
+
+@keyframes slideFromTop {
+  from { transform: translateY(-0.5rem); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slideFromBottom {
+  from { transform: translateY(0.5rem); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slideFromLeft {
+  from { transform: translateX(-0.5rem); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slideFromRight {
+  from { transform: translateX(0.5rem); }
+  to { transform: translateX(0); }
+}

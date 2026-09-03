@@ -1,0 +1,238 @@
+.cardInner {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: var(--spacing-2);
+}
+
+.cardHeader {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-2);
+}
+
+.priorityDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 6px;
+}
+
+.priorityDotHigh {
+    background: var(--color-destructive);
+}
+
+.priorityDotMedium {
+    background: var(--color-warning);
+}
+
+.priorityDotLow {
+    background: var(--color-muted-foreground);
+    opacity: 0.5;
+}
+
+.priorityDotNone {
+    background: var(--color-muted-foreground);
+    opacity: 0.25;
+}
+
+.titleColumn {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.titleRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.title {
+    font-size: 0.85rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: inherit;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+
+.title:hover {
+    text-decoration: underline;
+}
+
+.titleCompleted {
+    text-decoration: line-through;
+    opacity: 0.55;
+}
+
+.subtitle {
+    margin: 0;
+    font-size: 0.7rem;
+    color: var(--color-muted-foreground);
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.primaryAction {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--color-brand);
+    color: var(--color-brand-foreground);
+    border: 0;
+    padding: 4px 8px;
+    border-radius: var(--radius-lg);
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.primaryAction:hover {
+    background: var(--color-brand-hover);
+}
+
+.menuButton {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.cardMeta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    font-size: 0.7rem;
+    color: var(--color-muted-foreground);
+    padding-left: 16px;
+}
+
+.due {
+    font-size: 0.7rem;
+    color: var(--color-muted-foreground);
+}
+
+.dueOverdue {
+    font-size: 0.7rem;
+    color: var(--color-destructive);
+    font-weight: 600;
+}
+
+/* All card pills share the global chip contract (see variables.css) so a
+ * look restyles every one of them at once. Tone differences are limited to
+ * neutral vs categorical - a card used to be able to stack a purple project
+ * pill, two blue pills and a coloured dot, which read as decoration. */
+.recurringChip,
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-family: var(--chip-font-family);
+    font-size: var(--chip-font-size);
+    font-weight: var(--chip-font-weight);
+    letter-spacing: var(--chip-letter-spacing);
+    text-transform: var(--chip-text-transform);
+    padding: var(--chip-padding);
+    border-radius: var(--chip-radius);
+    border: var(--chip-border-width) solid var(--chip-border-color);
+    background: var(--chip-bg);
+    color: var(--chip-fg);
+}
+
+.chipLabel,
+.chipRepo,
+.chipTrello {
+    background: var(--chip-bg);
+    color: var(--chip-fg);
+}
+
+.chipProject {
+    background: var(--chip-category-bg);
+    color: var(--chip-category-fg);
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.statusBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--chip-font-family);
+    font-size: var(--chip-font-size);
+    font-weight: var(--chip-font-weight);
+    letter-spacing: var(--chip-letter-spacing);
+    padding: 2px 6px;
+    border-radius: var(--chip-radius);
+    text-transform: lowercase;
+}
+
+.statusInfo {
+    background: var(--color-info-soft);
+    color: var(--color-info);
+}
+
+.statusWarning {
+    background: var(--color-warning-soft);
+    color: var(--color-warning);
+}
+
+.statusError {
+    background: var(--color-destructive-soft);
+    color: var(--color-destructive);
+}
+
+.statusSuccess {
+    background: var(--color-success-soft);
+    color: var(--color-success);
+}
+
+.spinner {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+    border-top-color: transparent;
+    animation: kanban-card-spin 0.8s linear infinite;
+}
+
+@keyframes kanban-card-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.dropdownIcon {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 6px;
+    color: var(--color-muted-foreground);
+}
+
+/* Whole-card click target (href set): pointer signifier + keyboard focus ring.
+   Hover elevation lives on the wrapper (.card in kanban-board.module.css). */
+.cardClickable {
+    cursor: pointer;
+}
+
+.cardClickable:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: -2px;
+    border-radius: var(--radius-lg);
+}

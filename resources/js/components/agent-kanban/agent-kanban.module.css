@@ -1,0 +1,72 @@
+/* Outer wrapper provides the visual cue that this is an agent board (vs the
+   regular project kanban). Card visuals come from <KanbanCard> in the shared
+   primitive — no per-component styling here. */
+
+.boardWrap {
+    border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-2);
+    background: color-mix(in srgb, var(--color-success) 3%, transparent);
+}
+
+.boardHeader {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    margin-bottom: var(--spacing-2);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--color-success);
+    background: var(--color-success-soft);
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.boardHeaderIcon {
+    color: var(--color-success);
+}
+
+.spinIcon {
+    animation: agentKanbanSpin 1s linear infinite;
+}
+
+@keyframes agentKanbanSpin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Pulsing dot rendered as a chip when task.session_attention_at is set —
+   means the CLI hook fired and the user hasn't opened the task page yet. */
+.attentionChip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: color-mix(in srgb, var(--color-brand) 70%, var(--color-black));
+}
+
+.attentionDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-brand);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand) 70%, transparent);
+    animation: agentKanbanPulse 1.6s ease-out infinite;
+}
+
+@keyframes agentKanbanPulse {
+    0% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand) 70%, transparent);
+    }
+    70% {
+        box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-brand) 0%, transparent);
+    }
+    100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand) 0%, transparent);
+    }
+}

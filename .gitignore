@@ -1,0 +1,53 @@
+/.phpunit.cache
+/.fleet
+/.idea
+/.nova
+/.vscode
+/.zed
+/auth.json
+/bootstrap/ssr
+/node_modules
+/mcp-server/node_modules
+/public/build
+/public/hot
+/public/storage
+/resources/js/actions
+/resources/js/routes
+/resources/js/wayfinder
+/storage/*.key
+/storage/backups
+/storage/pail
+/.db-backups
+/rzis-*.csv
+/vendor
+.env
+.env.backup
+.env.production
+.phpactor.json
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+*.DS_Store
+.claude/scheduled_tasks.lock
+
+# Local test fixtures (not for commit)
+dummy data/
+landing page test/
+
+# Personal notes (not for commit)
+docs/vision/
+docs/handoffs/
+
+# Agent instruction copies. These deploy from a separate skills repository;
+# the copies here are build artifacts, and they carry local absolute paths.
+/.claude/skills/
+/.claude/skills.conf
+/.agents/
+
+# Work journal and per-client production scripts: this repository's own
+# copies stay out of any clone.
+/docs/session-log.md
+/scripts/prod/sites/
+bun.lockb

@@ -1,0 +1,368 @@
+/*
+ * CSS Custom Properties (Design Tokens)
+ * Black & White color palette using HSL values
+ */
+
+:root {
+    /* ========================================
+   * Colors - Black & White Palette (HSL)
+   * ======================================== */
+
+    /* Base colors */
+    --color-white: hsl(0 0% 100%);
+    --color-black: hsl(0 0% 0%);
+
+    /* Gray scale */
+    --color-gray-50: hsl(0 0% 98%);
+    --color-gray-100: hsl(0 0% 96%);
+    --color-gray-200: hsl(0 0% 90%);
+    --color-gray-300: hsl(0 0% 83%);
+    --color-gray-400: hsl(0 0% 64%);
+    --color-gray-500: hsl(0 0% 45%);
+    --color-gray-600: hsl(0 0% 32%);
+    --color-gray-700: hsl(0 0% 25%);
+    --color-gray-800: hsl(0 0% 15%);
+    --color-gray-900: hsl(0 0% 9%);
+    --color-gray-950: hsl(0 0% 4%);
+
+    /* Semantic colors - Light mode.
+   * The canvas is a warm off-white; content panels (card/popover) stay pure
+   * white so surfaces separate by background contrast, not border weight. */
+    --color-background: hsl(45 20% 96%);
+    --color-foreground: var(--color-gray-950);
+
+    --color-card: var(--color-white);
+    --color-card-foreground: var(--color-gray-950);
+
+    --color-popover: var(--color-white);
+    --color-popover-foreground: var(--color-gray-950);
+
+    --color-primary: var(--color-gray-900);
+    --color-primary-foreground: var(--color-gray-50);
+    --color-primary-hover: var(--color-gray-800);
+
+    --color-secondary: hsl(45 14% 93%);
+    --color-secondary-foreground: var(--color-gray-900);
+    --color-secondary-hover: hsl(45 10% 86%);
+
+    --color-muted: hsl(45 14% 93%);
+    --color-muted-foreground: var(--color-gray-500);
+
+    --color-accent: hsl(45 14% 93%);
+    --color-accent-foreground: var(--color-gray-900);
+
+    --color-destructive: hsl(352 80% 50%);
+    --color-destructive-foreground: var(--color-white);
+
+    /* Brand accent — Ember, the direction-B signature color (picked 2026-07-28) */
+    --color-brand: hsl(18 100% 59%);
+    --color-brand-hover: hsl(18 100% 52%);
+    --color-brand-foreground: var(--color-white);
+
+    /* Status palette — deliberately off-stock hues (pine, gold, steel) tuned to
+   * sit with Ember; semantics stay conventional. Soft variants are the chip/
+   * surface tints and adapt to dark mode through their base token. */
+    --color-success: hsl(152 55% 34%);
+    --color-success-foreground: var(--color-white);
+    --color-warning: hsl(42 92% 42%);
+    --color-warning-foreground: var(--color-white);
+    --color-info: hsl(213 55% 45%);
+    --color-info-foreground: var(--color-white);
+
+    /* Tint strength for every soft/status surface in the app. Looks dial this
+   * one number to make the whole UI louder or calmer — see looks.css. */
+    --tint-strength: 12%;
+
+    --color-brand-soft: color-mix(in srgb, var(--color-brand) var(--tint-strength), transparent);
+    --color-success-soft: color-mix(in srgb, var(--color-success) var(--tint-strength), transparent);
+    --color-warning-soft: color-mix(in srgb, var(--color-warning) var(--tint-strength), transparent);
+    --color-info-soft: color-mix(in srgb, var(--color-info) var(--tint-strength), transparent);
+    --color-destructive-soft: color-mix(in srgb, var(--color-destructive) var(--tint-strength), transparent);
+
+    /* ========================================
+   * Tone palette — the decorative/semantic colours feature surfaces reach
+   * for (stage chips, badges, diffs, timeline dots). Every tone ALIASES a
+   * themed status, so a theme sets four colours and all of these follow;
+   * components must never hardcode a hue (enforced by bun run lint:tokens).
+   * `-solid` is the marker/dot colour and doubles as the text colour on a
+   * tinted background; `-bg` is that background, tinted via --tint-strength.
+   * ======================================== */
+    --tone-blue-solid: var(--color-info);
+    --tone-green-solid: var(--color-success);
+    --tone-amber-solid: var(--color-warning);
+    --tone-red-solid: var(--color-destructive);
+    --tone-grey-solid: var(--color-muted-foreground);
+    --tone-violet-solid: hsl(270 55% 52%);
+
+    --tone-blue-bg: color-mix(in srgb, var(--tone-blue-solid) var(--tint-strength), transparent);
+    --tone-green-bg: color-mix(in srgb, var(--tone-green-solid) var(--tint-strength), transparent);
+    --tone-amber-bg: color-mix(in srgb, var(--tone-amber-solid) var(--tint-strength), transparent);
+    --tone-red-bg: color-mix(in srgb, var(--tone-red-solid) var(--tint-strength), transparent);
+    --tone-grey-bg: var(--color-muted);
+    --tone-violet-bg: color-mix(in srgb, var(--tone-violet-solid) var(--tint-strength), transparent);
+
+    /* Text on a tinted tone background. Darkened toward the foreground so
+   * 0.65-0.75rem pill text clears AA; the solid alone is often too light. */
+    --tone-blue-fg: color-mix(in srgb, var(--tone-blue-solid) 82%, var(--color-foreground));
+    --tone-green-fg: color-mix(in srgb, var(--tone-green-solid) 82%, var(--color-foreground));
+    --tone-amber-fg: color-mix(in srgb, var(--tone-amber-solid) 70%, var(--color-foreground));
+    --tone-red-fg: color-mix(in srgb, var(--tone-red-solid) 82%, var(--color-foreground));
+    --tone-grey-fg: var(--color-muted-foreground);
+    --tone-violet-fg: color-mix(in srgb, var(--tone-violet-solid) 82%, var(--color-foreground));
+
+    /* Tier badges (lead Hot/Warm/Cold) and revision diffs read as tones too. */
+    --tone-tier-hot: var(--color-brand);
+    --tone-tier-warm: var(--tone-amber-solid);
+    --tone-tier-cold: var(--tone-grey-solid);
+
+    --tone-diff-added-bg: var(--tone-green-bg);
+    --tone-diff-added-fg: var(--tone-green-fg);
+    --tone-diff-removed-bg: var(--tone-red-bg);
+    --tone-diff-removed-fg: var(--tone-red-fg);
+
+    /* Terminal chrome (ttyd wrappers) — always a dark surface, but themable. */
+    --terminal-bg: hsl(0 0% 8%);
+    --terminal-fg: hsl(0 0% 87%);
+    --terminal-muted: hsl(0 0% 73%);
+    --terminal-dim: hsl(0 0% 60%);
+    --terminal-link: var(--tone-blue-solid);
+
+    /* ========================================
+   * Chips / pills — one contract for every small metadata pill (kanban
+   * cards, badges, stage chips). Components pick a TONE token pair; form
+   * (radius, type, case, border) is global so a look can restyle every
+   * chip at once instead of 66 hand-tuned rules.
+   * ======================================== */
+    --chip-radius: var(--radius-full);
+    --chip-padding: 1px 6px;
+    --chip-font-family: var(--font-family-sans);
+    --chip-font-size: 0.65rem;
+    --chip-font-weight: var(--font-weight-medium);
+    --chip-letter-spacing: normal;
+    --chip-text-transform: none;
+    --chip-border-width: 0;
+
+    /* Neutral chip (labels, counts). The text is a step darker than
+   * muted-foreground: at 0.65rem on a muted fill, muted-foreground itself
+   * measures 4.09:1, just under AA for small text. */
+    --chip-bg: var(--color-muted);
+    --chip-fg: color-mix(in srgb, var(--color-muted-foreground) 72%, var(--color-foreground));
+    --chip-border-color: transparent;
+
+    /* Categorical chip (project) — a distinct family, not a semantic status */
+    --chip-category-bg: var(--color-secondary);
+    --chip-category-fg: var(--color-secondary-foreground);
+
+    /* Icon treatment — lucide strokes. Weight plus cap/join geometry is what a
+   * theme changes instead of swapping icon packages (see docs theming.md). */
+    --icon-stroke: 2;
+    --icon-linecap: round;
+    --icon-linejoin: round;
+
+    /* Card form — kanban cards and lanes. Tokenised so a look can change the
+   * physical language (hairline vs slab, soft vs hard shadow) and not just
+   * the palette. */
+    --card-border-width: 1px;
+    --card-shadow: 0 1px 2px color-mix(in srgb, var(--color-black) 4%, transparent);
+    --card-shadow-hover: 0 3px 10px color-mix(in srgb, var(--color-black) 10%, transparent);
+    --card-border-hover: color-mix(in srgb, var(--color-brand) 45%, var(--color-border));
+
+    --color-border: hsl(45 10% 88%);
+    --color-input: hsl(45 10% 88%);
+    --color-ring: var(--color-brand);
+
+    /* Sidebar sits one step deeper than the canvas — same warm family,
+   * clearly a different plane. */
+    --color-sidebar: hsl(45 16% 92%);
+    --color-sidebar-foreground: var(--color-gray-950);
+    --color-sidebar-primary: var(--color-gray-900);
+    --color-sidebar-primary-foreground: var(--color-gray-50);
+    --color-sidebar-accent: hsl(45 12% 87%);
+    --color-sidebar-accent-foreground: var(--color-gray-900);
+    --color-sidebar-border: hsl(45 10% 86%);
+    --color-sidebar-ring: var(--color-gray-300);
+
+    /* ========================================
+   * Typography
+   * ======================================== */
+    --font-family-sans:
+        'Spline Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-family-mono: 'Spline Sans Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+    /* Display face for headings — themes swap this independently of body text,
+   * which is where most of a theme's personality lives. */
+    --font-family-display: var(--font-family-sans);
+    --display-weight: var(--font-weight-semibold);
+    --display-transform: none;
+    --display-tracking: var(--letter-spacing-tight);
+
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.875rem;
+    --font-size-base: 1rem;
+    --font-size-lg: 1.125rem;
+    --font-size-xl: 1.25rem;
+    --font-size-2xl: 1.5rem;
+    --font-size-3xl: 1.875rem;
+    --font-size-4xl: 2.25rem;
+
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+
+    --line-height-none: 1;
+    --line-height-tight: 1.25;
+    --line-height-snug: 1.375;
+    --line-height-normal: 1.5;
+    --line-height-relaxed: 1.625;
+
+    --letter-spacing-tight: -0.025em;
+    --letter-spacing-normal: 0;
+    --letter-spacing-wide: 0.025em;
+
+    /* ========================================
+   * Spacing
+   * ======================================== */
+    --spacing-px: 1px;
+    --spacing-0: 0;
+    --spacing-0-5: 0.125rem;
+    --spacing-1: 0.25rem;
+    --spacing-1-5: 0.375rem;
+    --spacing-2: 0.5rem;
+    --spacing-2-5: 0.625rem;
+    --spacing-3: 0.75rem;
+    --spacing-3-5: 0.875rem;
+    --spacing-4: 1rem;
+    --spacing-5: 1.25rem;
+    --spacing-6: 1.5rem;
+    --spacing-7: 1.75rem;
+    --spacing-8: 2rem;
+    --spacing-9: 2.25rem;
+    --spacing-10: 2.5rem;
+    --spacing-11: 2.75rem;
+    --spacing-12: 3rem;
+    --spacing-14: 3.5rem;
+    --spacing-16: 4rem;
+    --spacing-20: 5rem;
+    --spacing-24: 6rem;
+    --spacing-28: 7rem;
+    --spacing-32: 8rem;
+
+    /* ========================================
+   * Border Radius
+   * ======================================== */
+    --radius-none: 0;
+    --radius-sm: 0.125rem;
+    --radius-default: 0.25rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+    --radius-2xl: 1rem;
+    --radius-3xl: 1.5rem;
+    --radius-full: 9999px;
+
+    /* ========================================
+   * Shadows
+   * ======================================== */
+    --shadow-xs: 0 1px 2px 0 hsl(0 0% 0% / 0.05);
+    --shadow-sm: 0 1px 3px 0 hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
+    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -2px hsl(0 0% 0% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.1), 0 4px 6px -4px hsl(0 0% 0% / 0.1);
+    --shadow-xl: 0 20px 25px -5px hsl(0 0% 0% / 0.1), 0 8px 10px -6px hsl(0 0% 0% / 0.1);
+    --shadow-2xl: 0 25px 50px -12px hsl(0 0% 0% / 0.25);
+    --shadow-inner: inset 0 2px 4px 0 hsl(0 0% 0% / 0.05);
+
+    /* ========================================
+   * Transitions
+   * ======================================== */
+    --duration-75: 75ms;
+    --duration-100: 100ms;
+    --duration-150: 150ms;
+    --duration-200: 200ms;
+    --duration-300: 300ms;
+    --duration-500: 500ms;
+
+    --ease-linear: linear;
+    --ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --ease-out: cubic-bezier(0, 0, 0.2, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* ========================================
+   * Z-Index
+   * ======================================== */
+    --z-0: 0;
+    --z-10: 10;
+    --z-20: 20;
+    --z-30: 30;
+    --z-40: 40;
+    --z-50: 50;
+
+    /* ========================================
+   * Breakpoints (for reference in JS)
+   * ======================================== */
+    --breakpoint-sm: 640px;
+    --breakpoint-md: 768px;
+    --breakpoint-lg: 1024px;
+    --breakpoint-xl: 1280px;
+    --breakpoint-2xl: 1536px;
+
+    /* ========================================
+   * Component-specific
+   * ======================================== */
+    --sidebar-width: 16rem;
+    --sidebar-width-icon: 3rem;
+    --header-height: 3.5rem;
+}
+
+/* ========================================
+ * Dark Mode
+ * ======================================== */
+.dark {
+    --color-background: var(--color-gray-950);
+    --color-foreground: var(--color-gray-50);
+
+    --color-card: hsl(0 0% 7%);
+    --color-card-foreground: var(--color-gray-50);
+
+    --color-popover: hsl(0 0% 7%);
+    --color-popover-foreground: var(--color-gray-50);
+
+    --color-primary: var(--color-gray-50);
+    --color-primary-foreground: var(--color-gray-900);
+    --color-primary-hover: var(--color-gray-200);
+
+    --color-secondary: var(--color-gray-800);
+    --color-secondary-foreground: var(--color-gray-50);
+    --color-secondary-hover: hsl(0 0% 20%);
+
+    --color-muted: var(--color-gray-800);
+    --color-muted-foreground: var(--color-gray-400);
+
+    --color-accent: var(--color-gray-800);
+    --color-accent-foreground: var(--color-gray-50);
+
+    --color-destructive: hsl(352 65% 34%);
+    --color-destructive-foreground: hsl(352 90% 66%);
+
+    /* Status palette — brighter dark-mode bases; soft tints derive automatically */
+    --color-success: hsl(152 50% 52%);
+    --color-success-foreground: var(--color-gray-950);
+    --color-warning: hsl(44 92% 55%);
+    --color-warning-foreground: var(--color-gray-950);
+    --color-info: hsl(213 75% 65%);
+    --color-info-foreground: var(--color-gray-950);
+
+    --color-border: var(--color-gray-800);
+    --color-input: var(--color-gray-800);
+    --color-ring: var(--color-brand);
+
+    /* Sidebar dark mode */
+    --color-sidebar: var(--color-gray-900);
+    --color-sidebar-foreground: var(--color-gray-50);
+    --color-sidebar-primary: var(--color-gray-50);
+    --color-sidebar-primary-foreground: var(--color-gray-50);
+    --color-sidebar-accent: var(--color-gray-800);
+    --color-sidebar-accent-foreground: var(--color-gray-50);
+    --color-sidebar-border: var(--color-gray-800);
+    --color-sidebar-ring: var(--color-gray-700);
+}

@@ -1,0 +1,78 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  align-items: flex-start;
+}
+
+.button {
+  font-size: var(--font-size-xs);
+  gap: 4px;
+  padding: 2px 8px;
+  height: auto;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0); }
+  to { transform: rotate(360deg); }
+}
+
+.error {
+  color: var(--color-destructive);
+  font-size: var(--font-size-xs);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-sm);
+  background-color: color-mix(in srgb, var(--color-destructive) 8%, transparent);
+}
+
+.diffPanel {
+  width: 100%;
+  min-width: 22rem;
+  max-width: 40rem;
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-md);
+  background-color: var(--color-muted);
+  padding: var(--spacing-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.diffHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-2);
+}
+
+.diffLabel {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.diffActions {
+  display: inline-flex;
+  gap: var(--spacing-1);
+}
+
+.diffBody {
+  margin: 0;
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background-color: var(--color-background);
+  padding: var(--spacing-2) var(--spacing-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-input);
+  max-height: 24rem;
+  overflow-y: auto;
+}

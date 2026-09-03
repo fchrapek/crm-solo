@@ -1,0 +1,11 @@
+/* Anchor Link Styles */
+
+.anchor {
+    color: var(--color-muted-foreground);
+    font-size: var(--font-size-sm);
+    transition: color var(--duration-150) var(--ease-in-out);
+}
+
+.anchor:hover {
+    color: var(--color-foreground);
+}

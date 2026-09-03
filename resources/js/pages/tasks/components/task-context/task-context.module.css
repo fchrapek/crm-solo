@@ -1,0 +1,223 @@
+.section {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3);
+    min-width: 0;
+}
+
+/* Highlight ring while a file is being dragged over the section. The whole
+   block becomes the drop target — feels more discoverable than a separate
+   "drag here" strip. */
+.sectionDragging {
+    box-shadow: 0 0 0 2px var(--color-primary);
+    border-radius: var(--radius-md);
+}
+
+.dropOverlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--color-background) 85%, transparent);
+    border-radius: var(--radius-md);
+    color: var(--color-foreground);
+    font-size: 0.875rem;
+    font-weight: 500;
+    gap: var(--spacing-2);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.title {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-muted-foreground);
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    width: 100%;
+    padding: var(--spacing-2) var(--spacing-3);
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-foreground);
+    font-size: 0.875rem;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 100ms;
+    min-width: 0;
+}
+
+.row:hover,
+.row:focus-visible {
+    background: var(--color-muted);
+    outline: none;
+}
+
+.icon {
+    flex-shrink: 0;
+    color: var(--color-muted-foreground);
+}
+
+/* Name + meta stacked vertically so long filenames don't get squashed by the
+   meta line in a narrow column. The wrapper takes the remaining space; both
+   children get min-width: 0 + ellipsis so they truncate gracefully. */
+.rowText {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.meta {
+    color: var(--color-muted-foreground);
+    font-size: 0.75rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The Eye icon stays visible always so the row clearly reads as "click to
+   open." Hover bumps its opacity from muted → full. */
+.openIndicator {
+    flex-shrink: 0;
+    color: var(--color-muted-foreground);
+    opacity: 0.5;
+    transition: opacity 100ms;
+}
+
+.row:hover .openIndicator,
+.row:focus-visible .openIndicator {
+    opacity: 1;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 100ms;
+}
+
+.row:hover .actions,
+.row:focus-within .actions {
+    opacity: 1;
+}
+
+.actionButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-muted-foreground);
+    cursor: pointer;
+}
+
+.actionButton:hover {
+    background: var(--color-background);
+    color: var(--color-foreground);
+}
+
+/* Dropzone doubles as the "add file" affordance — clicking opens the picker,
+   dragging onto it (or anywhere in the section) starts an upload. */
+.dropzone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-4) var(--spacing-3);
+    margin-top: var(--spacing-1);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-muted-foreground);
+    font-size: 0.8125rem;
+    text-align: center;
+    cursor: pointer;
+    transition:
+        background-color 100ms,
+        color 100ms,
+        border-color 100ms;
+}
+
+.dropzone:hover {
+    background: var(--color-muted);
+    color: var(--color-foreground);
+    border-color: var(--color-muted-foreground);
+}
+
+.dropzoneActive {
+    background: var(--color-muted);
+    color: var(--color-foreground);
+    border-color: var(--color-primary);
+    border-style: solid;
+}
+
+.addButton {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    align-self: flex-start;
+    padding: var(--spacing-2) var(--spacing-3);
+    margin-top: var(--spacing-1);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-muted-foreground);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition:
+        background-color 100ms,
+        color 100ms,
+        border-color 100ms;
+}
+
+.addButton:hover {
+    background: var(--color-muted);
+    color: var(--color-foreground);
+    border-color: var(--color-muted-foreground);
+}
+
+.addButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.hiddenInput {
+    display: none;
+}
+
+.empty {
+    color: var(--color-muted-foreground);
+    font-size: 0.875rem;
+    padding: var(--spacing-2) var(--spacing-3);
+}

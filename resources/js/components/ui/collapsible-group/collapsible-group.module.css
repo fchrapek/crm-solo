@@ -1,0 +1,66 @@
+.group {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background-color: var(--color-card);
+    overflow: hidden;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: var(--spacing-3) var(--spacing-4);
+    color: var(--color-foreground);
+    transition: background-color 0.15s;
+}
+
+.header:hover {
+    background-color: var(--color-muted);
+}
+
+.headerTrigger {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+}
+
+.headerRight {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+.chevron {
+    display: flex;
+    align-items: center;
+    color: var(--color-muted-foreground);
+}
+
+.icon {
+    display: flex;
+    align-items: center;
+}
+
+.title {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+}
+
+.count {
+    color: var(--color-muted-foreground);
+    font-size: var(--font-size-xs);
+}
+
+.content {
+    /* No extra padding — consumers control their own content layout */
+}

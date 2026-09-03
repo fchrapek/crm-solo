@@ -1,0 +1,89 @@
+/* One line per project. The Work tab answers "which projects, how far along,
+   anything running" — the board itself is one click away. */
+.row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-card);
+    transition: border-color 0.15s ease;
+}
+
+.row:hover {
+    border-color: var(--color-foreground);
+}
+
+/* The whole row is a mouse target for the board page; the interactive bits
+   (name link, actions) sit above it. */
+.rowOverlay {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+}
+
+.name {
+    position: relative;
+    font-weight: var(--font-weight-medium);
+    color: var(--color-foreground);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.name:hover {
+    color: var(--color-brand);
+}
+
+.count {
+    font-size: var(--font-size-xs);
+    color: var(--color-muted-foreground);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Everything after this is pushed to the trailing edge, above the overlay. */
+.actions {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-1);
+    margin-left: auto;
+}
+
+.agentLink {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-xs);
+    color: var(--color-muted-foreground);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.agentLink:hover {
+    color: var(--color-brand);
+}
+
+.boardLink {
+    display: inline-flex;
+    align-items: center;
+    color: var(--color-muted-foreground);
+}
+
+.boardLink:hover {
+    color: var(--color-brand);
+}
+
+.dropdownIcon {
+    margin-right: var(--spacing-2);
+}
+
+.privateBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
