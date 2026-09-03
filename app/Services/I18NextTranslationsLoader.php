@@ -65,11 +65,11 @@ final readonly class I18NextTranslationsLoader
                 $i18nTranslations[$i18nKey] = $this->prepare($laravelValue);
             } else {
                 $translationWithReplacedVariableSyntax = preg_replace("/:(\w+)/", '{{$1}}', $laravelValue);
-                // handle pluralisation
                 if (Str::contains($translationWithReplacedVariableSyntax, '|')) {
-                    [$one, $other] = explode('|', $translationWithReplacedVariableSyntax);
-                    $i18nTranslations[$i18nKey.'_one'] = $one;
-                    $i18nTranslations[$i18nKey.'_other'] = $other;
+                    $i18nTranslations = array_merge(
+                        $i18nTranslations,
+                        $this->pluralForms($i18nKey, $translationWithReplacedVariableSyntax),
+                    );
                 } else {
                     $i18nTranslations[$i18nKey] = $translationWithReplacedVariableSyntax;
                 }
@@ -77,6 +77,34 @@ final readonly class I18NextTranslationsLoader
         }
 
         return $this->flatten($i18nTranslations);
+    }
+
+    /**
+     * Expand Laravel's pipe pluralisation into the i18next suffixes.
+     *
+     * Laravel writes "one|other", or "one|few|many" for languages carrying
+     * more plural categories. i18next selects by CLDR category, and Polish
+     * asks for _few (2 to 4) and _many (5 and up). Emitting only _one and
+     * _other left those unresolved, so i18next fell through to the fallback
+     * language and rendered English labels inside a Polish page. The third
+     * form was dropped outright, which broke the error-count strings.
+     *
+     * @return array<string, string>
+     */
+    private function pluralForms(string $key, string $value): array
+    {
+        $parts = explode('|', $value);
+
+        [$one, $few, $many] = count($parts) >= 3
+            ? [$parts[0], $parts[1], $parts[2]]
+            : [$parts[0], $parts[1], $parts[1]];
+
+        return [
+            $key.'_one' => $one,
+            $key.'_few' => $few,
+            $key.'_many' => $many,
+            $key.'_other' => $many,
+        ];
     }
 
     private function flatten($translations): array

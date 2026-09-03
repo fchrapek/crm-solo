@@ -1375,5 +1375,21 @@
     "Billing summary": "Billing summary",
     "Pool for the period": "Pool for the period",
     "Used in the period": "Used in the period",
-    "Hours above the agreed carry-over cap, not carried forward: :hours": "Hours above the agreed carry-over cap, not carried forward: :hours"
+    "Hours above the agreed carry-over cap, not carried forward: :hours": "Hours above the agreed carry-over cap, not carried forward: :hours",
+    "Polish invoicing and accounting platform": "Polish invoicing and accounting platform",
+    "Sync project boards and tasks for client management": "Sync project boards and tasks for client management",
+    "Time tracking and work hours reporting": "Time tracking and work hours reporting",
+    "Time entries": "Time entries",
+    "Child tasks": "Child tasks",
+    "Clear": "Clear",
+    "Copied!": "Copied!",
+    "Copy merge command": "Copy merge command",
+    "Go to next page": "Go to next page",
+    "Go to previous page": "Go to previous page",
+    "Page": "Page",
+    "Paid": "Paid",
+    "Run in:": "Run in:",
+    "Select a country": "Select a country",
+    "Select role": "Select role",
+    "Select trashed status": "Select trashed status"
 }

@@ -61,12 +61,12 @@ export default function Integrations() {
                             </a>
                         </div>
 
-                        <p className={styles.cardDescription}>{integration.description}</p>
+                        <p className={styles.cardDescription}>{t(integration.description)}</p>
 
                         <div className={styles.features}>
                             {integration.features.map((feature) => (
                                 <span key={feature} className={styles.featureBadge}>
-                                    {t(feature.charAt(0).toUpperCase() + feature.slice(1))}
+                                    {t(feature.charAt(0).toUpperCase() + feature.slice(1).replace(/_/g, ' '))}
                                 </span>
                             ))}
                         </div>

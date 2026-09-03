@@ -1383,5 +1383,21 @@
     "Hours above the agreed carry-over cap, not carried forward: :hours": "Godziny powyżej ustalonego limitu kumulacji, nieprzeniesione: :hours",
     "Select a client": "Wybierz klienta",
     "Select type": "Wybierz typ",
-    "e.g., sp. z o.o., JDG": "np. sp. z o.o., JDG"
+    "e.g., sp. z o.o., JDG": "np. sp. z o.o., JDG",
+    "Polish invoicing and accounting platform": "Polska platforma do fakturowania i księgowości",
+    "Sync project boards and tasks for client management": "Synchronizacja tablic projektów i zadań klientów",
+    "Time tracking and work hours reporting": "Śledzenie czasu i raportowanie godzin pracy",
+    "Time entries": "Wpisy czasu",
+    "Child tasks": "Podzadania",
+    "Clear": "Wyczyść",
+    "Copied!": "Skopiowano!",
+    "Copy merge command": "Kopiuj polecenie scalenia",
+    "Go to next page": "Przejdź do następnej strony",
+    "Go to previous page": "Przejdź do poprzedniej strony",
+    "Page": "Strona",
+    "Paid": "Opłacone",
+    "Run in:": "Uruchom w:",
+    "Select a country": "Wybierz kraj",
+    "Select role": "Wybierz rolę",
+    "Select trashed status": "Wybierz status usuniętych"
 }

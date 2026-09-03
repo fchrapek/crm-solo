@@ -19,6 +19,11 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <!-- Pinned: several tests assert on rendered copy, so a developer
+             whose .env runs the app in Polish must not get English
+             assertions failing against Polish output. -->
+        <env name="APP_LOCALE" value="en"/>
+        <env name="APP_FALLBACK_LOCALE" value="en"/>
         <env name="APP_DISPLAY_TIMEZONE" value="UTC"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="AGENT_DEFAULT_EXECUTOR" value="claude_code"/>
