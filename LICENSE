@@ -21,14 +21,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-NOTICES
-
-This project began from the Laravel application skeleton and a Ping CRM style
-React/Inertia starter, both MIT licensed, whose copyright lines are retained
-above.
-
-Bundled fonts under resources/fonts are licensed separately under the SIL Open
-Font License; see resources/fonts/OFL.txt.

@@ -1,0 +1,20 @@
+CRM Solo bundles third-party work. The MIT terms in LICENSE cover the code;
+these are the attributions that come with it.
+
+Upstream code
+-------------
+This project began from the Laravel application skeleton and a Ping CRM style
+React/Inertia starter, both MIT licensed. Their copyright lines are retained in
+LICENSE:
+
+    Copyright (c) Taylor Otwell (laravel/laravel)
+    Copyright (c) 2022 Florian (fouteox)
+
+Fonts
+-----
+The typeface subsets under resources/fonts are not covered by the MIT licence.
+They are published under the SIL Open Font License, Version 1.1, and each keeps
+its own copyright. The full text and the per-family notices are in
+resources/fonts/OFL.txt.
+
+    Archivo Black, Outfit, Space Grotesk, Spline Sans, Spline Sans Mono

@@ -97,5 +97,5 @@ usually lose to whatever the agency needs that week.
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). Bundled fonts are under the SIL Open Font
-Licence, see [resources/fonts/OFL.txt](resources/fonts/OFL.txt).
+MIT, see [LICENSE](LICENSE). Third-party attribution, including the SIL Open
+Font Licence covering the bundled typefaces, is in [NOTICE](NOTICE).
