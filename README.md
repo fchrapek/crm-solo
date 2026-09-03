@@ -10,8 +10,9 @@ describes, which is why it can do things a hosted CRM cannot: read the git
 repositories it has on disk, open a terminal session inside a task's worktree,
 and start the project's dev server to look at the change.
 
-A read-only demo with fictional data runs at
-[demo.crm-solo.com](https://demo.crm-solo.com).
+A public demo with fictional data runs at
+[demo.crm-solo.com](https://demo.crm-solo.com). It reseeds every night, so
+anything you change there is temporary.
 
 ## Stack
 

@@ -137,6 +137,9 @@ final class TaskAttachmentsController extends Controller
 
         $headers = [
             'Content-Type' => $attachment->mime,
+            // The mime is sniffed from the upload, so never let a browser
+            // second-guess it and render a text file as HTML.
+            'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, max-age=300',
         ];
         // SVG rendered inline executes embedded scripts on the app origin

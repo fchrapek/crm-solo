@@ -22,7 +22,13 @@ use App\Http\Controllers\TimeEntriesController;
 use App\Http\Controllers\UsersController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/locales/{locale}/translation.json', FetchTranslationsController::class)->name('i18next.fetch');
+// Unauthenticated by necessity: the frontend fetches its strings before a
+// session exists. The locale is constrained because it lands in a filesystem
+// path, and a bare '..' is a single valid URL segment, which walked the loader
+// out of lang/ and into the project root.
+Route::get('/locales/{locale}/translation.json', FetchTranslationsController::class)
+    ->where('locale', '[a-z]{2}(_[A-Z]{2})?')
+    ->name('i18next.fetch');
 
 Route::controller(AuthenticatedSessionController::class)->group(function () {
     Route::middleware('guest')->group(function () {

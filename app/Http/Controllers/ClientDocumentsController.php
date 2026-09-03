@@ -89,6 +89,9 @@ final class ClientDocumentsController extends Controller
 
         return response()->file($absolutePath, [
             'Content-Type' => $document->mime,
+            // The mime is sniffed from the upload, so never let a browser
+            // second-guess it and render a text file as HTML.
+            'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, max-age=300',
         ]);
     }

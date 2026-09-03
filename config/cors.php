@@ -21,7 +21,9 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    // The one API route is token-gated and credentials are off, so a wildcard
+    // grants nothing; it is narrowed anyway so a new API route cannot inherit it.
+    'allowed_origins' => [env('APP_URL', 'http://localhost')],
 
     'allowed_origins_patterns' => [],
 

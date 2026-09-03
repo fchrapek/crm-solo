@@ -17,6 +17,16 @@ final class DatabaseSeeder extends Seeder
     {
         $account = Account::create(['name' => 'Acme Corporation']);
 
+        // The owner below has a password this repository publishes, and the
+        // README tells a reader to run this seeder. Creating it anywhere but a
+        // developer's own machine hands over an admin account. DemoSeeder
+        // carries the same warning and generates a random password instead.
+        if (! app()->environment('local', 'testing')) {
+            $this->command?->warn('Skipping the known-password owner: not a local environment.');
+
+            return;
+        }
+
         User::firstOrCreate(
             ['email' => 'webmaster@crm-solo.test'],
             [
