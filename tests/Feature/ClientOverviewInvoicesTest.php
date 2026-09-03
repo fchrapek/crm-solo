@@ -32,7 +32,7 @@ final class ClientOverviewInvoicesTest extends TestCase
         Invoice::create([
             'account_id' => $account->id,
             'client_id' => $client->id,
-            'external_id' => '94453569',
+            'external_id' => '20000001',
             'number' => '18/07/2026',
             'status' => 'paid',
             'currency' => 'PLN',
@@ -58,7 +58,7 @@ final class ClientOverviewInvoicesTest extends TestCase
         $this->assertSame('paid', $invoices['recent'][0]['status']);
         $this->assertSame(1214.01, $invoices['recent'][0]['gross'], 'Grosze are converted to major units for display.');
         $this->assertSame(
-            'https://app.infakt.test/app/faktury/94453569',
+            'https://app.infakt.test/app/faktury/20000001',
             $invoices['recent'][0]['external_url'],
             'The deep link interpolates the Infakt id, which the API never returns as a URL.',
         );
@@ -70,7 +70,7 @@ final class ClientOverviewInvoicesTest extends TestCase
         $this->assertSame(1, $tab['total']);
         $this->assertFalse($tab['truncated']);
         $this->assertSame('18/07/2026', $tab['rows'][0]['number']);
-        $this->assertSame('https://app.infakt.test/app/faktury/94453569', $tab['rows'][0]['external_url']);
+        $this->assertSame('https://app.infakt.test/app/faktury/20000001', $tab['rows'][0]['external_url']);
     }
 
     public function test_overview_shows_three_recent_invoices_while_the_tab_lists_them_all(): void

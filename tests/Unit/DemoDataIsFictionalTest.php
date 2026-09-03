@@ -81,11 +81,9 @@ final class DemoDataIsFictionalTest extends TestCase
     }
 
     /**
-     * `migrate --seed` is the command the README hands a new reader, and it
-     * runs the factory, not DemoSeeder. Faker's pl_PL provider emits VALID
-     * tax ids and real-looking .pl mail domains, so before 2026-09-03 that
-     * command wrote a hundred rows carrying live identifiers into every
-     * developer's database.
+     * `migrate --seed`, the command the README hands a reader, runs this
+     * factory rather than DemoSeeder. Faker's pl_PL provider emits VALID tax
+     * ids and real .pl mail domains.
      */
     public function test_the_client_factory_never_generates_usable_identifiers(): void
     {

@@ -10,13 +10,12 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
  * Mirrors the shape of real Infakt-synced clients: Polish businesses,
- * `Sp. z o.o.` / sole-prop names, PL addresses, PLN currency, mostly missing
- * phones (Infakt rarely captures them).
+ * `Sp. z o.o.` / sole-prop names, PL addresses, PLN currency.
  *
- * Identifiers are deliberately unusable: tax ids fail their checksum, mail is
- * on a reserved TLD and phones sit in an unassigned range. This runs on a
- * developer's first `migrate --seed`, so it must not fabricate a hundred
- * records that point at real companies.
+ * Identifiers are deliberately unusable, because this runs on a developer's
+ * first `migrate --seed` and must not fabricate rows pointing at real
+ * companies: tax ids fail their checksum, mail is on a reserved TLD and
+ * phones sit in an unassigned range.
  */
 final class ClientFactory extends Factory
 {
@@ -93,10 +92,7 @@ final class ClientFactory extends Factory
      * A NIP-shaped number whose checksum is deliberately wrong.
      *
      * Faker's taxpayerIdentificationNumber() emits valid ones, and a valid NIP
-     * can belong to a real company, so seeding one puts a stranger's tax id in
-     * a developer's database. Shifting the check digit off the correct value
-     * keeps the format without ever landing on a live registration. Pinned by
-     * DemoDataIsFictionalTest.
+     * can belong to a real company.
      */
     private static function invalidNip(Generator $pl): string
     {

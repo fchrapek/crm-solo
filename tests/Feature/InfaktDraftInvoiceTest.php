@@ -32,7 +32,7 @@ final class InfaktDraftInvoiceTest extends TestCase
             Carbon::parse('2026-06-15'),
         )['invoice'];
 
-        $this->assertSame(27861672, $payload['client_id']);
+        $this->assertSame(10000002, $payload['client_id']);
         $this->assertSame('2026-06-30', $payload['sale_date']); // last day of the billed month
         $this->assertSame('transfer', $payload['payment_method']);
 
@@ -101,7 +101,7 @@ final class InfaktDraftInvoiceTest extends TestCase
         $client = $this->account->clients()->create([
             'name' => 'Roofs Ltd',
             'month_close_type' => 'maintenance',
-            'external_ids' => ['infakt' => '27861672'],
+            'external_ids' => ['infakt' => '10000002'],
             'maintenance_invoice_description' => $description,
         ]);
         $client->retainers()->create([

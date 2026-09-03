@@ -10,7 +10,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // External-system identity for pulled leads — e.g. "ff-127" for
+        // External-system identity for pulled leads — e.g. "ff-{submission id}" for
         // FluentForm submission 127 pulled by kiwwwi:sync-leads. The unique
         // (account_id, external_ref) pair is the dedupe backbone: re-running a
         // pull can only skip, never duplicate, and because the CRM-side lookup

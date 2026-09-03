@@ -7,12 +7,10 @@ namespace Tests\Feature;
 use Tests\TestCase;
 
 /**
- * The translations endpoint is the one route that must answer before a session
- * exists, so it is the one route an anonymous caller can reach. Until
- * 2026-09-03 its locale segment went unvalidated into a filesystem path, and
- * ".." is a single valid URL segment: /locales/%2e%2e/translation.json walked
- * the loader out of lang/ and into the project root, where it required and
- * serialised whatever PHP files it found.
+ * The one route an anonymous caller can reach, because the frontend fetches
+ * strings before a session exists. Its locale lands in a filesystem path, and
+ * ".." is a single valid URL segment, which walked the loader into the project
+ * root until 2026-09-03.
  */
 final class TranslationsRouteTest extends TestCase
 {

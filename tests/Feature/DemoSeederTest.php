@@ -41,12 +41,10 @@ final class DemoSeederTest extends TestCase
     }
 
     /**
-     * A reserved domain stops demo data pointing at a stranger's site, but the
-     * company NAME is the other half. Until 2026-09-03 eight of these were real
-     * registered businesses, shown on the public demo attached to invented
-     * offers and invented board minutes. Plausible Polish company names are
-     * almost all somebody's, so demo names now carry an explicit fiction
-     * marker rather than being invented and hoped about.
+     * A reserved domain stops demo data pointing at a stranger's site; the
+     * company name is the other half. Eight of these were real businesses until
+     * 2026-09-03, so names now carry an explicit fiction marker rather than
+     * being invented and hoped about.
      */
     public function test_every_demo_company_name_is_marked_fictional(): void
     {

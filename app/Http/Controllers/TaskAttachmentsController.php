@@ -137,8 +137,8 @@ final class TaskAttachmentsController extends Controller
 
         $headers = [
             'Content-Type' => $attachment->mime,
-            // The mime is sniffed from the upload, so never let a browser
-            // second-guess it and render a text file as HTML.
+            // The mime is sniffed from the upload, so do not let a browser
+            // re-guess it and render a text file as HTML.
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, max-age=300',
         ];

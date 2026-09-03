@@ -80,14 +80,11 @@ final readonly class I18NextTranslationsLoader
     }
 
     /**
-     * Expand Laravel's pipe pluralisation into the i18next suffixes.
+     * Expand Laravel's "one|other" or "one|few|many" into i18next suffixes.
      *
-     * Laravel writes "one|other", or "one|few|many" for languages carrying
-     * more plural categories. i18next selects by CLDR category, and Polish
-     * asks for _few (2 to 4) and _many (5 and up). Emitting only _one and
-     * _other left those unresolved, so i18next fell through to the fallback
-     * language and rendered English labels inside a Polish page. The third
-     * form was dropped outright, which broke the error-count strings.
+     * i18next selects by CLDR category, so Polish asks for _few and _many.
+     * Without them it falls through to the fallback language and renders
+     * English inside a Polish page.
      *
      * @return array<string, string>
      */

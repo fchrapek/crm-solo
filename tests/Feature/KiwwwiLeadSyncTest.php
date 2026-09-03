@@ -42,7 +42,7 @@ final class KiwwwiLeadSyncTest extends TestCase
         // Consent Mode denied-by-default: the ad landing carries gbraid/gad_*
         // and no gclid (mirrors real submission #132 from campaign 24045017187).
         $submission = $this->form3Submission();
-        $submission['id'] = 129;
+        $submission['id'] = 9003;
         $submission['source_url'] = 'https://kiwwwi.pl/sklep-woocommerce/?gad_source=1&gad_campaignid=24045017187&gbraid=0AAAAAtest';
         $submission['utm'] = ['gad_source' => '1', 'gad_campaignid' => '24045017187', 'gbraid' => '0AAAAAtest'];
 
@@ -50,7 +50,7 @@ final class KiwwwiLeadSyncTest extends TestCase
 
         $this->artisan('kiwwwi:sync-leads')->assertSuccessful();
 
-        $lead = Lead::where('external_ref', 'ff-129')->firstOrFail();
+        $lead = Lead::where('external_ref', 'ff-9003')->firstOrFail();
         $this->assertSame('ads', $lead->source);
     }
 
@@ -63,7 +63,7 @@ final class KiwwwiLeadSyncTest extends TestCase
         $this->assertSame(2, Lead::count());
 
         // Form 3: free-text name, no tracking → the website-form channel.
-        $form3 = Lead::where('external_ref', 'ff-127')->firstOrFail();
+        $form3 = Lead::where('external_ref', 'ff-9001')->firstOrFail();
         $this->assertSame('kiwwwi', $form3->pipeline);
         $this->assertSame('Jan Kowalski', $form3->name);
         $this->assertSame('jan@example.com', $form3->email);
@@ -74,7 +74,7 @@ final class KiwwwiLeadSyncTest extends TestCase
         $this->assertSame('2026-07-20 11:57:33', $form3->captured_at->utc()->format('Y-m-d H:i:s'), 'captured_at is the WP timestamp, not sync time');
 
         // Form 6: nested name + company, gclid/cpc → the paid ads channel.
-        $form6 = Lead::where('external_ref', 'ff-128')->firstOrFail();
+        $form6 = Lead::where('external_ref', 'ff-9002')->firstOrFail();
         $this->assertSame('Anna Nowak', $form6->name);
         $this->assertSame('Testowa Sp. z o.o.', $form6->company);
         $this->assertSame('ads', $form6->source);
@@ -101,7 +101,7 @@ final class KiwwwiLeadSyncTest extends TestCase
         $this->artisan('kiwwwi:sync-leads')->assertSuccessful();
 
         $this->assertSame(2, Lead::count(), 're-run must not duplicate');
-        $this->assertSame(1, Lead::where('external_ref', 'ff-127')->count());
+        $this->assertSame(1, Lead::where('external_ref', 'ff-9001')->count());
 
         // Second run resumes from the newest pulled captured_at (12:10 UTC).
         $withSince = collect(Http::recorded())
@@ -115,7 +115,7 @@ final class KiwwwiLeadSyncTest extends TestCase
         $this->fakeEndpoint([$this->form3Submission()]);
 
         $this->artisan('kiwwwi:sync-leads')->assertSuccessful();
-        Lead::where('external_ref', 'ff-127')->firstOrFail()->delete();
+        Lead::where('external_ref', 'ff-9001')->firstOrFail()->delete();
 
         $this->artisan('kiwwwi:sync-leads --full')->assertSuccessful();
 
@@ -128,21 +128,21 @@ final class KiwwwiLeadSyncTest extends TestCase
         $this->fakeEndpoint([
             ['nonsense' => true],                                   // no id
             'not-even-an-object',                                   // wrong type
-            ['id' => 130, 'response' => 'garbage-not-an-array'],    // rotten fields
+            ['id' => 9004, 'response' => 'garbage-not-an-array'],    // rotten fields
             $this->form3Submission(),                               // still lands
         ]);
 
         $this->artisan('kiwwwi:sync-leads')->assertSuccessful();
 
         $this->assertSame(1, Lead::whereNotNull('email')->count(), 'the valid submission still lands');
-        $this->assertSame('ff-127', Lead::where('email', 'jan@example.com')->sole()->external_ref);
+        $this->assertSame('ff-9001', Lead::where('email', 'jan@example.com')->sole()->external_ref);
 
         // The id-bearing rotten row still creates a minimal lead (fallback
         // name, www-form source) rather than being lost — only id-less noise
         // is uncreatable.
-        $minimal = Lead::where('external_ref', 'ff-130')->first();
+        $minimal = Lead::where('external_ref', 'ff-9004')->first();
         $this->assertNotNull($minimal);
-        $this->assertSame('FluentForm entry #130', $minimal->name);
+        $this->assertSame('FluentForm entry #9004', $minimal->name);
     }
 
     public function test_unexpected_payload_shape_fails_the_command_cleanly(): void
@@ -185,7 +185,7 @@ final class KiwwwiLeadSyncTest extends TestCase
     private function form3Submission(): array
     {
         return [
-            'id' => 127,
+            'id' => 9001,
             'form_id' => 3,
             'status' => 'unread',
             'created_at' => '2026-07-20 13:57:33',
@@ -206,7 +206,7 @@ final class KiwwwiLeadSyncTest extends TestCase
     private function form6Submission(): array
     {
         return [
-            'id' => 128,
+            'id' => 9002,
             'form_id' => 6,
             'status' => 'unread',
             'created_at' => '2026-07-20 14:10:00',

@@ -8,13 +8,9 @@ use App\Services\I18NextTranslationsLoader;
 use Tests\TestCase;
 
 /**
- * Polish breadcrumbs rendered the English word "Clients" until 2026-09-03.
- *
- * Laravel writes pluralisation as "one|other" and the loader turned that into
- * i18next's _one and _other. i18next selects by CLDR category, and Polish asks
- * for _few at a count of 2, so the lookup missed, fell through to the fallback
- * language and produced English inside a Polish page. A three-form Polish
- * string lost its third form outright.
+ * Polish breadcrumbs rendered the English "Clients" until 2026-09-03: the
+ * loader emitted only _one and _other, and i18next asks Polish for _few at a
+ * count of 2, so it fell through to the fallback language.
  */
 final class I18NextTranslationsLoaderTest extends TestCase
 {

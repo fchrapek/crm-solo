@@ -139,7 +139,7 @@ final class AbonamentPositionsInvoiceTest extends TestCase
         return $this->account->clients()->create([
             'name' => 'Multi Site Sp. z o.o.',
             'month_close_type' => 'maintenance',
-            'external_ids' => ['infakt' => '28956539'],
+            'external_ids' => ['infakt' => '10000003'],
             'maintenance_invoice_description' => $description,
         ]);
     }

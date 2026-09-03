@@ -1,13 +1,10 @@
-# Every port binds to 127.0.0.1. Docker's short "3306:3306" syntax listens on
-# every interface and writes its own firewall rules, so on any shared network
-# the database, the unauthenticated cache and every captured email are open to
-# the LAN, behind a password this repository publishes.
+# Ports bind to 127.0.0.1: Docker's short "3306:3306" syntax listens on every
+# interface and writes its own firewall rules, which would open the database to
+# the LAN behind a password this repository publishes.
 #
-# Container names key off COMPOSE_PROJECT_NAME and the published ports read
-# the same variables Laravel does, so a second checkout that changes DB_PORT
-# in its .env moves the container with it. Without that, two checkouts publish
-# the same port: the second stack fails to bind, and its app silently talks to
-# the first one's database on identical .env.example credentials.
+# Names and ports key off COMPOSE_PROJECT_NAME and the variables Laravel reads,
+# so a second checkout that changes DB_PORT cannot silently connect to this
+# one's database.
 services:
     nginx:
         image: nginx:alpine
