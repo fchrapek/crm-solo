@@ -1,14 +1,17 @@
 name: Deploy Demo
 
-# The demo branch is a deployment pointer: fast-forward it from develop
-# (`git push origin develop:demo`) to refresh demo.crm-solo.com. Every deploy
-# reseeds the fictional dataset via demo:reset — the demo never accumulates
-# visitor edits across deploys (and self-heals nightly via the scheduler).
+# demo.crm-solo.com runs the public repository. A push to main of
+# fchrapek/crm-solo builds the image, redeploys, and reseeds the fictional
+# dataset via demo:reset, so the demo never accumulates visitor edits (it also
+# self-heals nightly via the scheduler). The private repository carries this
+# file verbatim, which is why the jobs check the repository name: there it
+# stays inert. Secrets live in the public repo's `demo` environment, which
+# only main may use.
 
 on:
   push:
     branches:
-      - demo
+      - main
 
 env:
   REGISTRY: ghcr.io
@@ -16,6 +19,7 @@ env:
 
 jobs:
   build:
+    if: github.repository == 'fchrapek/crm-solo'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,10 +52,20 @@ jobs:
 
   deploy:
     needs: build
+    if: github.repository == 'fchrapek/crm-solo'
     runs-on: ubuntu-latest
-    environment: development
+    environment: demo
 
     steps:
+      - name: Refuse to run without a deploy target
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          if [ -z "$DEPLOY_PATH" ]; then
+            echo "::error::DEPLOY_PATH is not set in the demo environment; refusing to deploy into a default directory."
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -63,7 +77,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: compose.demo.yaml
-          target: ${{ secrets.DEPLOY_PATH || '/srv/crm-solo-demo' }}/
+          target: ${{ secrets.DEPLOY_PATH }}/
 
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
@@ -74,7 +88,14 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -e
-            cd ${{ secrets.DEPLOY_PATH || '/srv/crm-solo-demo' }}
+            cd ${{ secrets.DEPLOY_PATH }}
+
+            # The target is provisioned by hand, once; the workflow never creates it.
+            if [ ! -f .env ] || ! grep -Eq '^DEMO_IMAGE=.+' .env; then
+              echo "Deploy target is not provisioned: expected a .env with DEMO_IMAGE set."
+              exit 1
+            fi
+            echo "Deploy target is provisioned (.env present, DEMO_IMAGE set)."
 
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
