@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Console\Commands\Concerns\ResolvesProjectAndClient;
 use App\Models\Project;
 use Illuminate\Console\Command;
@@ -16,21 +18,27 @@ use RuntimeException;
  * you track here. Deleting it drops the task history AND lets the next sync
  * recreate the project, so the only move that sticks is a tombstone.
  */
+#[AccountScope(AccountScope::ACTING)]
 final class ArchiveProjectsCommand extends Command
 {
+    use AgentConsoleOutput;
     use ResolvesProjectAndClient;
 
     protected $signature = 'projects:archive
                             {project?* : Project IDs or names (repeatable)}
                             {--orphans : Target every project with no client instead}
                             {--restore : Un-archive instead}
-                            {--account= : Restrict resolution to this account ID}';
+                            {--account= : Account ID; must be the acting account}';
 
     protected $description = 'Archive projects (hidden from views, kept in the DB, skipped by Trello sync). --restore reverses it.';
 
     public function handle(): int
     {
-        $accountId = $this->intOption('account');
+        $accountId = $this->actingAccountId();
+        if ($accountId === null) {
+            return self::FAILURE;
+        }
+
         $restoring = (bool) $this->option('restore');
 
         try {
@@ -66,7 +74,7 @@ final class ArchiveProjectsCommand extends Command
     }
 
     /** @return \Illuminate\Support\Collection<int, Project> */
-    private function targets(?int $accountId, bool $restoring): \Illuminate\Support\Collection
+    private function targets(int $accountId, bool $restoring): \Illuminate\Support\Collection
     {
         $needles = (array) $this->argument('project');
 
@@ -78,7 +86,7 @@ final class ArchiveProjectsCommand extends Command
             $query = Project::query()->whereNull('client_id');
 
             return ($restoring ? $query->archived() : $query->notArchived())
-                ->when($accountId !== null, fn ($q) => $q->where('account_id', $accountId))
+                ->where('account_id', $accountId)
                 ->orderBy('id')
                 ->get();
         }
@@ -91,12 +99,5 @@ final class ArchiveProjectsCommand extends Command
             ->map(fn (string $needle): Project => $this->resolveProject($needle, $accountId))
             ->unique('id')
             ->values();
-    }
-
-    private function intOption(string $name): ?int
-    {
-        $value = $this->option($name);
-
-        return $value === null || $value === '' ? null : (int) $value;
     }
 }

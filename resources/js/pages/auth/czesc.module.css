@@ -1,0 +1,34 @@
+/* The /czesc splash: the login screen's frame (login.module.css) plus these few pieces. Not final, Figma first. */
+.lede {
+    margin: 0;
+    font-size: var(--solo-text-row);
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+/* Off-screen rather than display:none, which some bots skip. */
+.honeypot {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+.signIn {
+    margin: 0;
+    font-size: var(--solo-text-action);
+    font-weight: 500;
+}
+
+.signIn a {
+    color: inherit;
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.signIn a:focus-visible {
+    outline: 2px solid var(--solo-fg);
+    outline-offset: 3px;
+}

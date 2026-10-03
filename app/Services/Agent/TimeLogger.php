@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Agent;
 
-use App\Actions\Clockify\PushTimeEntryToClockify;
 use App\Models\TimeEntry;
 use Carbon\Carbon;
 use InvalidArgumentException;
@@ -13,8 +12,7 @@ use Throwable;
 /**
  * Manual time logging shared by the CLI and MCP — mirrors
  * TimeEntriesController::store() so every transport produces identical rows
- * (account-scoped, closed entry with consistent end_time + duration, optional
- * best-effort Clockify push).
+ * (account-scoped, closed entry with consistent end_time + duration).
  */
 final class TimeLogger
 {
@@ -28,6 +26,7 @@ final class TimeLogger
      * @return array<string, mixed>
      */
     public function log(
+        int $accountId,
         int $minutes,
         ?string $task = null,
         ?string $client = null,
@@ -36,8 +35,6 @@ final class TimeLogger
         ?string $title = null,
         ?string $end = null,
         bool $billable = true,
-        bool $push = true,
-        ?int $accountId = null,
     ): array {
         if ($minutes <= 0) {
             throw new InvalidArgumentException('minutes must be a positive integer.');
@@ -53,7 +50,7 @@ final class TimeLogger
             throw new InvalidArgumentException('Pass exactly one target: task, client, or project.');
         }
 
-        [$accId, $projectId, $clientId, $taskId, $descDefault, $label] = $this->resolveTarget($targets, $accountId);
+        [$accId, $projectId, $clientId, $taskId, $descDefault, $label, $external] = $this->resolveTarget($targets, $accountId);
 
         $displayTz = (string) config('app.display_timezone', config('app.timezone'));
         $storageTz = (string) config('app.timezone');
@@ -85,11 +82,6 @@ final class TimeLogger
             'billable' => $billable,
         ]);
 
-        if ($push) {
-            // Best-effort — no-ops if Clockify isn't configured (mirrors the controller).
-            (new PushTimeEntryToClockify)($entry->load('project.client'));
-        }
-
         $startLocal = (clone $startAt)->setTimezone($displayTz);
         $endLocal = (clone $endAt)->setTimezone($displayTz);
 
@@ -102,26 +94,26 @@ final class TimeLogger
             'end_local' => $endLocal->format('Y-m-d H:i'),
             'timezone' => $endLocal->format('T'),
             'billable' => $entry->billable,
-            'pushed_to_clockify' => $push,
+            'untrusted' => $external ? ['target'] : [],
         ];
     }
 
     /**
      * @param  array<string, mixed>  $targets
-     * @return array{0:int,1:int,2:?int,3:?int,4:string,5:string}
+     * @return array{0:int,1:int,2:?int,3:?int,4:string,5:string,6:bool} the last item: the label holds a name written outside the CRM
      */
-    private function resolveTarget(array $targets, ?int $accountId): array
+    private function resolveTarget(array $targets, int $accountId): array
     {
         if (isset($targets['task'])) {
             $task = $this->resolver->task((string) $targets['task'], $accountId);
 
-            return [$task->project->account_id, $task->project_id, $task->project->client_id, $task->id, $task->name, "task #{$task->id} \"{$task->name}\""];
+            return [$task->project->account_id, $task->project_id, $task->project->client_id, $task->id, $task->name, "task #{$task->id} \"{$task->name}\"", TaskRecord::isExternal($task)];
         }
 
         if (isset($targets['project'])) {
             $project = $this->resolver->project((string) $targets['project'], $accountId);
 
-            return [$project->account_id, $project->id, $project->client_id, null, 'Ad-hoc work', "project #{$project->id} \"{$project->name}\""];
+            return [$project->account_id, $project->id, $project->client_id, null, 'Ad-hoc work', "project #{$project->id} \"{$project->name}\"", $project->trello_board_id !== null];
         }
 
         $client = $this->resolver->client((string) $targets['client'], $accountId);
@@ -131,6 +123,6 @@ final class TimeLogger
             throw new InvalidArgumentException("Client #{$client->id} \"{$client->name}\" has no project to log against.");
         }
 
-        return [$client->account_id, $project->id, $client->id, null, 'Ad-hoc work', "client #{$client->id} \"{$client->name}\" ({$project->name})"];
+        return [$client->account_id, $project->id, $client->id, null, 'Ad-hoc work', "client #{$client->id} \"{$client->name}\" ({$project->name})", $project->trello_board_id !== null];
     }
 }

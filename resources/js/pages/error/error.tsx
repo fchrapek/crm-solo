@@ -1,16 +1,19 @@
 import { Head } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 
+import { dashboard, login } from '@/routes';
 import { SharedData } from '@/types';
 
 import styles from './error.module.css';
 
-interface ErrorPageProps extends SharedData {
+interface ErrorPageProps extends Partial<SharedData> {
     status: number;
 }
 
-export default function ErrorPage({ status }: ErrorPageProps) {
+export default function ErrorPage({ status, auth }: ErrorPageProps) {
     const { t } = useTranslation();
+    // Shared props are absent when the error fires before the Inertia middleware, so treat that as a guest.
+    const signedIn = Boolean(auth?.user);
 
     const title = {
         503: t('503: Service Unavailable'),
@@ -34,6 +37,9 @@ export default function ErrorPage({ status }: ErrorPageProps) {
             <div className={styles.content}>
                 <h1 className={styles.title}>{title}</h1>
                 <p className={styles.description}>{description}</p>
+                <a className={styles.link} href={signedIn ? dashboard().url : login().url}>
+                    {signedIn ? t('Back to today') : t('Log in')}
+                </a>
             </div>
         </div>
     );

@@ -9,9 +9,9 @@ use App\Http\Resources\ClientCollection;
 use App\Http\Resources\ClientResource;
 use App\Models\Client;
 use App\Models\Invoice;
-use App\Models\Project;
 use App\Models\Task;
 use App\Services\Revenue\RevenueAggregator;
+use App\Support\LocalCalendar;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -66,12 +66,6 @@ final class ClientsController extends Controller
     {
         $client = Auth::user()->account->clients()->create($request->validated());
 
-        Project::create([
-            'account_id' => $client->account_id,
-            'client_id' => $client->id,
-            'name' => 'General',
-        ]);
-
         // Land on the new client's edit page, not the index — new clients
         // start at lifecycle_stage 'prospect' while the index defaults to the
         // 'active' filter, so a redirect there makes the fresh client
@@ -88,7 +82,7 @@ final class ClientsController extends Controller
             ])
             ->withCount([
                 'tasks',
-                'tasks as completed_tasks_count' => fn ($q) => $q->where('is_completed', true),
+                'tasks as completed_tasks_count' => fn ($q) => $q->where(fn ($done) => $done->where('is_completed', true)->orWhereNotNull('finished_at')),
                 'tasks as active_agent_tasks_count' => fn ($q) => $q->whereNotNull('cli')->where('agent_lane', '!=', 'done')->whereNull('archived_at'),
             ])
             ->get()
@@ -97,7 +91,6 @@ final class ClientsController extends Controller
                 'name' => $project->name,
                 'description' => $project->description,
                 'trello_url' => $project->trello_url,
-                'clockify_project_id' => $project->clockify_project_id,
                 'is_private' => $project->trello_board_id === null,
                 'trello_workspace' => $project->settings['trello_workspace'] ?? null,
                 'trello_lists' => $project->settings['trello_lists'] ?? [],
@@ -124,11 +117,13 @@ final class ClientsController extends Controller
                     'description' => $task->description,
                     'list_name' => $task->list_name,
                     'is_completed' => $task->is_completed,
+                    'finished_at' => $task->finished_at?->toIso8601String(),
                     'archived_at' => $task->archived_at?->toIso8601String(),
                     'due_date' => $task->due_date?->toIso8601String(),
                     'labels' => $task->labels,
                     'trello_url' => $task->trello_url,
                     'source' => $task->source,
+                    'has_trello_card' => $task->hasTrelloCard(),
                     'priority' => $task->priority,
                     'recurrence_period_days' => $task->recurrence_period_days,
                     'parent_task_id' => $task->parent_task_id,
@@ -136,7 +131,7 @@ final class ClientsController extends Controller
                     'child_tasks_count' => (int) ($task->child_tasks_count ?? 0),
                     'cli' => $task->cli,
                     'agent_lane' => $task->agent_lane,
-                    'is_overdue' => $task->due_date && $task->due_date->isPast() && ! $task->is_completed,
+                    'is_overdue' => $task->isOverdue(),
                 ]),
             ]);
 
@@ -152,11 +147,13 @@ final class ClientsController extends Controller
                 'description' => $task->description,
                 'list_name' => $task->list_name,
                 'due_date' => $task->due_date?->toIso8601String(),
+                'is_overdue' => $task->isOverdue(),
                 'priority' => $task->priority,
                 'parent_task_id' => $task->parent_task_id,
                 'parent_task' => $task->parentTask ? ['id' => $task->parentTask->id, 'name' => $task->parentTask->name] : null,
                 'child_tasks_count' => (int) ($task->child_tasks_count ?? 0),
                 'source' => $task->source,
+                'has_trello_card' => $task->hasTrelloCard(),
                 'type' => $task->type,
                 'agent_lane' => $task->agent_lane ?? Task::AGENT_LANE_BACKLOG,
                 'cli' => $task->cli,
@@ -187,7 +184,6 @@ final class ClientsController extends Controller
                 'project_name' => $entry->project?->name,
                 'source' => $entry->source,
                 'is_running' => $entry->end_time === null,
-                'is_in_clockify' => $entry->clockify_entry_id !== null,
                 'task' => $entry->task ? ['id' => $entry->task->id, 'name' => $entry->task->name] : null,
                 'tags' => $entry->tags,
             ]);
@@ -289,7 +285,7 @@ final class ClientsController extends Controller
         // hours-bank math (which is reportable-only + opening balance) — this
         // answers "how loaded is this client right now", the report stays the
         // billing truth.
-        $monthStart = now()->startOfMonth();
+        $monthStart = LocalCalendar::monthRange(LocalCalendar::currentMonth())[0];
         $monthMinutes = (int) $client->timeEntries()
             ->where('start_time', '>=', $monthStart)
             ->sum('duration_minutes');
@@ -325,7 +321,7 @@ final class ClientsController extends Controller
         // holds the full list. Same map either way.
         $recentInvoices = $client->invoices()->limit(3)->get()->map($mapInvoice);
 
-        $yearParam = (string) request()->query('invoice_year', (string) now()->year);
+        $yearParam = (string) request()->query('invoice_year', (string) LocalCalendar::now()->year);
         $invoiceYear = $yearParam === 'all' ? null : (int) $yearParam;
         $monthParam = request()->query('invoice_month');
         $invoiceMonth = is_numeric($monthParam) && (int) $monthParam >= 1 && (int) $monthParam <= 12 ? (int) $monthParam : null;
@@ -367,15 +363,16 @@ final class ClientsController extends Controller
         // books recognise the same invoices.
         $invoicedYear = (int) $client->invoices()
             ->countsAsRevenue()
-            ->whereRaw(Invoice::ACCRUAL_DATE_SQL.' >= ?', [now()->subYear()->toDateString()])
+            ->whereRaw(Invoice::ACCRUAL_DATE_SQL.' >= ?', [LocalCalendar::today()->subYear()->toDateString()])
             ->sum('net_price');
 
         // What this month actually offers: the pool plus whatever last month's
         // report closed with, capped at the agreed ceiling. Showing the bare
         // pool understates the budget for any client carrying a surplus.
-        $contractedHours = (float) $client->activeRetainersOn(now())->sum('monthly_hours');
-        $carriedHours = $this->carriedHoursInto($client, now()->startOfMonth());
-        $capHours = $client->activeRetainerOn(now())?->rollover_cap_hours;
+        $today = LocalCalendar::todayDate();
+        $contractedHours = (float) $client->activeRetainersOn($today)->sum('monthly_hours');
+        $carriedHours = $this->carriedHoursInto($client, $today->copy()->startOfMonth());
+        $capHours = $client->activeRetainerOn($today)?->rollover_cap_hours;
         $availableHours = $capHours !== null
             ? min($contractedHours + $carriedHours, (float) $capHours)
             : $contractedHours + $carriedHours;
@@ -421,11 +418,9 @@ final class ClientsController extends Controller
                 $periodFrom,
                 $periodTo,
             ),
-            'trelloEnabled' => $trelloIntegration?->isConfigured() ?? false,
-            'clockifyEnabled' => Auth::user()->account->integrations()
-                ->where('provider', 'clockify')
-                ->where('is_enabled', true)
-                ->first()?->isConfigured() ?? false,
+            'trelloEnabled' => ! config('app.demo') && ($trelloIntegration?->isConfigured() ?? false),
+            // A board-linked project's sync, mapping and disconnect do not exist on the demo.
+            'trelloActions' => ! config('app.demo'),
         ]);
     }
 

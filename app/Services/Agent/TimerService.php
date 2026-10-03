@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Agent;
 
-use App\Actions\Clockify\PushTimeEntryToClockify;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use Illuminate\Support\Collection;
@@ -19,36 +18,53 @@ final class TimerService
 {
     public function start(Task $task, ?string $description = null, bool $billable = true): TimeEntry
     {
-        return TimeEntry::create([
-            'account_id' => $task->project?->account_id,
-            'project_id' => $task->project_id,
-            'client_id' => $task->project?->client_id,
-            'task_id' => $task->id,
-            'source' => TimeEntry::SOURCE_MANUAL,
-            'title' => $task->name,
-            'description' => $description ?: $task->name,
-            'start_time' => now(),
-            'end_time' => null,
-            'duration_minutes' => 0,
-            'billable' => $billable,
-        ]);
+        return TimeEntry::startFor($task, TimeEntry::SOURCE_MANUAL, $description, $billable);
     }
 
     public function stop(TimeEntry $entry, ?string $description = null): TimeEntry
     {
-        $end = now();
-        $minutes = (int) $entry->start_time->diffInMinutes($end);
-
-        $entry->update([
-            'end_time' => $end,
-            'duration_minutes' => $minutes,
-            'description' => $description ?: $entry->description,
-        ]);
-
-        // Best-effort — no-ops when Clockify isn't configured.
-        (new PushTimeEntryToClockify)($entry->load('project.client'));
+        $entry->stopNow($description);
 
         return $entry;
+    }
+
+    /**
+     * What timer-start returns on every transport. A task name that came from
+     * a card or an email is listed under the item's `untrusted`.
+     *
+     * @param  Collection<int, TimeEntry>  $open
+     * @return array<string, mixed>
+     */
+    public function startPayload(TimeEntry $entry, Task $task, Collection $open): array
+    {
+        return [
+            'entry_id' => $entry->id,
+            'task_id' => $task->id,
+            'client' => $task->project?->client?->name,
+            'started_at' => $entry->start_time?->toIso8601String(),
+            'other_open_timers' => $open->map(fn (TimeEntry $other): array => [
+                'id' => $other->id,
+                'task' => $other->task?->name,
+                'untrusted' => $other->task !== null && TaskRecord::isExternal($other->task) ? ['task'] : [],
+            ])->values()->all(),
+            'untrusted' => [],
+        ];
+    }
+
+    /**
+     * What timer-stop returns on every transport.
+     *
+     * @return array<string, mixed>
+     */
+    public function stopPayload(TimeEntry $entry): array
+    {
+        return [
+            'entry_id' => $entry->id,
+            'minutes' => $entry->duration_minutes,
+            'task' => $entry->task?->name,
+            'client' => $entry->client?->name,
+            'untrusted' => $entry->task !== null && TaskRecord::isExternal($entry->task) ? ['task'] : [],
+        ];
     }
 
     /**
@@ -57,12 +73,12 @@ final class TimerService
      *
      * @return Collection<int, TimeEntry>
      */
-    public function open(?int $accountId = null): Collection
+    public function open(int $accountId): Collection
     {
         return TimeEntry::query()
             ->whereNull('end_time')
-            ->when($accountId !== null, fn ($q) => $q->where('account_id', $accountId))
-            ->with('task:id,name')
+            ->where('account_id', $accountId)
+            ->with('task:id,name,source,trello_card_id')
             ->get();
     }
 }

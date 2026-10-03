@@ -7,6 +7,7 @@ namespace App\Mcp\Tools;
 use App\Mcp\Tools\Concerns\HandlesReferenceErrors;
 use App\Models\Task;
 use App\Services\Agent\ReferenceNotFoundException;
+use App\Services\Tasks\TaskCompletion;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -15,14 +16,14 @@ use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[IsIdempotent]
-#[Description('Complete a task the canonical way: Done list, completed flag, agent-lane mirror, and the next instance spawned when the task recurs. Safe to call twice.')]
+#[Description('Finish a task: stops its running timers, then a manual task moves to Done (agent-lane mirror, next instance spawned when it recurs) while a Trello card only records finished_at and keeps the lane Trello gives it. Safe to call twice.')]
 final class TaskDoneTool extends Tool
 {
     use HandlesReferenceErrors;
 
     protected string $name = 'task_done';
 
-    public function handle(Request $request): Response
+    public function handle(Request $request, TaskCompletion $completion): Response
     {
         $validated = $request->validate([
             'task' => ['required', 'integer'],
@@ -31,20 +32,19 @@ final class TaskDoneTool extends Tool
             'task.integer' => 'Pass the numeric task id, not a name — task names are not unique enough to complete by.',
         ]);
 
-        $task = Task::find($validated['task']);
+        $task = Task::query()
+            ->whereHas('project', fn ($q) => $q->where('account_id', $this->identity()->account->id))
+            ->find($validated['task']);
 
         if ($task === null) {
             return $this->referenceError(new ReferenceNotFoundException('task', (string) $validated['task']));
         }
 
-        $alreadyDone = (bool) $task->is_completed;
-        $task->markDone();
+        $result = $completion->finish($task);
         $task->refresh();
 
         return $this->payload([
-            'id' => $task->id,
-            'name' => $task->name,
-            'was_already_done' => $alreadyDone,
+            ...$result->payload($task),
             'recurring_successor_id' => $task->latestOpenSuccessor()?->id,
         ]);
     }

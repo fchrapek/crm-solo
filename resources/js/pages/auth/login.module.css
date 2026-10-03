@@ -1,65 +1,153 @@
-.form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-6);
-}
-
-.grid {
+/* Login v1: the full wordmark in paper on vermilion (Figma: Logowanie · vermilion). */
+.page {
+    min-height: 100vh;
     display: grid;
-    gap: var(--spacing-6);
 }
 
-.fieldGrid {
-    display: grid;
-    gap: var(--spacing-2);
-}
-
-.labelRow {
-    display: flex;
-    align-items: center;
-}
-
-.checkboxRow {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-3);
-}
-
-.submitButton {
-    margin-top: var(--spacing-4);
+.frame {
     width: 100%;
+    max-width: var(--solo-grid-max);
+    margin: 0 auto;
+    padding-inline: var(--solo-grid-margin);
+    padding-block: var(--solo-space-7);
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: var(--solo-grid-gutter);
+    row-gap: var(--solo-space-7);
+    align-items: center;
 }
 
-.spinner {
-    width: 1rem;
-    height: 1rem;
-    animation: spin 1s linear infinite;
+.brand {
+    grid-column: 1 / span 7;
+    display: grid;
+    gap: var(--solo-space-5);
 }
 
-@keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-.statusMessage {
-    margin-bottom: var(--spacing-4);
-    text-align: center;
-    font-size: var(--font-size-sm);
+.eyebrow {
+    margin: 0;
+    font-size: var(--solo-text-eyebrow);
     font-weight: 500;
-    color: var(--color-success);
+    color: var(--solo-fg-muted);
+}
+
+.wordmark {
+    width: 100%;
+    height: auto;
+    color: var(--solo-fg);
+}
+
+.form {
+    grid-column: 9 / span 4;
+    display: grid;
+    gap: 18px;
+}
+
+.title {
+    margin: 0;
+    font-family: var(--solo-font-display);
+    font-stretch: 62%;
+    font-weight: 900;
+    font-size: var(--solo-display-title);
+    line-height: 0.9;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+}
+
+.field {
+    display: grid;
+    gap: var(--solo-space-2);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.field input {
+    height: 48px;
+    padding-inline: var(--solo-space-4);
+    border: 1.5px solid var(--solo-field-border);
+    border-radius: var(--solo-radius-lg);
+    background: var(--solo-field-bg);
+    color: var(--solo-field-fg);
+    font: 500 var(--solo-text-row) / 1 var(--solo-font-text);
+}
+
+.field input:focus-visible,
+.remember input:focus-visible {
+    outline: 2px solid var(--solo-fg);
+    outline-offset: 3px;
+}
+
+.remember {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: var(--solo-text-action);
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.remember input {
+    appearance: none;
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    border: 2px solid var(--solo-fg);
+    border-radius: var(--solo-radius-sm);
+    background: none;
+    cursor: pointer;
+}
+
+.remember input:checked {
+    background: var(--solo-fg);
+}
+
+.remember input:checked::after {
+    content: '✓';
+    color: var(--solo-on-accent);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.turnstile {
+    display: grid;
+    gap: var(--solo-space-2);
+}
+
+.error {
+    font-size: var(--solo-text-meta);
+    font-weight: 600;
+    color: var(--solo-fg);
+}
+
+.status {
+    margin: 0;
+    font-size: var(--solo-text-action);
+    font-weight: 500;
 }
 
 .demoHint {
     display: grid;
-    gap: var(--spacing-1);
-    margin-bottom: var(--spacing-6);
-    padding: var(--spacing-3) var(--spacing-4);
-    border: 1px solid var(--color-brand);
-    border-radius: var(--radius-md);
-    background: var(--color-brand-soft);
-    font-size: var(--font-size-sm);
+    gap: var(--solo-space-1);
+    padding: var(--solo-space-3) var(--solo-space-4);
+    border: 1.5px solid var(--solo-rule);
+    border-radius: var(--solo-radius-md);
+    font-size: var(--solo-text-meta);
+}
+
+@media (max-width: 1100px) {
+    .brand {
+        grid-column: 1 / -1;
+    }
+
+    .form {
+        grid-column: 1 / span 7;
+    }
+}
+
+@media (max-width: 640px) {
+    .form {
+        grid-column: 1 / -1;
+    }
 }

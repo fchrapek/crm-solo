@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Services\Reports\Composers;
 
 use App\Services\AI\AIProviderInterface;
+use App\Services\Reports\BillingSummary;
 use App\Services\Reports\NarrativePromptResolver;
+use App\Services\Reports\NarrativePromptUnavailable;
 use App\Services\Reports\ReportComposerInterface;
 use App\Services\Reports\ReportContext;
 use Illuminate\Support\Facades\Log;
@@ -18,10 +20,9 @@ use Throwable;
  * so the user always gets a draft to edit.
  *
  * The system prompt is resolved rather than compiled in, so an instance can
- * carry its own wording without a code change. The resolve happens outside
- * the try/catch on purpose: a provider that is down is a temporary condition
- * worth degrading through, while a prompt that cannot be read is an operator
- * error that must surface instead of silently changing the report's shape.
+ * carry its own wording without a code change. A prompt that cannot be read
+ * degrades like a provider failure: the structured composer emits the same
+ * report shape, and the error is logged for the operator to fix.
  */
 final class AiNarrativeComposer implements ReportComposerInterface
 {
@@ -44,7 +45,17 @@ final class AiNarrativeComposer implements ReportComposerInterface
     public function compose(ReportContext $context): string
     {
         $payload = $this->buildPayload($context);
-        $systemPrompt = $this->prompts->resolve($context->client->account_id);
+
+        try {
+            $systemPrompt = $this->prompts->resolve($context->client->account_id);
+        } catch (NarrativePromptUnavailable $e) {
+            Log::error('Report prompt unavailable, falling back to structured list', [
+                'client_id' => $context->client->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->fallback->compose($context);
+        }
 
         try {
             $response = $this->provider->chat(
@@ -72,7 +83,22 @@ final class AiNarrativeComposer implements ReportComposerInterface
             return $this->fallback->compose($context);
         }
 
-        return $body."\n";
+        // The balance is code, never prose: whatever summary the model wrote
+        // is dropped and the deterministic one appended, so figures and
+        // wording are the same in every draft.
+        if ($context->contractedHours() === null) {
+            return BillingSummary::strip($body."\n");
+        }
+
+        return BillingSummary::enforce(
+            $body,
+            $context->openingBalanceHours,
+            (float) $context->contractedHours(),
+            $context->actualHours,
+            $context->rolloverCapHours,
+            $context->locale,
+            $context->periodType,
+        );
     }
 
     private function buildPayload(ReportContext $context): string

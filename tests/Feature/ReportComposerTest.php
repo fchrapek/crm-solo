@@ -54,8 +54,8 @@ final class ReportComposerTest extends TestCase
             'is_reviewed' => true,
             'is_reportable' => true,
         ]);
-        // Force updated_at to fall inside the window.
-        $task->forceFill(['updated_at' => '2026-03-20 12:00:00'])->save();
+        // Finished inside the window.
+        $task->update(['finished_at' => '2026-03-20 12:00:00']);
 
         TimeEntry::create([
             'account_id' => $this->account->id,
@@ -139,7 +139,7 @@ final class ReportComposerTest extends TestCase
             'is_reviewed' => true,
             'is_reportable' => true,
         ]);
-        $task->forceFill(['updated_at' => '2026-03-20 12:00:00'])->save();
+        $task->update(['finished_at' => '2026-03-20 12:00:00']);
 
         TimeEntry::create([
             'account_id' => $this->account->id,
@@ -181,9 +181,9 @@ final class ReportComposerTest extends TestCase
         // The balance appears exactly once, at the end.
         $this->assertStringNotContainsString('Hours: 2h of 12h contracted', $body);
         $this->assertStringContainsString('## Billing summary', $body);
-        $this->assertStringContainsString('Pool for the period: +12h', $body);
-        $this->assertStringContainsString('Used in the period: −2h', $body);
-        $this->assertStringContainsString('Closing balance: +10h', $body);
+        $this->assertStringContainsString('Pool for the month: +12h', $body);
+        $this->assertStringContainsString('Used in the month: −2h', $body);
+        $this->assertStringContainsString('Opening balance for next month: +10h', $body);
         $this->assertSame(1, mb_substr_count($body, 'Billing summary'));
     }
 
@@ -196,7 +196,7 @@ final class ReportComposerTest extends TestCase
             'is_reviewed' => true,
             'is_reportable' => true,
         ]);
-        $task->forceFill(['updated_at' => '2026-03-20 12:00:00'])->save();
+        $task->update(['finished_at' => '2026-03-20 12:00:00']);
 
         TimeEntry::create([
             'account_id' => $this->account->id,
@@ -238,8 +238,8 @@ final class ReportComposerTest extends TestCase
         $this->assertStringNotContainsString('PLN', $body);
 
         // The overrun is visible as a negative closing balance instead.
-        $this->assertStringContainsString('Used in the period: −12h', $body);
-        $this->assertStringContainsString('Closing balance: −2h', $body);
+        $this->assertStringContainsString('Used in the month: −12h', $body);
+        $this->assertStringContainsString('Opening balance for next month: −2h', $body);
     }
 
     public function test_aggregator_excludes_non_reportable_tasks_and_their_time_entries(): void
@@ -252,7 +252,7 @@ final class ReportComposerTest extends TestCase
             'is_reviewed' => true,
             'is_reportable' => true,
         ]);
-        $reportable->forceFill(['updated_at' => '2026-03-20 12:00:00'])->save();
+        $reportable->update(['finished_at' => '2026-03-20 12:00:00']);
         TimeEntry::create([
             'account_id' => $this->account->id,
             'project_id' => $this->project->id,
@@ -273,7 +273,7 @@ final class ReportComposerTest extends TestCase
             'is_reviewed' => true,
             'is_reportable' => false,
         ]);
-        $internal->forceFill(['updated_at' => '2026-03-20 12:00:00'])->save();
+        $internal->update(['finished_at' => '2026-03-20 12:00:00']);
         TimeEntry::create([
             'account_id' => $this->account->id,
             'project_id' => $this->project->id,
@@ -349,8 +349,8 @@ final class ReportComposerTest extends TestCase
         $this->assertStringNotContainsString('Hours:', $body);
         $this->assertStringContainsString("### Monitoring\n- Skanowanie", $body);
         $this->assertStringContainsString('## Billing summary', $body);
-        $this->assertStringContainsString('Used in the period: 0h', $body);
-        $this->assertStringContainsString('Closing balance: +15h', $body);
+        $this->assertStringContainsString('Used in the month: 0h', $body);
+        $this->assertStringContainsString('Opening balance for next month: +15h', $body);
     }
 
     public function test_structured_composer_states_the_balance_when_there_is_no_baseline(): void
@@ -372,9 +372,9 @@ final class ReportComposerTest extends TestCase
         $body = (new StructuredListComposer)->compose($context);
 
         $this->assertStringContainsString('## Billing summary', $body);
-        $this->assertStringContainsString('Opening balance: 0h', $body);
-        $this->assertStringContainsString('Pool for the period: +15h', $body);
-        $this->assertStringContainsString('Closing balance: +15h', $body);
+        $this->assertStringContainsString('Opening balance for the month: 0h', $body);
+        $this->assertStringContainsString('Pool for the month: +15h', $body);
+        $this->assertStringContainsString('Opening balance for next month: +15h', $body);
     }
 
     public function test_structured_composer_reports_hours_lost_to_the_carry_over_cap(): void
@@ -414,8 +414,8 @@ final class ReportComposerTest extends TestCase
 
         $body = (new StructuredListComposer)->compose($context);
 
-        $this->assertStringContainsString('Opening balance: +18h', $body);
-        $this->assertStringContainsString('Closing balance: +20h', $body);
+        $this->assertStringContainsString('Opening balance for the month: +18h', $body);
+        $this->assertStringContainsString('Opening balance for next month: +20h', $body);
         $this->assertStringContainsString(
             'Hours above the agreed carry-over cap, not carried forward: 10h',
             $body,
@@ -448,7 +448,7 @@ Second line ignored.', '- Fix. Multi line.'],
                 'is_reviewed' => true,
                 'is_reportable' => true,
             ]);
-            $task->forceFill(['updated_at' => '2026-03-20 12:00:00'])->save();
+            $task->update(['finished_at' => '2026-03-20 12:00:00']);
 
             $context = app(ReportDataAggregator::class)->aggregate(
                 $this->client,

@@ -7,20 +7,29 @@ namespace App\Services\Reports;
 use App\Models\Client;
 use App\Models\Task;
 use App\Models\TimeEntry;
+use App\Support\LocalCalendar;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 final class ReportDataAggregator
 {
+    /**
+     * The opening balance is carried in from the previous report unless the
+     * caller passes one, as a regenerate does with the report's saved figure.
+     */
     public function aggregate(
         Client $client,
         Carbon $periodStart,
         Carbon $periodEnd,
         string $periodType,
         string $locale = 'en',
+        ?float $openingBalanceHours = null,
     ): ReportContext {
         $start = $periodStart->copy()->startOfDay();
         $end = $periodEnd->copy()->endOfDay();
+        // The period is local calendar dates; the timestamps it selects are UTC.
+        // An entry belongs to the day it started on, even when it runs past midnight.
+        [$from, $to] = LocalCalendar::dateRange($start, $end);
 
         // Pull every time entry in window for accounting / debugging, then
         // narrow to reportable ones (linked to a task with is_reportable=true)
@@ -29,12 +38,15 @@ final class ReportDataAggregator
         // shows up via clients.report_baseline_markdown instead.
         $allTimeEntries = TimeEntry::query()
             ->where('client_id', $client->id)
-            ->whereBetween('start_time', [$start, $end])
+            ->where('start_time', '>=', $from)
+            ->where('start_time', '<', $to)
             ->orderBy('start_time')
             ->get();
 
+        // An entry belongs to the client it was logged for (its own client_id, selected above), so
+        // only the task's reportable flag is read here, never where the task lives now.
         $reportableTaskIds = Task::query()
-            ->whereHas('project', fn ($q) => $q->where('client_id', $client->id))
+            ->whereIn('id', $allTimeEntries->pluck('task_id')->filter()->unique()->values())
             ->where('is_reportable', true)
             ->pluck('id');
 
@@ -49,15 +61,23 @@ final class ReportDataAggregator
         $taskMinutes = $timeEntries->groupBy('task_id')
             ->map(fn (Collection $rows): int => (int) $rows->sum('duration_minutes'));
 
-        // Tasks: reportable, AND either (logged time in window) or (completed
-        // in window). Non-reportable tasks are intentionally invisible —
-        // their scope is covered by the baseline markdown injection.
+        // Tasks: reportable, AND either (logged time in window) or (finished
+        // in window with no time logged before it). Non-reportable tasks are
+        // intentionally invisible: the baseline markdown covers their scope.
+        // finished_at is the completion date itself, so a later edit or sync
+        // cannot move a task into another period. A task worked in an earlier
+        // period and only closed in this one belongs to the period of its work.
         $taskIdsFromTime = $timeEntries->pluck('task_id')->filter()->unique();
         $completedTaskIds = Task::query()
             ->whereHas('project', fn ($q) => $q->where('client_id', $client->id))
             ->where('is_reportable', true)
-            ->where('is_completed', true)
-            ->whereBetween('updated_at', [$start, $end])
+            ->where('finished_at', '>=', $from)
+            ->where('finished_at', '<', $to)
+            ->whereNotIn('id', TimeEntry::query()
+                ->select('task_id')
+                ->whereNotNull('task_id')
+                ->where('client_id', $client->id)
+                ->where('start_time', '<', $from))
             ->pluck('id');
 
         $taskIds = $taskIdsFromTime->merge($completedTaskIds)->unique()->values();
@@ -72,7 +92,7 @@ final class ReportDataAggregator
                     'name' => $task->name,
                     'description' => $task->description,
                     'project' => $task->project?->name,
-                    'completed_at' => $task->is_completed ? $task->updated_at?->toIso8601String() : null,
+                    'completed_at' => $task->finished_at?->toIso8601String(),
                     'minutes' => (int) ($taskMinutes[$task->id] ?? 0),
                     'type' => $task->type,
                 ];
@@ -104,7 +124,7 @@ final class ReportDataAggregator
             tasks: $tasks,
             timeEntries: $timeEntryRows,
             locale: $locale,
-            openingBalanceHours: $this->openingBalanceFor($client, $start),
+            openingBalanceHours: $openingBalanceHours ?? $this->openingBalanceFor($client, $start),
             rolloverCapHours: $retainer?->rollover_cap_hours !== null
                 ? (float) $retainer->rollover_cap_hours
                 : null,

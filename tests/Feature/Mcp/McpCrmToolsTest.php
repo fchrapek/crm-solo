@@ -82,6 +82,22 @@ final class McpCrmToolsTest extends TestCase
             ->assertSee('running_time_entries');
     }
 
+    public function test_today_includes_a_close_still_open_for_the_previous_month(): void
+    {
+        $this->travelTo('2026-10-03 09:00:00');
+        \App\Models\MonthCloseRun::create([
+            'account_id' => $this->account->id,
+            'client_id' => $this->client->id,
+            'period' => '2026-09',
+            'close_type' => 'maintenance',
+            'status' => 'open',
+        ]);
+
+        CrmServer::tool(TodayTool::class)
+            ->assertOk()
+            ->assertSee('"period":"2026-09"');
+    }
+
     public function test_task_done_completes_and_spawns_recurrence(): void
     {
         $task = $this->task(['recurrence_period_days' => 7, 'cli' => 'claude', 'agent_lane' => Task::AGENT_LANE_IN_PROGRESS]);

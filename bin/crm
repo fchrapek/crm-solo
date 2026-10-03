@@ -1,13 +1,141 @@
 #!/usr/bin/env sh
-# Agent-facing CRM verb shim: `crm brief <client>`, `crm today --json`, …
-# Resolves the repo through the symlink, so artisan loads crm-solo's own
-# .env even inside env-i agent sessions (the stripped environment can't
-# leak another project's DB into these calls).
+# Agent-facing CRM verb shim: `crm brief <client>`, `crm today --json`, ...
+#
+# Local mode (default): resolves the repo through the symlink, so artisan
+# loads crm-solo's own .env even inside env-i agent sessions (the stripped
+# environment can't leak another project's DB into these calls).
+#
+# Remote mode (CRM_REMOTE_URL set, e.g. https://app.example.test): sends the
+# verb and its arguments to the hosted CRM's /agent/verb and prints what it
+# answers, with the verb's exit status. The token never goes on a command
+# line: it is read from the macOS Keychain (CRM_REMOTE_KEYCHAIN_SERVICE) or a
+# 0600 file (CRM_REMOTE_TOKEN_FILE, default ~/.config/crm-solo/agent.token)
+# and reaches curl on stdin. An optional 0600 curl header file
+# (CRM_REMOTE_HEADERS_FILE, default ~/.config/crm-solo/remote.headers) adds
+# the Cloudflare Access service-token headers, and only those: a bearer
+# token there is refused. CRM_SESSION_ID, when exported, is sent so the
+# writes carry the caller's session. `crm attachment <id>` writes a task's
+# attached file (the id a task record lists) to stdout.
+#
+# The remote list below is AgentAbilities::VERBS; CrmShimRemoteModeTest pins the two together.
+# remote-verbs: today brief task task-brief note task-done timer-start timer-stop time:log lead-capture lead-stage client:config month-close:tick
+
+private_or_exit() {
+    # GNU first: on Linux `stat -f` is the filesystem mode and succeeds with the wrong answer.
+    PERMS="$(stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null)"
+    case "$PERMS" in
+        ?00|00) ;;
+        *) echo "crm: $1 can be read by other users (mode $PERMS). Run: chmod 600 \"$1\"" >&2; exit 77 ;;
+    esac
+}
+
+remote() {
+    URL="${CRM_REMOTE_URL%/}"
+    case "$URL" in
+        https://*|http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*) ;;
+        *) echo "crm: CRM_REMOTE_URL must be https:// (http only for localhost)." >&2; exit 64 ;;
+    esac
+
+    VERB="${1:-}"
+    ENDPOINT="$URL/agent/verb"
+    case "$VERB" in
+        today|brief|task|task-brief|note|task-done|timer-start|timer-stop|time:log|lead-capture|lead-stage|client:config|month-close:tick) ;;
+        attachment)
+            case "${2:-}" in
+                ''|*[!0-9]*) echo "crm: usage: crm attachment <id> > file (the id a task record lists)." >&2; exit 64 ;;
+            esac
+            ENDPOINT="$URL/agent/attachments/$2" ;;
+        ""|help|-h|--help)
+            echo "crm (remote: $URL): today, brief, task, task-brief, note, task-done, timer-start, timer-stop, time:log, lead-capture, lead-stage, client:config, month-close:tick, attachment <id>"
+            exit 0 ;;
+        *)
+            echo "crm: \"$VERB\" is not available in remote mode (CRM_REMOTE_URL is set). Unset it to run local artisan commands." >&2
+            exit 64 ;;
+    esac
+    shift
+
+    command -v curl >/dev/null 2>&1 || { echo "crm: remote mode needs curl." >&2; exit 69; }
+
+    TOKEN_FILE="${CRM_REMOTE_TOKEN_FILE:-$HOME/.config/crm-solo/agent.token}"
+    HEADERS_FILE="${CRM_REMOTE_HEADERS_FILE:-$HOME/.config/crm-solo/remote.headers}"
+    TOKEN=""
+    if [ -n "${CRM_REMOTE_KEYCHAIN_SERVICE:-}" ]; then
+        TOKEN="$(security find-generic-password -s "$CRM_REMOTE_KEYCHAIN_SERVICE" -w 2>/dev/null)" || TOKEN=""
+        if [ -z "$TOKEN" ]; then
+            echo "crm: no Keychain item for service \"$CRM_REMOTE_KEYCHAIN_SERVICE\"." >&2
+            exit 77
+        fi
+    elif [ -f "$TOKEN_FILE" ]; then
+        private_or_exit "$TOKEN_FILE"
+        TOKEN="$(tr -d ' \r\n' < "$TOKEN_FILE")"
+    fi
+    if [ -z "$TOKEN" ]; then
+        echo "crm: no token. Save it to $TOKEN_FILE (chmod 600) or set CRM_REMOTE_KEYCHAIN_SERVICE." >&2
+        exit 77
+    fi
+    if [ -f "$HEADERS_FILE" ]; then
+        private_or_exit "$HEADERS_FILE"
+        if tr -d '\r' < "$HEADERS_FILE" | grep -qi '^ *authorization *:'; then
+            echo "crm: $HEADERS_FILE holds an Authorization header. Keep only the CF-Access-* lines there; the agent token belongs in the token file ($TOKEN_FILE) or the Keychain." >&2
+            exit 65
+        fi
+    fi
+
+    if [ "$VERB" = "attachment" ]; then
+        set -- -H "Accept: application/json"
+    else
+        # Rebuild the positional list as curl arguments: each verb argument
+        # becomes one url-encoded args[] field, so nothing is re-split or expanded.
+        N=$#
+        for ARG in "$@"; do
+            set -- "$@" --data-urlencode "args[]=$ARG"
+        done
+        shift "$N"
+        set -- "$@" --data-urlencode "verb=$VERB" -H "Accept: application/json"
+    fi
+    [ -f "$HEADERS_FILE" ] && set -- "$@" -H "@$HEADERS_FILE"
+    [ -n "${CRM_SESSION_ID:-}" ] && set -- "$@" -H "X-Crm-Session: $CRM_SESSION_ID"
+
+    BODY="$(mktemp)" && HEAD="$(mktemp)" || exit 70
+    trap 'rm -f "$BODY" "$HEAD"' EXIT INT TERM
+
+    STATUS="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sS --max-time "${CRM_REMOTE_TIMEOUT:-60}" -H @- "$@" -o "$BODY" -D "$HEAD" -w '%{http_code}' "$ENDPOINT")"
+    CURL_EXIT=$?
+    TOKEN=""
+    if [ "$CURL_EXIT" -ne 0 ]; then
+        echo "crm: could not reach $URL (curl exit $CURL_EXIT)." >&2
+        exit 69
+    fi
+
+    EXIT="$(tr -d '\r' < "$HEAD" | sed -n 's/^[Xx]-[Cc]rm-[Ee]xit: *\([0-9][0-9]*\)$/\1/p' | tail -n 1)"
+    # A Service Auth application answers with Access's own 403, not a login redirect; the app never sends cf-access-* headers.
+    if [ "$STATUS" != 200 ] && tr -d '\r' < "$HEAD" | grep -qi '^cf-access-domain:'; then
+        echo "crm: Cloudflare Access refused the request (HTTP $STATUS). Put the service token's CF-Access-Client-Id and CF-Access-Client-Secret in $HEADERS_FILE, or renew the token if it expired." >&2
+        exit 77
+    fi
+    case "$STATUS" in
+        200)
+            cat "$BODY"
+            [ "$VERB" = "attachment" ] && exit 0
+            exit "${EXIT:-1}" ;;
+        401) echo "crm: the token was refused (missing, unknown, expired or revoked)." >&2; exit 77 ;;
+        302|303) echo "crm: redirected, probably to the Cloudflare Access login. Add the CF-Access-Client-Id and CF-Access-Client-Secret headers to $HEADERS_FILE." >&2; exit 77 ;;
+        *)
+            cat "$BODY" >&2
+            [ -s "$BODY" ] || echo "crm: the server answered HTTP $STATUS." >&2
+            exit "${EXIT:-1}" ;;
+    esac
+}
+
+if [ -n "${CRM_REMOTE_URL:-}" ]; then
+    remote "$@"
+fi
+
 SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 DIR="$(cd "$(dirname "$SELF")/.." && pwd)"
 FIRST="$1"
 case "$FIRST" in
-    brief|today|note|task-done|lead-capture|lead-stage|timer-start|timer-stop)
+    brief|today|task|task-brief|note|task-done|lead-capture|lead-stage|timer-start|timer-stop)
         shift
         exec php "$DIR/artisan" "crm:$FIRST" "$@"
         ;;

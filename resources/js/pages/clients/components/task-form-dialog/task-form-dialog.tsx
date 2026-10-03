@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MarkdownTextarea } from '@/components/ui/markdown-textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { listLaneLabel } from '@/lib/list-lane-label';
 
 import styles from './task-form-dialog.module.css';
 
@@ -202,7 +203,7 @@ export function TaskFormDialog({ open, onOpenChange, projectId, initial, parentO
                                 <SelectContent>
                                     {STATUSES.map((s) => (
                                         <SelectItem key={s} value={s}>
-                                            {s}
+                                            {listLaneLabel(t, s)}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

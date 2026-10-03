@@ -46,7 +46,7 @@ export default function AgentBoardShow() {
                     <Bot size={20} />
                     {project.name} - {t('Agent Board')}
                 </h1>
-                <p className={styles.subtitle}>{t('Drag cards between lanes. No agent runs yet - manual lane management for now.')}</p>
+                <p className={styles.subtitle}>{t('Drag cards between lanes. Start a session on a card to run its agent in a terminal.')}</p>
             </div>
 
             <AgentKanban tasks={tasks} lanes={lanes} reloadOnly={['tasks']} />

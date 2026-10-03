@@ -7,6 +7,8 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\MonthCloseRun;
 use App\Models\MonthCloseStep;
+use App\Support\LocalCalendar;
+use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -70,7 +72,11 @@ final class MonthCloseController extends Controller
     {
         $data = $request->validate([
             'client_id' => ['required', 'integer'],
-            'period' => ['required', 'string', 'regex:/^\d{4}-\d{2}$/'],
+            'period' => ['required', 'string', function (string $attribute, mixed $value, Closure $fail): void {
+                if (! is_string($value) || ! LocalCalendar::isMonth($value)) {
+                    $fail(__('The period must be a month as YYYY-MM.'));
+                }
+            }],
         ]);
 
         $client = Auth::user()->account->clients()
@@ -120,12 +126,12 @@ final class MonthCloseController extends Controller
 
     private function resolvePeriod(string $input): string
     {
-        if (preg_match('/^\d{4}-\d{2}$/', $input) === 1) {
+        if (LocalCalendar::isMonth($input)) {
             return $input;
         }
 
         // Default to the month just ended — you close a month after it's over.
-        return Carbon::now()->subMonthNoOverflow()->format('Y-m');
+        return LocalCalendar::previousMonth();
     }
 
     /**
@@ -138,7 +144,7 @@ final class MonthCloseController extends Controller
     private function recentPeriods(): array
     {
         $floor = Carbon::create(2026, 6, 1);
-        $cursor = Carbon::now()->startOfMonth();
+        $cursor = Carbon::instance(LocalCalendar::monthFrom(LocalCalendar::currentMonth(), (string) config('app.timezone')));
         $periods = [];
 
         while ($cursor->greaterThanOrEqualTo($floor)) {

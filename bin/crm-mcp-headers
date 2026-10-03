@@ -1,0 +1,60 @@
+#!/usr/bin/env sh
+# Prints the HTTP headers an MCP client needs for the hosted CRM's /mcp, as
+# one JSON object, for clients that take a headers helper command (Claude
+# Code's `headersHelper`). Same sources as `crm` in remote mode, so the token
+# lives in one place and never in the client's config file:
+#   the Keychain (CRM_REMOTE_KEYCHAIN_SERVICE) or CRM_REMOTE_TOKEN_FILE
+#   (default ~/.config/crm-solo/agent.token), plus the Cloudflare Access
+#   headers from CRM_REMOTE_HEADERS_FILE (default ~/.config/crm-solo/remote.headers).
+
+TOKEN_FILE="${CRM_REMOTE_TOKEN_FILE:-$HOME/.config/crm-solo/agent.token}"
+HEADERS_FILE="${CRM_REMOTE_HEADERS_FILE:-$HOME/.config/crm-solo/remote.headers}"
+
+private_or_exit() {
+    # GNU first: on Linux `stat -f` is the filesystem mode and succeeds with the wrong answer.
+    PERMS="$(stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null)"
+    case "$PERMS" in
+        ?00|00) ;;
+        *) echo "crm-mcp-headers: $1 can be read by other users (mode $PERMS). Run: chmod 600 \"$1\"" >&2; exit 77 ;;
+    esac
+}
+
+# Header values go into JSON as they are, so anything that would need escaping is refused.
+safe_or_exit() {
+    case "$1" in
+        *'"'*|*'\'*) echo "crm-mcp-headers: a header value holds a quote or backslash." >&2; exit 65 ;;
+    esac
+}
+
+if [ -n "${CRM_REMOTE_KEYCHAIN_SERVICE:-}" ]; then
+    TOKEN="$(security find-generic-password -s "$CRM_REMOTE_KEYCHAIN_SERVICE" -w 2>/dev/null)" || TOKEN=""
+elif [ -f "$TOKEN_FILE" ]; then
+    private_or_exit "$TOKEN_FILE"
+    TOKEN="$(tr -d ' \r\n' < "$TOKEN_FILE")"
+else
+    TOKEN=""
+fi
+if [ -z "$TOKEN" ]; then
+    echo "crm-mcp-headers: no token (Keychain service or $TOKEN_FILE)." >&2
+    exit 77
+fi
+safe_or_exit "$TOKEN"
+
+printf '{"Authorization":"Bearer %s"' "$TOKEN"
+if [ -f "$HEADERS_FILE" ]; then
+    private_or_exit "$HEADERS_FILE"
+    tr -d '\r' < "$HEADERS_FILE" | while IFS= read -r LINE || [ -n "$LINE" ]; do
+        NAME="${LINE%%:*}"
+        VALUE="$(printf '%s' "${LINE#*:}" | sed 's/^ *//')"
+        case "$NAME" in
+            CF-Access-Client-Id|CF-Access-Client-Secret)
+                safe_or_exit "$VALUE"
+                printf ',"%s":"%s"' "$NAME" "$VALUE" ;;
+        esac
+    done
+fi
+if [ -n "${CRM_SESSION_ID:-}" ]; then
+    safe_or_exit "$CRM_SESSION_ID"
+    printf ',"X-Crm-Session":"%s"' "$CRM_SESSION_ID"
+fi
+printf '}\n'

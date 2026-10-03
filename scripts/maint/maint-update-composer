@@ -1,0 +1,295 @@
+#!/bin/bash
+# maint-update-composer <repo-path> [--period YYYY-MM] [--targets a,b] [--dry-run]
+#
+# Local updates for a Composer-managed WordPress repo: core
+# (johnpbloch/wordpress), wpackagist plugins and themes, other direct
+# packages, and WPML from its licensed dist URLs. Core and plugins are not in
+# git, so the commit is the manifest (composer.json); the server deploy is
+# `git pull` + `composer install`.
+#
+# Per target branch: updates/<period> branch, baseline, new pins written into
+# composer.json, `composer update` in the DDEV container, verification,
+# commit of composer.json only, fast-forward. DB snapshot first, restored
+# between passes and at the end, like maint-update. See README in SKILL.md.
+#
+# Pin policy:
+#  - wpackagist-plugin/*, wpackagist-theme/*, johnpbloch/wordpress: latest,
+#    major versions included (WordPress plugins do not follow semver).
+#  - any other package pinned to an exact version: only semver-safe updates.
+#  - range constraints ("*", "^8.0"): left as they are; `composer update`
+#    moves them within the range.
+#  - WPML packages (type "package" with a wpml.org dist URL): the newest
+#    version installed anywhere in ~/Sites (other sites update WPML through
+#    its own updater); version field, URL `version=` and require are bumped
+#    together and the download is proven by `composer update`.
+source "$(dirname "$0")/lib.sh"
+
+REPO=""; DRY=0; ONLY_TARGETS=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --period) PERIOD="$2"; shift 2 ;;
+    --targets) ONLY_TARGETS="$2"; shift 2 ;;
+    --dry-run) DRY=1; shift ;;
+    -*) die usage "unknown option $1" ;;
+    *) REPO="$1"; shift ;;
+  esac
+done
+[ -n "$REPO" ] && [ -e "$REPO/.git" ] || die usage "maint-update-composer <repo-path> [--period YYYY-MM] [--targets a,b] [--dry-run]"
+REPO="$(cd "$REPO" && pwd)"
+[[ "$PERIOD" =~ ^[0-9]{4}-[0-9]{2}$ ]] || die usage "bad period '$PERIOD'"
+
+NAME=$(basename "$REPO")
+RUN_DIR="$STATE_ROOT/$PERIOD"; mkdir -p "$RUN_DIR"
+LOG="$RUN_DIR/$NAME.log"; STATE="$RUN_DIR/$NAME.json"
+echo "=== $(date '+%F %T') maint-update-composer $NAME dry=$DRY" >>"$LOG"
+
+RESULTS=(); FAILED=0; PHASE="preflight"; SNAP=""; DB_DIRTY=0; CUR_T=""; STATE_WRITTEN=0
+write_state(){
+  local rows=""; [ ${#RESULTS[@]} -gt 0 ] && rows=$(printf '%s\n' "${RESULTS[@]}")
+  printf '%s' "$rows" | jq -R 'select(length>0) | split("|") | {target:.[0], status:.[1], detail:(.[2:]|join("|"))}' \
+    | jq -s --arg repo "$REPO" --arg period "$PERIOD" --arg snap "$SNAP" --arg phase "$PHASE" --arg kind composer \
+        --argjson db_dirty "$DB_DIRTY" --arg branch "$(G branch --show-current 2>/dev/null)" --arg at "$(date -u +%FT%TZ)" \
+        '{repo:$repo, kind:$kind, period:$period, db_snapshot:$snap, db_needs_restore:($db_dirty==1), last_phase:$phase, on_branch:$branch, finished_at:$at, targets:.}' \
+    >"$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+}
+on_signal(){
+  say interrupted STOP "phase=$PHASE target=${CUR_T:-none}; DB snapshot ${SNAP:-none}$([ $DB_DIRTY = 1 ] && echo ' NOT restored')"
+  RESULTS+=("${CUR_T:-run}|INTERRUPTED|phase $PHASE"); write_state; STATE_WRITTEN=1; unlock_repo; exit 130
+}
+lock_repo
+trap '[ $STATE_WRITTEN = 1 ] || { RESULTS+=("${CUR_T:-run}|ABORTED|phase $PHASE, db_needs_restore=$DB_DIRTY"); write_state; }; unlock_repo' EXIT
+trap on_signal INT TERM HUP
+
+ddev_running || die preflight "DDEV project not running: start it with 'ddev start'"
+sync_fs || exit 1
+rc=0; repo_is_clean || rc=$?
+[ $rc -eq 0 ] || die preflight "$(clean_reason $rc)"
+[ -n "$(default_branch)" ] || die preflight "no origin/HEAD: run 'git remote set-head origin -a'"
+
+# Composer root: the DDEV docroot when it holds the manifest, else the repo root.
+DOCROOT=$(awk '/^docroot:/{print $2; exit}' "$REPO/.ddev/config.yaml" | tr -d '"')
+CDIR=""
+for d in "$DOCROOT" "."; do
+  [ -n "$d" ] && [ -f "$REPO/$d/composer.json" ] && jq -e '.require["johnpbloch/wordpress"] // .require["roots/wordpress"]' "$REPO/$d/composer.json" >/dev/null 2>&1 && { CDIR="$d"; break; }
+done
+[ -n "$CDIR" ] || die preflight "no composer.json requiring WordPress core found (docroot '$DOCROOT' or repo root)"
+CJSON="$CDIR/composer.json"
+CONTENT_DIR=$(jq -r '.extra["installer-paths"] | to_entries[] | select(.value|index("type:wordpress-plugin")) | .key' "$REPO/$CJSON" | sed 's|/plugins/{$name}/||')
+CEXEC(){ (cd "$REPO" && ddev exec --dir "/var/www/html/$CDIR" "$@" </dev/null 2>>"$LOG"); }
+
+ORIG=$(G branch --show-current)
+[ -n "$ORIG" ] || die preflight "detached HEAD: check out a branch first"
+TARGETS=$(targets)
+if [ -n "$ONLY_TARGETS" ]; then
+  TARGETS=$(printf '%s\n' "$TARGETS" | grep -Fx -f <(tr ',' '\n' <<<"$ONLY_TARGETS") || true)
+fi
+[ -n "$TARGETS" ] || die preflight "no target branches"
+say preflight OK "clean; composer root $CDIR; targets: $(echo $TARGETS | tr ' ' ','); back to $ORIG after"
+
+# Newest WPML versions installed across the fleet (they update through WPML's
+# own updater, which carries the licence).
+fleet_version(){
+  local slug="$1" file="$2"
+  for f in "$HOME"/Sites/*/wp-content/plugins/"$slug"/"$file"; do
+    [ -f "$f" ] && sed -n 's/^[ *]*Version:[ ]*\([0-9][0-9.]*\).*/\1/p' "$f" | head -1
+  done | sort -V | tail -1
+}
+WPML_SITEPRESS=$(fleet_version sitepress-multilingual-cms sitepress.php)
+WPML_ST=$(fleet_version wpml-string-translation plugin.php)
+
+PHASE="snapshot"
+SNAP="maint-$PERIOD-$(date +%d%H%M%S)-$$"
+SNAPRC=0; SNAPOUT=$(cd "$REPO" && ddev snapshot --name "$SNAP" </dev/null 2>&1) || SNAPRC=$?; echo "$SNAPOUT" >>"$LOG"
+SNAPN=$(ls "$REPO/.ddev/db_snapshots/$SNAP"* 2>/dev/null | wc -l | tr -d ' ')
+SNAPFILE=$(ls "$REPO/.ddev/db_snapshots/$SNAP"* 2>/dev/null | head -1)
+if [ $SNAPRC -ne 0 ] || [ "$SNAPN" != "1" ] || [ ! -s "$SNAPFILE" ] || grep -qiE 'fail|error|warn' <<<"$SNAPOUT"; then
+  die snapshot "snapshot $SNAP missing, empty or reported a problem (see log)"
+fi
+case "$SNAPFILE" in
+  *.zst) zstd -tq "$SNAPFILE" 2>>"$LOG" || die snapshot "snapshot fails integrity test" ;;
+  *.gz)  gzip -t "$SNAPFILE" 2>>"$LOG" || die snapshot "snapshot fails integrity test" ;;
+esac
+say snapshot OK "$SNAP ($(du -h "$SNAPFILE" | cut -f1))"
+db_restore(){
+  PHASE="db_restore"
+  if (cd "$REPO" && ddev snapshot restore "$SNAP" </dev/null >>"$LOG" 2>&1); then
+    DB_DIRTY=0
+    # The restore can regenerate DDEV's own settings files (a tracked,
+    # #ddev-generated wp-config.php): put tracked runtime files back.
+    sync_fs && restore_runtime && sync_fs && return 0
+    say restore FAIL "DB restored but runtime files could not be put back"; return 1
+  fi
+  say restore FAIL "ddev snapshot restore $SNAP failed: restore it by hand"; return 1
+}
+
+# Debug log lives in the content dir here, not wp-content.
+dbg_size(){ (cd "$REPO" && ddev exec "f=$CDIR/$CONTENT_DIR/debug.log; if [ -f \$f ]; then wc -c < \$f; else echo none; fi" </dev/null 2>>"$LOG") | tr -d ' \r'; }
+dbg_fatals(){
+  local start="$1" out; [ "$start" = "none" ] && start=0
+  out=$( (cd "$REPO" && ddev exec "f=$CDIR/$CONTENT_DIR/debug.log; if [ ! -f \$f ]; then echo none; exit 0; fi; if [ \$(wc -c < \$f) -lt $start ]; then echo rotated; exit 0; fi; tail -c +$(( start + 1 )) \$f | awk '/PHP Fatal/{n++} END{print n+0}'" </dev/null 2>>"$LOG") | tr -d ' \r') || { echo ERR; return; }
+  case "$out" in none) [ "$1" = none ] && echo n/a || echo ERR ;; rotated|''|*[!0-9]*) [ "$out" = rotated ] && echo rotated || echo ERR ;; *) echo "$out" ;; esac
+}
+
+pass(){
+  local T="$1" UB base_sha st
+  CUR_T="$T"; UB=$(update_branch_for "$T"); PHASE="$T:prepare"
+  if G show-ref -q --verify "refs/heads/$UB"; then
+    if G merge-base --is-ancestor "$UB" "$T"; then G branch -q -d "$UB" >>"$LOG" 2>&1 || return 1
+    else say "$T" FAIL "branch $UB exists and is not in $T: inspect it, then delete it"; return 1; fi
+  fi
+  tree_status st || return 1; [ -z "$st" ] || { say "$T" FAIL "tree not clean before switching to $T"; return 1; }
+  G switch -q "$T" >>"$LOG" 2>&1 || { say "$T" FAIL "cannot switch to $T"; return 1; }
+  gcap base_sha rev-parse --short HEAD || return 1
+  [ -f "$REPO/$CJSON" ] || { say "$T" FAIL "$CJSON not on $T"; return 1; }
+  sync_fs || return 1
+
+  # Install what this branch pins, so the baseline runs on this branch's code.
+  PHASE="$T:install"; DB_DIRTY=1
+  CEXEC composer install --no-interaction --no-progress >>"$LOG" || { say "$T" FAIL "composer install failed on $T before updating (see log)"; return 1; }
+  sync_fs || return 1
+  PHASE="$T:baseline"
+  local dbg0 base_name base_probe base_core_ok=1
+  dbg0=$(dbg_size)
+  wval base_name option get blogname || { say "$T" FAIL "WordPress does not bootstrap on $T (see log)"; return 1; }
+  base_probe=$(home_probe)
+  [ "$base_probe" = "200 1 1" ] || { say "$T" FAIL "local homepage not healthy before updating ($base_probe)"; return 1; }
+  W core verify-checksums >>"$LOG" || base_core_ok=0
+
+  # Work out the new pins.
+  local outdated; outdated=$(CEXEC composer outdated --direct --format=json --no-interaction) || { say "$T" FAIL "composer outdated failed"; return 1; }
+  # composer prints {} or {"installed":[]} when nothing is outdated; anything else is an error.
+  if jq -e '.installed|type=="array"' >/dev/null 2>&1 <<<"$outdated"; then :
+  elif jq -e '. == {} or . == []' >/dev/null 2>&1 <<<"$outdated"; then outdated='{"installed":[]}'
+  else say "$T" FAIL "composer outdated returned unreadable output"; return 1; fi
+  local before; before=$(cat "$REPO/$CJSON")
+  local plan; plan=$(jq -c --argjson req "$(jq '.require' <<<"$before")" '
+    [.installed[] | select(.latest != null and .latest != .version) |
+      ($req[.name] // "") as $c |
+      (.latest | ltrimstr("v")) as $l |
+      if ((.name|test("^(wpackagist-(plugin|theme)/|johnpbloch/wordpress$)")) and ($c|test("^v?[0-9][0-9.]*$")))
+        then {name, from:($c|ltrimstr("v")), to:$l}
+      elif (.["latest-status"]=="semver-safe-update" and ($c|test("^v?[0-9][0-9.]*$")))
+        then {name, from:($c|ltrimstr("v")), to:$l}
+      else empty end]' <<<"$outdated") || { say "$T" FAIL "could not read composer outdated"; return 1; }
+  local skipped; skipped=$(jq -r --argjson p "$plan" '
+    [.installed[] | select(.latest != null and .latest != .version) | select(.name as $n | ($p|map(.name)|index($n))|not) |
+      "\(.name) \(.version)->\(.latest) (\(.["latest-status"]))"] | join(", ")' <<<"$outdated")
+  # WPML from the fleet.
+  local wp; for wp in "wpml/sitepress-multilingual-cms:$WPML_SITEPRESS" "wpml/wpml-string-translation:$WPML_ST"; do
+    local n="${wp%%:*}" v="${wp#*:}" cur
+    cur=$(jq -r --arg n "$n" '.require[$n] // empty' <<<"$before")
+    [ -n "$cur" ] && [ -n "$v" ] || continue
+    if [ "$(printf '%s\n%s\n' "$cur" "$v" | sort -V | tail -1)" = "$v" ] && [ "$cur" != "$v" ]; then
+      plan=$(jq -c --arg n "$n" --arg f "$cur" --arg t "$v" '. + [{name:$n, from:$f, to:$t, wpml:true}]' <<<"$plan")
+    fi
+  done
+
+  if [ $DRY -eq 1 ]; then
+    say "$T" PLAN "$(jq -r 'map(.name+" "+.from+"->"+.to)|join("; ")' <<<"$plan") | not bumped: ${skipped:-none}"
+    RESULTS+=("$T|PLAN|dry-run"); return 0
+  fi
+  if [ "$(jq length <<<"$plan")" = "0" ]; then
+    say "$T" OK "$base_sha; nothing to update${skipped:+; not bumped: $skipped}"
+    RESULTS+=("$T|OK|nothing to update"); return 0
+  fi
+
+  PHASE="$T:update"
+  G switch -q -c "$UB" "$T" >>"$LOG" 2>&1 || { say "$T" FAIL "cannot create $UB"; return 1; }
+  # Write the pins. WPML: version, dist URL version= and require together.
+  # Keep the file's own indentation so the diff is only the changed pins.
+  local ind; ind=$(awk 'NR>1 && /^ +"/{match($0,/^ +/); print RLENGTH; exit}' "$REPO/$CJSON"); ind=${ind:-4}
+  local after; after=$(jq --indent "$ind" --argjson p "$plan" '
+    reduce $p[] as $x (.;
+      .require[$x.name] = $x.to
+      | if $x.wpml then
+          .repositories |= map(if (.type=="package" and .package.name==$x.name)
+            then .package.version = $x.to | .package.dist.url |= sub("version=[0-9.]+"; "version=" + $x.to)
+            else . end)
+        else . end)' <<<"$before") || { say "$T" FAIL "could not write new pins"; return 1; }
+  printf '%s\n' "$after" >"$REPO/$CJSON"
+  # Only the planned keys may differ.
+  local diffkeys; diffkeys=$(jq -rn --argjson a "$before" --argjson b "$after" '
+    [($b.require|keys[]) as $k | select($a.require[$k] != $b.require[$k]) | $k] | sort | join(",")')
+  [ "$diffkeys" = "$(jq -r 'map(.name)|sort|join(",")' <<<"$plan")" ] || { say "$T" FAIL "composer.json changed beyond the plan; left on $UB"; return 2; }
+  # Line-level guard: one line per pin, plus version and URL lines per WPML package.
+  local maxl; maxl=$(jq '[.[] | if .wpml then 3 else 1 end] | add' <<<"$plan")
+  local chl; chl=$(G diff --numstat -- "$CJSON" | awk '{print $1}')
+  [ "${chl:-0}" -le "$maxl" ] || { say "$T" FAIL "composer.json diff is $chl lines, expected at most $maxl (formatting changed?); left on $UB"; return 2; }
+  sync_fs || return 1
+  CEXEC composer update --no-interaction --no-progress >>"$LOG" || { sync_fs; say "$T" FAIL "composer update failed (see log); left on $UB"; return 2; }
+  sync_fs || return 1
+  # Installed versions must be the planned ones.
+  local inst; inst=$(CEXEC composer show --direct --format=json --no-interaction) || { say "$T" FAIL "composer show failed"; return 2; }
+  local wrong; wrong=$(jq -rn --argjson p "$plan" --argjson i "$inst" '
+    [$p[] as $x | [$i.installed[] | select(.name==$x.name) | .version | ltrimstr("v")] as $got
+      | select(($got|length) != 1 or $got[0] != $x.to) | "\($x.name) wanted \($x.to) got \($got|join("/"))"] | join(", ")') \
+    || { say "$T" FAIL "could not read composer show"; return 2; }
+  [ -z "$wrong" ] || { say "$T" FAIL "installed versions differ from the plan: $wrong; left on $UB"; return 2; }
+
+  PHASE="$T:verify"
+  local name_after probe_after core_ok_after=1 fat notes=()
+  wval name_after option get blogname || name_after="(wp-cli failed)"
+  probe_after=$(home_probe)
+  W core verify-checksums >>"$LOG" || core_ok_after=0
+  fat=$(dbg_fatals "$dbg0")
+  [ "$fat" = "n/a" ] && notes+=("no debug.log: fatal check limited to wp-cli and homepage")
+  if [ "$name_after" != "$base_name" ] || [ "$probe_after" != "200 1 1" ] \
+     || { [ $base_core_ok -eq 1 ] && [ $core_ok_after -eq 0 ]; } \
+     || { [ "$fat" != "n/a" ] && [ "$fat" != "rotated" ] && [ "$fat" != "0" ]; }; then
+    say "$T" FAIL "verification red (blogname '$base_name'->'$name_after', home '$probe_after', core checksums $base_core_ok->$core_ok_after, new PHP fatals $fat); left on $UB"
+    return 2
+  fi
+
+  # Commit the manifest only. Everything else must still be clean.
+  local core_to; core_to=$(jq -r 'map(select(.name=="johnpbloch/wordpress"))[0].to // empty' <<<"$plan")
+  local np; np=$(jq '[.[]|select(.name!="johnpbloch/wordpress")]|length' <<<"$plan")
+  local msg="Update composer packages:${core_to:+ WP core $core_to,} $np packages ($(jq -r '[.[]|select(.name!="johnpbloch/wordpress")|.name|sub("^wpackagist-(plugin|theme)/";"")]|join(", ")' <<<"$plan"))"
+  GIT_LITERAL_PATHSPECS=1 G add -- "$CJSON" >>"$LOG" 2>&1 && G commit -q -m "$msg" >>"$LOG" 2>&1 || { say "$T" FAIL "commit failed"; return 2; }
+  tree_status st || return 2
+  [ -z "$st" ] || { say "$T" FAIL "changes besides composer.json, left on $UB: $(head -5 <<<"$st" | tr '\n' ';')"; return 2; }
+
+  PHASE="$T:integrate"
+  G switch -q "$T" >>"$LOG" 2>&1 && G merge -q --ff-only "$UB" >>"$LOG" 2>&1 || { say "$T" FAIL "fast-forward of $T failed; $UB kept"; return 1; }
+  G branch -q -d "$UB" >>"$LOG" 2>&1 || notes+=("could not delete $UB")
+  local summary="$base_sha->$(G rev-parse --short HEAD); $(jq -r 'map(.name+" "+.from+"->"+.to)|join(", ")' <<<"$plan")"
+  [ -n "$skipped" ] && summary="$summary; not bumped (range or major on a library): $skipped"
+  summary="$summary; DB upgrade pending: runs on first admin load"
+  [ ${#notes[@]} -gt 0 ] && summary="$summary; NOTES: $(printf '%s; ' "${notes[@]}")"
+  say "$T" OK "$summary"
+  RESULTS+=("$T|OK|$summary")
+}
+
+STOPPED=0
+while read -r T; do
+  [ -n "$T" ] || continue
+  pass "$T"; prc=$?
+  if [ $prc -ne 0 ]; then
+    FAILED=1; RESULTS+=("$T|FAIL|phase $PHASE, see log $LOG")
+    tree_status st_now || st_now="?"
+    if [ $prc -eq 2 ] || [ -n "$st_now" ]; then
+      say end STOP "left as is on $(G branch --show-current) for inspection; DB snapshot $SNAP NOT restored (ddev snapshot restore $SNAP)"
+      STOPPED=1; break
+    fi
+    db_restore; say end STOP "stopped after the failure on $T"; STOPPED=1; break
+  fi
+  db_restore || { FAILED=1; STOPPED=1; break; }
+done <<<"$TARGETS"
+
+if [ $STOPPED -eq 0 ]; then
+  PHASE="finish"
+  if ! G switch -q "$ORIG" >>"$LOG" 2>&1; then FAILED=1; say end FAIL "could not switch back to $ORIG"
+  elif ! sync_fs; then FAILED=1
+  # Installed packages must match the branch left checked out.
+  elif ! CEXEC composer install --no-interaction --no-progress >>"$LOG"; then FAILED=1; say end FAIL "composer install on $ORIG failed"
+  else
+    sync_fs; tree_status st_end || st_end="?"
+    if [ -n "$st_end" ]; then FAILED=1; say end FAIL "tree not clean at the end: $(head -5 <<<"$st_end" | tr '\n' ';')"
+    else say end "$([ $FAILED -eq 0 ] && echo OK || echo PARTIAL)" "on $ORIG, tree clean, packages installed for $ORIG, DB restored to $SNAP"
+    fi
+  fi
+fi
+if [ $DRY -eq 1 ] && [ $FAILED -eq 0 ] && [ $DB_DIRTY -eq 0 ]; then
+  (cd "$REPO" && ddev snapshot --cleanup --name "$SNAP" -y </dev/null >>"$LOG" 2>&1) || true
+fi
+if write_state; then STATE_WRITTEN=1; else say state FAIL "could not write $STATE"; STATE_WRITTEN=1; exit 1; fi
+exit $FAILED

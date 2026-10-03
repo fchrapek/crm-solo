@@ -66,6 +66,7 @@
             "composer install",
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
             "@php artisan key:generate",
+            "@php artisan setup:reverb-keys",
             "@php artisan migrate --force",
             "@php artisan db:seed --force",
             "bun install",
@@ -74,7 +75,7 @@
         "dev": [
             "Composer\\Config::disableProcessTimeout",
             "docker compose up -d",
-            "bunx concurrently -c \"#c4b5fd,#fdba74,#93c5fd,#86efac,#fca5a5\" \"php -d upload_max_filesize=2G -d post_max_size=2G -d memory_limit=512M -S 127.0.0.1:8000 -t public server.php\" \"php artisan horizon\" \"bun run dev\" \"php artisan schedule:work\" \"php artisan reverb:start\" --names=server,horizon,vite,scheduler,reverb --kill-others"
+            "bunx concurrently -c \"#c4b5fd,#fdba74,#93c5fd,#86efac,#fca5a5\" \"php -d upload_max_filesize=2G -d post_max_size=2G -d memory_limit=512M -S 127.0.0.1:8101 -t public server.php\" \"php artisan horizon\" \"bun run dev\" \"php artisan schedule:work\" \"php artisan reverb:start\" --names=server,horizon,vite,scheduler,reverb --kill-others"
         ],
         "dev:ssr": [
             "bun run build:ssr",
@@ -83,6 +84,10 @@
         ],
         "lint": [
             "pint"
+        ],
+        "check": [
+            "Composer\\Config::disableProcessTimeout",
+            "bash scripts/check.sh"
         ]
     },
     "extra": {

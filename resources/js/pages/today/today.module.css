@@ -1,0 +1,367 @@
+.page {
+    min-height: 100vh;
+}
+
+.frame {
+    max-width: var(--solo-grid-max);
+    margin: 0 auto;
+    padding-inline: var(--solo-grid-margin);
+    padding-bottom: var(--solo-space-8);
+}
+
+/* 12 columns, the same grid as the Figma frames */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: var(--solo-grid-gutter);
+    row-gap: var(--solo-space-7);
+    padding-top: 80px;
+}
+
+.head {
+    min-width: 0;
+    /* one-line metas truncate instead of widening the column */
+    grid-template-columns: minmax(0, 1fr);
+    grid-column: 1 / span 8;
+    display: grid;
+    gap: 18px;
+    align-content: start;
+}
+
+.main {
+    min-width: 0;
+    /* one-line metas truncate instead of widening the column */
+    grid-template-columns: minmax(0, 1fr);
+    grid-column: 1 / span 6;
+    display: grid;
+    gap: var(--solo-space-5);
+    align-content: start;
+}
+
+.mainWide {
+    grid-column: 1 / span 7;
+}
+
+.rail {
+    min-width: 0;
+    /* one-line metas truncate instead of widening the column */
+    grid-template-columns: minmax(0, 1fr);
+    grid-column: 10 / span 3;
+    grid-row: 1 / span 2;
+    display: grid;
+    gap: var(--solo-space-7);
+    align-content: start;
+}
+
+.railWide {
+    grid-column: 8 / span 5;
+    grid-row: 2;
+}
+
+.list {
+    margin: 0;
+    padding: 0;
+}
+
+.addRow {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--solo-space-3);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-fg-muted);
+    font: 500 var(--solo-text-action) / 1.3 var(--solo-font-text);
+    cursor: pointer;
+}
+
+.addRow span:first-child {
+    font-size: 1.75rem;
+    font-weight: 400;
+    color: var(--solo-fg);
+    line-height: 1;
+}
+
+.slot {
+    border: 1.5px dashed var(--solo-rule);
+    border-radius: var(--solo-radius-md);
+    padding: 14px 16px;
+    font-size: var(--solo-text-action);
+    font-weight: 500;
+    color: var(--solo-fg-muted);
+}
+
+.quiet {
+    margin: 0;
+    font-size: var(--solo-text-action);
+    font-weight: 500;
+    color: var(--solo-fg-muted);
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--solo-space-5);
+}
+
+.error {
+    margin: 0;
+    font-size: var(--solo-text-action);
+    font-weight: 600;
+    color: var(--solo-late);
+}
+
+/* timer */
+.live {
+    color: var(--solo-fg);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--solo-space-3);
+    margin: 0;
+    font-size: var(--solo-text-label);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--solo-fg);
+    box-shadow: 0 0 0 5px var(--solo-rule);
+}
+
+.taskTitle {
+    margin: 0;
+    font-size: var(--solo-heading-task);
+    font-weight: 600;
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+}
+
+.clock {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--solo-space-2);
+    margin: 0;
+    font-family: var(--solo-font-display);
+    font-stretch: 62%;
+    font-weight: 900;
+    line-height: 0.86;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+}
+
+.clockMain {
+    font-size: var(--solo-display-clock);
+}
+
+.clockSecs {
+    font-size: calc(var(--solo-display-clock) / 3);
+    color: var(--solo-fg-muted);
+    margin-top: 0.12em;
+}
+
+.stop {
+    grid-column: 10 / span 3;
+    align-self: center;
+    justify-self: end;
+}
+
+.footer {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: var(--solo-grid-gutter);
+    padding-top: 18px;
+    border-top: 2px solid var(--solo-rule-strong);
+}
+
+.footBlock {
+    display: grid;
+    gap: 6px;
+    align-content: start;
+    grid-column: span 3;
+}
+
+.footBlockWide {
+    grid-column: 4 / span 5;
+}
+
+.caps {
+    margin: 0;
+    font-size: var(--solo-text-label);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--solo-fg-muted);
+}
+
+.segs {
+    display: flex;
+    gap: 6px;
+    padding-block: 4px 2px;
+}
+
+.seg {
+    width: 48px;
+    height: 10px;
+    border-radius: 5px;
+    background: var(--solo-rule);
+}
+
+.segDone {
+    background: var(--solo-fg);
+}
+
+.segNow {
+    background: none;
+    box-shadow: inset 0 0 0 2px var(--solo-fg);
+}
+
+.footTitle {
+    margin: 0;
+    font-size: var(--solo-text-row);
+    font-weight: 600;
+}
+
+/* done */
+.stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 44px;
+}
+
+.stat {
+    display: grid;
+    gap: 4px;
+}
+
+.statValue {
+    font-family: var(--solo-font-display);
+    font-stretch: 70%;
+    font-weight: 900;
+    font-size: var(--solo-display-stat);
+    line-height: 0.92;
+}
+
+.statLabel {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--solo-fg-muted);
+}
+
+.body {
+    margin: 0;
+    font-size: var(--solo-text-row);
+    line-height: 1.45;
+}
+
+@media (max-width: 1100px) {
+    .head,
+    .main,
+    .mainWide,
+    .rail,
+    .railWide,
+    .stop {
+        grid-column: 1 / -1;
+        grid-row: auto;
+    }
+
+    .stop {
+        justify-self: start;
+    }
+
+    .footBlock,
+    .footBlockWide {
+        grid-column: span 6;
+    }
+}
+
+@media (max-width: 640px) {
+    .grid {
+        padding-top: var(--solo-space-7);
+    }
+
+    .footBlock,
+    .footBlockWide {
+        grid-column: 1 / -1;
+        padding-bottom: var(--solo-space-4);
+    }
+}
+
+.title {
+    margin: 0;
+    font-family: var(--solo-font-display);
+    font-stretch: 62%;
+    font-weight: 900;
+    font-size: var(--solo-display-title);
+    line-height: 0.9;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+}
+
+.main section + section {
+    margin-top: var(--solo-space-6);
+}
+
+.closeBox {
+    display: grid;
+    gap: 14px;
+    justify-items: start;
+}
+
+/* a ghost action that starts a column sits on the column edge */
+.flush {
+    padding-left: 0;
+}
+
+/* the running row on the default day list */
+.running {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--solo-space-3);
+}
+
+.liveDot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--solo-tile-now);
+    box-shadow: 0 0 0 4px var(--solo-rule);
+}
+
+.elapsed {
+    font-size: var(--solo-button-md);
+    font-weight: 700;
+    color: var(--solo-fg);
+    font-variant-numeric: tabular-nums;
+}
+
+
+/* Toasts stay paper on ink whatever the day's surface, so they read on vermilion and cobalt too. */
+.toasts [data-sonner-toast] {
+    background-color: var(--solo-paper);
+    color: var(--solo-ink);
+    border: 2px solid var(--solo-ink);
+    border-radius: var(--solo-radius-md);
+    box-shadow: none;
+    font-family: var(--solo-font-text);
+    font-size: var(--solo-text-action);
+}
+
+.toasts [data-sonner-toast] [data-title] {
+    font-weight: 600;
+}
+
+.toasts [data-sonner-toast] [data-description] {
+    color: var(--solo-stone);
+    font-size: var(--solo-text-meta);
+}
+
+.toasts [data-sonner-toast] [data-icon] {
+    color: var(--solo-vermilion);
+}

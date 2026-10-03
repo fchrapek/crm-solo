@@ -29,19 +29,14 @@ final class TimerStopTool extends Tool
         ]);
 
         try {
-            $entry = $resolver->openTimeEntry($validated['entry'] ?? null, $this->identity()->account->id);
+            $entry = $resolver->openTimeEntry($this->identity()->account->id, $validated['entry'] ?? null);
         } catch (ReferenceException $e) {
             return $this->referenceError($e);
         }
 
         $entry = $timers->stop($entry, $validated['description'] ?? null);
 
-        return $this->payload([
-            'entry_id' => $entry->id,
-            'minutes' => $entry->duration_minutes,
-            'task' => $entry->task?->name,
-            'client' => $entry->client?->name,
-        ]);
+        return $this->payload($timers->stopPayload($entry));
     }
 
     /**

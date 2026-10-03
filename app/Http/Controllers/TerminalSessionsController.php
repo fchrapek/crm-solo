@@ -24,11 +24,7 @@ final class TerminalSessionsController extends Controller
             abort(422, 'Task has no CLI configured.');
         }
 
-        // base_branch is required: every session forks from an explicitly
-        // chosen branch. Filip wants this as a forcing function to keep
-        // project branch state intentional. Resume of an already-running
-        // session bypasses this controller (frontend just navigates to the
-        // task page since the launcher's port survives).
+        // Required on purpose: every session forks from a branch someone chose.
         $validated = $request->validate([
             'base_branch' => ['required', 'string', 'max:255', 'regex:/^[A-Za-z0-9._\/\-]+$/'],
             'mode' => ['nullable', 'string', 'in:'.implode(',', Task::SESSION_MODES)],
@@ -125,11 +121,6 @@ final class TerminalSessionsController extends Controller
     }
 
     /**
-     * List branches available in the task's project repository so the user
-     * can pick where to fork the new worktree from. Filip wants this picker
-     * forced on every session start — the dialog refuses to launch without
-     * a conscious selection.
-     *
      * Returns the same `repository_missing` code as start() when the project
      * has no repo, so the frontend can route into the RepositoryFormDialog
      * with the existing auto-retry chain.

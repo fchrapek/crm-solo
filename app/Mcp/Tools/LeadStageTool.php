@@ -32,7 +32,7 @@ final class LeadStageTool extends Tool
             'stage.required' => 'Pass the stage to move the lead to.',
         ]);
 
-        $lead = Lead::find($validated['lead']);
+        $lead = Lead::query()->where('account_id', $this->identity()->account->id)->find($validated['lead']);
 
         if ($lead === null) {
             return $this->referenceError(new ReferenceNotFoundException('lead', (string) $validated['lead']));

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\Account;
 use App\Services\Reports\NarrativePromptResolver;
 use App\Services\Reports\NarrativePromptUnavailable;
@@ -14,10 +16,13 @@ use Illuminate\Console\Command;
  * Says which report prompt an account actually resolves, and shows its head.
  * The first thing to run when a generated report comes out the wrong shape.
  */
+#[AccountScope(AccountScope::ACTING)]
 final class ReportPromptShow extends Command
 {
+    use AgentConsoleOutput;
+
     protected $signature = 'reports:prompt-show
-        {--account= : Account id (defaults to the only account)}
+        {--account= : Account id; must be the acting account (the default)}
         {--full : Print the whole prompt instead of the first lines}';
 
     protected $description = 'Show which report narrative prompt resolves, and from where.';
@@ -67,26 +72,6 @@ final class ReportPromptShow extends Command
 
     private function resolveAccountId(): ?int
     {
-        $given = $this->option('account');
-
-        if ($given !== null) {
-            return (int) $given;
-        }
-
-        $ids = Account::query()->orderBy('id')->pluck('id');
-
-        if ($ids->count() === 1) {
-            return (int) $ids->first();
-        }
-
-        if ($ids->isEmpty()) {
-            $this->error('No accounts exist. Seed one first.');
-
-            return null;
-        }
-
-        $this->error('Several accounts exist; pass --account='.$ids->implode('|'));
-
-        return null;
+        return $this->actingAccountId();
     }
 }

@@ -4,13 +4,20 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Models\Client;
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
+use App\Services\Agent\CrmEntityResolver;
 use App\Services\Agent\MonthCloseTicker;
+use App\Services\Agent\ReferenceException;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
+#[AccountScope(AccountScope::ACTING)]
 final class MonthCloseTick extends Command
 {
+    use AgentConsoleOutput;
+
     protected $signature = 'month-close:tick
                             {client : Client id}
                             {step : Step key (e.g. db_dump), or "list" to just show the checklist}
@@ -22,14 +29,12 @@ final class MonthCloseTick extends Command
 
     protected $description = 'Tick a month-close checklist step for a client (starts the run if needed). Use step="list" to show the checklist.';
 
-    public function handle(MonthCloseTicker $ticker): int
+    public function handle(MonthCloseTicker $ticker, CrmEntityResolver $resolver): int
     {
-        $client = Client::find($this->argument('client'));
-
-        if ($client === null) {
-            $this->error('Client not found.');
-
-            return self::FAILURE;
+        try {
+            $client = $resolver->client((string) $this->argument('client'), $this->actingIdentity()->account->id);
+        } catch (ReferenceException $e) {
+            return $this->referenceFailure($e);
         }
 
         $period = $this->option('period') ? (string) $this->option('period') : $ticker->defaultPeriod();
@@ -54,13 +59,13 @@ final class MonthCloseTick extends Command
         }
 
         if ($this->option('json')) {
-            $this->line((string) json_encode($checklist, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            $this->raw($this->encodeJson($checklist));
 
             return self::SUCCESS;
         }
 
         if ($stepKey !== 'list') {
-            $this->info("{$client->name} [{$period}] · {$stepKey} → {$this->argument('state')}");
+            $this->raw($this->literal($client->name).' ['.$this->literal($period).'] · '.$this->literal($stepKey).' -> '.$this->literal((string) $this->argument('state')));
         }
 
         return $this->showChecklist($checklist);
@@ -74,10 +79,10 @@ final class MonthCloseTick extends Command
         $this->table(
             ['site', 'step', 'state'],
             collect($checklist['steps'])
-                ->map(fn (array $step): array => [$step['project'] ?? '—', $step['key'], $step['state']])
+                ->map(fn (array $step): array => [OutputFormatter::escape($this->literal($step['project'] ?? '-')), $step['key'], $step['state']])
                 ->all(),
         );
-        $this->line("{$checklist['client']} [{$checklist['period']}] — status: {$checklist['status']} ({$checklist['resolved']}/{$checklist['total']})");
+        $this->raw($this->literal($checklist['client'])." [{$checklist['period']}] - status: {$checklist['status']} ({$checklist['resolved']}/{$checklist['total']})");
 
         return self::SUCCESS;
     }

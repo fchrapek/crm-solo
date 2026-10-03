@@ -120,6 +120,13 @@
     gap: var(--spacing-2);
 }
 
+.staleNotice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
 .editorLabel {
     font-size: 0.875rem;
     font-weight: 500;
@@ -230,6 +237,12 @@
 .revisionMeta {
     color: var(--color-muted-foreground);
     font-size: 0.75rem;
+}
+
+.revisionFigures {
+    color: var(--color-muted-foreground);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
 }
 
 .revisionRow {

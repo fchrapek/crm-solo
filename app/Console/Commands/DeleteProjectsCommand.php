@@ -4,14 +4,19 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Console\Commands\Concerns\ResolvesProjectAndClient;
 use App\Models\Project;
 use App\Models\Task;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
+#[AccountScope(AccountScope::ACTING)]
 final class DeleteProjectsCommand extends Command
 {
+    use AgentConsoleOutput;
     use ResolvesProjectAndClient;
 
     protected $signature = 'projects:delete
@@ -19,15 +24,19 @@ final class DeleteProjectsCommand extends Command
                             {--client= : Client ID or name — wipe ALL projects for this client (except General)}
                             {--include-general : When using --client, also delete the "General" project}
                             {--force : Skip confirmation}
-                            {--account= : Restrict resolution to this account ID}';
+                            {--account= : Account ID; must be the acting account}';
 
-    protected $description = 'Delete a single project (with its tasks) OR wipe all projects for a client. Cascades to tasks, runs, artifacts.';
+    protected $description = 'Delete a single project OR wipe all projects for a client, with their tasks. Time entries stay, detached from the deleted tasks.';
 
     public function handle(): int
     {
+        $accountId = $this->actingAccountId();
+        if ($accountId === null) {
+            return self::FAILURE;
+        }
+
         $projectArg = $this->argument('project');
         $clientNeedle = $this->option('client');
-        $accountId = $this->intOption('account');
 
         if ($projectArg && $clientNeedle) {
             $this->error('Pass either a project argument OR --client, not both.');
@@ -85,18 +94,15 @@ final class DeleteProjectsCommand extends Command
             return self::SUCCESS;
         }
 
-        $deleted = 0;
-        foreach ($projects as $p) {
-            $p->delete();
-            $deleted++;
-        }
+        // Project::deleting deletes each task through its model, which detaches time entries and removes attachment files.
+        DB::transaction(fn () => $projects->each(fn (Project $p) => $p->delete()));
 
-        $this->info("Deleted {$deleted} project(s). Cascade dropped {$taskTotal} task(s) + dependents. Files on disk are NOT cleaned.");
+        $this->info("Deleted {$projects->count()} project(s) and {$taskTotal} task(s). Their logged time stays, billed to the client without a task.");
 
         return self::SUCCESS;
     }
 
-    private function projectsForClient(string $needle, ?int $accountId, bool $includeGeneral)
+    private function projectsForClient(string $needle, int $accountId, bool $includeGeneral)
     {
         $client = $this->resolveClient($needle, $accountId);
 
@@ -106,12 +112,5 @@ final class DeleteProjectsCommand extends Command
         }
 
         return $query->get();
-    }
-
-    private function intOption(string $name): ?int
-    {
-        $value = $this->option($name);
-
-        return $value === null || $value === '' ? null : (int) $value;
     }
 }

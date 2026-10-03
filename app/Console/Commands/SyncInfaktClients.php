@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
 use App\Models\Integration;
 use App\Services\Integrations\InfaktService;
 use Illuminate\Console\Command;
 
+#[AccountScope(AccountScope::OPERATOR)]
 final class SyncInfaktClients extends Command
 {
     protected $signature = 'infakt:sync-clients
@@ -15,7 +17,7 @@ final class SyncInfaktClients extends Command
                             {--test : Test the API connection without syncing}
                             {--force : Skip the confirmation prompt}';
 
-    protected $description = 'Sync clients from Infakt to local database';
+    protected $description = 'Sync clients from Infakt to local database (operator: every account with Infakt, or the one named by --account)';
 
     public function handle(): int
     {
@@ -41,7 +43,7 @@ final class SyncInfaktClients extends Command
 
         if (! $testOnly && ! $force) {
             $this->warn('WARNING: This sync will update existing clients matched by NIP or external ID.');
-            $this->warn('Existing client data may be overwritten with data from Infakt.');
+            $this->warn('Fields edited in the CRM are kept, and clients deleted in the CRM stay deleted.');
             $this->newLine();
 
             if (! $this->confirm('Do you want to continue?')) {
@@ -96,7 +98,12 @@ final class SyncInfaktClients extends Command
                 ['Updated', $stats['updated']],
                 ['Skipped', $stats['skipped']],
                 ['Errors', $stats['errors']],
+                ['Conflicts (not linked)', count($stats['conflicts'])],
             ]
         );
+
+        foreach ($stats['conflicts'] as $conflict) {
+            $this->warn($conflict);
+        }
     }
 }

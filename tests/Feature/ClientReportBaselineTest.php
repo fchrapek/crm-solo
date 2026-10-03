@@ -57,4 +57,18 @@ final class ClientReportBaselineTest extends TestCase
 
         $this->assertNull($this->client->fresh()->report_baseline_markdown);
     }
+
+    public function test_baseline_keeps_its_list_structure_through_the_punctuation_gate(): void
+    {
+        $this->actingAs($this->user)
+            ->put("/clients/{$this->client->id}/report-baseline", [
+                'report_baseline_markdown' => "### Monitoring\n\n\u{2013} Kopie\n  \u{2013} codziennie  \n  \u{2013} 30 dni",
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(
+            "### Monitoring\n\n- Kopie\n  - codziennie  \n  - 30 dni",
+            $this->client->fresh()->report_baseline_markdown,
+        );
+    }
 }

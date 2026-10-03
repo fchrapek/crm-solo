@@ -86,6 +86,35 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Allowed Hosts
+    |--------------------------------------------------------------------------
+    |
+    | Every request whose Host (or X-Forwarded-Host) is not APP_URL's host,
+    | localhost, 127.0.0.1, [::1] or one of these is refused with a 400, in
+    | every environment. Comma-separated hostnames, no scheme or port, for
+    | example a LAN name the browser uses to reach this machine.
+    |
+    */
+
+    'allowed_hosts' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('APP_ALLOWED_HOSTS', '')),
+    ))),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Seeded Owner Password
+    |--------------------------------------------------------------------------
+    |
+    | The local owner DatabaseSeeder creates. Unset, the seeder generates a
+    | random password and prints it once.
+    |
+    */
+
+    'seed_owner_password' => env('SEED_OWNER_PASSWORD'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Demo Mode
     |--------------------------------------------------------------------------
     |
@@ -99,6 +128,25 @@ return [
     'demo' => (bool) env('DEMO_MODE', false),
 
     'demo_password' => env('DEMO_PASSWORD'),
+
+    // A staging stack that runs the fictional DemoSeeder data without the rest
+    // of DEMO_MODE: demo:reset may run there by hand, but nothing schedules it.
+    // The command's own guard (every account is_test) still applies.
+    'demo_reset_allowed' => (bool) env('DEMO_RESET_ALLOWED', false),
+
+    // Demo visitors share one login, so uploads are capped per file and per
+    // IP each hour (App\Support\UploadLimits); demo:reset deletes the files.
+    'demo_uploads' => [
+        'max_kb' => (int) env('DEMO_UPLOAD_MAX_KB', 2048),
+        'per_hour' => (int) env('DEMO_UPLOADS_PER_HOUR', 20),
+    ],
+
+    // Every state-changing request on the demo, per IP (App\Support\DemoWriteBudget).
+    'demo_writes' => [
+        'per_minute' => (int) env('DEMO_WRITES_PER_MINUTE', 30),
+        'per_hour' => (int) env('DEMO_WRITES_PER_HOUR', 200),
+        'max_text_kb' => (int) env('DEMO_WRITE_MAX_TEXT_KB', 16),
+    ],
 
     /*
     |--------------------------------------------------------------------------

@@ -12,7 +12,10 @@ import { TaskPreview } from '@/components/task-preview';
 import { TerminalSession } from '@/components/terminal-session';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useHostExec } from '@/hooks/use-host-exec';
+import { listLaneLabel } from '@/lib/list-lane-label';
 import { RepositoryFormDialog } from '@/pages/clients/components/repository-form-dialog';
+import { ownerFinishLabel } from '@/pages/clients/components/task-row';
 
 import { TaskContext } from './components/task-context';
 import styles from './show.module.css';
@@ -36,6 +39,9 @@ interface ChildTask {
     id: number;
     name: string;
     is_completed: boolean;
+    finished_at: string | null;
+    /** Finished by the owner or completed on its board. */
+    is_done: boolean;
     agent_lane: string | null;
     cli: 'claude' | 'codex' | null;
 }
@@ -46,6 +52,7 @@ interface TaskData {
     description: string | null;
     list_name: string | null;
     is_completed: boolean;
+    finished_at: string | null;
     due_date: string | null;
     labels: string[] | null;
     priority: 'high' | 'medium' | 'low' | null;
@@ -53,6 +60,7 @@ interface TaskData {
     parent_task: { id: number; name: string } | null;
     child_tasks: ChildTask[];
     source: string | null;
+    has_trello_card: boolean;
     trello_url: string | null;
     created_at: string | null;
     updated_at: string | null;
@@ -108,7 +116,8 @@ interface Props {
 }
 
 export default function Show({ task }: Props) {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    const finishLabel = ownerFinishLabel(task, t, i18n.language);
     const [savingCli, setSavingCli] = useState(false);
     const [mergeCopied, setMergeCopied] = useState(false);
     // Branch-picker dialog. Repo dialog state used as a fallback chain when
@@ -266,8 +275,9 @@ export default function Show({ task }: Props) {
         setTimeout(() => setMergeCopied(false), 1500);
     };
 
+    const hostExec = useHostExec();
     const hasSession = task.session_port !== null;
-    const canResume = !hasSession && task.tmux_alive;
+    const canResume = hostExec && !hasSession && task.tmux_alive;
     const [resuming, setResuming] = useState(false);
     const [killConfirmOpen, setKillConfirmOpen] = useState(false);
 
@@ -316,7 +326,7 @@ export default function Show({ task }: Props) {
     // Lifecycle mirrors session start/stop, surfaced as a button + iframe.
     const [previewStarting, setPreviewStarting] = useState(false);
     const [previewConflict, setPreviewConflict] = useState<{ name: string | null } | null>(null);
-    const previewAvailable = task.cli !== null && Boolean(task.project?.preview_command);
+    const previewAvailable = hostExec && task.cli !== null && Boolean(task.project?.preview_command);
     const startPreview = async (force = false) => {
         if (previewStarting) return;
         setPreviewStarting(true);
@@ -367,9 +377,13 @@ export default function Show({ task }: Props) {
             <div className={`${styles.container} ${hasSession ? styles.containerWide : ''}`}>
                 <div className={styles.titleBar}>
                     <div className={styles.titleBlock}>
-                        <h1 className={`${styles.title} ${task.is_completed ? styles.titleCompleted : ''}`}>{task.name}</h1>
+                        <h1 className={`${styles.title} ${task.is_completed || task.finished_at ? styles.titleCompleted : ''}`}>{task.name}</h1>
                         <div className={styles.chipRow}>
-                            {task.list_name && <span className={styles.chip}>{task.list_name}</span>}
+                            {finishLabel ? (
+                                <span className={styles.chip}>{finishLabel}</span>
+                            ) : (
+                                task.list_name && <span className={styles.chip}>{listLaneLabel(t, task.list_name)}</span>
+                            )}
                             {task.agent_lane && <span className={styles.chip}>{t(`agent_lane_${task.agent_lane}`)}</span>}
                             {task.cli && (
                                 <span className={`${styles.chip} ${styles.chipMono}`}>
@@ -385,7 +399,7 @@ export default function Show({ task }: Props) {
                                 <span className={styles.chip}>
                                     <Clock size={11} />
                                     {task.session_count > 0
-                                        ? t('{{count}} sessions · {{total}}', {
+                                        ? t('session_count_summary', {
                                               count: task.session_count,
                                               total: formatMinutes(task.session_total_minutes),
                                           })
@@ -431,7 +445,7 @@ export default function Show({ task }: Props) {
                                 {resuming ? t('Resuming…') : t('Resume session')}
                             </Button>
                         )}
-                        {task.cli && !hasSession && !canResume && (
+                        {hostExec && task.cli && !hasSession && !canResume && (
                             <Button size="sm" onClick={openStartDialog}>
                                 <Terminal size={14} />
                                 {t('Start session')}
@@ -443,7 +457,7 @@ export default function Show({ task }: Props) {
                                 {mergeCopied ? t('Copied!') : t('Copy merge command')}
                             </Button>
                         )}
-                        {task.cli && task.tmux_alive && !hasSession && (
+                        {hostExec && task.cli && task.tmux_alive && !hasSession && (
                             <Button size="sm" variant="outline" onClick={() => setKillConfirmOpen(true)}>
                                 {t('Kill session')}
                             </Button>
@@ -499,7 +513,7 @@ export default function Show({ task }: Props) {
                         <ul className={styles.childList}>
                             {task.child_tasks.map((c) => (
                                 <li key={c.id} className={styles.childItem}>
-                                    <Link href={`/tasks/${c.id}`} className={`${styles.childName} ${c.is_completed ? styles.childCompleted : ''}`}>
+                                    <Link href={`/tasks/${c.id}`} className={`${styles.childName} ${c.is_done ? styles.childCompleted : ''}`}>
                                         {c.name}
                                     </Link>
                                     {c.cli && (

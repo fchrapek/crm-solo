@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Actions\Clockify\PushTimeEntryToClockify;
-use App\Actions\Clockify\UpdateTimeEntryInClockify;
 use App\Models\Task;
 use App\Models\TaskSession;
 use App\Models\TimeEntry;
@@ -61,14 +59,14 @@ final class TimeEntriesController extends Controller
             'billable' => ['boolean'],
         ]);
 
-        $start = Carbon::parse($data['start_time']);
+        $start = $this->instant($data['start_time']);
         // Either end_time OR duration_minutes is acceptable. If both provided,
         // end_time wins and we recompute minutes from it; if only duration is
         // given, derive end_time from start + duration so the row is well-
         // formed (closed entries always have both for downstream queries).
         if (! empty($data['end_time'])) {
-            $end = Carbon::parse($data['end_time']);
-            $minutes = max(0, (int) ceil($start->diffInSeconds($end) / 60));
+            $end = $this->instant($data['end_time']);
+            $minutes = TimeEntry::minutesBetween($start, $end);
         } elseif (isset($data['duration_minutes'])) {
             $minutes = (int) $data['duration_minutes'];
             $end = (clone $start)->addMinutes($minutes);
@@ -91,10 +89,6 @@ final class TimeEntriesController extends Controller
             'duration_minutes' => $minutes,
             'billable' => (bool) ($data['billable'] ?? true),
         ]);
-
-        // Best-effort Clockify push — Clockify integration not configured →
-        // silently no-op; failure logs but doesn't reject the response.
-        (new PushTimeEntryToClockify)($entry->load('project.client'));
 
         return response()->json($this->serialize($entry->fresh()), 201);
     }
@@ -147,14 +141,12 @@ final class TimeEntriesController extends Controller
                 $timeEntry->billable = (bool) $data['billable'];
             }
             if (isset($data['start_time'])) {
-                $timeEntry->start_time = Carbon::parse($data['start_time']);
+                $timeEntry->start_time = $this->instant($data['start_time']);
             }
             if (array_key_exists('end_time', $data) && $data['end_time'] !== null) {
-                $end = Carbon::parse($data['end_time']);
+                $end = $this->instant($data['end_time']);
                 $timeEntry->end_time = $end;
-                $timeEntry->duration_minutes = max(0, (int) ceil(
-                    $timeEntry->start_time->diffInSeconds($end) / 60
-                ));
+                $timeEntry->duration_minutes = TimeEntry::minutesBetween($timeEntry->start_time, $end);
             } elseif (isset($data['duration_minutes'])) {
                 $minutes = (int) $data['duration_minutes'];
                 $timeEntry->duration_minutes = $minutes;
@@ -179,14 +171,6 @@ final class TimeEntriesController extends Controller
             }
         });
 
-        // Push the update to Clockify best-effort. Only fires if the entry was
-        // already mirrored (has clockify_entry_id) — otherwise PushTimeEntryToClockify
-        // handles the create flow. Network failures log + swallow so the local
-        // edit always succeeds.
-        if ($timeEntry->clockify_entry_id !== null && $timeEntry->clockify_entry_id !== '') {
-            (new UpdateTimeEntryInClockify)($timeEntry->fresh());
-        }
-
         return response()->json($this->serialize($timeEntry));
     }
 
@@ -206,25 +190,25 @@ final class TimeEntriesController extends Controller
      * Runs alongside terminal-session entries by design; conflict warning
      * for double-tracking is surfaced by the UI before this call (via the
      * existing `/time-entries/running` endpoint).
+     *
+     * `request_id` names one click: a repeat of it returns the timer that click
+     * opened (200) instead of opening another, while a new click on the same
+     * task still starts a second timer.
      */
-    public function start(Task $task): JsonResponse
+    public function start(Request $request, Task $task): JsonResponse
     {
         $this->authorizeTask($task);
 
-        $entry = TimeEntry::create([
-            'account_id' => $task->project->account_id,
-            'project_id' => $task->project_id,
-            'client_id' => $task->project->client_id,
-            'task_id' => $task->id,
-            'source' => TimeEntry::SOURCE_MANUAL,
-            'description' => $task->name,
-            'start_time' => now(),
-            'end_time' => null,
-            'duration_minutes' => 0,
-            'billable' => true,
-        ]);
+        $data = $request->validate(['request_id' => ['nullable', 'uuid']]);
 
-        return response()->json($this->serialize($entry), 201);
+        $entry = TimeEntry::startFor($task, requestId: $data['request_id'] ?? null);
+
+        // A replay returns the timer that request opened, stopped or not; the same id on another task is a client bug.
+        if (! $entry->wasRecentlyCreated && $entry->task_id !== $task->id) {
+            return response()->json(['message' => 'This request id already started a timer on another task.'], 409);
+        }
+
+        return response()->json($this->serialize($entry), $entry->wasRecentlyCreated ? 201 : 200);
     }
 
     /**
@@ -235,20 +219,9 @@ final class TimeEntriesController extends Controller
     {
         $this->authorizeEntry($timeEntry);
 
-        if ($timeEntry->end_time !== null) {
+        if (! $timeEntry->stopNow()) {
             return response()->json(['message' => 'Time entry is already stopped.'], 422);
         }
-
-        $end = now();
-        $minutes = max(0, (int) ceil($timeEntry->start_time->diffInSeconds($end) / 60));
-        $timeEntry->update([
-            'end_time' => $end,
-            'duration_minutes' => $minutes,
-        ]);
-
-        // Same best-effort push path used by manual `store()` and the launcher's
-        // session-close hook.
-        (new PushTimeEntryToClockify)($timeEntry->fresh()->load('project.client'));
 
         return response()->json($this->serialize($timeEntry->fresh()));
     }
@@ -283,5 +256,11 @@ final class TimeEntriesController extends Controller
             'billable' => (bool) $entry->billable,
             'source' => $entry->source,
         ];
+    }
+
+    /** An input instant in storage time: Eloquent saves a Carbon's wall clock, so an offset must be converted first. */
+    private function instant(string $value): Carbon
+    {
+        return Carbon::parse($value)->setTimezone(config('app.timezone'));
     }
 }

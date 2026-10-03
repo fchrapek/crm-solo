@@ -1,4 +1,5 @@
 import { router } from '@inertiajs/react';
+import { CANONICAL_LANES, isCanonicalLane, listLaneLabel } from '@/lib/list-lane-label';
 import { Plus, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,8 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 import styles from './list-mapping-dialog.module.css';
 
-const CANONICAL_LANES = ['Backlog', 'To-Do', 'Doing', 'Testing', 'Done'] as const;
-type CanonicalLane = (typeof CANONICAL_LANES)[number];
 
 export interface TrelloList {
     id: string;
@@ -29,9 +28,7 @@ interface Props {
     customLanes?: string[];
 }
 
-const CANONICAL_LABEL_KEY = (lane: string) => `list_lane_${lane}`;
 
-const isCanonical = (lane: string): lane is CanonicalLane => (CANONICAL_LANES as readonly string[]).includes(lane);
 
 export function ListMappingDialog({ open, onOpenChange, projectId, lists, mapping: initialMapping, customLanes: initialCustomLanes }: Props) {
     const { t } = useTranslation();
@@ -42,7 +39,7 @@ export function ListMappingDialog({ open, onOpenChange, projectId, lists, mappin
 
     useEffect(() => {
         if (open) {
-            const customs = (initialCustomLanes ?? []).filter((l) => l.trim() !== '' && !isCanonical(l));
+            const customs = (initialCustomLanes ?? []).filter((l) => l.trim() !== '' && !isCanonicalLane(l));
             const allowed = new Set<string>([...CANONICAL_LANES, ...customs]);
             const next: Record<string, string> = {};
             for (const list of lists) {
@@ -62,7 +59,7 @@ export function ListMappingDialog({ open, onOpenChange, projectId, lists, mappin
     const addCustomLane = () => {
         const trimmed = newLaneName.trim();
         if (trimmed === '') return;
-        if (isCanonical(trimmed)) {
+        if (isCanonicalLane(trimmed)) {
             setNewLaneName('');
             return;
         }
@@ -133,7 +130,7 @@ export function ListMappingDialog({ open, onOpenChange, projectId, lists, mappin
                                         <SelectContent>
                                             {CANONICAL_LANES.map((lane) => (
                                                 <SelectItem key={lane} value={lane}>
-                                                    {t(CANONICAL_LABEL_KEY(lane))}
+                                                    {listLaneLabel(t, lane)}
                                                 </SelectItem>
                                             ))}
                                             {customLanes.map((lane) => (

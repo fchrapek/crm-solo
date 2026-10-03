@@ -4,67 +4,75 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Services\Agent\TodayDigest;
 use Illuminate\Console\Command;
 
 /**
  * The cross-client morning glance for agents: what needs attention today.
  * Mirrors the dashboard's attention rule (priority high, or AI-high with no
- * human override) plus overdue tasks, open month-close runs for the current
- * period, hot leads still in play, and any running time entry.
+ * human override) plus overdue tasks, every open month-close run (oldest
+ * period first), hot leads still in play, and any running time entry.
  */
+#[AccountScope(AccountScope::ACTING)]
 final class CrmToday extends Command
 {
+    use AgentConsoleOutput;
+
     protected $signature = 'crm:today {--json : Machine-readable output}';
 
     protected $description = 'Cross-client attention list: urgent/overdue tasks, month-close, hot leads, running timers';
 
     public function handle(TodayDigest $digest): int
     {
-        $data = $digest->build();
+        $data = $digest->build($this->actingIdentity()->account->id);
         $attention = $data['attention_tasks'];
         $monthClose = $data['month_close_open'];
         $hotLeads = $data['hot_leads'];
         $running = $data['running_time_entries'];
 
         if ($this->option('json')) {
-            $this->line((string) json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            $this->raw($this->encodeJson($data));
 
             return self::SUCCESS;
         }
 
-        $this->info('Attention tasks:');
+        // Task titles, lead names and client names come from cards, forms and imports: all of it is fenced.
+        $lines = ['Attention tasks:'];
         foreach ($attention as $task) {
             $flag = $task['overdue'] ? ' (OVERDUE)' : '';
-            $this->line("  #{$task['id']} [{$task['client']}] {$task['name']}".($task['due'] ? " due {$task['due']}{$flag}" : ''));
+            $lines[] = "  #{$task['id']} [".$this->literal($task['client']).'] '.$this->literal($task['name']).($task['due'] ? " due {$task['due']}{$flag}" : '');
         }
         if ($attention->isEmpty()) {
-            $this->line('  none');
+            $lines[] = '  none';
         }
 
-        $this->info('Month close open ('.now()->format('Y-m').'):');
+        $lines[] = 'Month close open:';
         foreach ($monthClose as $run) {
-            $this->line("  {$run['client']} ({$run['type']})");
+            $lines[] = "  {$run['period']} ".$this->literal($run['client'])." ({$run['type']})";
         }
         if ($monthClose->isEmpty()) {
-            $this->line('  none');
+            $lines[] = '  none';
         }
 
-        $this->info('Hot leads in play:');
+        $lines[] = 'Hot leads in play:';
         foreach ($hotLeads as $lead) {
-            $this->line("  #{$lead['id']} {$lead['name']} [{$lead['brand']}] at {$lead['stage']} → {$lead['routing']}");
+            $lines[] = "  #{$lead['id']} ".$this->literal($lead['name'])." [{$lead['brand']}] at {$lead['stage']} -> {$lead['routing']}";
         }
         if ($hotLeads->isEmpty()) {
-            $this->line('  none');
+            $lines[] = '  none';
         }
 
-        $this->info('Running time entries:');
+        $lines[] = 'Running time entries:';
         foreach ($running as $entry) {
-            $this->line("  #{$entry['id']} {$entry['client']} — ".($entry['task'] ?? 'no task')." since {$entry['started']}");
+            $lines[] = "  #{$entry['id']} ".$this->literal($entry['client']).' - '.$this->literal($entry['task'] ?? 'no task')." since {$entry['started']}";
         }
         if ($running->isEmpty()) {
-            $this->line('  none');
+            $lines[] = '  none';
         }
+
+        $this->fenced($lines);
 
         return self::SUCCESS;
     }

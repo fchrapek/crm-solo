@@ -78,6 +78,17 @@ final class MonthCloseTest extends TestCase
             );
     }
 
+    public function test_the_default_period_is_the_local_month_just_ended(): void
+    {
+        config(['app.display_timezone' => 'Europe/Warsaw']);
+        // 00:30 on 1 August in Warsaw is still 31 July in UTC.
+        $this->travelTo(Carbon::parse('2026-07-31 22:30:00', 'UTC'));
+
+        $this->actingAs($this->user)
+            ->get('/month-close')
+            ->assertInertia(fn (Assert $assert) => $assert->where('period', '2026-07'));
+    }
+
     public function test_excluded_client_leaves_the_worklist_but_keeps_its_type(): void
     {
         $this->site->update(['include_in_month_close' => false]);
@@ -383,6 +394,32 @@ final class MonthCloseTest extends TestCase
 
         $this->assertSame(MonthCloseStep::STATE_DONE, $step->state);
         $this->assertNotNull($step->completed_at);
+    }
+
+    public function test_a_mistyped_step_fails_without_starting_the_run(): void
+    {
+        $this->artisan('month-close:tick', [
+            'client' => $this->site->id,
+            'step' => 'db_archvied',
+            'state' => 'done',
+            '--period' => '2026-06',
+        ])->expectsOutputToContain("Step 'db_archvied' is not in this run")->assertFailed();
+
+        $this->assertSame(0, MonthCloseRun::where('client_id', $this->site->id)->count());
+        $this->assertSame(0, MonthCloseStep::count());
+    }
+
+    public function test_an_unknown_site_fails_without_starting_the_run(): void
+    {
+        $this->artisan('month-close:tick', [
+            'client' => $this->site->id,
+            'step' => 'db_archived',
+            'state' => 'done',
+            '--project' => 'nowhere',
+            '--period' => '2026-06',
+        ])->assertFailed();
+
+        $this->assertSame(0, MonthCloseRun::where('client_id', $this->site->id)->count());
     }
 
     public function test_tick_records_a_note_and_keeps_it_on_a_later_move(): void

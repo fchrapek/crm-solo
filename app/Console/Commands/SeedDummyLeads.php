@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Models\Account;
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\Lead;
 use Illuminate\Console\Command;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -20,9 +21,12 @@ use Symfony\Component\Console\Attribute\AsCommand;
  *   php artisan leads:seed-dummy
  *   php artisan leads:seed-dummy --remove
  */
+#[AccountScope(AccountScope::ACTING)]
 #[AsCommand(name: 'leads:seed-dummy', description: 'Seed (or remove) throwaway lead cards for UI evaluation')]
 final class SeedDummyLeads extends Command
 {
+    use AgentConsoleOutput;
+
     /**
      * Every dummy row gets external_ref = MARKER . '-' . n, so removal can
      * match the prefix exactly. It cannot be one shared value: leads carry a
@@ -34,18 +38,13 @@ final class SeedDummyLeads extends Command
 
     public function handle(): int
     {
+        $account = $this->actingIdentity()->account;
+
         if ($this->option('remove')) {
-            return $this->remove();
+            return $this->remove($account->id);
         }
 
-        $account = Account::query()->first();
-        if (! $account) {
-            $this->error('No account found.');
-
-            return self::FAILURE;
-        }
-
-        $existing = Lead::withTrashed()->where('external_ref', 'like', self::MARKER.'%')->count();
+        $existing = Lead::withTrashed()->where('account_id', $account->id)->where('external_ref', 'like', self::MARKER.'%')->count();
         if ($existing > 0) {
             $this->warn("{$existing} dummy leads already exist. Run with --remove first to reseed.");
 
@@ -83,9 +82,9 @@ final class SeedDummyLeads extends Command
         return self::SUCCESS;
     }
 
-    private function remove(): int
+    private function remove(int $accountId): int
     {
-        $leads = Lead::withTrashed()->where('external_ref', 'like', self::MARKER.'%')->get();
+        $leads = Lead::withTrashed()->where('account_id', $accountId)->where('external_ref', 'like', self::MARKER.'%')->get();
 
         foreach ($leads as $lead) {
             $lead->stageEvents()->delete();

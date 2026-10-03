@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Models\Repository;
+use App\Services\Concerns\SpawnEnvironment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -88,7 +89,7 @@ final class RepositoriesController extends Controller
                 'refs/heads/',
                 '--format=%(refname:short)|%(committerdate:relative)',
                 '--count=50',
-            ]);
+            ], null, SpawnEnvironment::withoutGitRepository());
             $proc->setTimeout(5);
             $proc->run();
             if (! $proc->isSuccessful()) {
@@ -104,7 +105,7 @@ final class RepositoriesController extends Controller
                 $branches[] = ['name' => $name, 'age' => $age];
             }
 
-            $current = new Process(['git', '-C', $repository->local_path, 'rev-parse', '--abbrev-ref', 'HEAD']);
+            $current = new Process(['git', '-C', $repository->local_path, 'rev-parse', '--abbrev-ref', 'HEAD'], null, SpawnEnvironment::withoutGitRepository());
             $current->setTimeout(5);
             $current->run();
 

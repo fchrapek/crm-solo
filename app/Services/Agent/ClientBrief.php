@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Agent;
 
 use App\Models\Client;
+use App\Support\LocalCalendar;
 
 /**
  * The agent-facing client context dump — the client-side equivalent of
@@ -19,22 +20,26 @@ final class ClientBrief
      */
     public function for(Client $client): array
     {
-        $monthStart = now()->startOfMonth();
+        $monthStart = LocalCalendar::monthRange(LocalCalendar::currentMonth())[0];
         $monthMinutes = (int) $client->timeEntries()->where('start_time', '>=', $monthStart)->sum('duration_minutes');
-        $retainers = $client->activeRetainersOn(now());
+        $retainers = $client->activeRetainersOn(LocalCalendar::todayDate());
         $latestReport = $client->reports()->orderByDesc('period_start')->first();
 
         $openTasks = $client->projects()
-            ->with(['tasks' => fn ($q) => $q->where('is_completed', false)->whereNull('archived_at')->orderBy('position')])
+            ->with(['tasks' => fn ($q) => $q->open()->orderBy('position'), ...TaskReadiness::listRelations('tasks.')])
             ->get()
             ->flatMap(fn ($project) => $project->tasks->map(fn ($task) => [
                 'id' => $task->id,
                 'project' => $project->name,
                 'name' => $task->name,
                 'list' => $task->list_name,
-                'due' => $task->due_date?->toDateString(),
+                'due' => $task->dueDay(),
+                'overdue' => $task->isOverdue(),
                 'priority' => $task->priority ?? $task->ai_priority,
                 'cli' => $task->cli,
+                ...$task->completionState(),
+                ...TaskRecord::summary($task),
+                'untrusted' => TaskRecord::untrustedListKeys($task, ['name', 'project', 'list', 'card_lane', 'card_url']),
             ]))
             ->values();
 

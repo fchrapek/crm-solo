@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Console\Commands\Concerns\ResolvesProjectAndClient;
 use App\Models\Task;
 use Illuminate\Console\Command;
 use RuntimeException;
 
+#[AccountScope(AccountScope::ACTING)]
 final class DeleteTasksCommand extends Command
 {
+    use AgentConsoleOutput;
     use ResolvesProjectAndClient;
 
     protected $signature = 'tasks:delete
@@ -20,12 +24,17 @@ final class DeleteTasksCommand extends Command
                             {--archived : Only delete already-archived tasks}
                             {--archive-only : Soft-archive (set archived_at) instead of deleting}
                             {--force : Skip confirmation}
-                            {--account= : Restrict resolution to this account ID}';
+                            {--account= : Account ID; must be the acting account}';
 
     protected $description = 'Mass-delete (or archive) tasks on a project. Without filters, targets ALL tasks on the project.';
 
     public function handle(): int
     {
+        $accountId = $this->actingAccountId();
+        if ($accountId === null) {
+            return self::FAILURE;
+        }
+
         $projectNeedle = (string) ($this->option('project') ?? '');
         if ($projectNeedle === '') {
             $this->error('Missing --project (id or name).');
@@ -34,7 +43,7 @@ final class DeleteTasksCommand extends Command
         }
 
         try {
-            $project = $this->resolveProject($projectNeedle, $this->intOption('account'));
+            $project = $this->resolveProject($projectNeedle, $accountId);
         } catch (RuntimeException $e) {
             $this->error($e->getMessage());
 
@@ -83,17 +92,11 @@ final class DeleteTasksCommand extends Command
             $affected = $query->whereNull('archived_at')->update(['archived_at' => now()]);
             $this->info("Archived {$affected} tasks.");
         } else {
-            $affected = $query->delete();
-            $this->info("Deleted {$affected} tasks. (Cascade dropped runs, artifacts, attachments, design references. Files on disk are NOT cleaned.)");
+            // One by one so Task::deleting runs: subtasks and time entries are detached, attachment files removed.
+            $affected = $query->get()->each(fn (Task $task) => $task->delete())->count();
+            $this->info("Deleted {$affected} tasks. Their time entries stay, detached from the task.");
         }
 
         return self::SUCCESS;
-    }
-
-    private function intOption(string $name): ?int
-    {
-        $value = $this->option($name);
-
-        return $value === null || $value === '' ? null : (int) $value;
     }
 }

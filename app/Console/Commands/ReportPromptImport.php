@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\Account;
 use App\Models\Setting;
 use App\Services\Reports\SettingsNarrativePromptResolver;
@@ -16,11 +18,14 @@ use Illuminate\Console\Command;
  * This is how an instance keeps wording it does not want in the repository:
  * the file stays wherever the owner keeps it, only the database carries it.
  */
+#[AccountScope(AccountScope::ACTING)]
 final class ReportPromptImport extends Command
 {
+    use AgentConsoleOutput;
+
     protected $signature = 'reports:prompt-import
         {path : Markdown file holding the prompt}
-        {--account= : Account id (defaults to the only account)}
+        {--account= : Account id; must be the acting account (the default)}
         {--clear : Remove the override and fall back to the shipped prompt}';
 
     protected $description = 'Import a report narrative prompt into the settings override.';
@@ -94,26 +99,6 @@ final class ReportPromptImport extends Command
 
     private function resolveAccountId(): ?int
     {
-        $given = $this->option('account');
-
-        if ($given !== null) {
-            return (int) $given;
-        }
-
-        $ids = Account::query()->orderBy('id')->pluck('id');
-
-        if ($ids->count() === 1) {
-            return (int) $ids->first();
-        }
-
-        if ($ids->isEmpty()) {
-            $this->error('No accounts exist. Seed one first.');
-
-            return null;
-        }
-
-        $this->error('Several accounts exist; pass --account='.$ids->implode('|'));
-
-        return null;
+        return $this->actingAccountId();
     }
 }

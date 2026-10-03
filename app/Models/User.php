@@ -13,10 +13,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 final class User extends Authenticatable
 {
-    use Concerns\Filterable, HasFactory, Notifiable, SoftDeletes;
+    use Concerns\Filterable, HasApiTokens, HasFactory, Notifiable, SoftDeletes;
+
+    /** The shared login DemoSeeder creates on the public demo. */
+    public const DEMO_EMAIL = 'demo@crm-solo.test';
 
     /**
      * The attributes that are mass assignable.
@@ -48,7 +52,10 @@ final class User extends Authenticatable
      */
     public function resolveRouteBinding($value, $field = null): ?Model
     {
-        return $this->where($field ?? 'id', $value)->withTrashed()->firstOrFail();
+        return $this->where($field ?? 'id', $value)
+            ->where('account_id', auth()->user()->account_id)
+            ->withTrashed()
+            ->firstOrFail();
     }
 
     public function account(): BelongsTo
@@ -63,9 +70,10 @@ final class User extends Authenticatable
         );
     }
 
+    /** The demo login every visitor shares; only meaningful under DEMO_MODE. */
     public function isDemoUser(): bool
     {
-        return $this->email === 'johndoe@example.com';
+        return (bool) config('app.demo') && $this->email === self::DEMO_EMAIL;
     }
 
     #[Scope]

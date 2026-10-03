@@ -164,7 +164,7 @@ export function ConnectTrelloDialog({ open, onOpenChange, projectId }: Props) {
                                             const workspaceSuffix = board.workspace ? ` (${board.workspace})` : '';
                                             const linkedSuffix =
                                                 isLinked && board.linked_client_name
-                                                    ? ` - ${t('on :client', { client: board.linked_client_name })}`
+                                                    ? ` - ${t('on {{client}}', { client: board.linked_client_name })}`
                                                     : '';
                                             return (
                                                 <SelectItem key={board.id} value={board.id} disabled={isLinked} className={styles.boardSelectItem}>

@@ -4,7 +4,19 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Models\AgentToken;
+use App\Models\ClientLifecycleEvent;
+use App\Models\Lead;
+use App\Models\LeadStageEvent;
+use App\Models\MonthCloseRun;
+use App\Models\MonthCloseStep;
+use App\Models\Project;
+use App\Models\Task;
+use App\Models\TaskBrief;
+use App\Models\TimeEntry;
+use App\Services\Agent\AgentCallContext;
 use App\Services\Agent\AgentIdentityResolver;
+use App\Services\Agent\AgentWriteRecorder;
 use App\Services\Agent\OwnerIdentityResolver;
 use App\Services\AI\AIProviderInterface;
 use App\Services\AI\AIServiceManager;
@@ -19,16 +31,28 @@ use App\Services\TaskSources\Providers\TrelloTaskSourceProvider;
 use App\Services\TaskSources\TaskSourceRegistry;
 use App\Services\TerminalSessionLauncher;
 use App\Services\TerminalSessionLauncherInterface;
+use App\Support\DemoWriteBudget;
+use App\Support\UploadLimits;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\Sanctum;
 use Throwable;
 
 final class AppServiceProvider extends ServiceProvider
 {
     public const string HOME = '/';
+
+    public static function wipesForbidden(): bool
+    {
+        return app()->isProduction() && ! config('app.demo') && ! config('app.demo_reset_allowed');
+    }
 
     public function register(): void
     {
@@ -44,6 +68,9 @@ final class AppServiceProvider extends ServiceProvider
         // to the account owner. A hosted transport rebinds this to derive the
         // identity from the request token.
         $this->app->bind(AgentIdentityResolver::class, OwnerIdentityResolver::class);
+
+        // Scoped: an Octane request or a queued job never inherits another's open agent call.
+        $this->app->scoped(AgentCallContext::class);
 
         // Report wording resolves from the account's settings row, falling
         // back to the prompt shipped in resources/prompts. Same defaults-in-
@@ -73,6 +100,10 @@ final class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // db:wipe, migrate:fresh/refresh/reset are refused on a production install that holds real data;
+        // only the demo and a fictional-data staging stack (their own reset path) may wipe.
+        DB::prohibitDestructiveCommands(self::wipesForbidden());
+
         // Behind Cloudflare/Traefik, TLS terminates at the edge and the proxy
         // forwards over http, so Laravel generates http:// URLs. That makes the
         // post-login 302 point at http://<host> while the page origin is https,
@@ -84,6 +115,24 @@ final class AppServiceProvider extends ServiceProvider
         }
 
         Vite::prefetch(concurrency: 3);
+
+        RateLimiter::for('uploads', UploadLimits::limit(...));
+        RateLimiter::for('demo-writes', DemoWriteBudget::limit(...));
+        // Every demo visitor is the same user, so the default per-user key would be one shared bucket.
+        RateLimiter::for('demo-cli', fn (Request $request): Limit => Limit::perMinute(30)->by('demo-cli|'.$request->ip()));
+        RateLimiter::for('waitlist', fn (Request $request): array => [
+            Limit::perMinute((int) config('waitlist.per_minute'))->by('waitlist-m|'.$request->ip()),
+            Limit::perHour((int) config('waitlist.per_hour'))->by('waitlist-h|'.$request->ip()),
+        ]);
+
+        // Agent tokens: one per agent, account-bound, per-token budget across MCP and the verb endpoint.
+        Sanctum::usePersonalAccessTokenModel(AgentToken::class);
+        RateLimiter::for('agent', fn (Request $request): Limit => Limit::perMinute((int) config('agent.per_minute'))
+            ->by('agent|'.($request->attributes->get('agent_token_id') ?? $request->ip())));
+
+        foreach ([TimeEntry::class, ClientLifecycleEvent::class, Task::class, TaskBrief::class, Lead::class, LeadStageEvent::class, MonthCloseRun::class, MonthCloseStep::class, Project::class] as $model) {
+            $model::observe(AgentWriteRecorder::class);
+        }
 
         $this->mergeLeadgenSettings();
     }

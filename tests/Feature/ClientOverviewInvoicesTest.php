@@ -73,6 +73,36 @@ final class ClientOverviewInvoicesTest extends TestCase
         $this->assertSame('https://app.infakt.test/app/faktury/20000001', $tab['rows'][0]['external_url']);
     }
 
+    public function test_the_twelve_month_total_starts_a_year_before_the_local_today(): void
+    {
+        config(['app.display_timezone' => 'Europe/Warsaw']);
+        // 00:30 on 1 November in Warsaw, still 31 October in UTC.
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-10-31 23:30:00', 'UTC'));
+        $account = Account::create(['name' => 'Acme']);
+        $user = User::factory()->create(['account_id' => $account->id, 'owner' => true]);
+        $client = Client::create(['account_id' => $account->id, 'name' => 'Test Client']);
+        foreach (['2025-10-31' => 10000, '2025-11-01' => 20000] as $date => $net) {
+            Invoice::create([
+                'account_id' => $account->id,
+                'client_id' => $client->id,
+                'external_id' => 'x'.$date,
+                'number' => $date,
+                'status' => 'paid',
+                'currency' => 'PLN',
+                'net_price' => $net,
+                'gross_price' => $net,
+                'tax_price' => 0,
+                'paid_price' => 0,
+                'left_to_pay' => 0,
+                'invoice_date' => $date,
+            ]);
+        }
+
+        $response = $this->actingAs($user)->get("/clients/{$client->id}/edit");
+
+        $this->assertSame(200.0, $response->viewData('page')['props']['overview']['invoices']['net_last_12_months']);
+    }
+
     public function test_overview_shows_three_recent_invoices_while_the_tab_lists_them_all(): void
     {
         $account = Account::create(['name' => 'Acme']);

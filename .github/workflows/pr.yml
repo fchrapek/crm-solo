@@ -1,0 +1,140 @@
+name: Pull request
+
+# Every change reaches develop through a pull request that merges itself
+# when the CI gate and the title check pass: squashed, the PR title as the
+# commit subject. The free plan has no branch protection, so this is
+# hygiene, not enforcement: anyone with write access can still merge by
+# hand. A pull request that touches the gate itself (workflows, check
+# script, hooks, the public export policy) is never merged by the bot; a
+# person merges it.
+#
+# Hold one back with the `hold` label or as a draft; removing the label,
+# marking it ready or fixing the title runs the checks again and merges.
+# Other label changes and body edits start nothing.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, unlabeled, edited]
+
+# An irrelevant event gets its own group, so it never cancels a real run.
+concurrency:
+  group: >-
+    pr-${{ github.event.pull_request.number }}-${{
+    ((github.event.action != 'unlabeled' && github.event.action != 'edited')
+    || github.event.label.name == 'hold'
+    || github.event.changes.title != null
+    || github.event.changes.base != null)
+    && 'checks' || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    if: >-
+      (github.event.action != 'unlabeled' && github.event.action != 'edited')
+      || github.event.label.name == 'hold'
+      || github.event.changes.title != null
+      || github.event.changes.base != null
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  # A release PR into main merges with GitHub's own merge-commit subject, so
+  # its title is not checked.
+  title:
+    name: Title in house style
+    if: >-
+      github.event.pull_request.base.ref != 'main'
+      && ((github.event.action != 'unlabeled' && github.event.action != 'edited')
+      || github.event.label.name == 'hold'
+      || github.event.changes.title != null
+      || github.event.changes.base != null)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check the title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: scripts/hooks/commit-msg.sh --subject "$TITLE"
+
+  # By visibility, not repository name, so the public snapshot names nothing private; forks are private too.
+  merge:
+    name: Merge when green
+    needs: [gate, title]
+    if: >-
+      github.event.repository.private && !github.event.repository.fork
+      && github.event.pull_request.base.ref == 'develop'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # One merge at a time, so a second green PR sees the first one's merge
+    # and fails the stale-base check instead of landing on an untested base.
+    concurrency:
+      group: merge-develop
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+
+    steps:
+      - name: Merge, unless held, stale or touching the gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          TESTED_SHA: ${{ github.sha }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+
+          # Read live, not from the event: a label or draft set while the
+          # checks ran still holds the merge.
+          live=$(gh api "repos/$GH_REPO/pulls/$PR")
+          if [ "$(jq -r '.state' <<<"$live")" != "open" ]; then
+            echo "Pull request is no longer open."; exit 0
+          fi
+          if [ "$(jq -r '.draft' <<<"$live")" = "true" ] \
+            || jq -e '.labels[] | select(.name == "hold")' <<<"$live" >/dev/null; then
+            echo "::notice::Held (draft or the hold label); not merging."; exit 0
+          fi
+
+          # The full file list, failing closed: an error or a short list stops
+          # the merge instead of letting a gate change through.
+          files=$(gh api --paginate "repos/$GH_REPO/pulls/$PR/files" --jq '.[].filename')
+          expected=$(jq -r '.changed_files' <<<"$live")
+          if [ "$(grep -c . <<<"$files" || true)" -ne "$expected" ]; then
+            echo "::error::Could not list all $expected changed files; a person merges this one."; exit 1
+          fi
+          gated=$(grep -E '^(\.github/|scripts/check\.sh$|scripts/hooks/|scripts/public-export|lefthook\.yml$)' <<<"$files" || true)
+          if [ -n "$gated" ]; then
+            echo "::notice::This pull request changes the gate, so a person merges it:"
+            printf '%s\n' "$gated"
+            exit 0
+          fi
+
+          # The checks ran on a merge of the PR into the develop of that
+          # moment. If develop has moved since, that result says nothing
+          # about the merge that would happen now.
+          tested_base=$(gh api "repos/$GH_REPO/commits/$TESTED_SHA" --jq '.parents[0].sha')
+          develop=$(gh api "repos/$GH_REPO/branches/develop" --jq '.commit.sha')
+          if [ "$tested_base" != "$develop" ]; then
+            echo "::error::develop moved since these checks ran; push to the branch (or close and reopen the PR) to check it again."
+            exit 1
+          fi
+
+          # --match-head-commit refuses the merge if anything was pushed
+          # after the commit these checks ran on.
+          gh pr merge "$PR" --squash --match-head-commit "$HEAD_SHA" --subject "$TITLE"
+
+          # The merge was pushed with GITHUB_TOKEN, which starts no workflow;
+          # a dispatch is the exception, so develop still gets its build and
+          # its release pull request. If this run is cancelled between the
+          # two lines, run `gh workflow run deploy.yml --ref develop` by hand.
+          gh workflow run deploy.yml --ref develop

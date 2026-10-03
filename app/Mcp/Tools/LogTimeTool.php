@@ -32,7 +32,6 @@ final class LogTimeTool extends Tool
             'title' => ['nullable', 'string'],
             'end' => ['nullable', 'string'],
             'billable' => ['nullable', 'boolean'],
-            'push_clockify' => ['nullable', 'boolean'],
         ], [
             'minutes.required' => 'Pass how many minutes to log.',
             'minutes.min' => 'Minutes must be a positive whole number.',
@@ -48,7 +47,6 @@ final class LogTimeTool extends Tool
                 title: $validated['title'] ?? null,
                 end: $validated['end'] ?? null,
                 billable: $validated['billable'] ?? true,
-                push: $validated['push_clockify'] ?? true,
                 accountId: $this->identity()->account->id,
             ));
         } catch (ReferenceException $e) {
@@ -88,10 +86,6 @@ final class LogTimeTool extends Tool
 
             'billable' => $schema->boolean()
                 ->description('Whether the time is billable.')
-                ->default(true),
-
-            'push_clockify' => $schema->boolean()
-                ->description('Also push the entry to Clockify when that integration is configured.')
                 ->default(true),
         ];
     }

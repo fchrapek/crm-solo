@@ -19,6 +19,12 @@ services:
     command: ["php", "artisan", "octane:start", "--server=frankenphp", "--port=8000", "--host=0.0.0.0"]
     environment:
       PHP_OPCACHE_ENABLE: "1"
+      # Traefik reaches the app over the Docker networks; name its subnet in
+      # the deploy .env to narrow this.
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      # The demo is proxied by Cloudflare; see deployment.md for why the origin
+      # must not be reachable around it.
+      TRUST_CF_CONNECTING_IP: ${TRUST_CF_CONNECTING_IP:-true}
     env_file:
       - .env
     volumes:

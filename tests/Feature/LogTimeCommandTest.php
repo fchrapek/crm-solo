@@ -65,7 +65,6 @@ final class LogTimeCommandTest extends TestCase
             'minutes' => 90,
             '--task' => $this->task->id,
             '--desc' => 'Fixed retainer hours',
-            '--no-push' => true,
         ])->assertExitCode(Command::SUCCESS);
 
         $entry = TimeEntry::sole();
@@ -84,7 +83,7 @@ final class LogTimeCommandTest extends TestCase
 
     public function test_description_defaults_to_task_name(): void
     {
-        $this->artisan('time:log', ['minutes' => 15, '--task' => $this->task->id, '--no-push' => true])
+        $this->artisan('time:log', ['minutes' => 15, '--task' => $this->task->id])
             ->assertExitCode(Command::SUCCESS);
 
         $this->assertSame('Hero work', TimeEntry::sole()->description);
@@ -95,7 +94,6 @@ final class LogTimeCommandTest extends TestCase
         $this->artisan('time:log', [
             'minutes' => 60,
             '--client' => $this->client->id,
-            '--no-push' => true,
         ])->assertExitCode(Command::SUCCESS);
 
         $entry = TimeEntry::sole();
@@ -113,7 +111,6 @@ final class LogTimeCommandTest extends TestCase
             '--task' => $this->task->id,
             '--end' => '2026-07-13 17:00',
             '--not-billable' => true,
-            '--no-push' => true,
         ])->assertExitCode(Command::SUCCESS);
 
         $entry = TimeEntry::sole();
@@ -132,7 +129,6 @@ final class LogTimeCommandTest extends TestCase
             'minutes' => 30,
             '--task' => $this->task->id,
             '--end' => '2026-07-21 11:00',
-            '--no-push' => true,
         ])->assertExitCode(Command::SUCCESS);
 
         $entry = TimeEntry::sole();
@@ -152,7 +148,6 @@ final class LogTimeCommandTest extends TestCase
             'minutes' => 60,
             '--task' => $this->task->id,
             '--end' => '2026-07-21T17:00:00+00:00',
-            '--no-push' => true,
         ])->assertExitCode(Command::SUCCESS);
 
         // Explicit +00:00 wins; it is not re-interpreted as Warsaw time.
@@ -166,7 +161,6 @@ final class LogTimeCommandTest extends TestCase
         $this->artisan('time:log', [
             'minutes' => 15,
             '--task' => $this->task->id,
-            '--no-push' => true,
         ])->assertExitCode(Command::SUCCESS);
 
         $entry = TimeEntry::sole();
@@ -176,13 +170,12 @@ final class LogTimeCommandTest extends TestCase
 
     public function test_requires_exactly_one_target(): void
     {
-        $this->artisan('time:log', ['minutes' => 30, '--no-push' => true])
+        $this->artisan('time:log', ['minutes' => 30])
             ->assertExitCode(Command::INVALID);
         $this->artisan('time:log', [
             'minutes' => 30,
             '--task' => $this->task->id,
             '--client' => $this->client->id,
-            '--no-push' => true,
         ])->assertExitCode(Command::INVALID);
 
         $this->assertSame(0, TimeEntry::count());
@@ -190,7 +183,7 @@ final class LogTimeCommandTest extends TestCase
 
     public function test_rejects_non_positive_minutes(): void
     {
-        $this->artisan('time:log', ['minutes' => 0, '--task' => $this->task->id, '--no-push' => true])
+        $this->artisan('time:log', ['minutes' => 0, '--task' => $this->task->id])
             ->assertExitCode(Command::INVALID);
 
         $this->assertSame(0, TimeEntry::count());
@@ -201,7 +194,7 @@ final class LogTimeCommandTest extends TestCase
         Task::create(['project_id' => $this->project->id, 'name' => 'Hero polish']);
 
         // "Hero" now matches both "Hero work" and "Hero polish".
-        $this->artisan('time:log', ['minutes' => 30, '--task' => 'Hero', '--no-push' => true])
+        $this->artisan('time:log', ['minutes' => 30, '--task' => 'Hero'])
             ->assertExitCode(Command::FAILURE);
 
         $this->assertSame(0, TimeEntry::count());
@@ -209,7 +202,7 @@ final class LogTimeCommandTest extends TestCase
 
     public function test_unknown_task_is_rejected(): void
     {
-        $this->artisan('time:log', ['minutes' => 30, '--task' => '999999', '--no-push' => true])
+        $this->artisan('time:log', ['minutes' => 30, '--task' => '999999'])
             ->assertExitCode(Command::FAILURE);
 
         $this->assertSame(0, TimeEntry::count());

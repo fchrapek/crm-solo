@@ -81,7 +81,6 @@ interface ProjectSummary {
     name: string;
     description: string | null;
     trello_url: string | null;
-    clockify_project_id: string | null;
     is_private: boolean;
     trello_workspace?: string | null;
     trello_lists?: TrelloList[];
@@ -104,7 +103,6 @@ interface ClientTimeEntry {
     project_name: string | null;
     source: 'clockify' | 'terminal_session' | 'manual';
     is_running: boolean;
-    is_in_clockify: boolean;
     task: { id: number; name: string } | null;
     tags: string[] | null;
 }
@@ -144,6 +142,7 @@ interface EditPageProps extends SharedData {
     reportBaselineMarkdown: string | null;
     revenue: ClientRevenueSummary | null;
     trelloEnabled: boolean;
+    trelloActions: boolean;
     flash?: { success?: string | null; error?: string | null };
 }
 
@@ -151,11 +150,13 @@ function ProjectsTabContent({
     projects,
     clientId,
     trelloEnabled,
+    trelloActions,
     t,
 }: {
     projects: ProjectSummary[];
     clientId: number;
     trelloEnabled: boolean;
+    trelloActions: boolean;
     t: (key: string) => string;
 }) {
     const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -176,7 +177,13 @@ function ProjectsTabContent({
                 ) : (
                     <div className={styles.projectRows}>
                         {projects.map((project) => (
-                            <ProjectRow key={project.id} project={project} clientId={clientId} trelloEnabled={trelloEnabled} />
+                            <ProjectRow
+                                key={project.id}
+                                project={project}
+                                clientId={clientId}
+                                trelloEnabled={trelloEnabled}
+                                trelloActions={trelloActions}
+                            />
                         ))}
                     </div>
                 )}
@@ -209,6 +216,7 @@ export default function Edit() {
         reportBaselineMarkdown,
         revenue,
         trelloEnabled,
+        trelloActions,
     } = usePage<EditPageProps>().props;
 
     // Click a time-entry row to open the edit dialog (title / detail / times / task).
@@ -222,7 +230,6 @@ export default function Edit() {
             end_time: entry.end_time,
             description: entry.description,
             billable: entry.billable,
-            pushed_to_clockify: entry.is_in_clockify,
         });
 
     const breadcrumbs: BreadcrumbItem[] = React.useMemo(
@@ -728,7 +735,9 @@ export default function Edit() {
         </TableContainer>
     );
 
-    const projectsTab = <ProjectsTabContent projects={projects} clientId={client.id} trelloEnabled={trelloEnabled} t={t} />;
+    const projectsTab = (
+        <ProjectsTabContent projects={projects} clientId={client.id} trelloEnabled={trelloEnabled} trelloActions={trelloActions} t={t} />
+    );
 
     const timeTab = (
         <>
@@ -741,7 +750,6 @@ export default function Edit() {
                         <TableHead>{t('Project')}</TableHead>
                         <TableHead>{t('Duration')}</TableHead>
                         <TableHead>{t('Billable')}</TableHead>
-                        <TableHead>{t('Clockify')}</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -783,7 +791,6 @@ export default function Edit() {
                                 {entry.is_running ? t('In progress') : `${Math.floor(entry.duration_minutes / 60)}h ${entry.duration_minutes % 60}m`}
                             </TableCell>
                             <TableCell>{entry.billable ? '✓' : '-'}</TableCell>
-                            <TableCell>{entry.is_in_clockify ? '✓' : entry.is_running ? ' - ' : '·'}</TableCell>
                         </TableRow>
                     ))}
                     {timeEntries.data.length === 0 && (

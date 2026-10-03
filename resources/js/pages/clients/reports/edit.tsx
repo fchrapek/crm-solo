@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { MarkdownDiff } from '@/components/markdown-diff';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { MarkdownTextarea } from '@/components/ui/markdown-textarea';
@@ -24,6 +25,7 @@ interface ReportData {
     currency: string | null;
     composer_key: string;
     body_markdown: string;
+    version: string;
     status: 'draft' | 'finalized' | 'sent';
     generated_at: string | null;
     finalized_at: string | null;
@@ -36,10 +38,12 @@ interface Composer {
 
 interface Revision {
     id: number;
-    reason: 'update' | 'regenerate' | 'finalize' | 'reopen';
+    reason: 'update' | 'regenerate' | 'finalize' | 'reopen' | 'opening_balance';
     status_before: 'draft' | 'finalized' | 'sent';
     composer_key_before: string | null;
     body_markdown_before: string | null;
+    opening_balance_hours_before: number | null;
+    rollover_cap_hours_before: number | null;
     created_at: string;
     user: { id: number; name: string } | null;
 }
@@ -54,8 +58,14 @@ interface Props {
 export default function ReportEdit({ client, report, composers, revisions }: Props) {
     const { t } = useTranslation();
     const f = useFormatters();
-    const [body, setBody] = useState(report.body_markdown ?? '');
+    // The text in the editor travels with the version it was based on: a save sends that
+    // version, so the server refuses text written against a report that has since changed.
+    const [draft, setDraft] = useState(() => draftFrom(report));
+    const body = draft.body;
+    const setBody = (next: string) => setDraft((current) => ({ ...current, body: next }));
     const [saving, setSaving] = useState(false);
+    // The editor is read-only while a balance save is in flight, because the reply replaces its text.
+    const [savingBalance, setSavingBalance] = useState(false);
     const [regenerating, setRegenerating] = useState(false);
     const [confirmRegen, setConfirmRegen] = useState(false);
     const [confirmFinalize, setConfirmFinalize] = useState(false);
@@ -66,7 +76,25 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
     const [opening, setOpening] = useState<string>(report.opening_balance_hours != null ? String(report.opening_balance_hours) : '');
 
     const isDraft = report.status === 'draft';
-    const isDirty = body !== (report.body_markdown ?? '');
+    const isDirty = draft.body !== draft.base;
+    // Another tab (or a refused write's reply) has moved the stored report past this text.
+    const isStale = draft.version !== report.version;
+
+    // A write the server took replaces the text, its version and the balance field together.
+    function adopt(page: { props: unknown }) {
+        if (refused(page)) {
+            return false;
+        }
+        const fresh = (page.props as unknown as Props).report;
+        setDraft(draftFrom(fresh));
+        setOpening(fresh.opening_balance_hours != null ? String(fresh.opening_balance_hours) : '');
+        return true;
+    }
+
+    function loadCurrent() {
+        setDraft(draftFrom(report));
+        setOpening(report.opening_balance_hours != null ? String(report.opening_balance_hours) : '');
+    }
 
     // Hours bank: what the client may draw on is the balance carried in plus
     // this period's pool, capped at the agreed ceiling. Overspill is forfeited,
@@ -76,6 +104,7 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
     const availableNum = report.rollover_cap_hours !== null ? Math.min(uncappedNum, report.rollover_cap_hours) : uncappedNum;
     const forfeitedNum = Math.max(0, uncappedNum - availableNum);
     const closingNum = availableNum - report.actual_hours;
+    const fmtCap = (n: number | null) => (n === null ? t('None') : f.hours(n));
     const fmtBalance = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${f.hours(Math.abs(n))}`;
 
     function saveOpening() {
@@ -83,10 +112,23 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
         if (value === report.opening_balance_hours || (value === null && report.opening_balance_hours === null)) {
             return;
         }
+        // The server rewrites the body's billing summary from the new balance, so unsaved
+        // edits travel with it and the editor takes back the body it stored. The version
+        // makes the server refuse text written against a report that has since changed.
+        setSavingBalance(true);
         router.patch(
             `/clients/${client.id}/reports/${report.id}/opening-balance`,
-            { opening_balance_hours: value },
-            { preserveScroll: true, preserveState: true },
+            isDirty
+                ? { opening_balance_hours: value, body_markdown: draft.body, version: draft.version }
+                : { opening_balance_hours: value, version: draft.version },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onFinish: () => setSavingBalance(false),
+                onSuccess: (page) => {
+                    adopt(page);
+                },
+            },
         );
     }
 
@@ -94,11 +136,17 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
         setSaving(true);
         router.put(
             `/clients/${client.id}/reports/${report.id}`,
-            { body_markdown: body },
+            { body_markdown: draft.body, version: draft.version },
             {
                 preserveScroll: true,
+                // Kept so a refused save leaves the text in the editor.
+                preserveState: true,
                 onFinish: () => setSaving(false),
-                onSuccess: () => toast.success(t('Report saved.')),
+                onSuccess: (page) => {
+                    if (adopt(page)) {
+                        toast.success(t('Report saved.'));
+                    }
+                },
             },
         );
     }
@@ -115,8 +163,13 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
             runnable ? { composer_key: report.composer_key } : {},
             {
                 preserveScroll: true,
+                preserveState: true,
                 onFinish: () => setRegenerating(false),
-                onSuccess: () => toast.success(t('Report regenerated.')),
+                onSuccess: (page) => {
+                    if (adopt(page)) {
+                        toast.success(t('Report regenerated.'));
+                    }
+                },
             },
         );
     }
@@ -172,7 +225,7 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
                     </span>
                 </div>
                 <div className={styles.headerActions}>
-                    <Button onClick={save} disabled={!isDirty || saving}>
+                    <Button onClick={save} disabled={!isDirty || saving || savingBalance}>
                         <Save size={14} /> {saving ? t('Saving…') : t('Save')}
                     </Button>
                     <Button variant="outline" onClick={() => setConfirmRegen(true)} disabled={regenerating}>
@@ -240,7 +293,17 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
 
             <div className={styles.editor}>
                 <span className={styles.editorLabel}>{t('Report body (markdown)')}</span>
-                <MarkdownTextarea value={body} onChange={setBody} rows={24} />
+                {isStale && (
+                    <Alert variant="destructive">
+                        <AlertDescription className={styles.staleNotice}>
+                            {t('This report changed after your text was loaded, so it cannot be saved over the newer version.')}
+                            <Button variant="outline" size="sm" onClick={loadCurrent}>
+                                {t('Load the current text')}
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
+                )}
+                <MarkdownTextarea value={body} onChange={setBody} rows={24} disabled={savingBalance} />
             </div>
 
             <div className={styles.dangerZone}>
@@ -269,7 +332,14 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
                                 const after = i === 0 ? (report.body_markdown ?? '') : (revisions[i - 1].body_markdown_before ?? '');
                                 const before = r.body_markdown_before ?? '';
                                 const expanded = expandedRevisions.has(r.id);
-                                const canDiff = r.reason === 'update' || r.reason === 'regenerate';
+                                const canDiff = (r.reason === 'update' || r.reason === 'regenerate' || r.reason === 'opening_balance') && before !== after;
+                                // Same pairing for the figures: what this change replaced, and what it left.
+                                const newer = i === 0 ? null : revisions[i - 1];
+                                const openingAfter = newer ? newer.opening_balance_hours_before : report.opening_balance_hours;
+                                const capAfter = newer ? newer.rollover_cap_hours_before : report.rollover_cap_hours;
+                                const showsFigures = r.reason === 'opening_balance' || r.reason === 'regenerate';
+                                const openingChanged = showsFigures && (r.opening_balance_hours_before ?? 0) !== (openingAfter ?? 0);
+                                const capChanged = showsFigures && r.rollover_cap_hours_before !== capAfter;
                                 return (
                                     <li key={r.id} className={styles.revisionRow}>
                                         <button
@@ -299,6 +369,15 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
                                                 {' · '}
                                                 {t('was {{status}}', { status: t(statusLabelKey(r.status_before)) })}
                                             </span>
+                                            {(openingChanged || capChanged) && (
+                                                <span className={styles.revisionFigures}>
+                                                    {openingChanged &&
+                                                        `${t('Opening balance')}: ${fmtBalance(r.opening_balance_hours_before ?? 0)} → ${fmtBalance(openingAfter ?? 0)}`}
+                                                    {openingChanged && capChanged && ' · '}
+                                                    {capChanged &&
+                                                        `${t('Carry-over cap')}: ${fmtCap(r.rollover_cap_hours_before)} → ${fmtCap(capAfter)}`}
+                                                </span>
+                                            )}
                                         </button>
                                         {expanded && canDiff && (
                                             <div className={styles.revisionDiff}>
@@ -375,6 +454,16 @@ function statusLabelKey(status: ReportData['status']): string {
     }
 }
 
+function draftFrom(report: ReportData): { body: string; base: string; version: string } {
+    const body = report.body_markdown ?? '';
+    return { body, base: body, version: report.version };
+}
+
+/** A redirect carrying an error flash means the server refused the write. */
+function refused(page: { props: unknown }): boolean {
+    return Boolean((page.props as { flash?: { error?: string | null } }).flash?.error);
+}
+
 function reasonLabelKey(reason: Revision['reason']): string {
     switch (reason) {
         case 'update':
@@ -385,6 +474,8 @@ function reasonLabelKey(reason: Revision['reason']): string {
             return 'Finalized';
         case 'reopen':
             return 'Reopened';
+        case 'opening_balance':
+            return 'Balance changed';
     }
 }
 

@@ -5,10 +5,11 @@ import { useTranslation } from 'react-i18next';
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { KanbanBoard, KanbanCard, type KanbanCardAction, type KanbanLane } from '@/components/ui/kanban-board';
+import { listLaneLabel } from '@/lib/list-lane-label';
 import { markdownPreview } from '@/lib/markdown-to-text';
 import tasksRoute from '@/routes/tasks';
 
-import { type TaskRowTask } from '../task-row';
+import { ownerFinishLabel, type TaskRowTask } from '../task-row';
 
 import styles from './project-kanban.module.css';
 
@@ -28,7 +29,7 @@ interface Props {
 }
 
 export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTask }: Props) {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const [tasks, setTasks] = useState<TaskRowTask[]>(initialTasks);
     const [showArchived, setShowArchived] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -50,12 +51,9 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
 
     const lanes = useMemo<KanbanLane<TaskRowTask>[]>(() => {
         return resolvedLanes.map((laneName) => {
-            const key = `list_lane_${laneName}`;
-            const translated = t(key);
-            const label = translated === key ? laneName : translated;
             return {
                 id: laneName,
-                label,
+                label: listLaneLabel(t, laneName),
                 items: visibleTasks.filter((task) => (task.list_name ?? DEFAULT_LANES[0]) === laneName),
             };
         });
@@ -64,10 +62,22 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
     const handleMove = (cardId: string | number, _from: string, to: string) => {
         const id = Number(cardId);
         const task = tasks.find((entry) => entry.id === id);
-        if (!task || task.source === 'trello') return;
+        if (!task || task.has_trello_card) return;
 
-        const previous = task.list_name;
-        setTasks((prev) => prev.map((entry) => (entry.id === id ? { ...entry, list_name: to, is_completed: to === 'Done' } : entry)));
+        const previous = task;
+        const restore = () => setTasks((prev) => prev.map((entry) => (entry.id === id ? previous : entry)));
+        setTasks((prev) =>
+            prev.map((entry) =>
+                entry.id === id
+                    ? {
+                          ...entry,
+                          list_name: to,
+                          is_completed: to === 'Done',
+                          finished_at: to === 'Done' ? (entry.finished_at ?? new Date().toISOString()) : null,
+                      }
+                    : entry,
+            ),
+        );
 
         fetch(`/tasks/${id}/list-name`, {
             method: 'PATCH',
@@ -80,16 +90,23 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
             },
             body: JSON.stringify({ list_name: to }),
         })
-            .then((res) => {
+            .then(async (res) => {
                 if (!res.ok) {
-                    setTasks((prev) => prev.map((entry) => (entry.id === id ? { ...entry, list_name: previous ?? null } : entry)));
+                    restore();
                     return;
                 }
+                // The server's answer replaces the guess: the lane, completion and finish date it actually stored.
+                const saved = (await res.json()) as Pick<TaskRowTask, 'list_name' | 'is_completed' | 'finished_at'>;
+                setTasks((prev) =>
+                    prev.map((entry) =>
+                        entry.id === id
+                            ? { ...entry, list_name: saved.list_name, is_completed: saved.is_completed, finished_at: saved.finished_at ?? null }
+                            : entry,
+                    ),
+                );
                 router.reload({ only: ['tasks'] });
             })
-            .catch(() => {
-                setTasks((prev) => prev.map((entry) => (entry.id === id ? { ...entry, list_name: previous ?? null } : entry)));
-            });
+            .catch(restore);
     };
 
     const performArchive = (task: TaskRowTask, archive: boolean) => {
@@ -160,10 +177,11 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
                 lanes={lanes}
                 renderCard={(task) => {
                     const isArchived = !!task.archived_at;
-                    const isOverdue = task.is_overdue ?? (task.due_date ? new Date(task.due_date) < new Date() && !task.is_completed : false);
+                    // Overdue is decided on the server, in the owner's calendar.
+                    const isOverdue = task.is_overdue ?? false;
 
                     const actions: KanbanCardAction[] = [];
-                    if (task.source !== 'trello' && onEditTask && !isArchived) {
+                    if (!task.has_trello_card && onEditTask && !isArchived) {
                         actions.push({ label: t('Edit'), icon: <Pencil size={14} />, onClick: () => onEditTask(task) });
                     }
                     if (!isArchived && task.cli === null) {
@@ -189,7 +207,7 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
                             target: '_blank',
                         });
                     }
-                    const isTrelloSource = task.source === 'trello';
+                    const isTrelloSource = !!task.has_trello_card;
                     if (!isTrelloSource && !isArchived) {
                         actions.push({
                             label: t('Archive'),
@@ -224,10 +242,14 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
                         chips.push({ label: t('Parent: {{name}}', { name: task.parent_task.name }), tone: 'label' });
                     }
                     if ((task.child_tasks_count ?? 0) > 0) {
-                        chips.push({ label: t('{{count}} subtasks', { count: task.child_tasks_count }), tone: 'label' });
+                        chips.push({ label: t('subtask_count', { count: task.child_tasks_count }), tone: 'label' });
                     }
                     if (task.cli) {
                         chips.push({ label: task.cli, tone: 'label' });
+                    }
+                    const finishLabel = ownerFinishLabel(task, t, i18n.language);
+                    if (finishLabel) {
+                        chips.push({ label: finishLabel, tone: 'label' });
                     }
 
                     return (
@@ -236,7 +258,7 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
                             title={task.name}
                             subtitle={markdownPreview(task.description)}
                             href={tasksRoute.show(task.id).url}
-                            isCompleted={task.is_completed || isArchived}
+                            isCompleted={task.is_completed || !!task.finished_at || isArchived}
                             dueDate={task.due_date}
                             isOverdue={isOverdue}
                             recurrencePeriodDays={task.recurrence_period_days}
@@ -247,7 +269,7 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
                     );
                 }}
                 getCardId={(task) => task.id}
-                isCardDraggable={(task) => task.source !== 'trello' && !task.archived_at}
+                isCardDraggable={(task) => !task.has_trello_card && !task.archived_at}
                 onMove={handleMove}
             />
 

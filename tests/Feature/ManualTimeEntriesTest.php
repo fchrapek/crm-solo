@@ -6,14 +6,12 @@ namespace Tests\Feature;
 
 use App\Models\Account;
 use App\Models\Client;
-use App\Models\Integration;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TaskSession;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 final class ManualTimeEntriesTest extends TestCase
@@ -385,61 +383,6 @@ final class ManualTimeEntriesTest extends TestCase
         $session->refresh();
         $this->assertSame('2026-05-21 10:30:00', $session->started_at->utc()->toDateTimeString());
         $this->assertSame('2026-05-21 11:45:00', $session->ended_at->utc()->toDateTimeString());
-    }
-
-    public function test_update_pushes_put_to_clockify_when_already_mirrored(): void
-    {
-        Integration::create([
-            'account_id' => $this->account->id,
-            'provider' => 'clockify',
-            'is_enabled' => true,
-            'api_key' => 'test-key',
-            'settings' => ['workspace_id' => 'ws-1'],
-        ]);
-        // Pre-stamp client + project as already mirrored so updateTimeEntry's
-        // ensure-helpers don't call the API for those.
-        $this->client->forceFill(['clockify_client_id' => 'cli-1'])->save();
-        $this->project->forceFill(['clockify_project_id' => 'proj-1'])->save();
-
-        $entry = TimeEntry::create([
-            'account_id' => $this->account->id,
-            'project_id' => $this->project->id,
-            'client_id' => $this->client->id,
-            'task_id' => $this->task->id,
-            'source' => TimeEntry::SOURCE_TERMINAL_SESSION,
-            'start_time' => '2026-05-21 10:00:00',
-            'end_time' => '2026-05-21 12:00:00',
-            'duration_minutes' => 120,
-            'billable' => true,
-            'clockify_entry_id' => 'te-existing-123',
-        ]);
-
-        Http::fake([
-            // ClockifyMirrorService::resolveWorkspaceId hits /workspaces first
-            // to pick the default ws id. Without faking it the whole flow
-            // throws and the PUT we're asserting never fires.
-            'api.clockify.me/api/v1/workspaces' => Http::response([
-                ['id' => 'ws-1', 'name' => 'Default'],
-            ], 200),
-            // Anchor on the PUT to the specific entry id — if update()
-            // accidentally re-pushed via POST we'd hit the collection URL
-            // (`/time-entries` without the id) and this fake wouldn't match.
-            'api.clockify.me/api/v1/workspaces/ws-1/time-entries/te-existing-123' => Http::response(['id' => 'te-existing-123'], 200),
-        ]);
-
-        $this->actingAs($this->user)
-            ->putJson("/time-entries/{$entry->id}", [
-                'start_time' => '2026-05-21T10:30:00Z',
-                'end_time' => '2026-05-21T11:45:00Z',
-                'description' => 'trimmed to real worked time',
-            ])
-            ->assertOk();
-
-        Http::assertSent(fn ($r) => $r->method() === 'PUT'
-            && str_contains($r->url(), 'workspaces/ws-1/time-entries/te-existing-123'));
-        // The local Clockify id is preserved — we PATCH the same row, never
-        // create a duplicate.
-        $this->assertSame('te-existing-123', $entry->fresh()->clockify_entry_id);
     }
 
     public function test_cross_account_update_is_forbidden(): void

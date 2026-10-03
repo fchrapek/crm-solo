@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Console\Commands\Concerns\ResolvesClients;
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
+use App\Services\Agent\CrmEntityResolver;
+use App\Services\Agent\ReferenceException;
 use Illuminate\Console\Command;
 
 /**
@@ -12,19 +15,21 @@ use Illuminate\Console\Command;
  * lifecycle event with a note — the exact mechanism the UI's "+ Add log
  * entry" composer uses, so agent notes and human notes share one history).
  */
+#[AccountScope(AccountScope::ACTING)]
 final class CrmNote extends Command
 {
-    use ResolvesClients;
+    use AgentConsoleOutput;
 
     protected $signature = 'crm:note {client : Client id or name fragment} {note : Journal entry text} {--json : Machine-readable output}';
 
     protected $description = "Append a journal entry to a client's timeline";
 
-    public function handle(): int
+    public function handle(CrmEntityResolver $resolver): int
     {
-        $client = $this->resolveClient((string) $this->argument('client'));
-        if ($client === null) {
-            return self::FAILURE;
+        try {
+            $client = $resolver->client((string) $this->argument('client'), $this->actingIdentity()->account->id);
+        } catch (ReferenceException $e) {
+            return $this->referenceFailure($e);
         }
 
         $note = mb_trim((string) $this->argument('note'));
@@ -37,15 +42,15 @@ final class CrmNote extends Command
         $event = $client->transitionTo($client->lifecycle_stage, $note, null);
 
         if ($this->option('json')) {
-            $this->line((string) json_encode([
+            $this->raw($this->encodeJson([
                 'client_id' => $client->id,
                 'event_id' => $event?->id,
-            ], JSON_UNESCAPED_UNICODE));
+            ]));
 
             return self::SUCCESS;
         }
 
-        $this->info("Noted on {$client->name} (event #{$event?->id}).");
+        $this->raw('Noted on '.$this->literal($client->name)." (event #{$event?->id}).");
 
         return self::SUCCESS;
     }

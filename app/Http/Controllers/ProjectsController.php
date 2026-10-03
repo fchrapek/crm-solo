@@ -7,12 +7,17 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Integration;
 use App\Models\Project;
+use App\Models\Task;
+use App\Services\Integrations\Trello\CardFinishReconciler;
+use App\Services\Integrations\Trello\TrelloBoardSyncRunning;
 use App\Services\Integrations\Trello\TrelloListMapper;
+use App\Services\Integrations\Trello\TrelloService;
 use App\Services\TaskSources\TaskSourceRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Throwable;
 
@@ -71,13 +76,8 @@ final class ProjectsController extends Controller
             abort(422, 'Trello-backed projects must be unlinked first.');
         }
 
-        // Model-by-model delete (not a bulk query) so Task::deleting fires:
-        // it nulls child parent_task_id references and removes attachment
-        // files from disk. A bulk delete() skips Eloquent events entirely.
-        foreach ($project->tasks()->get() as $task) {
-            $task->delete();
-        }
-        $project->delete();
+        // Project::deleting removes its tasks one by one, so each task's own hook runs.
+        DB::transaction(fn () => $project->delete());
 
         return back()->with('success', __('Project deleted.'));
     }
@@ -155,7 +155,11 @@ final class ProjectsController extends Controller
 
         $integration = $this->resolveTrelloIntegration();
 
-        $stats = $this->taskSources->get('trello')->syncProject($project, $integration);
+        try {
+            $stats = $this->taskSources->get('trello')->syncProject($project, $integration);
+        } catch (TrelloBoardSyncRunning) {
+            return back()->with('error', __('This board is already syncing. Try again in a moment.'));
+        }
 
         $message = __('Board synced successfully.')." ({$stats['created']} created, {$stats['updated']} updated)";
 
@@ -197,21 +201,30 @@ final class ProjectsController extends Controller
             'mapping.*' => ['required', 'string', Rule::in($allowedLanes)],
         ]);
 
-        $settings = $project->settings ?? [];
-        $settings['trello_list_mapping'] = $validated['mapping'];
-        $settings['custom_lanes'] = $customLanes;
-        $project->update(['settings' => $settings]);
+        // A board sync rewrites the same settings and lanes: the two never run at once.
+        $lock = TrelloService::boardLock($project->trello_board_id);
+        if (! $lock->get()) {
+            return back()->with('error', __('This board is already syncing. Try again in a moment.'));
+        }
 
-        // Apply the new mapping to existing tasks immediately. Without this,
-        // the user has to wait for the next Trello sync (every N minutes) to
-        // see cards redistribute across lanes, which surprises everyone.
-        foreach ($validated['mapping'] as $listId => $lane) {
+        try {
+            $project->refresh();
+            $settings = $project->settings ?? [];
+            $settings['trello_list_mapping'] = $validated['mapping'];
+            $settings['custom_lanes'] = $customLanes;
+            $project->update(['settings' => $settings]);
+
+            // Apply the new mapping to existing tasks immediately. Without this,
+            // the user has to wait for the next Trello sync (every N minutes) to
+            // see cards redistribute across lanes, which surprises everyone.
+            // Same completion and finish rules as the sync; each card's lane is
+            // read from its list as it is under the row lock.
             $project->tasks()
-                ->where('trello_list_id', $listId)
-                ->update([
-                    'list_name' => $lane,
-                    'is_completed' => $lane === TrelloListMapper::LANE_DONE,
-                ]);
+                ->whereIn('trello_list_id', array_keys($validated['mapping']))
+                ->get()
+                ->each(fn (Task $card) => CardFinishReconciler::remap($card));
+        } finally {
+            $lock->release();
         }
 
         return back()->with('success', __('List mapping saved.'));

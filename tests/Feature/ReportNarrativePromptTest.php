@@ -16,6 +16,7 @@ use App\Services\Reports\ReportDataAggregator;
 use App\Services\Reports\SettingsNarrativePromptResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use LogicException;
 use Tests\TestCase;
 
@@ -111,20 +112,37 @@ final class ReportNarrativePromptTest extends TestCase
         $this->assertSame('file', (new SettingsNarrativePromptResolver)->source($this->account->id));
     }
 
-    public function test_an_unresolvable_prompt_throws_instead_of_degrading_silently(): void
+    public function test_an_unresolvable_prompt_degrades_to_the_structured_composer_and_logs(): void
     {
-        // A prompt that cannot be read is an operator error. Falling back to
-        // the deterministic composer here would hand the user a differently
-        // shaped report with nothing explaining why.
+        Log::spy();
         $composer = new AiNarrativeComposer(
             $this->neverCalledProvider(),
             $this->app->make(StructuredListComposer::class),
             $this->failingResolver(),
         );
 
-        $this->expectException(NarrativePromptUnavailable::class);
+        $body = $composer->compose($this->context());
 
-        $composer->compose($this->context());
+        $this->assertSame($this->app->make(StructuredListComposer::class)->compose($this->context()), $body);
+        Log::shouldHaveReceived('error')->once();
+    }
+
+    public function test_a_missing_shipped_prompt_still_generates_a_report(): void
+    {
+        $this->app->bind(NarrativePromptResolver::class, fn () => $this->failingResolver());
+        $this->app->bind(AIProviderInterface::class, fn () => $this->neverCalledProvider());
+        $user = \App\Models\User::factory()->create(['account_id' => $this->account->id, 'owner' => true]);
+
+        $this->actingAs($user)
+            ->post("/clients/{$this->client->id}/reports", [
+                'period_type' => 'month',
+                'period_start' => '2026-03-01',
+                'period_end' => '2026-03-31',
+                'composer_key' => 'ai_narrative',
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('ai_narrative', $this->client->reports()->sole()->composer_key);
     }
 
     public function test_the_import_command_round_trips_a_prompt_and_clears_it(): void

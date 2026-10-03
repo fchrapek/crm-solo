@@ -16,8 +16,7 @@ final class LeadCollection extends ResourceCollection
             ...$lead->only('id', 'pipeline', 'name', 'company', 'email', 'phone', 'source', 'stage', 'client_id', 'deleted_at'),
             'captured_at' => $lead->captured_at?->toIso8601String(),
             'client_name' => $lead->client?->name,
-            // Derived per row — the board shows tier because tier is what says
-            // who gets Filip-minutes today.
+            // Tier decides who gets a reply today, so the board shows it.
             'score_total' => $lead->scoreTotal(),
             'tier' => $lead->tier(),
         ]);

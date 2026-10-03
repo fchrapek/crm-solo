@@ -42,6 +42,8 @@ return [
         'social',
         'referral',
         'outbound',
+        // The closed-mode splash (config/waitlist.php).
+        'waitlist',
         'other',
     ],
 

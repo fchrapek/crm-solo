@@ -8,20 +8,21 @@ use App\Models\Client;
 use App\Models\Project;
 use RuntimeException;
 
+/**
+ * Project and client lookup for the maintenance verbs, always inside one
+ * account: the account is a required argument, so the lookup cannot run
+ * unscoped by mistake.
+ */
 trait ResolvesProjectAndClient
 {
-    protected function resolveProject(string $needle, ?int $accountId = null): Project
+    protected function resolveProject(string $needle, int $accountId): Project
     {
-        $query = Project::query();
-
-        if ($accountId !== null) {
-            $query->where('account_id', $accountId);
-        }
+        $query = Project::query()->where('account_id', $accountId);
 
         if (ctype_digit($needle)) {
             $project = $query->find((int) $needle);
             if (! $project) {
-                throw new RuntimeException("Project #{$needle} not found".($accountId ? " in account #{$accountId}" : '').'.');
+                throw new RuntimeException("Project #{$needle} not found.");
             }
 
             return $project;
@@ -32,25 +33,21 @@ trait ResolvesProjectAndClient
             throw new RuntimeException("No project matches \"{$needle}\".");
         }
         if ($matches->count() > 1) {
-            $list = $matches->map(fn (Project $p) => "  #{$p->id} \"{$p->name}\" (account {$p->account_id})")->implode("\n");
+            $list = $matches->map(fn (Project $p) => "  #{$p->id} \"{$p->name}\"")->implode("\n");
             throw new RuntimeException("Ambiguous — \"{$needle}\" matches multiple projects:\n{$list}\nPass the numeric ID or refine the name.");
         }
 
         return $matches->first();
     }
 
-    protected function resolveClient(string $needle, ?int $accountId = null): Client
+    protected function resolveClient(string $needle, int $accountId): Client
     {
-        $query = Client::query();
-
-        if ($accountId !== null) {
-            $query->where('account_id', $accountId);
-        }
+        $query = Client::query()->where('account_id', $accountId);
 
         if (ctype_digit($needle)) {
             $client = $query->find((int) $needle);
             if (! $client) {
-                throw new RuntimeException("Client #{$needle} not found".($accountId ? " in account #{$accountId}" : '').'.');
+                throw new RuntimeException("Client #{$needle} not found.");
             }
 
             return $client;
@@ -61,7 +58,7 @@ trait ResolvesProjectAndClient
             throw new RuntimeException("No client matches \"{$needle}\".");
         }
         if ($matches->count() > 1) {
-            $list = $matches->map(fn (Client $c) => "  #{$c->id} \"{$c->name}\" (account {$c->account_id})")->implode("\n");
+            $list = $matches->map(fn (Client $c) => "  #{$c->id} \"{$c->name}\"")->implode("\n");
             throw new RuntimeException("Ambiguous — \"{$needle}\" matches multiple clients:\n{$list}\nPass the numeric ID or refine the name.");
         }
 

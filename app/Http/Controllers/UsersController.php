@@ -9,8 +9,8 @@ use App\Http\Resources\UserCollection;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Request;
 use Inertia\Inertia;
@@ -33,11 +33,15 @@ final class UsersController extends Controller
 
     public function create()
     {
+        Gate::authorize('create', User::class);
+
         return Inertia::render('users/create');
     }
 
     public function store(UserRequest $request): RedirectResponse
     {
+        Gate::authorize('create', User::class);
+
         Auth::user()->account->users()->create($request->validated());
 
         return Redirect::route('users.index')->with('success', translate_with_gender('created', 'User'));
@@ -52,8 +56,10 @@ final class UsersController extends Controller
 
     public function update(User $user, UserRequest $request): RedirectResponse
     {
-        if (App::environment('production') && $user->isDemoUser()) {
-            return Redirect::back();
+        Gate::authorize('update', $user);
+
+        if ($user->isDemoUser()) {
+            return Redirect::back()->with('error', __('The demo login cannot be changed or deleted.'));
         }
 
         $data = $request->validated();
@@ -65,8 +71,10 @@ final class UsersController extends Controller
 
     public function destroy(User $user): RedirectResponse
     {
-        if (App::environment('production') && $user->isDemoUser()) {
-            return Redirect::back()->with('error', 'La suppression de l\'utilisateur de démonstration n\'est pas autorisée.');
+        Gate::authorize('delete', $user);
+
+        if ($user->isDemoUser()) {
+            return Redirect::back()->with('error', __('The demo login cannot be changed or deleted.'));
         }
 
         $user->delete();
@@ -76,6 +84,8 @@ final class UsersController extends Controller
 
     public function restore(User $user): RedirectResponse
     {
+        Gate::authorize('restore', $user);
+
         $user->restore();
 
         return Redirect::back()->with('success', translate_with_gender('restored', 'User'));

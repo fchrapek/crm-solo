@@ -6,9 +6,10 @@ import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { usePageActions } from '@/contexts/page-context';
+import { listLaneLabel } from '@/lib/list-lane-label';
 import { ProjectKanban } from '@/pages/clients/components/project-kanban';
 import { type TaskDialogValues, TaskFormDialog } from '@/pages/clients/components/task-form-dialog';
-import { type TaskRowTask } from '@/pages/clients/components/task-row';
+import { ownerFinishLabel, type TaskRowTask } from '@/pages/clients/components/task-row';
 import clients from '@/routes/clients';
 import { BreadcrumbItem, SharedData } from '@/types';
 
@@ -45,7 +46,7 @@ interface PageProps extends SharedData {
  * of a tab's content.
  */
 export default function ProjectBoardShow() {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const { setBreadcrumbs } = usePageActions();
     const { client, project, tasks } = usePage<PageProps>().props;
 
@@ -174,7 +175,7 @@ export default function ProjectBoardShow() {
                             </thead>
                             <tbody>
                                 {tasks.map((task) => {
-                                    const overdue = task.due_date ? new Date(task.due_date) < new Date() && !task.is_completed : false;
+                                    const overdue = task.is_overdue ?? false;
                                     return (
                                         <tr key={task.id}>
                                             <td>
@@ -182,7 +183,7 @@ export default function ProjectBoardShow() {
                                                     {task.name}
                                                 </Link>
                                             </td>
-                                            <td className={styles.cellMuted}>{task.list_name ?? '-'}</td>
+                                            <td className={styles.cellMuted}>{ownerFinishLabel(task, t, i18n.language) ?? listLaneLabel(t, task.list_name)}</td>
                                             <td className={task.priority === 'high' ? styles.priorityHigh : styles.cellMuted}>
                                                 {priorityLabel(task.priority, t)}
                                             </td>
@@ -191,9 +192,11 @@ export default function ProjectBoardShow() {
                                             </td>
                                             <td className={styles.cellMuted}>{task.source ?? '-'}</td>
                                             <td className={styles.editCell}>
-                                                <Button variant="ghost" size="icon" aria-label={t('Edit task')} onClick={() => openEdit(task)}>
-                                                    <Pencil size={14} />
-                                                </Button>
+                                                {!task.has_trello_card && (
+                                                    <Button variant="ghost" size="icon" aria-label={t('Edit task')} onClick={() => openEdit(task)}>
+                                                        <Pencil size={14} />
+                                                    </Button>
+                                                )}
                                             </td>
                                         </tr>
                                     );

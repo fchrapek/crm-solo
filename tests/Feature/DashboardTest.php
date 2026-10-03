@@ -40,7 +40,7 @@ final class DashboardTest extends TestCase
     public function test_dashboard_ships_the_daily_session_snapshot(): void
     {
         $this->actingAs($this->user)
-            ->get('/')
+            ->get('/sesje')
             ->assertInertia(fn (Assert $assert) => $assert
                 ->component('dashboard', false)
                 ->has('dailySession', fn (Assert $session) => $session

@@ -8,7 +8,9 @@ use App\Models\Account;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\TimeEntry;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 final class TimeEntriesTest extends TestCase
@@ -139,5 +141,36 @@ final class TimeEntriesTest extends TestCase
 
         $total = $client->timeEntries()->sum('duration_minutes');
         $this->assertSame(210, (int) $total);
+    }
+
+    public function test_imported_clockify_entries_still_list_on_the_client_page(): void
+    {
+        $user = User::factory()->create([
+            'account_id' => $this->account->id,
+            'first_name' => 'F',
+            'last_name' => 'C',
+            'email' => 'u@example.com',
+            'owner' => true,
+        ]);
+        $client = Client::create(['account_id' => $this->account->id, 'name' => 'Imported Client', 'type' => 'business']);
+        (new TimeEntry)->forceFill([
+            'account_id' => $this->account->id,
+            'client_id' => $client->id,
+            'source' => TimeEntry::SOURCE_CLOCKIFY,
+            'clockify_entry_id' => 'imported-entry-1',
+            'description' => 'Pulled before the removal',
+            'start_time' => '2026-07-08 09:00:00',
+            'end_time' => '2026-07-08 10:00:00',
+            'duration_minutes' => 60,
+        ])->save();
+
+        $this->actingAs($user)
+            ->get("/clients/{$client->id}/edit")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('timeEntries.data.0.source', 'clockify')
+                ->where('timeEntries.data.0.duration_minutes', 60)
+                ->missing('timeEntries.data.0.is_in_clockify')
+                ->missing('clockifyEnabled'));
     }
 }

@@ -6,18 +6,25 @@ namespace App\Services\Agent;
 
 final class AmbiguousReferenceException extends ReferenceException
 {
+    public readonly int $total;
+
     /**
-     * @param  list<array{id: int, name: string, context: string|null}>  $candidates
+     * @param  list<array{id: int, name: string, context: string|null}>  $candidates  the first matches, best first
+     * @param  int|null  $total  how many records matched in all; more than the candidates when the list is cut
      */
     public function __construct(
         string $entity,
         string $needle,
         public readonly array $candidates,
+        ?int $total = null,
     ) {
+        $this->total = $total ?? count($candidates);
+        $shown = $this->total > count($candidates) ? ' Showing '.count($candidates)." of {$this->total} matches; narrow the name or use an id." : '';
+
         parent::__construct(
             $entity,
             $needle,
-            "Ambiguous {$entity} \"{$needle}\" — call again with the numeric id.",
+            "Ambiguous {$entity} \"{$needle}\" — call again with the numeric id.{$shown}",
         );
     }
 
@@ -32,6 +39,7 @@ final class AmbiguousReferenceException extends ReferenceException
             'needle' => $this->needle,
             'message' => $this->getMessage(),
             'candidates' => $this->candidates,
+            'total' => $this->total,
         ];
     }
 
@@ -42,6 +50,7 @@ final class AmbiguousReferenceException extends ReferenceException
     {
         return collect($this->candidates)
             ->map(fn (array $c): string => "  #{$c['id']} \"{$c['name']}\"".($c['context'] !== null ? " ({$c['context']})" : ''))
-            ->implode("\n");
+            ->implode("\n")
+            .($this->total > count($this->candidates) ? "\n  ... and ".($this->total - count($this->candidates)).' more' : '');
     }
 }

@@ -119,11 +119,7 @@ final class TrelloSyncTest extends TestCase
             'name' => 'Overdue Client',
         ]);
 
-        $project = Project::create([
-            'account_id' => $this->account->id,
-            'client_id' => $client->id,
-            'name' => 'Overdue Project',
-        ]);
+        $project = $client->ensureGeneralProject();
 
         Task::create([
             'project_id' => $project->id,
@@ -149,11 +145,7 @@ final class TrelloSyncTest extends TestCase
             'name' => 'Tasks Client',
         ]);
 
-        $project = Project::create([
-            'account_id' => $this->account->id,
-            'client_id' => $client->id,
-            'name' => 'Project With Tasks',
-        ]);
+        $project = $client->ensureGeneralProject();
 
         Task::create([
             'project_id' => $project->id,

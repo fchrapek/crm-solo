@@ -22,6 +22,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Host execution
+    |--------------------------------------------------------------------------
+    |
+    | Whether the app may run processes on this machine: terminal sessions,
+    | task previews, repository git calls and the daily-session viewport.
+    | Always off under DEMO_MODE (App\Support\HostExec), where every visitor
+    | is logged in.
+    |
+    */
+
+    'host_exec' => (bool) env('CRM_HOST_EXEC', true) && ! (bool) env('DEMO_MODE', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Daily session (herdr)
     |--------------------------------------------------------------------------
     |

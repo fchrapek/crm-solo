@@ -34,7 +34,7 @@ final class TimerStartTool extends Tool
         $accountId = $this->identity()->account->id;
 
         try {
-            $task = $resolver->task($validated['task'], $accountId);
+            $task = $resolver->task($validated['task'], $accountId, openOnly: true);
         } catch (ReferenceException $e) {
             return $this->referenceError($e);
         }
@@ -47,13 +47,7 @@ final class TimerStartTool extends Tool
             $validated['billable'] ?? true,
         );
 
-        return $this->payload([
-            'entry_id' => $entry->id,
-            'task_id' => $task->id,
-            'client' => $task->project?->client?->name,
-            'started_at' => $entry->start_time?->toIso8601String(),
-            'other_open_timers' => $open->map(fn ($e) => ['id' => $e->id, 'task' => $e->task?->name])->values(),
-        ]);
+        return $this->payload($timers->startPayload($entry, $task, $open));
     }
 
     /**

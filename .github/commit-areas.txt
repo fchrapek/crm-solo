@@ -1,0 +1,27 @@
+# Areas a commit subject may start with ("Area: what changed").
+# Add a line here when a new area is genuinely needed; never invent one per commit.
+Today
+Clients
+Tasks
+Leads
+Reports
+Month close
+Finance
+Integrations
+Trello
+Infakt
+Agent
+MCP
+Auth
+UI
+Design
+Hosting
+Backups
+Prod scripts
+Maintenance
+Public export
+Tests
+Docs
+Roadmap
+CI
+Deps

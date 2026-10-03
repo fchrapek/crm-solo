@@ -9,12 +9,15 @@ use App\Models\ClientRetainer;
 use App\Models\Contact;
 use App\Models\Integration;
 use App\Models\Invoice;
+use App\Support\LocalCalendar;
+use App\Support\Redaction;
 use Exception;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Sleep;
 use RuntimeException;
 
 final class InfaktService
@@ -27,11 +30,19 @@ final class InfaktService
 
     private const BASE_URL = 'https://api.infakt.pl/v3';
 
+    /** Client fields Infakt keeps current until the CRM edits them; the rest it only seeds. */
+    private const SYNCED_FIELDS = ['name', 'email', 'phone', 'address', 'city', 'country', 'postal_code', 'tax_id', 'notes'];
+
+    /** external_ids key holding the synced fields as Infakt last wrote them. */
+    private const SYNCED_SNAPSHOT_KEY = 'infakt_synced';
+
     private PendingRequest $http;
 
     public function __construct(
         private readonly Integration $integration
     ) {
+        $this->integration->assertSecretsReadable();
+
         $this->http = Http::baseUrl(self::BASE_URL)
             ->withHeaders([
                 'X-inFakt-ApiKey' => $this->integration->api_key,
@@ -47,8 +58,10 @@ final class InfaktService
 
             return $response->successful();
         } catch (Exception $e) {
+            // The key travels in a header, and a malformed one comes back in the
+            // client's own error text, so it is cut out before logging.
             Log::error('Infakt API connection test failed', [
-                'error' => $e->getMessage(),
+                'error' => str_replace(Redaction::variants([(string) $this->integration->api_key]), '[redacted]', $e->getMessage()),
             ]);
 
             return false;
@@ -56,71 +69,89 @@ final class InfaktService
     }
 
     /**
-     * Create a DRAFT maintenance invoice in Infakt for a maintenance client,
-     * derived from the retainer in force for the given month.
+     * Create the DRAFT maintenance invoices for a client and month, one per
+     * invoice group, through InfaktDraftRun: each request is recorded before
+     * it is sent, so a second run resumes instead of drafting twice.
      *
-     * Intentionally narrow — this is the ONLY invoice-writing path in the CRM.
+     * Intentionally narrow: this is the ONLY invoice-writing path in the CRM.
      * It refuses any client that is not a `maintenance` client with an active
-     * retainer + a linked Infakt id, always emits a single retainer-derived
-     * line item, and always lands as a `draft` (Infakt creates invoices as
-     * draft; this never issues, sends, prints or marks-paid). The CRM cannot
-     * create arbitrary invoices.
+     * fee-bearing position and a linked Infakt id, and every invoice lands as
+     * a `draft` (never issued, sent, printed or marked paid).
      *
-     * @return array{payload: array<string, mixed>, task_reference: ?string, status: ?array<string, mixed>}
+     * @return list<array{group: int, outcome: string, payload: array<string, mixed>, task_reference: ?string, message: ?string}>
      *
      * @throws InfaktApiException on a non-2xx create response
      */
-    public function createDraftMaintenanceInvoice(Client $client, Carbon $periodMonth): array
+    public function createDraftMaintenanceInvoices(Client $client, Carbon $periodMonth, bool $resendUnconfirmed = false): array
     {
-        $payload = $this->buildMaintenanceInvoicePayload($client, $periodMonth);
+        return (new InfaktDraftRun($this))->run($client, $periodMonth, $resendUnconfirmed);
+    }
 
+    /**
+     * Sends one draft request; Infakt answers with a task reference and builds
+     * the draft asynchronously.
+     *
+     * @param  array{invoice: array<string, mixed>}  $payload
+     *
+     * @throws InfaktApiException on a non-2xx response
+     */
+    public function postDraftInvoice(array $payload): ?string
+    {
         $response = $this->http->post('/async/invoices.json', $payload);
 
         if (! $response->successful()) {
             throw new InfaktApiException($response->status(), $response->body());
         }
 
-        $reference = $response->json('invoice_task_reference_number');
-
-        return [
-            'payload' => $payload,
-            'task_reference' => $reference,
-            'status' => $reference !== null ? $this->pollInvoiceTask($reference) : null,
-        ];
+        return $response->json('invoice_task_reference_number');
     }
 
     /**
-     * Create one or more DRAFT maintenance invoices for a client. A single
-     * Infakt payer can cover several sites: lines sharing an `invoice_group`
-     * land on one invoice, different groups produce separate invoices. When the
-     * client has no active maintenance lines this falls back to the single
-     * retainer-derived draft. Every invoice is a `draft` — never issued or sent.
+     * What an async creation task says now: created (201, with the invoice
+     * uuid), failed (422), or pending (100 accepted, 140 processing, or no
+     * readable answer).
      *
-     * @return array<int, array{payload: array<string, mixed>, task_reference: ?string, status: ?array<string, mixed>}>
-     *
-     * @throws InfaktApiException on a non-2xx create response
+     * @return array{state: string, invoice_uuid: ?string, error: ?string}
      */
-    public function createDraftMaintenanceInvoices(Client $client, Carbon $periodMonth): array
+    public function draftTaskState(string $reference): array
     {
-        $results = [];
+        $response = $this->http->get("/async/invoices/status/{$reference}.json");
+        $data = $response->successful() ? (array) $response->json() : [];
+        $code = (int) ($data['processing_code'] ?? 0);
 
-        foreach ($this->buildMaintenanceInvoicePayloads($client, $periodMonth) as $payload) {
-            $response = $this->http->post('/async/invoices.json', $payload);
+        // Only 201 (created) and 422 (could not create) are final in Infakt's docs; anything else is still open.
+        return match (true) {
+            $code === 201 || isset($data['invoice_uuid']) => [
+                'state' => 'created',
+                'invoice_uuid' => $data['invoice_uuid'] ?? ($data['invoice']['uuid'] ?? null),
+                'error' => null,
+            ],
+            $code === 422 => [
+                'state' => 'failed',
+                'invoice_uuid' => null,
+                'error' => mb_trim(($data['processing_description'] ?? 'rejected').' '.json_encode($data['invoice_errors'] ?? [], JSON_UNESCAPED_UNICODE)),
+            ],
+            default => ['state' => 'pending', 'invoice_uuid' => null, 'error' => null],
+        };
+    }
 
-            if (! $response->successful()) {
-                throw new InfaktApiException($response->status(), $response->body());
+    /**
+     * Polls a fresh task for a few seconds; a draft still pending after that
+     * is reconciled by the next run.
+     *
+     * @return array{state: string, invoice_uuid: ?string, error: ?string}
+     */
+    public function awaitDraft(string $reference, int $attempts = 8): array
+    {
+        for ($i = 0; $i < $attempts; $i++) {
+            $state = $this->draftTaskState($reference);
+            if ($state['state'] !== 'pending') {
+                return $state;
             }
-
-            $reference = $response->json('invoice_task_reference_number');
-
-            $results[] = [
-                'payload' => $payload,
-                'task_reference' => $reference,
-                'status' => $reference !== null ? $this->pollInvoiceTask($reference) : null,
-            ];
+            Sleep::for(1)->second();
         }
 
-        return $results;
+        return ['state' => 'pending', 'invoice_uuid' => null, 'error' => null];
     }
 
     /**
@@ -135,6 +166,16 @@ final class InfaktService
      * @return array<int, array{invoice: array<string, mixed>}>
      */
     public function buildMaintenanceInvoicePayloads(Client $client, Carbon $periodMonth): array
+    {
+        return array_values($this->maintenanceInvoiceGroups($client, $periodMonth));
+    }
+
+    /**
+     * The draft payloads keyed by invoice group, the key a draft request is recorded under.
+     *
+     * @return array<int, array{invoice: array<string, mixed>}>
+     */
+    public function maintenanceInvoiceGroups(Client $client, Carbon $periodMonth): array
     {
         if ($client->month_close_type !== 'maintenance') {
             throw new RuntimeException("Refusing: {$client->name} is not a maintenance client — the CRM only drafts maintenance invoices.");
@@ -156,13 +197,19 @@ final class InfaktService
 
         $default = $client->maintenance_invoice_description ?: self::DEFAULT_MAINTENANCE_DESCRIPTION;
 
+        $currency = mb_strtoupper($client->currency ?: 'PLN');
+        // Infakt requires the exchange-rate date kind on any invoice not in PLN.
+        $foreign = $currency !== 'PLN' ? ['vat_exchange_date_kind' => $this->vatExchangeDateKind()] : [];
+
         return $positions
-            ->groupBy('invoice_group')
+            ->groupBy(fn (ClientRetainer $p): int => (int) $p->invoice_group)
             ->map(fn (Collection $group): array => ['invoice' => [
                 'client_id' => (int) $infaktClientId,
                 'sale_date' => $saleDate->toDateString(),
-                'invoice_date' => Carbon::now()->toDateString(),
+                'invoice_date' => LocalCalendar::today()->toDateString(),
                 'payment_method' => 'transfer',
+                'currency' => $currency,
+                ...$foreign,
                 'services' => $group->map(fn (ClientRetainer $p): array => [
                     'name' => $p->description ?: ($p->label ?: $default),
                     'unit_net_price' => (int) round(((float) $p->monthly_fee) * 100),
@@ -171,7 +218,7 @@ final class InfaktService
                     'unit' => 'usł.',
                 ])->values()->all(),
             ]])
-            ->values()
+            ->sortKeys()
             ->all();
     }
 
@@ -250,6 +297,9 @@ final class InfaktService
     /**
      * Sync clients from Infakt to local database.
      *
+     *
+     * @return array{created: int, updated: int, skipped: int, errors: int, conflicts: list<string>}
+     *
      * @throws InfaktApiException when the Infakt API rejects the request
      *                            (auth, rate-limit, server error). On failure
      *                            the integration's last_sync_error is written
@@ -270,6 +320,7 @@ final class InfaktService
             'updated' => 0,
             'skipped' => 0,
             'errors' => 0,
+            'conflicts' => [],
         ];
 
         foreach ($infaktClients as $infaktClient) {
@@ -284,9 +335,11 @@ final class InfaktService
             }
         }
 
+        // Kept until a sync finds none, so the integration page shows what still needs a human.
         $this->integration->update([
             'last_synced_at' => now(),
             'last_sync_error' => null,
+            'settings' => [...($this->integration->settings ?? []), 'client_conflicts' => $stats['conflicts']],
         ]);
 
         return $stats;
@@ -455,6 +508,33 @@ final class InfaktService
     }
 
     /**
+     * Invoices Infakt already holds for an Infakt client with this sale date,
+     * drafts included. Infakt is asked rather than the local invoices table,
+     * which only learns about a draft at the next sync.
+     *
+     * @return Collection<int, array<string, mixed>>
+     *
+     * @throws InfaktApiException on any non-2xx response
+     */
+    public function invoicesWithSaleDate(string $infaktClientId, string $saleDate): Collection
+    {
+        $response = $this->http->get('/invoices.json', [
+            'q[client_id_eq]' => $infaktClientId,
+            'q[sale_date_eq]' => $saleDate,
+            'limit' => 100,
+        ]);
+
+        if (! $response->successful()) {
+            throw new InfaktApiException($response->status(), $response->body());
+        }
+
+        return collect($response->json()['entities'] ?? [])
+            ->filter(fn (array $invoice): bool => (string) ($invoice['client_id'] ?? $infaktClientId) === $infaktClientId
+                && ($invoice['sale_date'] ?? null) === $saleDate)
+            ->values();
+    }
+
+    /**
      * Single-shot read of an async invoice-creation task's status.
      *
      * @return array{status: int, body: mixed}
@@ -484,53 +564,94 @@ final class InfaktService
         ];
     }
 
-    /**
-     * Best-effort poll of the async invoice-creation task. Returns the last
-     * status payload, or null if still processing after the attempts.
-     *
-     * @return array<string, mixed>|null
-     */
-    private function pollInvoiceTask(string $reference, int $attempts = 8): ?array
+    private static function comparable(mixed $value): ?string
     {
-        for ($i = 0; $i < $attempts; $i++) {
-            $response = $this->http->get("/async/invoices/status/{$reference}.json");
+        return $value === null || $value === '' ? null : (string) $value;
+    }
 
-            if ($response->successful()) {
-                $data = $response->json();
-
-                if (isset($data['invoice']) || isset($data['id']) || ($data['processing_code'] ?? null) === 200) {
-                    return $data;
-                }
-            }
-
-            usleep(1_000_000);
+    private function vatExchangeDateKind(): string
+    {
+        $kind = (string) config('services.infakt.vat_exchange_date_kind', 'vat');
+        if (! in_array($kind, ['vat', 'pit'], true)) {
+            throw new RuntimeException("Refusing: services.infakt.vat_exchange_date_kind is \"{$kind}\"; Infakt accepts vat or pit.");
         }
 
-        return null;
+        return $kind;
     }
 
     private function syncClient(array $infaktClient, int $accountId, array &$stats): void
     {
         $infaktId = (string) $infaktClient['id'];
+        $nip = $this->cleanNip($infaktClient['nip'] ?? null);
 
-        $existingClient = Client::where('account_id', $accountId)
-            ->where(function ($query) use ($infaktId, $infaktClient) {
-                $query->whereJsonContains('external_ids->infakt', $infaktId);
-
-                if (! empty($infaktClient['nip'])) {
-                    $query->orWhere('tax_id', $this->cleanNip($infaktClient['nip']));
-                }
-            })
+        $byInfaktId = Client::withTrashed()
+            ->where('account_id', $accountId)
+            ->whereJsonContains('external_ids->infakt', $infaktId)
+            ->orderBy('id')
             ->first();
+
+        if ($byInfaktId !== null) {
+            // A client deleted in the CRM stays deleted, whatever else matches.
+            if ($byInfaktId->trashed()) {
+                $stats['skipped']++;
+
+                return;
+            }
+            $client = $byInfaktId;
+        } else {
+            $client = null;
+            if ($nip !== null && $nip !== '') {
+                $byNip = Client::withTrashed()
+                    ->where('account_id', $accountId)
+                    ->where('tax_id', $nip)
+                    ->orderByRaw('deleted_at is null desc')
+                    ->orderBy('id')
+                    ->get();
+
+                // Only a client with no Infakt id yet can be linked by NIP.
+                $unlinked = $byNip->first(fn (Client $candidate): bool => empty($candidate->external_ids['infakt'] ?? null));
+
+                if ($unlinked?->trashed()) {
+                    $stats['skipped']++;
+
+                    return;
+                }
+
+                if ($unlinked === null && $byNip->isNotEmpty()) {
+                    $other = $byNip->first();
+                    $stats['conflicts'][] = sprintf(
+                        'Infakt client %s (NIP %s) matches CRM client #%d, already linked to Infakt client %s; not linked.',
+                        $infaktId,
+                        $nip,
+                        $other->id,
+                        (string) $other->external_ids['infakt'],
+                    );
+                    Log::warning('Infakt client matches a CRM client linked to another Infakt client by NIP', [
+                        'infakt_id' => $infaktId,
+                        'client_id' => $other->id,
+                        'linked_infakt_id' => (string) $other->external_ids['infakt'],
+                    ]);
+
+                    return;
+                }
+
+                $client = $unlinked;
+            }
+        }
 
         $clientData = $this->mapInfaktClientToLocal($infaktClient, $accountId);
 
-        if ($existingClient) {
-            $existingClient->update($clientData);
-            $client = $existingClient;
+        if ($client !== null) {
+            $this->applyInfaktFields($client, $clientData, $infaktId);
             $stats['updated']++;
         } else {
-            $client = Client::create($clientData);
+            $client = Client::create([
+                ...$clientData,
+                'external_ids' => [
+                    'infakt' => $infaktId,
+                    self::SYNCED_SNAPSHOT_KEY => $this->snapshotOf($clientData),
+                ],
+            ]);
             $stats['created']++;
         }
 
@@ -538,6 +659,68 @@ final class InfaktService
         // comma-separated). The client keeps the first as its primary; any
         // further addresses become Contacts so nothing is lost or truncated.
         $this->syncClientContactsFromEmails($client, array_slice($this->parseEmails($infaktClient['email'] ?? null), 1));
+    }
+
+    /**
+     * Infakt seeds a client; after that it updates a field only while the CRM
+     * value is still the one Infakt last wrote. The baseline of a field moves
+     * only when the sync writes that field, so a value the owner typed never
+     * becomes "what Infakt wrote", even when Infakt later reports the same
+     * value. A client imported before the baseline existed gets one only for
+     * the fields whose CRM value already equals Infakt's.
+     *
+     * @param  array<string, mixed>  $clientData
+     */
+    private function applyInfaktFields(Client $client, array $clientData, string $infaktId): void
+    {
+        $externalIds = is_array($client->external_ids) ? $client->external_ids : [];
+        $lastSynced = is_array($externalIds[self::SYNCED_SNAPSHOT_KEY] ?? null) ? $externalIds[self::SYNCED_SNAPSHOT_KEY] : null;
+        $incoming = $this->snapshotOf($clientData);
+        $baseline = $lastSynced ?? [];
+
+        foreach (self::SYNCED_FIELDS as $field) {
+            $current = self::comparable($client->getAttribute($field));
+
+            if ($lastSynced === null) {
+                if ($current === $incoming[$field]) {
+                    $baseline[$field] = $incoming[$field];
+                }
+
+                continue;
+            }
+
+            if (array_key_exists($field, $lastSynced) && $lastSynced[$field] === $current) {
+                $client->setAttribute($field, $clientData[$field]);
+                $baseline[$field] = $incoming[$field];
+            }
+        }
+
+        $client->external_ids = [
+            ...$externalIds,
+            'infakt' => $infaktId,
+            self::SYNCED_SNAPSHOT_KEY => $baseline,
+        ];
+        $client->save();
+    }
+
+    /**
+     * Each synced field as the client model reads it back, so a cast that
+     * rewrites on save (notes are humanized) does not look like an edit.
+     *
+     * @param  array<string, mixed>  $clientData
+     * @return array<string, string|null>
+     */
+    private function snapshotOf(array $clientData): array
+    {
+        $probe = new Client;
+        $snapshot = [];
+
+        foreach (self::SYNCED_FIELDS as $field) {
+            $probe->setAttribute($field, $clientData[$field]);
+            $snapshot[$field] = self::comparable($probe->getAttribute($field));
+        }
+
+        return $snapshot;
     }
 
     /**
@@ -604,8 +787,6 @@ final class InfaktService
 
     private function mapInfaktClientToLocal(array $infaktClient, int $accountId): array
     {
-        $infaktId = (string) $infaktClient['id'];
-
         return [
             'account_id' => $accountId,
             'type' => 'business', // Infakt mainly deals with businesses
@@ -621,9 +802,6 @@ final class InfaktService
             'tax_id' => $this->cleanNip($infaktClient['nip'] ?? null),
             'business_type' => null,
             'notes' => $infaktClient['note'] ?? null,
-            'external_ids' => [
-                'infakt' => $infaktId,
-            ],
         ];
     }
 

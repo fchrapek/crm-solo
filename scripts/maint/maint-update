@@ -1,0 +1,351 @@
+#!/bin/bash
+# maint-update <repo-path> [--period YYYY-MM] [--targets a,b] [--dry-run]
+#
+# Local WordPress updates for one clean repo, one pass per target branch.
+# Order: lock, preflight, verified DB snapshot, then per target: updates
+# branch, baseline, core / plugins / themes / translations with allowlisted
+# commits, leftover check, verification, leftover check again, fast-forward,
+# DB restore. Any failed pass stops the repo. Ends on the starting branch
+# with the DB restored, or says exactly what is left. See README.md.
+source "$(dirname "$0")/lib.sh"
+
+REPO=""; DRY=0; ONLY_TARGETS=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --period) PERIOD="$2"; shift 2 ;;
+    --targets) ONLY_TARGETS="$2"; shift 2 ;;
+    --dry-run) DRY=1; shift ;;
+    -*) die usage "unknown option $1" ;;
+    *) REPO="$1"; shift ;;
+  esac
+done
+[ -n "$REPO" ] && [ -e "$REPO/.git" ] || die usage "maint-update <repo-path> [--period YYYY-MM] [--targets a,b] [--dry-run]"
+REPO="$(cd "$REPO" && pwd)"
+[[ "$PERIOD" =~ ^[0-9]{4}-[0-9]{2}$ ]] || die usage "bad period '$PERIOD'"
+
+NAME=$(basename "$REPO")
+RUN_DIR="$STATE_ROOT/$PERIOD"; mkdir -p "$RUN_DIR"
+LOG="$RUN_DIR/$NAME.log"; STATE="$RUN_DIR/$NAME.json"; VERR="$RUN_DIR/$NAME.verify.err"
+echo "=== $(date '+%F %T') maint-update $NAME dry=$DRY" >>"$LOG"
+
+# Never updated by the script. wp-rocket: licence not renewed, being replaced.
+ALWAYS_EXCLUDE="wp-rocket"
+
+RESULTS=(); FAILED=0; PHASE="preflight"; SNAP=""; DB_DIRTY=0
+FLAG=""; FLAG_MADE=0; CUR_T=""
+
+write_state(){
+  local rows=""; [ ${#RESULTS[@]} -gt 0 ] && rows=$(printf '%s\n' "${RESULTS[@]}")
+  printf '%s' "$rows" | jq -R 'select(length>0) | split("|") | {target:.[0], status:.[1], detail:(.[2:]|join("|"))}' \
+    | jq -s --arg repo "$REPO" --arg period "$PERIOD" --arg snap "$SNAP" --arg phase "$PHASE" \
+        --argjson db_dirty "$DB_DIRTY" --arg branch "$(G branch --show-current 2>/dev/null)" --arg at "$(date -u +%FT%TZ)" \
+        '{repo:$repo, period:$period, db_snapshot:$snap, db_needs_restore:($db_dirty==1), last_phase:$phase, on_branch:$branch, finished_at:$at, targets:.}' \
+    >"$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+}
+
+# Interrupted: keep everything as it is for inspection, say where it stopped.
+on_signal(){
+  say interrupted STOP "phase=$PHASE target=${CUR_T:-none} branch=$(G branch --show-current 2>/dev/null); DB snapshot ${SNAP:-none}$([ $DB_DIRTY = 1 ] && echo ' NOT restored'); flag ${FLAG:-none} made=$FLAG_MADE"
+  RESULTS+=("${CUR_T:-run}|INTERRUPTED|phase $PHASE"); write_state; STATE_WRITTEN=1; unlock_repo; exit 130
+}
+
+lock_repo
+STATE_WRITTEN=0
+trap '[ $STATE_WRITTEN = 1 ] || { RESULTS+=("${CUR_T:-run}|ABORTED|phase $PHASE, flag ${FLAG:-none} made=$FLAG_MADE, db_needs_restore=$DB_DIRTY"); write_state; }; unlock_repo' EXIT
+trap on_signal INT TERM HUP
+
+ddev_running || die preflight "DDEV project not running: start it with 'ddev start' (do not ddev-wake a DB you want to keep)"
+sync_fs || exit 1
+rc=0; repo_is_clean || rc=$?
+[ $rc -eq 0 ] || die preflight "$(clean_reason $rc)"
+[ -n "$(default_branch)" ] || die preflight "no origin/HEAD: run 'git remote set-head origin -a'"
+[ -f "$REPO/wp-includes/version.php" ] || die preflight "not a classic WordPress layout (core not at repo root)"
+
+ORIG=$(G branch --show-current)
+[ -n "$ORIG" ] || die preflight "detached HEAD: check out a branch first"
+TARGETS=$(targets)
+if [ -n "$ONLY_TARGETS" ]; then
+  TARGETS=$(printf '%s\n' "$TARGETS" | grep -Fx -f <(tr ',' '\n' <<<"$ONLY_TARGETS") || true)
+fi
+[ -n "$TARGETS" ] || die preflight "no target branches"
+UNMANAGED=$(unmanaged_plugins)
+say preflight OK "clean; targets: $(echo $TARGETS | tr ' ' ','); back to $ORIG after${UNMANAGED:+; not in git (skipped): $UNMANAGED}"
+
+# Bootstrapping WordPress can migrate the DB (FluentCart does it on init).
+# Snapshot first and prove the file is there and readable.
+PHASE="snapshot"
+SNAP="maint-$PERIOD-$(date +%d%H%M%S)-$$"
+ls "$REPO/.ddev/db_snapshots/$SNAP"* >/dev/null 2>&1 && die snapshot "snapshot name $SNAP already exists"
+SNAPRC=0; SNAPOUT=$(cd "$REPO" && ddev snapshot --name "$SNAP" </dev/null 2>&1) || SNAPRC=$?; echo "$SNAPOUT" >>"$LOG"
+SNAPN=$(ls "$REPO/.ddev/db_snapshots/$SNAP"* 2>/dev/null | wc -l | tr -d ' ')
+SNAPFILE=$(ls "$REPO/.ddev/db_snapshots/$SNAP"* 2>/dev/null | head -1)
+if [ $SNAPRC -ne 0 ] || [ "$SNAPN" != "1" ] || [ ! -s "$SNAPFILE" ] || grep -qiE 'fail|error|warn' <<<"$SNAPOUT"; then
+  die snapshot "snapshot $SNAP missing, empty or reported a problem (see log)"
+fi
+case "$SNAPFILE" in
+  *.zst) zstd -tq "$SNAPFILE" 2>>"$LOG" || die snapshot "snapshot $SNAPFILE fails integrity test" ;;
+  *.gz)  gzip -t "$SNAPFILE" 2>>"$LOG" || die snapshot "snapshot $SNAPFILE fails integrity test" ;;
+esac
+say snapshot OK "$SNAP ($(du -h "$SNAPFILE" | cut -f1))"
+
+db_restore(){
+  PHASE="db_restore"
+  if (cd "$REPO" && ddev snapshot restore "$SNAP" </dev/null >>"$LOG" 2>&1); then
+    DB_DIRTY=0
+    # The restore can regenerate DDEV's own settings files (a tracked,
+    # #ddev-generated wp-config.php): put tracked runtime files back.
+    sync_fs && restore_runtime && sync_fs && return 0
+    say restore FAIL "DB restored but runtime files could not be put back"; return 1
+  fi
+  say restore FAIL "ddev snapshot restore $SNAP failed: restore it by hand"; return 1
+}
+
+# Remove a targets.conf flag file only if this run created it.
+drop_flag(){
+  [ "$FLAG_MADE" = 1 ] || return 0
+  rm -f "$REPO/$FLAG" || { say flag FAIL "could not remove $FLAG"; return 1; }
+  FLAG_MADE=0; sync_fs
+}
+
+pass(){
+  local T="$1" UB base_sha st
+  CUR_T="$T"; UB=$(update_branch_for "$T"); FLAG=$(conf_flag "$T")
+  PHASE="$T:prepare"
+
+  if G show-ref -q --verify "refs/heads/$UB"; then
+    if G merge-base --is-ancestor "$UB" "$T"; then G branch -q -d "$UB" >>"$LOG" 2>&1 || return 1
+    else say "$T" FAIL "branch $UB exists and is not in $T: inspect it, then delete it"; return 1; fi
+  fi
+  tree_status st || return 1
+  [ -z "$st" ] || { say "$T" FAIL "tree not clean before switching to $T"; return 1; }
+  G switch -q "$T" >>"$LOG" 2>&1 || { say "$T" FAIL "cannot switch to $T"; return 1; }
+  gcap base_sha rev-parse --short HEAD || return 1
+  if [ -n "$FLAG" ] && [ ! -e "$REPO/$FLAG" ]; then touch "$REPO/$FLAG" || return 1; FLAG_MADE=1; fi
+  sync_fs || return 1
+
+  # Baseline on the target's own code and DB. From here the DB may change.
+  PHASE="$T:baseline"; DB_DIRTY=1
+  local dbg0 base_name stylesheet base_probe base_core_ok=1
+  dbg0=$(debuglog_size)
+  wval base_name option get blogname || { say "$T" FAIL "WordPress does not bootstrap on $T (see log)"; return 1; }
+  wval stylesheet option get stylesheet || return 1
+  [ -d "$REPO/wp-content/themes/$stylesheet" ] || { say "$T" FAIL "active theme '$stylesheet' is not on $T: the DB does not belong to this branch (targets.conf flag?)"; return 1; }
+  base_probe=$(home_probe)
+  [ "$base_probe" = "200 1 1" ] || { say "$T" FAIL "local homepage not healthy before updating ($base_probe = code, local-host, html): fix the local site first"; return 1; }
+  W core verify-checksums >>"$LOG" || base_core_ok=0
+
+  # Plugin checksums. JSON rows = files that differ from wordpress.org:
+  # edited by hand, never overwritten. A 404 for the checksum file means the
+  # plugin or that version is not on wordpress.org (premium, custom):
+  # unverifiable. Any other failure stops the pass.
+  local vout vrc=0 flagged unverified badfetch vlast
+  vout=$(cd "$REPO" && ddev wp plugin verify-checksums --all --format=json </dev/null 2>"$VERR") || vrc=$?
+  cat "$VERR" >>"$LOG"
+  vlast=$(awk 'NF{l=$0} END{print l}' <<<"$vout")
+  if jq -e 'type=="array"' >/dev/null 2>&1 <<<"$vlast"; then
+    flagged=$(jq -r '[.[].plugin_name]|unique|join(",")' <<<"$vlast")
+  elif [ $vrc -eq 0 ] && grep -q '^Success:' <<<"$vout"; then
+    flagged=""
+  else
+    say "$T" FAIL "plugin checksum check failed without a usable report (exit $vrc, see log)"; return 1
+  fi
+  badfetch=$(grep -E "Couldn't fetch response" "$VERR" | grep -v 'HTTP code 404' || true)
+  [ -n "$badfetch" ] && { say "$T" FAIL "checksum download failed (network?): $(echo "$badfetch" | head -2 | tr '\n' ' ')"; return 1; }
+  unverified=$(grep -oE 'of plugin [a-z0-9._-]+' "$VERR" | awk '{print $3}' | sort -u | paste -sd, -)
+  local excl; excl=$(printf '%s\n' "$ALWAYS_EXCLUDE" "$flagged" "$UNMANAGED" | tr ',' '\n' | grep -v '^$' | sort -u | paste -sd, -)
+
+  sync_fs || return 1
+  RESTORED=""; restore_runtime || return 1; sync_fs || return 1
+  tree_status st || return 1
+  [ -z "$st" ] || { say "$T" FAIL "bootstrap changed tracked files outside the runtime list: $(head -5 <<<"$st" | tr '\n' ';')"; return 2; }
+
+  local pc pt tc
+  wjson pc core check-update --format=json || return 1
+  wjson pt plugin list --update=available --fields=name,version,update_version --format=json || return 1
+  wjson tc theme list --update=available --fields=name,version,update_version --format=json || return 1
+
+  if [ $DRY -eq 1 ]; then
+    say "$T" PLAN "core=$(jq -r 'map(.version)|join(",")' <<<"$pc") plugins=$(jq -r 'map(.name+" "+.version+"->"+.update_version)|join("; ")' <<<"$pt") themes=$(jq -r 'map(.name+" "+.version+"->"+.update_version)|join("; ")' <<<"$tc") | excluded=$excl | unverifiable=$unverified"
+    RESULTS+=("$T|PLAN|dry-run"); drop_flag; return 0
+  fi
+
+  PHASE="$T:update"
+  G switch -q -c "$UB" "$T" >>"$LOG" 2>&1 || { say "$T" FAIL "cannot create $UB"; return 1; }
+  local commits=() notes=() PKG_RE=""
+
+  # Core
+  if [ "$(jq 'length' <<<"$pc")" != "0" ]; then
+    if [ $base_core_ok -eq 1 ]; then
+      local cv0 cv1; wval cv0 core version || return 1
+      W core update >>"$LOG" || { sync_fs; say "$T" FAIL "core update failed (see log); left on $UB"; return 2; }
+      sync_fs || return 1; wval cv1 core version || return 2
+      commit_allowlisted '^(wp-admin/|wp-includes/|index\.php$|xmlrpc\.php$|wp-[^/]*\.php$|license\.txt$|readme\.html$)' \
+        "Update WordPress core to $cv1" || { say "$T" FAIL "core commit failed"; return 2; }
+      [ -n "$COMMIT" ] && commits+=("core $cv0->$cv1 ($COMMIT)") && notes+=("DB upgrade pending: runs on first admin load")
+    else
+      notes+=("core checksums fail on $T: core NOT updated (edited by hand?)")
+    fi
+  fi
+
+  # Plugins, one at a time. A refusal that leaves the plugin folder untouched
+  # (licence bound to the live domain, vendor server down) becomes MANUAL. A
+  # refusal that left the folder half-written is put back from git: that
+  # folder was clean when the run started, so its changes are ours.
+  local before after changed missing deact slug urc refused=""
+  wjson before plugin list --fields=name,version,status --format=json || return 1
+  while read -r slug; do
+    [ -n "$slug" ] || continue
+    urc=0; W plugin update "$slug" >>"$LOG" || urc=$?
+    sync_fs || return 1
+    if [ $urc -ne 0 ]; then
+      local pdir="wp-content/plugins/$slug" pst
+      gcap pst status --porcelain --untracked-files=all -- "$pdir" || return 2
+      if [ -n "$pst" ]; then
+        GIT_LITERAL_PATHSPECS=1 G restore --source=HEAD --staged --worktree -- "$pdir" >>"$LOG" 2>&1 || true
+        GIT_LITERAL_PATHSPECS=1 G clean -fdq -- "$pdir" >>"$LOG" 2>&1 || true
+        sync_fs || return 1
+        gcap pst status --porcelain --untracked-files=all -- "$pdir" || return 2
+        [ -z "$pst" ] || { say "$T" FAIL "$slug failed mid-update and its folder could not be restored; left on $UB"; return 2; }
+        refused="$refused,$slug (failed mid-update, folder restored)"
+      else
+        refused="$refused,$slug"
+      fi
+    fi
+  done < <(jq -r '.[].name' <<<"$pt" | grep -vxF -f <(tr ',' '\n' <<<"$excl") || true)
+  refused="${refused#,}"
+  wjson after plugin list --fields=name,version,status --format=json || return 2
+  missing=$(jq -rn --argjson b "$before" --argjson a "$after" '[$b[].name] - [$a[].name] | join(",")') || return 2
+  [ -n "$missing" ] && { say "$T" FAIL "plugins vanished during update: $missing; left on $UB"; return 2; }
+  deact=$(jq -rn --argjson b "$before" --argjson a "$after" \
+    '[$b[] | select(.status=="active") | .name as $n | select(([$a[]|select(.name==$n)|.status][0]) != "active") | .name] | join(",")') || return 2
+  [ -n "$deact" ] && { say "$T" FAIL "plugins deactivated during update: $deact; left on $UB"; return 2; }
+  changed=$(jq -cn --argjson b "$before" --argjson a "$after" \
+    '[$a[] as $x | ($b[] | select(.name==$x.name)) as $y | select($y.version!=$x.version) | {name:$x.name, from:$y.version, to:$x.version}]') || return 2
+  if [ "$(jq 'length' <<<"$changed")" != "0" ]; then
+    PKG_RE="^wp-content/plugins/($(jq -r '.[].name' <<<"$changed" | re_alt))/"
+    commit_packages plugins "Update plugins: $(jq -r 'map(.name)|join(", ")' <<<"$changed")" "$(jq -r '.[].name' <<<"$changed")" \
+      || { say "$T" FAIL "plugin commit failed"; return 2; }
+    [ -n "$COMMIT" ] && commits+=("plugins $(jq -r 'map(.name+" "+.from+"->"+.to)|join(", ")' <<<"$changed") ($COMMIT)")
+  fi
+  local still; wjson still plugin list --update=available --fields=name,version,update_version --format=json || return 2
+
+  # Themes
+  wjson before theme list --fields=name,version --format=json || return 2
+  W theme update --all >>"$LOG" || { sync_fs; say "$T" FAIL "wp theme update reported a failure (see log); left on $UB"; return 2; }
+  sync_fs || return 1
+  wjson after theme list --fields=name,version --format=json || return 2
+  changed=$(jq -cn --argjson b "$before" --argjson a "$after" \
+    '[$a[] as $x | ($b[] | select(.name==$x.name)) as $y | select($y.version!=$x.version) | {name:$x.name, from:$y.version, to:$x.version}]') || return 2
+  if [ "$(jq 'length' <<<"$changed")" != "0" ]; then
+    PKG_RE="${PKG_RE:+$PKG_RE|}^wp-content/themes/($(jq -r '.[].name' <<<"$changed" | re_alt))/"
+    commit_packages themes "Update themes: $(jq -r 'map(.name)|join(", ")' <<<"$changed")" "$(jq -r '.[].name' <<<"$changed")" \
+      || { say "$T" FAIL "theme commit failed"; return 2; }
+    [ -n "$COMMIT" ] && commits+=("themes $(jq -r 'map(.name+" "+.from+"->"+.to)|join(", ")' <<<"$changed") ($COMMIT)")
+  fi
+
+  # Translations: selected by file, not by version. WPML runtime files under
+  # languages/wpml are not translations and fail the leftover check.
+  W language core update >>"$LOG" || { sync_fs; say "$T" FAIL "language core update failed (see log); left on $UB"; return 2; }
+  W language plugin update --all >>"$LOG" || { sync_fs; say "$T" FAIL "language plugin update failed (see log); left on $UB"; return 2; }
+  W language theme update --all >>"$LOG" || { sync_fs; say "$T" FAIL "language theme update failed (see log); left on $UB"; return 2; }
+  sync_fs || return 1
+  commit_allowlisted '^wp-content/languages/(((plugins|themes)/.+)|[^/]+)\.(po|mo|json|l10n\.php)$' "Update translations" \
+    || { say "$T" FAIL "translation commit failed"; return 2; }
+  [ -n "$COMMIT" ] && commits+=("translations ($COMMIT)")
+
+  # Run-owned leftovers: maintenance flag and upgrade temp files.
+  sync_fs || return 1
+  [ -f "$REPO/.maintenance" ] && { rm -f "$REPO/.maintenance"; notes+=("removed stale .maintenance"); }
+  local up; gcap up ls-files --others --exclude-standard -- wp-content/upgrade/ wp-content/upgrade-temp-backup/ || return 2
+  if [ -n "$up" ]; then
+    (cd "$REPO" && printf '%s\n' "$up" | while read -r f; do rm -f -- "$f" || exit 1; done) || return 2
+    notes+=("removed upgrade temp files")
+  fi
+  restore_runtime || return 2; sync_fs || return 1
+  # Files of an updated package that reached the host after its commit
+  # (Mutagen, case-variant folders like WPML's Rest/REST): complete the package.
+  if [ -n "${PKG_RE:-}" ]; then
+    commit_allowlisted "$PKG_RE" "Update plugins and themes: add package files that synced after the first commit" || return 2
+    [ -n "$COMMIT" ] && notes+=("package completion commit $COMMIT (late-synced files)")
+  fi
+  tree_status st || return 2
+  [ -z "$st" ] || { say "$T" FAIL "changes outside the allowlist, left on $UB: $(head -10 <<<"$st" | tr '\n' ';' | cut -c1-400)"; return 2; }
+
+  # Verify on the updated code.
+  PHASE="$T:verify"
+  local name_after probe_after core_ok_after=1 fat
+  wval name_after option get blogname || name_after="(wp-cli failed)"
+  probe_after=$(home_probe)
+  W core verify-checksums >>"$LOG" || core_ok_after=0
+  fat=$(fatals_since "$dbg0")
+  [ "$fat" = "n/a" ] && notes+=("no debug.log on this site: fatal check limited to wp-cli and homepage")
+  [ "$fat" = "rotated" ] && notes+=("debug.log shrank during the run: fatal check not possible")
+  if [ "$name_after" != "$base_name" ] || [ "$probe_after" != "200 1 1" ] \
+     || { [ $base_core_ok -eq 1 ] && [ $core_ok_after -eq 0 ]; } \
+     || { [ "$fat" != "n/a" ] && [ "$fat" != "rotated" ] && [ "$fat" != "0" ]; }; then
+    sync_fs; restore_runtime
+    say "$T" FAIL "verification red (blogname '$base_name'->'$name_after', home '$probe_after', core checksums $base_core_ok->$core_ok_after, new PHP fatals $fat); $UB kept"
+    return 1
+  fi
+  sync_fs || return 1; restore_runtime || return 2; sync_fs || return 1
+  tree_status st || return 2
+  [ -z "$st" ] || { say "$T" FAIL "verification changed tracked files, left on $UB: $(head -10 <<<"$st" | tr '\n' ';' | cut -c1-400)"; return 2; }
+
+  # Integrate.
+  PHASE="$T:integrate"
+  G switch -q "$T" >>"$LOG" 2>&1 && G merge -q --ff-only "$UB" >>"$LOG" 2>&1 \
+    || { say "$T" FAIL "fast-forward of $T failed; $UB kept"; return 1; }
+  G branch -q -d "$UB" >>"$LOG" 2>&1 || notes+=("could not delete $UB")
+  drop_flag || return 1
+
+  local summary="$base_sha->$(G rev-parse --short HEAD)"
+  [ ${#commits[@]} -gt 0 ] && summary="$summary; $(printf '%s; ' "${commits[@]}")" || summary="$summary; nothing to update"
+  local manual; manual=$(jq -r 'map(.name+" "+.version+"->"+.update_version)|join(", ")' <<<"$still")
+  [ -n "$manual" ] && summary="$summary MANUAL (still offered): $manual;"
+  [ -n "$refused" ] && summary="$summary REFUSED by updater (not updated): $refused;"
+  [ -n "$flagged" ] && summary="$summary EDITED BY HAND, skipped: $flagged;"
+  [ -n "$unverified" ] && summary="$summary no wp.org checksums (premium/custom; not offered does not prove current): $unverified;"
+  [ ${#notes[@]} -gt 0 ] && summary="$summary NOTES: $(printf '%s; ' "${notes[@]}")"
+  say "$T" OK "$summary"
+  RESULTS+=("$T|OK|$summary")
+}
+
+STOPPED=0
+while read -r T; do
+  [ -n "$T" ] || continue
+  pass "$T"; prc=$?
+  if [ $prc -ne 0 ]; then
+    FAILED=1; RESULTS+=("$T|FAIL|phase $PHASE, see log $LOG")
+    tree_status st_now || st_now="?"
+    if [ $prc -eq 2 ] || [ -n "$st_now" ]; then
+      say end STOP "worktree left as is on $(G branch --show-current) for inspection; DB snapshot $SNAP NOT restored (ddev snapshot restore $SNAP)"
+      STOPPED=1; break
+    fi
+    # Clean tree after a failure: restore the DB and stop the repo anyway.
+    drop_flag; db_restore
+    say end STOP "stopped after the failure on $T; later targets not run"
+    STOPPED=1; break
+  fi
+  db_restore || { FAILED=1; STOPPED=1; break; }
+done <<<"$TARGETS"
+
+if [ $STOPPED -eq 0 ]; then
+  PHASE="finish"
+  if ! G switch -q "$ORIG" >>"$LOG" 2>&1; then FAILED=1; say end FAIL "could not switch back to $ORIG"
+  elif ! sync_fs; then FAILED=1
+  else
+    tree_status st_end || st_end="?"
+    if [ -n "$st_end" ]; then FAILED=1; say end FAIL "tree not clean at the end: $(head -5 <<<"$st_end" | tr '\n' ';')"
+    else say end "$([ $FAILED -eq 0 ] && echo OK || echo PARTIAL)" "on $ORIG, tree clean, DB restored to $SNAP"
+    fi
+  fi
+elif [ $DB_DIRTY -eq 0 ] && [ -z "$(G status --porcelain --untracked-files=all 2>/dev/null)" ]; then
+  G switch -q "$ORIG" >>"$LOG" 2>&1 && sync_fs && say end INFO "back on $ORIG, DB restored to $SNAP"
+fi
+
+# A dry-run snapshot is deleted only when the DB was restored and nothing failed.
+if [ $DRY -eq 1 ] && [ $FAILED -eq 0 ] && [ $DB_DIRTY -eq 0 ]; then
+  (cd "$REPO" && ddev snapshot --cleanup --name "$SNAP" -y </dev/null >>"$LOG" 2>&1) || true
+fi
+if write_state; then STATE_WRITTEN=1; else say state FAIL "could not write $STATE"; STATE_WRITTEN=1; exit 1; fi
+exit $FAILED

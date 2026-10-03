@@ -6,6 +6,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Task;
 use App\Services\I18NextTranslationsLoader;
+use App\Support\HostExec;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Middleware;
@@ -54,6 +55,7 @@ final class HandleInertiaRequests extends Middleware
             // browser and server share a machine, the server's hostname on
             // LAN/remote self-hosts (TERMINAL_SESSION_HOST).
             'terminal_session_host' => fn (): string => (string) config('terminal.session_host'),
+            'host_exec' => fn (): bool => HostExec::enabled(),
             'translations' => ! $request->inertia() ? [
                 $locale => [
                     'translation' => $this->translationsLoader->loadTranslations($locale),

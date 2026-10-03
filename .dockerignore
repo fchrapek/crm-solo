@@ -1,5 +1,6 @@
 **/*.log
 **/*.md
+!resources/prompts/*.md
 **/*.php~
 **/*.dist.php
 **/*.dist
@@ -43,3 +44,20 @@ _ide_helper.php
 .phpunit.database.checksum
 rr
 .rr.yaml
+
+# Local and private material that must never ride along in an image. The
+# Dockerfile recreates the storage folders it needs, empty.
+.claude/
+.agents/
+scripts/prod/sites/
+.db-backups/
+storage/backups/
+storage/app/private/
+storage/app/public/
+storage/framework/sessions/
+storage/logs/
+storage/pail/
+storage/*.key
+bootstrap/cache/*.php
+auth.json
+rzis-*.csv

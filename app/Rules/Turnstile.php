@@ -27,6 +27,14 @@ final class Turnstile implements ValidationRule
     /** @var bool Run even when the attribute is absent from the request. */
     public $implicit = true;
 
+    /** The widget's site key, only when the backend will verify the token. */
+    public static function siteKey(): ?string
+    {
+        return config('services.turnstile.secret')
+            ? (string) config('services.turnstile.site_key')
+            : null;
+    }
+
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         $secret = (string) config('services.turnstile.secret');

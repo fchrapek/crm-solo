@@ -95,7 +95,6 @@ return [
         'ai-priority',
         'trello-sync',
         'trello-onboarding',
-        'clockify-sync',
         'infakt-sync',
         'integrations-page',
     ],
@@ -213,7 +212,6 @@ Route::middleware(['auth', 'feature:integrations-page'])->group(function () {
 | AI priority estimation | ❌ | ✅ |
 | Trello sync | ❌ | ✅ |
 | Trello onboarding | ❌ | ✅ |
-| Clockify sync | ❌ | ✅ |
 | Infakt sync | ❌ | ✅ |
 | Integrations page | ❌ | ✅ |
 

@@ -10,6 +10,7 @@ use App\Exceptions\Terminal\WorktreeMissingException;
 use App\Models\Task;
 use App\Models\TaskPreview;
 use App\Services\Concerns\ManagesTtydProcess;
+use App\Support\HostExec;
 use RuntimeException;
 
 final class ProjectPreviewLauncher implements ProjectPreviewLauncherInterface
@@ -103,6 +104,10 @@ final class ProjectPreviewLauncher implements ProjectPreviewLauncherInterface
 
     public function tmuxSessionAlive(Task $task): bool
     {
+        if (! HostExec::enabled()) {
+            return false;
+        }
+
         $tmux = $this->locateTmux(throwIfMissing: false);
         if ($tmux === null) {
             return false;

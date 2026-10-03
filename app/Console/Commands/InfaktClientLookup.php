@@ -4,20 +4,30 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\Integration;
 use App\Services\Integrations\InfaktService;
 use Illuminate\Console\Command;
 
+#[AccountScope(AccountScope::ACTING)]
 final class InfaktClientLookup extends Command
 {
-    protected $signature = 'infakt:client {ref : Infakt client numeric id or UUID} {--account=1}';
+    use AgentConsoleOutput;
+
+    protected $signature = 'infakt:client {ref : Infakt client numeric id or UUID} {--account= : Account ID; must be the acting account}';
 
     protected $description = 'Fetch a single Infakt client (by numeric id or UUID) — prints its id/name/NIP.';
 
     public function handle(): int
     {
+        $accountId = $this->actingAccountId();
+        if ($accountId === null) {
+            return self::FAILURE;
+        }
+
         $integration = Integration::where('provider', 'infakt')
-            ->where('account_id', (int) $this->option('account'))
+            ->where('account_id', $accountId)
             ->where('is_enabled', true)
             ->whereNotNull('api_key')
             ->first();

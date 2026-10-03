@@ -1,14 +1,10 @@
 import { Head, useForm } from '@inertiajs/react';
-import { LoaderCircle } from 'lucide-react';
-import { FormEvent, useEffect } from 'react';
+import { FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import InputError from '@/components/input-error';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { usePageActions } from '@/contexts/page-context';
+import { Wordmark } from '@/components/solo/logos';
+import { SoloButton } from '@/components/solo/primitives';
+import { resetTurnstile, TurnstileWidget } from '@/components/turnstile-widget';
 import login from '@/routes/login';
 
 import styles from './login.module.css';
@@ -28,21 +24,8 @@ interface LoginProps {
     turnstileSiteKey?: string | null;
 }
 
-declare global {
-    interface Window {
-        turnstile?: { reset: (widget?: string | HTMLElement) => void };
-        onTurnstileToken?: (token: string) => void;
-        onTurnstileExpired?: () => void;
-    }
-}
-
 export default function Login({ status, demo, turnstileSiteKey }: LoginProps) {
-    const { t } = useTranslation();
-    const { setAuthInfo } = usePageActions();
-
-    useEffect(() => {
-        setAuthInfo(t('Log in to your account'), t('Enter your email and password below to log in'));
-    }, [setAuthInfo, t]);
+    const { t, i18n } = useTranslation();
 
     const { data, setData, submit, processing, errors, reset } = useForm<Required<LoginForm>>({
         email: demo?.email ?? '',
@@ -51,119 +34,91 @@ export default function Login({ status, demo, turnstileSiteKey }: LoginProps) {
         'cf-turnstile-response': '',
     });
 
-    // Turnstile: implicit rendering picks up the .cf-turnstile div once the
-    // api.js script loads; the data-callback feeds the token into the Inertia
-    // form payload (useForm submits its state, never the DOM form).
-    useEffect(() => {
-        if (!turnstileSiteKey) return;
-
-        window.onTurnstileToken = (token: string) => setData('cf-turnstile-response', token);
-        window.onTurnstileExpired = () => setData('cf-turnstile-response', '');
-
-        if (!document.getElementById('cf-turnstile-script')) {
-            const script = document.createElement('script');
-            script.id = 'cf-turnstile-script';
-            script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-            script.async = true;
-            script.defer = true;
-            document.head.appendChild(script);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [turnstileSiteKey]);
+    const setTurnstileToken = (token: string) => setData('cf-turnstile-response', token);
 
     const onSubmit = (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
 
         submit(login.store(), {
             onFinish: () => reset('password'),
-            // Tokens are single-use: a failed login keeps the page (no
-            // navigation), so the widget must issue a fresh token before the
-            // retry or Cloudflare rejects it as timeout-or-duplicate.
-            onError: () => {
-                window.turnstile?.reset();
-                setData('cf-turnstile-response', '');
-            },
+            // A failed login keeps the page, so the retry needs a fresh token.
+            onError: () => resetTurnstile(setTurnstileToken),
         });
     };
 
+    const today = new Intl.DateTimeFormat(i18n.language, { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
+
     return (
-        <>
+        <div className={styles.page} data-day="timer">
             <Head title={t('Login')} />
-
-            {demo && (
-                <div className={styles.demoHint}>
-                    <strong>{t('Public demo')}</strong>
-                    <span>{t('demo_login_hint')}</span>
+            <main className={styles.frame}>
+                <div className={styles.brand}>
+                    <p className={styles.eyebrow}>{today.charAt(0).toUpperCase() + today.slice(1)}</p>
+                    <Wordmark className={styles.wordmark} />
                 </div>
-            )}
 
-            <form className={styles.form} onSubmit={onSubmit}>
-                <div className={styles.grid}>
-                    <div className={styles.fieldGrid}>
-                        <Label htmlFor="email">{t('Email')}</Label>
-                        <Input
+                <form className={styles.form} onSubmit={onSubmit}>
+                    <h1 className={styles.title}>{t('Log in')}</h1>
+
+                    {demo && (
+                        <div className={styles.demoHint}>
+                            <strong>{t('Public demo')}</strong>
+                            <span>{t('demo_login_hint')}</span>
+                        </div>
+                    )}
+
+                    <label className={styles.field} htmlFor="email">
+                        <span>{t('Email')}</span>
+                        <input
                             id="email"
                             type="email"
                             required
                             autoFocus
-                            tabIndex={1}
                             autoComplete="email"
                             value={data.email}
                             onChange={(e) => setData('email', e.target.value)}
                         />
-                        <InputError message={errors.email} />
-                    </div>
+                        {errors.email && <span className={styles.error}>{errors.email}</span>}
+                    </label>
 
-                    <div className={styles.fieldGrid}>
-                        <div className={styles.labelRow}>
-                            <Label htmlFor="password">{t('Password')}</Label>
-                        </div>
-                        <Input
+                    <label className={styles.field} htmlFor="password">
+                        <span>{t('Password')}</span>
+                        <input
                             id="password"
                             type="password"
                             required
-                            tabIndex={2}
                             autoComplete="current-password"
                             value={data.password}
                             onChange={(e) => setData('password', e.target.value)}
-                            placeholder="Password"
                         />
-                        <InputError message={errors.password} />
-                    </div>
+                        {errors.password && <span className={styles.error}>{errors.password}</span>}
+                    </label>
 
-                    <div className={styles.checkboxRow}>
-                        <Checkbox
+                    <label className={styles.remember} htmlFor="remember">
+                        <input
                             id="remember"
                             name="remember"
-                            tabIndex={3}
+                            type="checkbox"
                             checked={data.remember}
-                            onCheckedChange={(checked) => setData('remember', Boolean(checked))}
+                            onChange={(e) => setData('remember', e.target.checked)}
                         />
-                        <Label htmlFor="remember">{t('Remember me')}</Label>
-                    </div>
+                        <span>{t('Remember me')}</span>
+                    </label>
 
                     {turnstileSiteKey && (
-                        <div className={styles.fieldGrid}>
-                            <div
-                                className="cf-turnstile"
-                                data-sitekey={turnstileSiteKey}
-                                data-action="turnstile-spin-v2"
-                                data-callback="onTurnstileToken"
-                                data-expired-callback="onTurnstileExpired"
-                                data-error-callback="onTurnstileExpired"
-                            />
-                            <InputError message={errors['cf-turnstile-response']} />
+                        <div className={styles.turnstile}>
+                            <TurnstileWidget siteKey={turnstileSiteKey} action="turnstile-spin-v2" onToken={setTurnstileToken} />
+                            {errors['cf-turnstile-response'] && <span className={styles.error}>{errors['cf-turnstile-response']}</span>}
                         </div>
                     )}
 
-                    <Button type="submit" className={styles.submitButton} tabIndex={4} disabled={processing}>
-                        {processing && <LoaderCircle className={styles.spinner} />}
-                        {t('Log in')}
-                    </Button>
-                </div>
-            </form>
+                    <SoloButton type="submit" size="lg" block disabled={processing}>
+                        {processing ? t('Logging in') : t('Log in')} →
+                    </SoloButton>
 
-            {status && <div className={styles.statusMessage}>{status}</div>}
-        </>
+                    {status && <p className={styles.status}>{status}</p>}
+                </form>
+            </main>
+        </div>
     );
 }

@@ -9,7 +9,7 @@ Copy-paste recipes for the ad-hoc DB work done from a side terminal — logging 
 
 ## Fastest: `php artisan time:log` (agent-safe, mirrors the UI)
 
-For **logging time, prefer this command** over raw tinker — it derives account/project/client, keeps `end_time` + `duration_minutes` consistent, and pushes to Clockify best-effort, exactly like `TimeEntriesController::store()`. And it runs headlessly (unlike `tinker --execute`, which hangs here).
+For **logging time, prefer this command** over raw tinker — it derives account/project/client, and keeps `end_time` + `duration_minutes` consistent, exactly like `TimeEntriesController::store()`. And it runs headlessly (unlike `tinker --execute`, which hangs here).
 
 ```bash
 # 90 min against a task (account/project/client derived from it)
@@ -22,8 +22,8 @@ php artisan time:log 60 --client=Acme --desc="Ad-hoc DB work"
 # a project, no task
 php artisan time:log 45 --project="Acme site"
 
-# backdated (start = end − minutes), non-billable, skip Clockify push
-php artisan time:log 120 --task=912 --end="2026-07-13 17:00" --not-billable --no-push
+# backdated (start = end − minutes), non-billable
+php artisan time:log 120 --task=912 --end="2026-07-13 17:00" --not-billable
 ```
 
 ### `--end` is LOCAL time, storage is UTC
@@ -37,14 +37,22 @@ Two things to keep straight when writing raw entries yourself:
 
 The browser is unaffected — the UI sends absolute ISO instants (`localInputToIso()`) and renders with `toLocaleString()`, so it was always correct.
 
-Target with **exactly one** of `--task` / `--client` / `--project`. Ambiguous names error with the matches listed. `source` is always `manual`; `billable` defaults true; Clockify push is best-effort (skip with `--no-push`). Full flags: `php artisan time:log --help`. For anything the command doesn't cover (edits, adjustments, lookups), drop to the tinker recipes below.
+### Days and months are local too
+
+Every human boundary (today, overdue, this month's hours, a report's month, the default period of a close, a draft invoice or `reports:generate`) is the display timezone's calendar, computed in `App\Support\LocalCalendar` and queried as UTC instants. So with `Europe/Warsaw`, work logged at 00:30 on the 1st belongs to the new month's report, and at 00:30 on the 1st the month just ended is the previous one. When querying by hand, bound a Warsaw month as `[first day 00:00 local, last day 23:59:59 local]` converted to UTC (`LocalCalendar::monthRange('2026-11')`), not `'2026-11-01'..'2026-11-30'`. A month given as text (`--period`, the month-close picker) is read only by `LocalCalendar::monthFrom()`: exactly `YYYY-MM` with month 01 to 12, built with the reset modifier so no field comes from the clock (`Carbon::createFromFormat('Y-m', ...)` takes today's day and turns September into October on the 31st). Anything else is refused before anything is written or sent.
+
+Overdue is one server rule, `Task::isOverdue()`, sent to every page as `is_overdue`: a task is overdue once its due day has ended locally. A CRM due date is a calendar date stored as its midnight and read as written; a Trello card's due is an instant, read in the display timezone (`Task::dueDay()`).
+
+An entry belongs wholly to the day (and month) it **started** on: a session from 23:00 to 01:00 local counts two hours on its start day, and an entry started on the 31st and running past midnight counts in that month. Entries are never split at midnight.
+
+Target with **exactly one** of `--task` / `--client` / `--project`. Ambiguous names error with the matches listed. `source` is always `manual`; `billable` defaults true. Full flags: `php artisan time:log --help`. For anything the command doesn't cover (edits, adjustments, lookups), drop to the tinker recipes below.
 
 ## Model cheat-sheet — `App\Models\TimeEntry`
 
-- `source`: `'manual'` (hand-logged) · `'terminal_session'` (agent sessions) · `'clockify'` (raw pulls). Constants: `TimeEntry::SOURCE_MANUAL` etc.
-- Fillable: `account_id, project_id, client_id, task_id, source, clockify_entry_id, title, description, start_time, end_time, duration_minutes, billable, tags`.
+- `source`: `'manual'` (hand-logged) · `'terminal_session'` (agent sessions) · `'clockify'` (historical imports; the integration was removed 2026-10-01, nothing creates them now). Constants: `TimeEntry::SOURCE_MANUAL` etc.
+- Fillable: `account_id, project_id, client_id, task_id, source, title, description, start_time, end_time, duration_minutes, billable, tags`.
 - `title` = short label (shown in the list) · `description` = detail (defaults to the task name). `tags` is an array-cast JSON column.
-- **Closed entries carry BOTH `end_time` and `duration_minutes`, kept consistent:** `duration_minutes = ceil(start->diffInSeconds(end) / 60)`. Aggregation/reports read `duration_minutes`. A **running** entry has `end_time = null`, `duration_minutes = 0`.
+- **Closed entries carry BOTH `end_time` and `duration_minutes`, kept consistent:** `duration_minutes = TimeEntry::minutesBetween(start, end)` (seconds rounded up to whole minutes; every stop path uses it). Aggregation/reports read `duration_minutes`. A **running** entry has `end_time = null`, `duration_minutes = 0`.
 - **Everything is account-scoped.** Always set `account_id` — derive it from the task/project/client (below), never guess. Owner account if you truly need it raw: `App\Models\User::where('role','owner')->value('account_id')`.
 
 ## Recipes
@@ -93,10 +101,10 @@ App\Models\TaskSession::where('time_entry_id',$e->id)->update(['started_at'=>$e-
 
 ### Start / stop a running timer
 ```php
-// start (running stopwatch)
-$e = App\Models\TimeEntry::create([... task-derived fields ..., 'start_time'=>now(),'end_time'=>null,'duration_minutes'=>0,'billable'=>true]);
+// start (running stopwatch) - the same call the web, the agent verbs and terminal sessions use
+$e = App\Models\TimeEntry::startFor($task);
 // stop
-$e->update(['end_time'=>now(),'duration_minutes'=>(int)ceil($e->start_time->diffInSeconds(now())/60)]);
+$e->stopNow();
 ```
 
 ### List running (open) entries
@@ -118,7 +126,6 @@ $c->projects()->with('tasks:id,project_id,name')->get();
 ## Gotchas
 - **`tinker --execute` hangs** here — use interactive tinker or a throwaway command for anything scripted/agent-run.
 - **Account scoping** — always set `account_id`; derive from task/project/client.
-- **Clockify push is NOT automatic in tinker.** The UI create/stop pushes best-effort; a raw `TimeEntry::create` does not. To mirror: `(new App\Actions\Clockify\PushTimeEntryToClockify)($e->load('project.client'));` (no-ops if Clockify isn't configured).
 - **TaskSession sync** — only `terminal_session` entries have a `TaskSession`; edit both when changing times. Manual entries have none.
 - **Report hours ≠ raw time.** Client-report `actual_hours` counts only time entries whose task has `is_reportable = true` (see `ReportDataAggregator`). Recurring/baseline tasks are usually `is_reportable=false`. So a client's raw time total can exceed report hours by design.
 - **Finances source of truth** is the Infakt RZiS (`finances:import-rzis`), not these entries — see the finances memory.

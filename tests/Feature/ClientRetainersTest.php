@@ -94,6 +94,62 @@ final class ClientRetainersTest extends TestCase
         $this->assertNull($february);
     }
 
+    public function test_active_retainer_on_picks_the_largest_of_two_overlapping_positions(): void
+    {
+        $this->client->retainers()->create([
+            'account_id' => $this->client->account_id,
+            'label' => 'main site',
+            'monthly_hours' => 20,
+            'currency' => 'PLN',
+            'effective_from' => '2026-01-01',
+        ]);
+        $this->client->retainers()->create([
+            'account_id' => $this->client->account_id,
+            'label' => 'landing page',
+            'monthly_hours' => 4,
+            'currency' => 'PLN',
+            'effective_from' => '2026-05-01',
+        ]);
+
+        $this->assertSame('main site', $this->client->activeRetainerOn(Carbon::parse('2026-06-15'))->label);
+    }
+
+    public function test_positions_and_invoice_lines_follow_invoice_group_and_sort_order_not_start_dates(): void
+    {
+        $this->client->update(['month_close_type' => 'maintenance', 'external_ids' => ['infakt' => '10000002']]);
+        // Sort orders repeat across groups and two rows share a start date, so only
+        // group then sort order gives the expected sequence.
+        foreach ([['g2s1', 2, 1, '2026-03-01'], ['g1s1', 1, 1, '2026-03-01'], ['g2s0', 2, 0, '2026-05-01'], ['g1s0', 1, 0, '2026-01-01']] as [$label, $group, $order, $from]) {
+            $this->client->retainers()->create([
+                'account_id' => $this->client->account_id,
+                'label' => $label,
+                'invoice_group' => $group,
+                'sort_order' => $order,
+                'monthly_hours' => 1,
+                'monthly_fee' => 100,
+                'currency' => 'PLN',
+                'effective_from' => $from,
+            ]);
+        }
+
+        $this->assertSame(
+            ['g1s0', 'g1s1', 'g2s0', 'g2s1'],
+            $this->client->activeRetainersOn(Carbon::parse('2026-06-15'))->pluck('label')->all(),
+        );
+
+        $service = new \App\Services\Integrations\InfaktService(\App\Models\Integration::create([
+            'account_id' => $this->client->account_id,
+            'provider' => 'infakt',
+            'api_key' => 'test-key',
+            'is_enabled' => true,
+        ]));
+        $groups = $service->maintenanceInvoiceGroups($this->client->fresh(), Carbon::parse('2026-06-01'));
+
+        $this->assertSame([1, 2], array_keys($groups));
+        $this->assertSame(['g1s0', 'g1s1'], array_column($groups[1]['invoice']['services'], 'name'));
+        $this->assertSame(['g2s0', 'g2s1'], array_column($groups[2]['invoice']['services'], 'name'));
+    }
+
     public function test_update_changes_hours_rate_and_notes_in_place(): void
     {
         $retainer = $this->client->retainers()->create([

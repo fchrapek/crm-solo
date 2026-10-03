@@ -15,7 +15,6 @@ final class Project extends Model
         'account_id',
         'client_id',
         'trello_board_id',
-        'clockify_project_id',
         'name',
         'description',
         'trello_url',
@@ -96,6 +95,18 @@ final class Project extends Model
     public function scopeArchived(Builder $query): Builder
     {
         return $query->whereNotNull('archived_at');
+    }
+
+    /**
+     * Deleting a project deletes its tasks one by one, so each task's own hook
+     * runs: time entries are detached (still billed to the client), child
+     * links nulled and attachment files removed.
+     */
+    protected static function booted(): void
+    {
+        self::deleting(function (Project $project): void {
+            $project->tasks()->get()->each(fn (Task $task) => $task->delete());
+        });
     }
 
     protected function casts(): array

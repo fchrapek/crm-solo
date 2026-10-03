@@ -1,0 +1,195 @@
+#!/bin/bash
+# maint-swap-cache <repo-path> --to litespeed|cache-enabler [--base <branch>]
+#
+# Replaces WP Rocket in a clean classic WordPress repo, locally, on a feature
+# branch cut from --base (default: the default branch). Nothing is merged or
+# pushed: the branch is for the owner to review and deploy.
+#
+#   --to litespeed       LiteSpeed Cache. Only for production servers that
+#                        answer `server: LiteSpeed`; elsewhere it cannot
+#                        page-cache.
+#   --to cache-enabler   Cache Enabler (page cache) + Autoptimize (CSS/JS),
+#                        for Apache/nginx hosts. An inactive LiteSpeed Cache
+#                        in the repo is removed too: it cannot work there.
+#
+# Steps: DB snapshot, backups of untracked/ignored files the plugins write,
+# branch, deactivate + delete WP Rocket (its deactivation cleans its drop-in
+# and WP_CACHE line), install + activate the replacement, verify, commit the
+# plugin folders and Rocket's tracked leftovers only, put back every local
+# file the run touched, back to the starting branch, DB restored.
+source "$(dirname "$0")/lib.sh"
+
+REPO=""; BASE=""; TO=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --base) BASE="$2"; shift 2 ;;
+    --to) TO="$2"; shift 2 ;;
+    -*) die usage "unknown option $1" ;;
+    *) REPO="$1"; shift ;;
+  esac
+done
+USAGE="maint-swap-cache <repo-path> --to litespeed|cache-enabler [--base <branch>]"
+[ -n "$REPO" ] && [ -e "$REPO/.git" ] || die usage "$USAGE"
+case "$TO" in
+  litespeed)     ADD="litespeed-cache"; REMOVE="wp-rocket"; FB="feature/replace-wp-rocket-litespeed"; LABEL="LiteSpeed Cache" ;;
+  cache-enabler) ADD="cache-enabler autoptimize"; REMOVE="wp-rocket litespeed-cache"; FB="feature/replace-wp-rocket-cache-enabler"; LABEL="Cache Enabler + Autoptimize" ;;
+  *) die usage "$USAGE" ;;
+esac
+REPO="$(cd "$REPO" && pwd)"; NAME=$(basename "$REPO")
+RUN_DIR="$STATE_ROOT/$PERIOD"; mkdir -p "$RUN_DIR"; LOG="$RUN_DIR/$NAME.swap-cache.log"
+echo "=== $(date '+%F %T') maint-swap-cache $NAME --to $TO" >>"$LOG"
+
+lock_repo; trap 'unlock_repo' EXIT
+ddev_running || die preflight "DDEV project not running: start it with 'ddev start'"
+sync_fs || exit 1
+rc=0; repo_is_clean || rc=$?; [ $rc -eq 0 ] || die preflight "$(clean_reason $rc)"
+ORIG=$(G branch --show-current); [ -n "$ORIG" ] || die preflight "detached HEAD"
+BASE=${BASE:-$(default_branch)}
+G show-ref -q --verify "refs/heads/$BASE" || die preflight "no branch $BASE"
+G show-ref -q --verify "refs/heads/$FB" && die preflight "$FB already exists: inspect or delete it first"
+G ls-tree -d --name-only "$BASE" wp-content/plugins/wp-rocket | grep -q . || die preflight "no wp-rocket in $BASE: nothing to replace"
+
+SNAP="swapcache-$(date +%d%H%M%S)-$$"
+(cd "$REPO" && ddev snapshot --name "$SNAP" </dev/null >>"$LOG" 2>&1) && ls "$REPO/.ddev/db_snapshots/$SNAP"* >/dev/null 2>&1 \
+  || die snapshot "ddev snapshot failed"
+say snapshot OK "$SNAP"
+restore_db(){ (cd "$REPO" && ddev snapshot restore "$SNAP" </dev/null >>"$LOG" 2>&1) && sync_fs && restore_runtime && sync_fs; }
+fail(){ say "$1" FAIL "$2; left on $FB, DB snapshot $SNAP NOT restored, local file backups in $BK"; exit 1; }
+
+# Untracked or ignored paths the cache plugins write. Copies of whatever
+# exists now; at the end each is put back, or removed if it did not exist.
+LOCAL_PATHS=".htaccess .htaccess.bk wp-content/settings/cache-enabler wp-content/cache/cache-enabler wp-content/cache/autoptimize wp-content/litespeed wp-content/autoptimize_404_handler.php"
+BK="$RUN_DIR/$NAME.swap-backup.$$"; mkdir -p "$BK"
+EXISTED=""
+for f in $LOCAL_PATHS; do
+  G ls-files --error-unmatch "$f" >/dev/null 2>&1 && continue      # tracked: git has it
+  if [ -e "$REPO/$f" ]; then
+    mkdir -p "$BK/$(dirname "$f")" && cp -Rp "$REPO/$f" "$BK/$f" || die backup "could not back up $f"
+    EXISTED="$EXISTED $f"
+  fi
+done
+# Files git does not track inside the plugin folders being deleted (WP
+# Rocket's licence-data.php and similar) and an untracked advanced-cache.php:
+# deleting the plugin would lose them, so keep exact copies.
+IGN=""
+for p in $REMOVE; do
+  gcap ig ls-files --others --exclude-standard --ignored -- "wp-content/plugins/$p/" || exit 1
+  gcap ut ls-files --others --exclude-standard -- "wp-content/plugins/$p/" || exit 1
+  IGN="$IGN$(printf '%s\n%s\n' "$ig" "$ut")
+"
+done
+G ls-files --error-unmatch wp-content/advanced-cache.php >/dev/null 2>&1 || { [ -e "$REPO/wp-content/advanced-cache.php" ] && IGN="${IGN}wp-content/advanced-cache.php
+"; }
+IGN=$(printf '%s' "$IGN" | grep -v '^$' | sort -u || true)
+while read -r f; do
+  [ -n "$f" ] || continue
+  mkdir -p "$BK/.ign/$(dirname "$f")" && cp -p "$REPO/$f" "$BK/.ign/$f" || die backup "could not back up $f"
+done <<<"$IGN"
+
+# Files marked skip-worktree hold deliberate local versions git does not see
+# (for example wp-config.php, advanced-cache.php). Keep their exact content.
+gcap SKIPW ls-files -v || exit 1
+SKIPW=$(printf '%s\n' "$SKIPW" | awk '$1=="S" || $1=="s" { $1=""; sub(/^ /,""); print }')
+while read -r f; do
+  [ -n "$f" ] || continue
+  if [ -e "$REPO/$f" ]; then mkdir -p "$BK/.skipw/$(dirname "$f")" && cp -p "$REPO/$f" "$BK/.skipw/$f" || die backup "could not back up $f"; fi
+done <<<"$SKIPW"
+say backup OK "kept copies of:${EXISTED:- nothing}${SKIPW:+; skip-worktree: $(echo $SKIPW)}${IGN:+; $(printf '%s\n' "$IGN" | wc -l | tr -d ' ') untracked/ignored file(s) in removed plugins} in $BK"
+put_back_local(){
+  local f
+  while read -r f; do
+    [ -n "$f" ] || continue
+    if [ -e "$BK/.skipw/$f" ]; then cp -p "$BK/.skipw/$f" "$REPO/$f" || return 1; else rm -f -- "${REPO:?}/$f"; fi
+  done <<<"$SKIPW"
+  for f in $LOCAL_PATHS; do
+    G ls-files --error-unmatch "$f" >/dev/null 2>&1 && continue
+    rm -rf -- "${REPO:?}/$f"
+    if [ -e "$BK/$f" ]; then mkdir -p "$REPO/$(dirname "$f")" && cp -Rp "$BK/$f" "$REPO/$f" || return 1; fi
+  done
+}
+
+G switch -q -c "$FB" "$BASE" >>"$LOG" 2>&1 || die branch "cannot create $FB from $BASE"
+sync_fs || exit 1
+wval base_name option get blogname || fail baseline "WordPress does not bootstrap"
+base_probe=$(home_probe); [ "$base_probe" = "200 1 1" ] || fail baseline "local homepage not healthy ($base_probe)"
+
+# Remove: deactivate first (WP Rocket's deactivation cleans its drop-in and
+# WP_CACHE line), then delete.
+for p in $REMOVE; do
+  G ls-tree -d --name-only HEAD "wp-content/plugins/$p" | grep -q . || continue
+  if W plugin is-active "$p" >/dev/null 2>&1; then W plugin deactivate "$p" >>"$LOG" || fail remove "deactivate $p failed"; fi
+  W plugin delete "$p" >>"$LOG" || fail remove "delete $p failed"
+done
+sync_fs || exit 1
+for d in wp-content/wp-rocket-config wp-content/cache/wp-rocket wp-content/cache/busting wp-content/cache/min wp-content/cache/critical-css; do
+  G ls-files --error-unmatch "$d" >/dev/null 2>&1 || rm -rf -- "${REPO:?}/$d"
+done
+
+# Add.
+VERS=""
+for p in $ADD; do
+  if G ls-tree -d --name-only HEAD "wp-content/plugins/$p" | grep -q .; then
+    W plugin activate "$p" >>"$LOG" || fail add "activate $p failed"
+    W plugin update "$p" >>"$LOG" || fail add "update $p failed"
+  else
+    W plugin install "$p" --activate >>"$LOG" || fail add "install $p failed"
+  fi
+  sync_fs || exit 1
+  wval v plugin get "$p" --field=version || fail add "$p not readable"
+  VERS="$VERS, $p $v"
+done
+VERS="${VERS#, }"
+
+wval name_after option get blogname || name_after="(wp-cli failed)"
+probe_after=$(home_probe)
+[ "$name_after" = "$base_name" ] && [ "$probe_after" = "200 1 1" ] || fail verify "verification red (blogname '$name_after', home '$probe_after')"
+
+# What gets committed: the plugin folders and Rocket's tracked leftovers.
+# Files the plugins generate per site (drop-in, settings, .htaccess rules,
+# WP_CACHE line in a DDEV-owned wp-config) are written again on production
+# when the plugin is activated there, so locally they go back as they were.
+put_back_local || fail restore "could not put local files back"
+is_skipw(){ grep -qxF -- "$1" <<<"$SKIPW"; }
+for f in wp-config.php wp-config-ddev.php; do
+  is_skipw "$f" && continue
+  G ls-files --error-unmatch "$f" >/dev/null 2>&1 && { GIT_LITERAL_PATHSPECS=1 G restore --source=HEAD --staged --worktree -- "$f" >>"$LOG" 2>&1 || fail restore "could not restore $f"; }
+done
+if is_skipw wp-content/advanced-cache.php; then
+  # Kept local (put back above); git sees no change, so the commit cannot remove it.
+  SKIPW_NOTE="wp-content/advanced-cache.php is skip-worktree: its tracked WP Rocket version stays in git, remove it by hand if wanted"
+elif G ls-files --error-unmatch wp-content/advanced-cache.php >/dev/null 2>&1; then
+  # Tracked drop-in from WP Rocket (or empty): removed in the commit.
+  if ! G show HEAD:wp-content/advanced-cache.php | grep -q . || G show HEAD:wp-content/advanced-cache.php | grep -q "WP Rocket"; then
+    rm -f "$REPO/wp-content/advanced-cache.php"
+  else
+    GIT_LITERAL_PATHSPECS=1 G restore --source=HEAD --staged --worktree -- wp-content/advanced-cache.php >>"$LOG" 2>&1
+  fi
+else
+  rm -f "$REPO/wp-content/advanced-cache.php"    # generated by the new plugin this run
+fi
+[ -n "$(G ls-files -- wp-content/wp-rocket-config)" ] && rm -rf -- "${REPO:?}/wp-content/wp-rocket-config"
+sync_fs || exit 1
+
+re_plugins=$(printf '%s\n' $REMOVE $ADD | re_alt)
+changed_paths list "^wp-content/(plugins/($re_plugins)/|wp-rocket-config/|advanced-cache\\.php\$|languages/plugins/($re_plugins)-[^/]+\$)" || exit 1
+[ -n "$list" ] || fail commit "nothing changed"
+printf '%s\n' "$list" | GIT_LITERAL_PATHSPECS=1 G add -A --pathspec-from-file=- >>"$LOG" 2>&1 || fail commit "git add failed"
+for p in $ADD; do G add -A -f -- "wp-content/plugins/$p/" >>"$LOG" 2>&1 || fail commit "git add $p failed"; done
+G commit -q -m "Replace WP Rocket with $LABEL ($VERS; licence not renewed)" >>"$LOG" 2>&1 || fail commit "commit failed"
+tree_status st || exit 1
+[ -z "$st" ] || fail commit "changes left outside the swap: $(head -5 <<<"$st" | tr '\n' ';')"
+c=$(G rev-parse --short HEAD)
+
+G switch -q "$ORIG" >>"$LOG" 2>&1 || die end "could not switch back to $ORIG"
+sync_fs || exit 1
+restore_db || die end "DB restore failed: ddev snapshot restore $SNAP"
+put_back_local || die end "could not put local files back (copies in $BK)"
+while read -r f; do
+  [ -n "$f" ] || continue
+  mkdir -p "$REPO/$(dirname "$f")" && cp -p "$BK/.ign/$f" "$REPO/$f" || die end "could not put back $f (copy in $BK/.ign)"
+done <<<"$IGN"
+sync_fs || exit 1
+tree_status st || exit 1; [ -z "$st" ] || die end "tree not clean after switching back"
+rm -rf "$BK"
+[ -n "${SKIPW_NOTE:-}" ] && say note INFO "$SKIPW_NOTE"
+say done OK "$FB ($c) from $BASE: WP Rocket$([ "$TO" = cache-enabler ] && echo ' and LiteSpeed Cache') removed, $VERS committed, activation verified locally; production activation pending; not merged, back on $ORIG, DB restored"

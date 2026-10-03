@@ -4,24 +4,34 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Models\Client;
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\Integration;
+use App\Services\Agent\CrmEntityResolver;
+use App\Services\Agent\ReferenceException;
 use App\Services\Integrations\InfaktService;
 use Illuminate\Console\Command;
 
+#[AccountScope(AccountScope::ACTING)]
 final class InfaktClientInvoices extends Command
 {
-    protected $signature = 'infakt:invoices {client : local CRM client id} {--account=1} {--limit=12} {--services : print each invoice line item}';
+    use AgentConsoleOutput;
+
+    protected $signature = 'infakt:invoices {client : local CRM client id} {--account= : Account ID; must be the acting account} {--limit=12} {--services : print each invoice line item}';
 
     protected $description = 'List a client\'s recent Infakt invoices (newest first) — reads the recurring maintenance amount before drafting.';
 
     public function handle(): int
     {
-        $client = Client::find((int) $this->argument('client'));
-        if ($client === null) {
-            $this->error('Client not found.');
-
+        $accountId = $this->actingAccountId();
+        if ($accountId === null) {
             return self::FAILURE;
+        }
+
+        try {
+            $client = app(CrmEntityResolver::class)->client((string) $this->argument('client'), $accountId);
+        } catch (ReferenceException $e) {
+            return $this->referenceFailure($e);
         }
 
         $infaktId = $client->external_ids['infakt'] ?? null;
@@ -32,7 +42,7 @@ final class InfaktClientInvoices extends Command
         }
 
         $integration = Integration::where('provider', 'infakt')
-            ->where('account_id', (int) $this->option('account'))
+            ->where('account_id', $accountId)
             ->where('is_enabled', true)
             ->whereNotNull('api_key')
             ->first();

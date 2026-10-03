@@ -4,16 +4,18 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
 use App\Models\Task;
 use App\Models\TaskPreview;
 use App\Services\TerminalSessionLauncherInterface;
 use Illuminate\Console\Command;
 
+#[AccountScope(AccountScope::OPERATOR)]
 final class ReapDeadSessions extends Command
 {
     protected $signature = 'sessions:reap';
 
-    protected $description = 'Close terminal sessions (and previews) whose ttyd process died without a Stop — reboot/crash leaves a billable TimeEntry accruing forever otherwise';
+    protected $description = 'Close terminal sessions (and previews) whose ttyd process died without a Stop — reboot/crash leaves a billable TimeEntry accruing forever otherwise (operator: every account)';
 
     public function handle(TerminalSessionLauncherInterface $launcher): int
     {

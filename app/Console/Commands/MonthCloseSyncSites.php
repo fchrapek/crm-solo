@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\Repository;
@@ -18,8 +20,11 @@ use Illuminate\Console\Command;
  * is nobody's backup target, and a site can be archived from live with no local
  * copy at all. So this proposes; --apply writes.
  */
+#[AccountScope(AccountScope::ACTING)]
 final class MonthCloseSyncSites extends Command
 {
+    use AgentConsoleOutput;
+
     protected $signature = 'month-close:sync-sites
                             {--apply : Write the proposed flags (default is a proposal only)}
                             {--prune : Also clear the flag on in-close projects that have neither a repository nor a backup folder}';
@@ -31,8 +36,13 @@ final class MonthCloseSyncSites extends Command
         // Proposal by default: re-flagging a candidate on every run would
         // undo a deliberate call, so the decision stays with the edit dialog.
         $write = (bool) $this->option('apply');
+        $accountId = $this->actingAccountId();
+        if ($accountId === null) {
+            return self::FAILURE;
+        }
 
         $clientIds = Client::query()
+            ->where('account_id', $accountId)
             ->whereNotNull('month_close_type')
             ->where('include_in_month_close', true)
             ->pluck('id');

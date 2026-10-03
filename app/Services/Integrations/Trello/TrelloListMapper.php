@@ -41,6 +41,15 @@ final class TrelloListMapper
     ];
 
     /**
+     * Work still in hand: anything but Testing and Done, custom lanes included.
+     * A card moved here after the owner finished it has been sent back.
+     */
+    public static function isActiveLane(string $lane): bool
+    {
+        return ! in_array($lane, [self::LANE_TESTING, self::LANE_DONE], true);
+    }
+
+    /**
      * Guess the canonical lane for a given Trello list name. Returns null when
      * no pattern matches confidently — caller should fall back to LANE_BACKLOG
      * and flag the list for user attention.

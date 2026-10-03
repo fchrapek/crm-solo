@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Console\Commands\Concerns\ResolvesProjectAndClient;
 use App\Models\Task;
+use App\Services\Tasks\TaskCompletion;
 use Illuminate\Console\Command;
 use RuntimeException;
 
+#[AccountScope(AccountScope::ACTING)]
 final class CreateTasksCommand extends Command
 {
+    use AgentConsoleOutput;
     use ResolvesProjectAndClient;
 
     protected $signature = 'tasks:create
@@ -21,12 +26,17 @@ final class CreateTasksCommand extends Command
                             {--priority= : low|medium|high}
                             {--source=manual : manual|email|trello|planner}
                             {--description= : Optional description applied to every task}
-                            {--account= : Restrict resolution to this account ID}';
+                            {--account= : Account ID; must be the acting account}';
 
     protected $description = 'Mass-create tasks on a project. Use --name multiple times for distinct tasks, or --count for N copies.';
 
-    public function handle(): int
+    public function handle(TaskCompletion $completion): int
     {
+        $accountId = $this->actingAccountId();
+        if ($accountId === null) {
+            return self::FAILURE;
+        }
+
         $projectNeedle = (string) ($this->option('project') ?? '');
         if ($projectNeedle === '') {
             $this->error('Missing --project (id or name).');
@@ -35,7 +45,7 @@ final class CreateTasksCommand extends Command
         }
 
         try {
-            $project = $this->resolveProject($projectNeedle, $this->intOption('account'));
+            $project = $this->resolveProject($projectNeedle, $accountId);
         } catch (RuntimeException $e) {
             $this->error($e->getMessage());
 
@@ -92,6 +102,10 @@ final class CreateTasksCommand extends Command
 
         foreach ($finalNames as $name) {
             $task = Task::create(['name' => $name] + $payload);
+            // A task born on Done is finished through the same transition as a tick.
+            if ($list === 'Done') {
+                $completion->finish($task);
+            }
             $this->line("  ✓ #{$task->id} {$name}");
         }
 

@@ -20,6 +20,7 @@ use App\Http\Controllers\TasksController;
 use App\Http\Controllers\TerminalSessionsController;
 use App\Http\Controllers\TimeEntriesController;
 use App\Http\Controllers\UsersController;
+use App\Http\Controllers\WaitlistController;
 use Illuminate\Support\Facades\Route;
 
 // Unauthenticated by necessity: the frontend fetches strings before a session
@@ -37,17 +38,38 @@ Route::controller(AuthenticatedSessionController::class)->group(function () {
     Route::post('logout', 'destroy')->name('logout');
 });
 
-Route::middleware('auth')->group(function () {
-    Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+// Closed mode (APP_CLOSED): the /czesc splash guests are sent to instead of /login.
+Route::middleware(['guest', 'closed'])->controller(WaitlistController::class)->group(function () {
+    Route::get('czesc', 'show')->name('czesc');
+    Route::post('czesc', 'store')->name('czesc.store')->middleware('throttle:waitlist');
+});
+
+// The demo write budget counts only state-changing requests and only under DEMO_MODE.
+Route::middleware(['auth', 'throttle:demo-writes', App\Http\Middleware\LimitDemoTextWrites::class])->group(function () {
+    Route::get('/', [App\Http\Controllers\TodayController::class, 'index'])->name('dashboard');
+    Route::get('/jutro', [App\Http\Controllers\TodayController::class, 'plan'])->name('today.plan');
+    Route::get('/zadania', [App\Http\Controllers\TodayController::class, 'tasks'])->name('today.tasks');
+    Route::post('/day/picks', [App\Http\Controllers\TodayController::class, 'storePick'])->name('day.picks.store');
+    Route::delete('/day/picks/{dayPick}', [App\Http\Controllers\TodayController::class, 'destroyPick'])->name('day.picks.destroy');
+    Route::post('/day/picks/{dayPick}/complete', [App\Http\Controllers\TodayController::class, 'completePick'])->name('day.picks.complete');
+    Route::post('/day/tasks/{task}/complete', [App\Http\Controllers\TodayController::class, 'completeTask'])->name('day.tasks.complete');
+    Route::delete('/day/tasks/{task}/complete', [App\Http\Controllers\TodayController::class, 'uncompleteTask'])->name('day.tasks.uncomplete');
+    Route::post('/day/close', [App\Http\Controllers\TodayController::class, 'close'])->name('day.close');
+    Route::delete('/day/close', [App\Http\Controllers\TodayController::class, 'reopen'])->name('day.reopen');
+
+    // The agent session card and the demo crm prompt, the home screen before the day screens.
+    Route::get('/sesje', [DashboardController::class, 'index'])->name('sessions');
 
     // Daily session — browser viewport onto the herdr daemon (status-first;
     // the native terminal stays the primary attach point).
-    Route::post('/daily-session/attach', [App\Http\Controllers\DailySessionController::class, 'attach'])->name('daily-session.attach');
-    Route::delete('/daily-session/attach', [App\Http\Controllers\DailySessionController::class, 'detach'])->name('daily-session.detach');
+    Route::middleware('host-exec')->group(function () {
+        Route::post('/daily-session/attach', [App\Http\Controllers\DailySessionController::class, 'attach'])->name('daily-session.attach');
+        Route::delete('/daily-session/attach', [App\Http\Controllers\DailySessionController::class, 'detach'])->name('daily-session.detach');
+    });
 
     // Demo-only crm prompt (whitelisted verbs, in-process, no shell) - the
     // controller 404s unless DEMO_MODE is on.
-    Route::post('/demo/cli', App\Http\Controllers\DemoCliController::class)->middleware('throttle:30,1')->name('demo.cli');
+    Route::post('/demo/cli', App\Http\Controllers\DemoCliController::class)->middleware('throttle:demo-cli')->name('demo.cli');
 
     Route::resource('users', UsersController::class)->except(['show']);
     Route::put('users/{user}/restore', [UsersController::class, 'restore'])->name('users.restore');
@@ -78,7 +100,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('clients/{client}/retainers/{retainer}', [App\Http\Controllers\ClientRetainersController::class, 'destroy'])->name('client-retainers.destroy');
 
     // Client documents (signed contracts, GDPR clauses — stored locally).
-    Route::post('clients/{client}/documents', [App\Http\Controllers\ClientDocumentsController::class, 'store'])->name('client-documents.store');
+    Route::post('clients/{client}/documents', [App\Http\Controllers\ClientDocumentsController::class, 'store'])->middleware('throttle:uploads')->name('client-documents.store');
     Route::get('clients/{client}/documents/{document}', [App\Http\Controllers\ClientDocumentsController::class, 'show'])->name('client-documents.show');
     Route::delete('clients/{client}/documents/{document}', [App\Http\Controllers\ClientDocumentsController::class, 'destroy'])->name('client-documents.destroy');
 
@@ -104,34 +126,41 @@ Route::middleware('auth')->group(function () {
     Route::post('clients/{client}/projects', [ProjectsController::class, 'store'])->name('projects.store');
     Route::put('projects/{project}', [ProjectsController::class, 'update'])->name('projects.update');
     Route::delete('projects/{project}', [ProjectsController::class, 'destroy'])->name('projects.destroy');
-    Route::post('projects/{project}/connect-trello', [ProjectsController::class, 'connectTrello'])->name('projects.connect-trello');
-    Route::post('projects/{project}/disconnect-trello', [ProjectsController::class, 'disconnectTrello'])->name('projects.disconnect-trello');
-    Route::post('projects/{project}/sync-trello', [ProjectsController::class, 'syncTrello'])->name('projects.sync-trello')->middleware('throttle:5,1');
-    Route::put('projects/{project}/trello-list-mapping', [ProjectsController::class, 'updateTrelloListMapping'])->name('projects.trello-list-mapping');
-    Route::get('projects/{project}/available-trello-boards', [ProjectsController::class, 'availableTrelloBoards'])->name('projects.available-trello-boards');
+    Route::middleware('not-in-demo')->group(function () {
+        Route::post('projects/{project}/connect-trello', [ProjectsController::class, 'connectTrello'])->name('projects.connect-trello');
+        Route::post('projects/{project}/disconnect-trello', [ProjectsController::class, 'disconnectTrello'])->name('projects.disconnect-trello');
+        Route::post('projects/{project}/sync-trello', [ProjectsController::class, 'syncTrello'])->name('projects.sync-trello')->middleware('throttle:5,1');
+        Route::put('projects/{project}/trello-list-mapping', [ProjectsController::class, 'updateTrelloListMapping'])->name('projects.trello-list-mapping');
+        Route::get('projects/{project}/available-trello-boards', [ProjectsController::class, 'availableTrelloBoards'])->name('projects.available-trello-boards');
+    });
 
-    // Repositories (linked to projects)
-    Route::post('projects/{project}/repositories', [RepositoriesController::class, 'store'])->name('repositories.store');
-    Route::put('repositories/{repository}', [RepositoriesController::class, 'update'])->name('repositories.update');
+    // Repositories (linked to projects). A local path is a working directory
+    // for host processes, so setting one needs host execution.
+    Route::middleware('host-exec')->group(function () {
+        Route::post('projects/{project}/repositories', [RepositoriesController::class, 'store'])->name('repositories.store');
+        Route::put('repositories/{repository}', [RepositoriesController::class, 'update'])->name('repositories.update');
+        Route::get('repositories/{repository}/branches', [RepositoriesController::class, 'branches'])->name('repositories.branches');
+    });
     Route::delete('repositories/{repository}', [RepositoriesController::class, 'destroy'])->name('repositories.destroy');
-    Route::get('repositories/{repository}/branches', [RepositoriesController::class, 'branches'])->name('repositories.branches');
 
     Route::post('projects/{project}/tasks', [TasksController::class, 'store'])->name('tasks.store');
     Route::put('/tasks/{task}', [TasksController::class, 'update'])->name('tasks.update');
     Route::delete('/tasks/{task}', [TasksController::class, 'destroy'])->name('tasks.destroy');
 
-    // Terminal sessions (claude/codex CLI launched in a per-task git worktree via ttyd)
-    Route::post('/tasks/{task}/start-session', [TerminalSessionsController::class, 'start'])->name('tasks.start-session');
-    Route::get('/tasks/{task}/session-branches', [TerminalSessionsController::class, 'branches'])->name('tasks.session-branches');
-    Route::delete('/tasks/{task}/stop-session', [TerminalSessionsController::class, 'stop'])->name('tasks.stop-session');
-    Route::post('/tasks/{task}/resume-session', [TerminalSessionsController::class, 'resume'])->name('tasks.resume-session');
-    Route::delete('/tasks/{task}/kill-session', [TerminalSessionsController::class, 'kill'])->name('tasks.kill-session');
-    Route::post('/tasks/{task}/clear-session-attention', [TerminalSessionsController::class, 'clearAttention'])->name('tasks.clear-session-attention');
+    Route::middleware('host-exec')->group(function () {
+        // Terminal sessions (claude/codex CLI launched in a per-task git worktree via ttyd)
+        Route::post('/tasks/{task}/start-session', [TerminalSessionsController::class, 'start'])->name('tasks.start-session');
+        Route::get('/tasks/{task}/session-branches', [TerminalSessionsController::class, 'branches'])->name('tasks.session-branches');
+        Route::delete('/tasks/{task}/stop-session', [TerminalSessionsController::class, 'stop'])->name('tasks.stop-session');
+        Route::post('/tasks/{task}/resume-session', [TerminalSessionsController::class, 'resume'])->name('tasks.resume-session');
+        Route::delete('/tasks/{task}/kill-session', [TerminalSessionsController::class, 'kill'])->name('tasks.kill-session');
 
-    // Per-task preview — spawn the project's preview_command in the task's
-    // worktree via ttyd. Stack-agnostic: ddev/vite/rails/whatever.
-    Route::post('/tasks/{task}/preview/start', [TaskPreviewsController::class, 'start'])->name('tasks.preview.start');
-    Route::delete('/tasks/{task}/preview/stop', [TaskPreviewsController::class, 'stop'])->name('tasks.preview.stop');
+        // Per-task preview — spawn the project's preview_command in the task's
+        // worktree via ttyd. Stack-agnostic: ddev/vite/rails/whatever.
+        Route::post('/tasks/{task}/preview/start', [TaskPreviewsController::class, 'start'])->name('tasks.preview.start');
+        Route::delete('/tasks/{task}/preview/stop', [TaskPreviewsController::class, 'stop'])->name('tasks.preview.stop');
+    });
+    Route::post('/tasks/{task}/clear-session-attention', [TerminalSessionsController::class, 'clearAttention'])->name('tasks.clear-session-attention');
 
     // Kanban lane + CLI mutations
     Route::patch('/tasks/{task}/agent-lane', [TasksController::class, 'updateAgentLane'])->name('tasks.agent-lane');
@@ -142,7 +171,7 @@ Route::middleware('auth')->group(function () {
 
     // Task attachments (manual uploads — context for the agent session)
     Route::get('/tasks/{task}/attachments', [TaskAttachmentsController::class, 'index'])->name('task-attachments.index');
-    Route::post('/tasks/{task}/attachments', [TaskAttachmentsController::class, 'store'])->name('task-attachments.store');
+    Route::post('/tasks/{task}/attachments', [TaskAttachmentsController::class, 'store'])->middleware('throttle:uploads')->name('task-attachments.store');
     Route::get('/task-attachments/{attachment}', [TaskAttachmentsController::class, 'show'])
         ->name('task-attachments.show')
         ->where('attachment', '[0-9]+');
@@ -167,8 +196,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
     Route::patch('/settings/leadgen', [SettingsController::class, 'updateLeadgen'])->name('settings.leadgen.update');
 
+    // On the demo the index says integrations are not part of it; the rest is absent.
     Route::get('/integrations', [IntegrationsController::class, 'index'])->name('integrations.index');
-    Route::get('/integrations/{provider}', [IntegrationsController::class, 'edit'])->name('integrations.edit');
-    Route::put('/integrations/{provider}', [IntegrationsController::class, 'update'])->name('integrations.update');
-    Route::post('/integrations/{provider}/sync', [IntegrationsController::class, 'sync'])->name('integrations.sync');
+    Route::middleware('not-in-demo')->group(function () {
+        Route::get('/integrations/{provider}', [IntegrationsController::class, 'edit'])->name('integrations.edit');
+        Route::put('/integrations/{provider}', [IntegrationsController::class, 'update'])->name('integrations.update');
+        Route::post('/integrations/{provider}/sync', [IntegrationsController::class, 'sync'])->name('integrations.sync');
+        Route::delete('/integrations/{provider}', [IntegrationsController::class, 'disconnect'])->name('integrations.disconnect');
+    });
 });

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Exceptions\Terminal\RepoBusyException;
+use App\Exceptions\Terminal\WorkingTreeDirtyException;
 use App\Models\Account;
 use App\Models\Project;
 use App\Models\Repository;
@@ -15,6 +17,7 @@ use App\Models\User;
 use App\Services\TerminalSessionLauncher;
 use App\Services\TerminalSessionLauncherInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\App;
 use Mockery;
 use RuntimeException;
 use Tests\TestCase;
@@ -277,7 +280,7 @@ final class TerminalSessionsTest extends TestCase
             ->assertJson(['code' => 'repository_missing']);
     }
 
-    public function test_launcher_writes_brief_with_children_when_parent_has_them(): void
+    public function test_launcher_writes_instructions_naming_the_task_and_its_children_by_id(): void
     {
         $repoDir = sys_get_temp_dir().'/crm-solo-launcher-test-'.uniqid('', true);
         mkdir($repoDir, 0o755, true);
@@ -342,18 +345,13 @@ final class TerminalSessionsTest extends TestCase
         $this->assertFileExists($briefPath);
         $brief = (string) file_get_contents($briefPath);
 
-        $this->assertStringContainsString('Build landing page', $brief);
-        $this->assertStringContainsString('Full page context here.', $brief);
+        // Instructions only: the task id and how to read it; no title, description or file name.
+        $this->assertStringContainsString("crm task {$parent->id} --json", $brief);
         $this->assertStringContainsString('## Child tasks', $brief);
-        $this->assertStringContainsString('Hero block', $brief);
-        $this->assertStringContainsString('Hero specs.', $brief);
-        $this->assertStringContainsString('CTA block', $brief);
-
-        // Attachments surfaced with absolute paths so claude/codex can Read them.
-        $this->assertStringContainsString('## Attachments', $brief);
-        $this->assertStringContainsString(storage_path('app/private/task-attachments/'.$parent->id.'/spec.pdf'), $brief);
-        $this->assertStringContainsString('Brand spec', $brief);
-        $this->assertStringContainsString(storage_path('app/private/task-attachments/'.$hero->id.'/hero.png'), $brief);
+        $this->assertStringContainsString("#{$hero->id}", $brief);
+        foreach (['Build landing page', 'Full page context here.', 'Hero block', 'Hero specs.', 'CTA block', 'spec.pdf', 'Brand spec', 'hero.png'] as $cardText) {
+            $this->assertStringNotContainsString($cardText, $brief);
+        }
 
         // Cleanup: kill the spawned ttyd and remove the test repo.
         if (isset($result['pid']) && $result['pid'] > 0) {
@@ -679,10 +677,44 @@ final class TerminalSessionsTest extends TestCase
         ]);
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessageMatches('/dirty/i');
+        $this->expectExceptionMessageMatches('/uncommitted changes/');
 
         try {
             (new TerminalSessionLauncher)->launch($task->fresh(), 'main', Task::SESSION_MODE_IN_REPO);
+        } finally {
+            shell_exec('rm -rf '.escapeshellarg($repoDir));
+        }
+    }
+
+    public function test_dirty_working_tree_refusal_reads_in_polish_without_long_dashes(): void
+    {
+        $repoDir = sys_get_temp_dir().'/crm-solo-inrepo-dirty-pl-'.uniqid('', true);
+        mkdir($repoDir, 0o755, true);
+        $this->initGitRepo($repoDir);
+        file_put_contents($repoDir.'/dirty.txt', 'uncommitted');
+
+        Repository::create([
+            'project_id' => $this->project->id,
+            'name' => 'r',
+            'local_path' => $repoDir,
+            'provider' => 'local',
+        ]);
+        $task = Task::create([
+            'project_id' => $this->project->id,
+            'name' => 'Dirty task',
+            'cli' => Task::CLI_CLAUDE,
+        ]);
+
+        App::setLocale('pl');
+
+        try {
+            (new TerminalSessionLauncher)->launch($task->fresh(), 'main', Task::SESSION_MODE_IN_REPO);
+            $this->fail('A dirty working tree must refuse an in-repo session.');
+        } catch (WorkingTreeDirtyException $e) {
+            $this->assertStringContainsString("Katalog roboczy {$repoDir} ma niezatwierdzone zmiany.", $e->getMessage());
+            $this->assertStringContainsString('dirty.txt', $e->getMessage());
+            $this->assertStringNotContainsString("\u{2014}", $e->getMessage());
+            $this->assertStringNotContainsString("\u{2013}", $e->getMessage());
         } finally {
             shell_exec('rm -rf '.escapeshellarg($repoDir));
         }
@@ -717,12 +749,51 @@ final class TerminalSessionsTest extends TestCase
         ]);
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessageMatches('/Repo is busy/');
+        $this->expectExceptionMessageMatches('/The repository is busy: an in-repo session is live on task "Already running"/');
 
         try {
             (new TerminalSessionLauncher)->launch($newTask->fresh(), 'main', Task::SESSION_MODE_IN_REPO);
         } finally {
             // Clear the fake live PID before tearDown so other tests aren't affected.
+            $existing->update(['session_pid' => null, 'session_port' => null]);
+            shell_exec('rm -rf '.escapeshellarg($repoDir));
+        }
+    }
+
+    public function test_busy_repo_refusal_reads_in_polish(): void
+    {
+        $repoDir = sys_get_temp_dir().'/crm-solo-inrepo-busy-pl-'.uniqid('', true);
+        mkdir($repoDir, 0o755, true);
+        $this->initGitRepo($repoDir);
+
+        Repository::create([
+            'project_id' => $this->project->id,
+            'name' => 'r',
+            'local_path' => $repoDir,
+            'provider' => 'local',
+        ]);
+        $existing = Task::create([
+            'project_id' => $this->project->id,
+            'name' => 'Already running',
+            'cli' => Task::CLI_CLAUDE,
+            'session_pid' => posix_getpid(),
+            'session_port' => 7681,
+            'session_mode' => Task::SESSION_MODE_IN_REPO,
+        ]);
+        $newTask = Task::create([
+            'project_id' => $this->project->id,
+            'name' => 'New in-repo attempt',
+            'cli' => Task::CLI_CLAUDE,
+        ]);
+
+        App::setLocale('pl');
+
+        $this->expectException(RepoBusyException::class);
+        $this->expectExceptionMessage("Repozytorium jest zajęte: sesja w repozytorium działa przy zadaniu \"Already running\" (id {$existing->id}). Najpierw ją zatrzymaj.");
+
+        try {
+            (new TerminalSessionLauncher)->launch($newTask->fresh(), 'main', Task::SESSION_MODE_IN_REPO);
+        } finally {
             $existing->update(['session_pid' => null, 'session_port' => null]);
             shell_exec('rm -rf '.escapeshellarg($repoDir));
         }
@@ -739,7 +810,7 @@ final class TerminalSessionsTest extends TestCase
         $launcher = Mockery::mock(TerminalSessionLauncherInterface::class);
         $launcher->shouldReceive('launch')
             ->once()
-            ->andThrow(new \App\Exceptions\Terminal\WorkingTreeDirtyException("Working tree at /tmp/repo is dirty — commit or stash before starting an in-repo session.\n\n?? new.txt"));
+            ->andThrow(new WorkingTreeDirtyException("The working tree at /tmp/repo has uncommitted changes.\n\n?? new.txt"));
         $this->app->instance(TerminalSessionLauncherInterface::class, $launcher);
 
         $this->actingAs($this->user)

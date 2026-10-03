@@ -14,8 +14,13 @@ import { join } from 'node:path';
 const ROOT = new URL('..', import.meta.url).pathname;
 const VARIABLES = join(ROOT, 'resources/css/variables.css');
 
-// Defined anywhere in variables.css (light + dark blocks)
-const defined = new Set([...readFileSync(VARIABLES, 'utf8').matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1]));
+// Solo tokens (the day screens and the rewrite built on them) are a second source.
+const SOLO = join(ROOT, 'resources/css/solo.css');
+
+// Defined anywhere in variables.css (light + dark blocks) or solo.css
+const defined = new Set(
+    [VARIABLES, SOLO].flatMap((file) => [...readFileSync(file, 'utf8').matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1])),
+);
 
 // Runtime-provided or component-local prefixes that are legitimately not in variables.css
 const RUNTIME_PREFIXES = ['--radix-'];

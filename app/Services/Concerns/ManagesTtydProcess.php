@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Concerns;
 
+use App\Support\HostExec;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 
@@ -33,6 +34,8 @@ trait ManagesTtydProcess
 
     private function locateBinary(string $name, bool $throwIfMissing): ?string
     {
+        HostExec::ensureEnabled();
+
         $candidates = ["/opt/homebrew/bin/{$name}", "/usr/local/bin/{$name}", "/usr/bin/{$name}"];
         foreach ($candidates as $path) {
             if (is_executable($path)) {
@@ -87,6 +90,8 @@ trait ManagesTtydProcess
      */
     private function spawnDetachedTtyd(string $ttydCmd, string $logPath, string $failureLabel): int
     {
+        HostExec::ensureEnabled();
+
         $envPrefix = SpawnEnvironment::allowlistedPrefix();
         $full = sprintf(
             'nohup %s %s >%s 2>&1 < /dev/null & echo $!',
@@ -116,7 +121,9 @@ trait ManagesTtydProcess
      */
     private function run(array $command): Process
     {
-        $proc = new Process($command);
+        HostExec::ensureEnabled();
+
+        $proc = new Process($command, null, SpawnEnvironment::withoutGitRepository());
         $proc->setTimeout(30);
         $proc->run();
 

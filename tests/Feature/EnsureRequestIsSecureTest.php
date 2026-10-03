@@ -21,7 +21,7 @@ final class EnsureRequestIsSecureTest extends TestCase
 
     public function test_intended_redirect_after_login_stays_https_behind_tls_terminating_proxy(): void
     {
-        config(['app.url' => 'https://crm-solo.test']);
+        config(['app.url' => 'https://crm-solo.test', 'trustedproxy.proxies' => '172.16.0.0/12']);
 
         $user = User::factory()->create();
 

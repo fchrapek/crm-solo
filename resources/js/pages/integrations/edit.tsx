@@ -1,4 +1,4 @@
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { AlertTriangle, ArrowLeft, Check, ExternalLink, Loader2, RefreshCw, X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +17,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { InfoHint } from '@/components/ui/info-hint';
 import { usePageActions } from '@/contexts/page-context';
 import { useReverbNotification } from '@/contexts/reverb-context';
@@ -35,10 +36,13 @@ interface Integration {
     is_enabled: boolean;
     has_api_key: boolean;
     has_trello_api_key: boolean;
+    has_unreadable_credentials: boolean;
     is_configured: boolean;
     last_synced_at: string | null;
     last_sync_error: string | null;
     connected_email: string | null;
+    /** Infakt clients the last sync could not link; kept until a sync finds none. */
+    client_conflicts: string[];
 }
 
 interface FlashData {
@@ -58,6 +62,8 @@ export default function Edit() {
     const { integration, flash } = usePage<EditPageProps>().props;
     const { addUuid } = useReverbNotification();
     const [showSyncWarning, setShowSyncWarning] = useState(false);
+    const [showDisconnect, setShowDisconnect] = useState(false);
+    const hasCredentials = integration.has_api_key || integration.has_trello_api_key || integration.has_unreadable_credentials;
 
     const isOAuth = integration.auth_type === 'oauth2';
 
@@ -95,6 +101,11 @@ export default function Edit() {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         form.put(integrations.update(integration.provider).url);
+    };
+
+    const handleDisconnectConfirm = () => {
+        setShowDisconnect(false);
+        router.delete(integrations.disconnect(integration.provider).url, { preserveScroll: true });
     };
 
     const handleSyncClick = () => {
@@ -189,10 +200,42 @@ export default function Edit() {
                         </div>
                     )}
 
+                    {integration.has_unreadable_credentials && (
+                        <div className={styles.errorRow}>
+                            <AlertTriangle size={14} className={styles.errorIcon} />
+                            <span>
+                                {t(
+                                    'A stored credential cannot be decrypted with this app key. Enter it again, or restore the app key it was saved with.',
+                                )}
+                            </span>
+                        </div>
+                    )}
+
                     {integration.last_sync_error && (
                         <div className={styles.errorRow}>
                             <AlertTriangle size={14} className={styles.errorIcon} />
                             <span>{integration.last_sync_error}</span>
+                        </div>
+                    )}
+
+                    {integration.client_conflicts.length > 0 && (
+                        <div className={styles.conflicts}>
+                            <div className={styles.conflictsHead}>
+                                <AlertTriangle size={14} className={styles.errorIcon} />
+                                <span>
+                                    {t('Unlinked Infakt clients')} ({integration.client_conflicts.length})
+                                </span>
+                            </div>
+                            <p className={styles.conflictsHint}>
+                                {t(
+                                    'Their NIP belongs to a CRM client already linked to another Infakt client. Link or merge them by hand; this list clears on the first sync that finds none.',
+                                )}
+                            </p>
+                            <ul className={styles.conflictsList}>
+                                {integration.client_conflicts.map((conflict) => (
+                                    <li key={conflict}>{conflict}</li>
+                                ))}
+                            </ul>
                         </div>
                     )}
                 </div>
@@ -285,8 +328,24 @@ export default function Edit() {
                                 {t('Sync Now')}
                             </Button>
                         )}
+
+                        {hasCredentials && (
+                            <Button type="button" variant="outline" onClick={() => setShowDisconnect(true)} disabled={form.processing}>
+                                {t('Disconnect')}
+                            </Button>
+                        )}
                     </div>
                 </form>
+
+                <ConfirmDialog
+                    open={showDisconnect}
+                    onOpenChange={setShowDisconnect}
+                    title={t('Disconnect integration')}
+                    description={t('Remove the stored credentials and turn this integration off? Data already synced stays.')}
+                    confirmLabel={t('Disconnect')}
+                    variant="destructive"
+                    onConfirm={handleDisconnectConfirm}
+                />
 
                 <AlertDialog open={showSyncWarning} onOpenChange={setShowSyncWarning}>
                     <AlertDialogContent>
@@ -306,7 +365,6 @@ export default function Edit() {
                                     </>
                                 )}
                                 {integration.provider === 'trello' && t('This will sync all Trello boards and their cards as projects and tasks.')}
-                                {integration.provider === 'clockify' && t('This will sync time entries from Clockify.')}
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

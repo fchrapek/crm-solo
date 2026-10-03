@@ -1,0 +1,38 @@
+#!/bin/bash
+# maint-run <repo-path>... [--period YYYY-MM]
+#
+# Runs maint-update on each repo in turn. A stopped DDEV project is started
+# with `ddev start` for the run and stopped again afterwards, so every
+# project ends in the state it was found in. One summary line per repo at the
+# end; the full output of each run is in the per-repo log and JSON state.
+DIR="$(cd "$(dirname "$0")" && pwd)"
+REPOS=(); PASS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --period) PASS+=(--period "$2"); shift 2 ;;
+    *) REPOS+=("$1"); shift ;;
+  esac
+done
+[ ${#REPOS[@]} -gt 0 ] || { echo "usage: maint-run <repo-path>... [--period YYYY-MM]"; exit 1; }
+
+SUMMARY=()
+for r in "${REPOS[@]}"; do
+  name=$(basename "$r")
+  echo "################ $name  $(date '+%T')"
+  was=$(cd "$r" && ddev describe -j </dev/null 2>/dev/null | jq -r '.raw.status' 2>/dev/null)
+  if [ "$was" != "running" ]; then
+    if ! (cd "$r" && ddev start </dev/null >/dev/null 2>&1); then
+      SUMMARY+=("$name|SKIP|ddev start failed"); continue
+    fi
+  fi
+  out=$("$DIR/maint-update" "$r" ${PASS[@]+"${PASS[@]}"} 2>&1); rc=$?
+  echo "$out"
+  status=$(grep -E '^end\|' <<<"$out" | head -1 | cut -d'|' -f2)
+  [ -n "$status" ] || status=$(grep -E '\|FAIL\|' <<<"$out" | head -1 | cut -d'|' -f1,2 | tr '|' ' ')
+  SUMMARY+=("$name|${status:-rc=$rc}|$(grep -E '\|OK\|' <<<"$out" | grep -cvE '^(preflight|snapshot|end)\|') targets OK")
+  if [ "$was" != "running" ]; then
+    (cd "$r" && ddev stop </dev/null >/dev/null 2>&1) || SUMMARY+=("$name|WARN|could not stop DDEV again")
+  fi
+done
+echo "################ summary"
+printf '%s\n' "${SUMMARY[@]}" | column -t -s'|'

@@ -6,6 +6,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Task;
 use App\Models\TaskAttachment;
+use App\Support\TaskAttachmentTypes;
+use App\Support\UploadLimits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -24,41 +26,6 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  */
 final class TaskAttachmentsController extends Controller
 {
-    /**
-     * Extension whitelist passed to Laravel's `mimes:` rule — validated against
-     * MIME-from-content + extension consistency, so spoofed-extension uploads
-     * (e.g. payload.php renamed to payload.txt) are rejected on real MIME.
-     *
-     * `sql` + `gz` + `zip` are here for DB dumps the user wants the agent to
-     * import to a local environment — claude reads them via absolute path
-     * (CRM_TASK.md) and runs `gunzip | mysql` (or similar) inside the worktree.
-     */
-    private const ALLOWED_EXTENSIONS = [
-        'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg',
-        'pdf',
-        'md', 'txt',
-        'doc', 'docx',
-        'sql', 'gz', 'zip',
-    ];
-
-    /**
-     * Broad mime allowlist that runs alongside `extensions:` — catches the
-     * "renamed payload.exe to payload.txt" spoof case where the content's
-     * actual mime betrays the disguise. text/plain covers md/txt/sql since
-     * Symfony detects them all as plain text.
-     */
-    private const ALLOWED_MIMETYPES = [
-        'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/svg',
-        'application/pdf',
-        'text/plain', 'text/markdown', 'text/x-markdown',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/sql', 'application/x-sql', 'text/x-sql',
-        'application/gzip', 'application/x-gzip',
-        'application/zip', 'application/x-zip-compressed',
-        'application/octet-stream', // catch-all for binary uploads (gz from some clients)
-    ];
-
     // 2 GB. PHP request size also needs to permit it — see composer run dev's
     // `-d upload_max_filesize=2G -d post_max_size=2G` overrides. Production
     // nginx needs `client_max_body_size 2G` to match.
@@ -89,9 +56,9 @@ final class TaskAttachmentsController extends Controller
             'file' => [
                 'required',
                 'file',
-                'max:'.self::MAX_FILE_KB,
-                'extensions:'.implode(',', self::ALLOWED_EXTENSIONS),
-                'mimetypes:'.implode(',', self::ALLOWED_MIMETYPES),
+                'max:'.UploadLimits::maxKilobytes(self::MAX_FILE_KB),
+                'extensions:'.implode(',', TaskAttachmentTypes::EXTENSIONS),
+                'mimetypes:'.implode(',', TaskAttachmentTypes::MIMETYPES),
             ],
             'label' => ['nullable', 'string', 'max:200'],
         ]);

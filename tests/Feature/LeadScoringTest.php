@@ -45,7 +45,7 @@ final class LeadScoringTest extends TestCase
         $lead = $this->lead(['pipeline' => 'kiwwwi', 'source' => 'www-form']);
 
         $this->assertSame(0, $lead->scoreTotal());
-        $this->assertSame(Lead::TIER_ROWAN, $lead->tier(), 'no signal means no Filip-minutes');
+        $this->assertSame(Lead::TIER_ROWAN, $lead->tier(), 'no signal means no personal time');
         $this->assertSame([], $lead->scoreFactors());
     }
 

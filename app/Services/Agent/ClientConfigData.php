@@ -7,7 +7,7 @@ namespace App\Services\Agent;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\Repository;
-use Illuminate\Support\Carbon;
+use App\Support\LocalCalendar;
 
 /**
  * A client's month-close config (cohort, ssh, backup path, per-site repos,
@@ -20,7 +20,7 @@ final class ClientConfigData
      */
     public function for(Client $client): array
     {
-        $retainer = $client->activeRetainerOn(Carbon::now());
+        $retainer = $client->activeRetainerOn(LocalCalendar::todayDate());
 
         return [
             'id' => $client->id,

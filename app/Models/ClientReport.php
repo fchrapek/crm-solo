@@ -76,6 +76,15 @@ final class ClientReport extends Model
         return round(max(0.0, $total - $this->availableHours()), 2);
     }
 
+    /**
+     * Fingerprint of what an editor works on, the text and the balance; an edit
+     * sent with an older fingerprint was made on a version that is gone.
+     */
+    public function version(): string
+    {
+        return sha1($this->body_markdown."\0".$this->opening_balance_hours);
+    }
+
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
@@ -101,6 +110,8 @@ final class ClientReport extends Model
             'status_before' => $this->status,
             'contracted_hours_before' => $this->contracted_hours,
             'actual_hours_before' => $this->actual_hours,
+            'opening_balance_hours_before' => $this->opening_balance_hours,
+            'rollover_cap_hours_before' => $this->rollover_cap_hours,
             'currency_before' => $this->currency,
             'composer_key_before' => $this->composer_key,
             'created_at' => now(),

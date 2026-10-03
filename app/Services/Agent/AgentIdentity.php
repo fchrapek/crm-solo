@@ -5,17 +5,20 @@ declare(strict_types=1);
 namespace App\Services\Agent;
 
 use App\Models\Account;
+use App\Models\AgentToken;
 use App\Models\User;
 
 /**
  * Who an agent transport is acting as. The CLI verbs historically wrote NULL
  * attribution on every event; anything resolving an identity can now stamp the
- * acting user on lifecycle events and month-close steps.
+ * acting user on lifecycle events and month-close steps. A hosted transport
+ * adds the token the request carried; local transports have none.
  */
 final readonly class AgentIdentity
 {
     public function __construct(
         public Account $account,
         public ?User $user,
+        public ?AgentToken $token = null,
     ) {}
 }

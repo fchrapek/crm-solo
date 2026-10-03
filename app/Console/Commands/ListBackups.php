@@ -4,18 +4,20 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
+#[AccountScope(AccountScope::OPERATOR)]
 final class ListBackups extends Command
 {
     protected $signature = 'db:backup:list';
 
-    protected $description = 'List available database backups';
+    protected $description = 'List available database backups (operator: the whole database, every account)';
 
     public function handle(): int
     {
-        $backupDir = storage_path('backups');
+        $backupDir = config('backup.path');
         $files = glob("{$backupDir}/backup-*.sql.gz");
 
         if (! $files) {

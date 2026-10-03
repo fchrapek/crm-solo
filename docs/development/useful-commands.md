@@ -21,7 +21,7 @@ php artisan tasks:create
     --source=manual                  # manual | email | trello | planner          (default: manual)
     --priority=low|medium|high       # optional
     --description="…"                # applied to every task
-    --account=1                      # restrict resolution to this account ID
+    --account=1                      # must be the acting account (the default); another fails
 ```
 
 Examples:
@@ -60,7 +60,7 @@ php artisan tasks:delete
     --archived                       # only target already-archived rows
     --archive-only                   # soft-archive (set archived_at) instead of deleting
     --force                          # skip confirmation
-    --account=1                      # restrict resolution to this account ID
+    --account=1                      # must be the acting account (the default); another fails
 ```
 
 Without any filter, it targets ALL tasks on the project — the confirmation prompt makes this explicit (`filter: ALL tasks (no filters)`).
@@ -99,7 +99,7 @@ php artisan projects:create
     --client=<id|name>               # required
     --name="…"                       # repeatable — one project per --name
     --description="…"                # applied to every project
-    --account=1                      # restrict resolution to this account ID
+    --account=1                      # must be the acting account (the default); another fails
 ```
 
 Examples:
@@ -126,13 +126,13 @@ php artisan projects:delete --client=<id|name>  # wipe-all mode (preserves "Gene
 
     --include-general                # also delete the "General" project (wipe-all mode)
     --force                          # skip confirmation
-    --account=1                      # restrict resolution to this account ID
+    --account=1                      # must be the acting account (the default); another fails
 ```
 
 Examples:
 
 ```bash
-# Delete one project (by id or name); cascades to its tasks + runs
+# Delete one project (by id or name) and its tasks; their time entries stay, detached
 php artisan projects:delete cli-test-project-A
 php artisan projects:delete 192 --force
 

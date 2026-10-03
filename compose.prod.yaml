@@ -39,6 +39,7 @@ services:
       INERTIA_SSR_ENSURE_BUNDLE_EXISTS: "false"
       HEALTHCHECK_PATH: "/up"
       PHP_OPCACHE_ENABLE: "1"
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
     networks:
       - internal
       - proxy
@@ -125,7 +126,7 @@ services:
 
   reverb:
     <<: *base
-    command: ["php", "/var/www/html/artisan", "reverb:start", "--port=8080"]
+    command: ["php", "/var/www/html/artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
     stop_signal: SIGTERM
     networks:
       - internal

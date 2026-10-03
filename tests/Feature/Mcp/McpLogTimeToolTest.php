@@ -38,11 +38,7 @@ final class McpLogTimeToolTest extends TestCase
         $this->account = Account::factory()->create();
         User::factory()->create(['account_id' => $this->account->id, 'owner' => true]);
         $this->client = Client::factory()->create(['account_id' => $this->account->id, 'name' => 'Log Test Co']);
-        $this->project = Project::create([
-            'account_id' => $this->account->id,
-            'client_id' => $this->client->id,
-            'name' => 'General',
-        ]);
+        $this->project = $this->client->ensureGeneralProject();
         $this->task = Task::create([
             'project_id' => $this->project->id,
             'name' => 'Hero work',
@@ -52,7 +48,7 @@ final class McpLogTimeToolTest extends TestCase
 
     public function test_logging_against_a_task_derives_project_and_client(): void
     {
-        CrmServer::tool(LogTimeTool::class, ['minutes' => 45, 'task' => 'Hero', 'push_clockify' => false])
+        CrmServer::tool(LogTimeTool::class, ['minutes' => 45, 'task' => 'Hero'])
             ->assertOk()
             ->assertSee('"minutes":45');
 
@@ -67,7 +63,7 @@ final class McpLogTimeToolTest extends TestCase
 
     public function test_logging_against_a_client_falls_back_to_the_general_project(): void
     {
-        CrmServer::tool(LogTimeTool::class, ['minutes' => 60, 'client' => 'Log Test', 'push_clockify' => false])
+        CrmServer::tool(LogTimeTool::class, ['minutes' => 60, 'client' => 'Log Test'])
             ->assertOk();
 
         $entry = TimeEntry::sole();
@@ -78,7 +74,7 @@ final class McpLogTimeToolTest extends TestCase
 
     public function test_requires_exactly_one_target(): void
     {
-        CrmServer::tool(LogTimeTool::class, ['minutes' => 30, 'push_clockify' => false])
+        CrmServer::tool(LogTimeTool::class, ['minutes' => 30])
             ->assertHasErrors()
             ->assertSee('invalid_argument');
 
@@ -86,7 +82,6 @@ final class McpLogTimeToolTest extends TestCase
             'minutes' => 30,
             'task' => (string) $this->task->id,
             'client' => (string) $this->client->id,
-            'push_clockify' => false,
         ])->assertHasErrors();
 
         $this->assertSame(0, TimeEntry::count());
@@ -94,7 +89,7 @@ final class McpLogTimeToolTest extends TestCase
 
     public function test_rejects_non_positive_minutes(): void
     {
-        CrmServer::tool(LogTimeTool::class, ['minutes' => 0, 'task' => (string) $this->task->id, 'push_clockify' => false])
+        CrmServer::tool(LogTimeTool::class, ['minutes' => 0, 'task' => (string) $this->task->id])
             ->assertHasErrors();
 
         $this->assertSame(0, TimeEntry::count());
@@ -109,7 +104,6 @@ final class McpLogTimeToolTest extends TestCase
             'minutes' => 30,
             'task' => (string) $this->task->id,
             'end' => '2026-07-14 15:30',
-            'push_clockify' => false,
         ])->assertOk();
 
         $entry = TimeEntry::sole();
@@ -123,7 +117,6 @@ final class McpLogTimeToolTest extends TestCase
             'minutes' => 15,
             'task' => (string) $this->task->id,
             'billable' => false,
-            'push_clockify' => false,
         ])->assertOk();
 
         $this->assertFalse(TimeEntry::sole()->billable);
@@ -132,7 +125,6 @@ final class McpLogTimeToolTest extends TestCase
             'minutes' => 15,
             'task' => (string) $this->task->id,
             'end' => 'whenever',
-            'push_clockify' => false,
         ])->assertHasErrors();
 
         $this->assertSame(1, TimeEntry::count());
@@ -142,7 +134,7 @@ final class McpLogTimeToolTest extends TestCase
     {
         Task::create(['project_id' => $this->project->id, 'name' => 'Hero polish', 'source' => 'manual']);
 
-        CrmServer::tool(LogTimeTool::class, ['minutes' => 30, 'task' => 'Hero', 'push_clockify' => false])
+        CrmServer::tool(LogTimeTool::class, ['minutes' => 30, 'task' => 'Hero'])
             ->assertHasErrors()
             ->assertSee('ambiguous_reference');
 

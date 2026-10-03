@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\Client;
 use App\Models\Project;
 use Illuminate\Console\Command;
@@ -17,8 +19,11 @@ use Illuminate\Console\Command;
  * human to fill in. It never invents a folder: every proposal is a directory
  * that exists on disk right now.
  */
+#[AccountScope(AccountScope::ACTING)]
 final class MonthCloseMapBackups extends Command
 {
+    use AgentConsoleOutput;
+
     /**
      * Trailing path segments kept by short(); enough to identify a site.
      */
@@ -33,7 +38,13 @@ final class MonthCloseMapBackups extends Command
 
     public function handle(): int
     {
+        $accountId = $this->actingAccountId();
+        if ($accountId === null) {
+            return self::FAILURE;
+        }
+
         $clients = Client::query()
+            ->where('account_id', $accountId)
             ->where('include_in_month_close', true)
             ->with('monthCloseSites')
             ->orderBy('name')

@@ -4,25 +4,34 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Console\Commands\Concerns\ResolvesProjectAndClient;
 use App\Models\Project;
 use Illuminate\Console\Command;
 use RuntimeException;
 
+#[AccountScope(AccountScope::ACTING)]
 final class CreateProjectsCommand extends Command
 {
+    use AgentConsoleOutput;
     use ResolvesProjectAndClient;
 
     protected $signature = 'projects:create
                             {--client= : Client ID or name (required)}
                             {--name=* : Project name (repeatable — one project per --name)}
                             {--description= : Optional description applied to every project}
-                            {--account= : Restrict resolution to this account ID}';
+                            {--account= : Account ID; must be the acting account}';
 
     protected $description = 'Create one or more private projects under a client.';
 
     public function handle(): int
     {
+        $accountId = $this->actingAccountId();
+        if ($accountId === null) {
+            return self::FAILURE;
+        }
+
         $clientNeedle = (string) ($this->option('client') ?? '');
         if ($clientNeedle === '') {
             $this->error('Missing --client (id or name).');
@@ -31,7 +40,7 @@ final class CreateProjectsCommand extends Command
         }
 
         try {
-            $client = $this->resolveClient($clientNeedle, $this->intOption('account'));
+            $client = $this->resolveClient($clientNeedle, $accountId);
         } catch (RuntimeException $e) {
             $this->error($e->getMessage());
 
@@ -63,12 +72,5 @@ final class CreateProjectsCommand extends Command
         $this->info('Done.');
 
         return self::SUCCESS;
-    }
-
-    private function intOption(string $name): ?int
-    {
-        $value = $this->option($name);
-
-        return $value === null || $value === '' ? null : (int) $value;
     }
 }

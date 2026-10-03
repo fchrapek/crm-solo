@@ -56,7 +56,6 @@ final class Client extends Model
         'lifecycle_stage',
         'segment',
         'cooperation_type',
-        'clockify_client_id',
         'currency',
         'hourly_rate',
     ];
@@ -125,7 +124,10 @@ final class Client extends Model
         return $this->retainers()
             ->activeOn($date)
             ->where('is_active', true)
+            ->reorder()
             ->orderByDesc('monthly_hours')
+            ->orderByDesc('effective_from')
+            ->orderByDesc('id')
             ->first();
     }
 
@@ -137,8 +139,10 @@ final class Client extends Model
         return $this->retainers()
             ->activeOn($date)
             ->where('is_active', true)
+            ->reorder()
             ->orderBy('invoice_group')
             ->orderBy('sort_order')
+            ->orderBy('id')
             ->get();
     }
 
@@ -211,6 +215,21 @@ final class Client extends Model
             );
     }
 
+    /**
+     * The client's private catch-all project, created as "General" when the
+     * client has no private project. Every create path gets one through the
+     * created hook; clients:ensure-general-project covers older rows.
+     */
+    public function ensureGeneralProject(): Project
+    {
+        $existing = $this->projects()->whereNull('trello_board_id')->orderBy('id')->first();
+
+        return $existing ?? $this->projects()->create([
+            'account_id' => $this->account_id,
+            'name' => 'General',
+        ]);
+    }
+
     protected static function booted(): void
     {
         self::created(function (Client $client): void {
@@ -222,8 +241,10 @@ final class Client extends Model
                 'note' => null,
                 'created_at' => $client->created_at ?? now(),
             ]);
-        });
 
+            // Time logged against the client needs a project to land on.
+            $client->ensureGeneralProject();
+        });
     }
 
     protected function casts(): array

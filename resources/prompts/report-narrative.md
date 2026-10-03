@@ -40,18 +40,10 @@ Output rules:
   in another heading. Do NOT paraphrase it, do NOT add hours to it, and do
   NOT invent items that are not in it. If `report_baseline_markdown` is null,
   skip this section.
-- Then, when `contracted_hours` is set, append a final h2 section, "Billing
-  summary" in English or "Podsumowanie rozliczeniowe" in Polish, as four
-  plain lines with a blank line between them: the opening balance, this
-  period's pool, the hours used, and the closing balance. Label them
-  "Opening balance" / "Pool for the period" / "Used in the period" /
-  "Closing balance", or in Polish "Bilans na start" / "Pula okresu" /
-  "Wykorzystano" / "Bilans na koniec", so an AI draft and the deterministic
-  composer read identically. Sign the balances
-  (+ or the minus character) and mark the used hours as a deduction. Use the
-  input numbers exactly. If `available_hours` is lower than
-  `opening_balance_hours` plus `contracted_hours`, add one line stating how
-  many hours exceeded the agreed cap and were not carried forward.
+- Do NOT write the billing summary section
+  ("Billing summary" / "Podsumowanie rozliczeniowe"), a balance, or any
+  hours figure. The application appends that section itself, from code,
+  after your text; anything you write about balances is removed.
 - Do not invent reportable work that is not in `tasks`.
 - Style for client-facing text: never use em or en dashes, use a comma, a
   period or a plain hyphen. Straight quotes only. No signposting ("warto

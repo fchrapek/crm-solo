@@ -39,14 +39,15 @@ interface Props {
     project: ProjectRowProject;
     clientId: number;
     trelloEnabled?: boolean;
+    trelloActions?: boolean;
 }
 
 /**
  * A project as one row: where it stands, what is running, and the actions that
  * belong to it. The whole row navigates to the project's board page; task
- * creation and Clockify concerns live there, not here.
+ * creation lives there, not here.
  */
-export function ProjectRow({ project, clientId, trelloEnabled = false }: Props) {
+export function ProjectRow({ project, clientId, trelloEnabled = false, trelloActions = true }: Props) {
     const { t } = useTranslation();
     const [projectDialogOpen, setProjectDialogOpen] = useState(false);
     const [mappingDialogOpen, setMappingDialogOpen] = useState(false);
@@ -151,21 +152,23 @@ export function ProjectRow({ project, clientId, trelloEnabled = false }: Props) 
                                     </DropdownMenuItem>
                                 </>
                             ) : (
-                                <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={handleSync} disabled={processing}>
-                                        <RefreshCw size={14} className={styles.dropdownIcon} />
-                                        {t('Sync Now')}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => setMappingDialogOpen(true)} disabled={processing || lists.length === 0}>
-                                        <Settings size={14} className={styles.dropdownIcon} />
-                                        {t('Configure list mapping')}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem variant="destructive" onClick={() => setDisconnectOpen(true)} disabled={processing}>
-                                        <Unlink size={14} className={styles.dropdownIcon} />
-                                        {t('Disconnect from Trello')}
-                                    </DropdownMenuItem>
-                                </>
+                                trelloActions && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={handleSync} disabled={processing}>
+                                            <RefreshCw size={14} className={styles.dropdownIcon} />
+                                            {t('Sync Now')}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => setMappingDialogOpen(true)} disabled={processing || lists.length === 0}>
+                                            <Settings size={14} className={styles.dropdownIcon} />
+                                            {t('Configure list mapping')}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem variant="destructive" onClick={() => setDisconnectOpen(true)} disabled={processing}>
+                                            <Unlink size={14} className={styles.dropdownIcon} />
+                                            {t('Disconnect from Trello')}
+                                        </DropdownMenuItem>
+                                    </>
+                                )
                             )}
                         </DropdownMenuContent>
                     </DropdownMenu>

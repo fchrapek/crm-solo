@@ -18,7 +18,7 @@
 # What stays public under docs/ is docs/development and docs/integrations.
 # Anything public that links into an excluded path becomes a dead link, so
 # check for those when adding a rule here.
-docs/session-log.md    export-ignore
+docs/SESSION-LOG.md    export-ignore
 docs/deploy/           export-ignore
 docs/development/deployment.md export-ignore
 docs/vision/           export-ignore
@@ -30,8 +30,26 @@ docs/audit/            export-ignore
 docs/demo/             export-ignore
 docs/roadmap/          export-ignore
 scripts/prod/sites/    export-ignore
+# Per-client maintenance targets (real repo names); the scripts read it only if present.
+scripts/maint/targets.conf export-ignore
 # The export script carries the blocklist of real client names it hunts for,
 # so publishing it would publish exactly what it exists to keep out.
 scripts/public-export.sh export-ignore
+scripts/public-export/  export-ignore
 .claude/               export-ignore
 .agents/               export-ignore
+# The real app's private hosting; the demo's compose.demo.yaml and Dockerfile.prod stay public.
+docs/development/hosting.md export-ignore
+compose.hosting.yaml   export-ignore
+.env.app.example       export-ignore
+.env.dev.example       export-ignore
+docker/hosting/        export-ignore
+deploy/hosting/        export-ignore
+scripts/hosting/       export-ignore
+# Their tests run the hosting scripts above, so they leave with them.
+tests/Feature/HostingScriptsTest.php   export-ignore
+tests/Feature/PullBackupScriptTest.php export-ignore
+# The private repository's own automation; the snapshot keeps deploy-demo.yml and ci.yml.
+.github/workflows/deploy.yml     export-ignore
+.github/workflows/main-guard.yml export-ignore
+.github/workflows/public-release.yml export-ignore

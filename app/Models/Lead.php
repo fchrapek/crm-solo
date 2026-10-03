@@ -48,10 +48,12 @@ final class Lead extends Model
         'email',
         'phone',
         'source',
+        'marketing_consent',
         'stage',
         'score_factors',
         'client_id',
         'external_ref',
+        'capture_key',
         'notes',
         'captured_at',
     ];
@@ -188,8 +190,8 @@ final class Lead extends Model
 
     /**
      * Gold / Oak / Rowan from the shared thresholds (Gold >= 7, Oak 4-6,
-     * Rowan below). Tier drives routing, not just display: Gold earns a
-     * personal reply inside 24h, Rowan gets no Filip-minutes at all.
+     * Rowan below). Tier drives routing: Gold earns a personal reply inside
+     * 24h, Rowan gets no personal time at all.
      */
     public function tier(): string
     {

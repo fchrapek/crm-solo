@@ -27,7 +27,6 @@ export interface TaskSessionSummary {
         end_time: string | null;
         description: string | null;
         billable: boolean;
-        pushed_to_clockify: boolean;
     } | null;
 }
 

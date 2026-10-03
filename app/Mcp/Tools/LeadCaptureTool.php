@@ -6,6 +6,7 @@ namespace App\Mcp\Tools;
 
 use App\Mcp\Tools\Concerns\HandlesReferenceErrors;
 use App\Models\Lead;
+use App\Services\Leads\LeadCapture;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
@@ -21,7 +22,7 @@ final class LeadCaptureTool extends Tool
 
     protected string $name = 'lead_capture';
 
-    public function handle(Request $request): Response
+    public function handle(Request $request, LeadCapture $capture): Response
     {
         try {
             $validated = $request->validate([
@@ -44,11 +45,10 @@ final class LeadCaptureTool extends Tool
         }
 
         try {
-            $lead = Lead::create([
-                'account_id' => $this->identity()->account->id,
-                'pipeline' => $validated['pipeline'] ?? (Lead::pipelines()[0] ?? ''),
-                'name' => mb_trim($validated['name']),
-                'source' => mb_trim($validated['source']),
+            $lead = $capture->capture($this->identity()->account, [
+                'pipeline' => $validated['pipeline'] ?? null,
+                'name' => $validated['name'],
+                'source' => $validated['source'],
                 'email' => $validated['email'] ?? null,
                 'phone' => $validated['phone'] ?? null,
                 'company' => $validated['company'] ?? null,

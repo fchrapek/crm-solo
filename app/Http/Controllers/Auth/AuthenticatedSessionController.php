@@ -6,7 +6,9 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\User;
 use App\Providers\AppServiceProvider;
+use App\Rules\Turnstile;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -24,14 +26,12 @@ final class AuthenticatedSessionController extends Controller
     {
         return Inertia::render('auth/login', [
             'demo' => config('app.demo') ? [
-                'email' => 'demo@crm-solo.test',
+                'email' => User::DEMO_EMAIL,
                 'password' => (string) config('app.demo_password'),
             ] : null,
             // Widget renders only when the backend will actually verify -
             // a visible challenge without enforcement would be pure friction.
-            'turnstileSiteKey' => config('services.turnstile.secret')
-                ? (string) config('services.turnstile.site_key')
-                : null,
+            'turnstileSiteKey' => Turnstile::siteKey(),
         ]);
     }
 

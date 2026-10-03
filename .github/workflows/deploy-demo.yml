@@ -6,7 +6,8 @@ name: Deploy Demo
 # self-heals nightly via the scheduler). The private repository carries this
 # file verbatim, which is why the jobs check the repository name: there it
 # stays inert. Secrets live in the public repo's `demo` environment, which
-# only main may use.
+# only main may use. The CI gate runs first, on the same commit, and a
+# failure stops the build and the deploy.
 
 on:
   push:
@@ -18,29 +19,36 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build:
+  gate:
     if: github.repository == 'fchrapek/crm-solo'
-    runs-on: ubuntu-latest
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  build:
+    needs: gate
+    if: github.repository == 'fchrapek/crm-solo'
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push app image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ./Dockerfile.prod
@@ -53,7 +61,7 @@ jobs:
   deploy:
     needs: build
     if: github.repository == 'fchrapek/crm-solo'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: demo
 
     steps:
@@ -67,10 +75,10 @@ jobs:
           fi
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Sync compose file to server
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           port: ${{ secrets.SSH_PORT }}
@@ -80,7 +88,7 @@ jobs:
           target: ${{ secrets.DEPLOY_PATH }}/
 
       - name: Deploy to server
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           port: ${{ secrets.SSH_PORT }}

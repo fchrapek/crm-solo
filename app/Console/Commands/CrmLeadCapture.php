@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Models\Account;
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\Lead;
+use App\Services\Leads\LeadCapture;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
 
@@ -15,8 +17,11 @@ use InvalidArgumentException;
  * entry-stage resolution and the capture event all behave exactly like the
  * UI form.
  */
+#[AccountScope(AccountScope::ACTING)]
 final class CrmLeadCapture extends Command
 {
+    use AgentConsoleOutput;
+
     protected $signature = 'crm:lead-capture
         {--pipeline= : Brand pipeline (config/leadgen.php); defaults to the first}
         {--name= : Lead name (required)}
@@ -29,14 +34,9 @@ final class CrmLeadCapture extends Command
 
     protected $description = 'Capture a lead (validated exactly like the UI: pipeline/source/entry stage)';
 
-    public function handle(): int
+    public function handle(LeadCapture $capture): int
     {
-        $account = Account::query()->orderBy('id')->first();
-        if ($account === null) {
-            $this->error('No account exists.');
-
-            return self::FAILURE;
-        }
+        $account = $this->actingIdentity()->account;
 
         $name = mb_trim((string) $this->option('name'));
         $source = mb_trim((string) $this->option('source'));
@@ -47,15 +47,14 @@ final class CrmLeadCapture extends Command
         }
 
         try {
-            $lead = Lead::create([
-                'account_id' => $account->id,
-                'pipeline' => $this->option('pipeline') ?: (Lead::pipelines()[0] ?? ''),
+            $lead = $capture->capture($account, [
+                'pipeline' => $this->option('pipeline'),
                 'name' => $name,
                 'source' => $source,
-                'email' => $this->option('email') ?: null,
-                'phone' => $this->option('phone') ?: null,
-                'company' => $this->option('company') ?: null,
-                'notes' => $this->option('note') ?: null,
+                'email' => $this->option('email'),
+                'phone' => $this->option('phone'),
+                'company' => $this->option('company'),
+                'notes' => $this->option('note'),
             ]);
         } catch (InvalidArgumentException $e) {
             $this->error($e->getMessage());
@@ -64,16 +63,16 @@ final class CrmLeadCapture extends Command
         }
 
         if ($this->option('json')) {
-            $this->line((string) json_encode([
+            $this->raw($this->encodeJson([
                 'id' => $lead->id,
                 'pipeline' => $lead->pipeline,
                 'stage' => $lead->stage,
-            ], JSON_UNESCAPED_UNICODE));
+            ]));
 
             return self::SUCCESS;
         }
 
-        $this->info("Captured lead #{$lead->id} {$lead->name} [{$lead->pipeline}] at {$lead->stage}.");
+        $this->raw("Captured lead #{$lead->id} ".$this->literal($lead->name)." [{$lead->pipeline}] at {$lead->stage}.");
 
         return self::SUCCESS;
     }

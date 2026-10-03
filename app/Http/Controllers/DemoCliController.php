@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Services\Agent\AgentCall;
+use App\Services\Agent\AgentCallContext;
+use App\Services\Agent\AgentIdentity;
+use App\Services\Agent\AgentIdentityResolver;
+use App\Services\Agent\FixedIdentityResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -24,6 +29,7 @@ final class DemoCliController extends Controller
     private const VERBS = [
         'today' => 'crm:today',
         'brief' => 'crm:brief',
+        'task' => 'crm:task',
         'timer-start' => 'crm:timer-start',
         'timer-stop' => 'crm:timer-stop',
         'task-done' => 'crm:task-done',
@@ -62,12 +68,21 @@ final class DemoCliController extends Controller
 
         $buffer = new BufferedOutput();
 
+        // The verbs act as the signed-in visitor's account, not whichever account comes first.
+        $user = $request->user();
+        app()->instance(AgentIdentityResolver::class, new FixedIdentityResolver(new AgentIdentity($user->account, $user)));
+
         try {
-            Artisan::call(mb_trim(self::VERBS[$verb].' '.$rest), [], $buffer);
+            app(AgentCallContext::class)->run(
+                new AgentCall(AgentCall::VIA_WEB_DEMO, self::VERBS[$verb]),
+                fn (): int => Artisan::call(mb_trim(self::VERBS[$verb].' '.$rest), [], $buffer),
+            );
         } catch (Throwable $e) {
             // Console errors (bad option, missing argument) read fine in a
             // terminal; the demo DB holds nothing sensitive to leak.
             return response()->json(['output' => $e->getMessage()]);
+        } finally {
+            app()->forgetInstance(AgentIdentityResolver::class);
         }
 
         $output = $buffer->fetch();
@@ -85,6 +100,7 @@ final class DemoCliController extends Controller
             '',
             '  crm today [--json]                    attention list, timers, hot leads',
             '  crm brief "<client>" [--json]         full client context',
+            '  crm task <id|name> [--json]           one task: description, brief, readiness',
             '  crm timer-start "<task>"              start a live timer',
             '  crm timer-stop                        stop it',
             '  crm time:log <minutes> --task="<t>"   log time after the fact',

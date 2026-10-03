@@ -8,12 +8,8 @@ use RuntimeException;
 
 /**
  * No report prompt could be resolved: the shipped file is missing or
- * unreadable and the account has no override.
- *
- * Deliberately fatal rather than a silent downgrade to the deterministic
- * composer. A missing prompt file is an operator error (a bad deploy, a
- * botched mount), and swallowing it would hand the user a differently shaped
- * report with no explanation.
+ * unreadable and the account has no override. The AI composer logs it and
+ * degrades to the structured composer; `reports:prompt-show` reports it.
  */
 final class NarrativePromptUnavailable extends RuntimeException
 {

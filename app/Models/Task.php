@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Casts\HumanizedText;
+use App\Casts\TaskDescription;
+use App\Services\Integrations\Trello\TrelloListMapper;
+use App\Support\LocalCalendar;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 
@@ -65,10 +69,18 @@ final class Task extends Model
         self::SESSION_MODE_IN_REPO,
     ];
 
+    /** The terminal session's bearer credential for the session-events endpoint. */
+    protected $hidden = [
+        'session_token',
+    ];
+
     protected $fillable = [
         'project_id',
         'trello_card_id',
         'trello_list_id',
+        'trello_due_complete',
+        'trello_activity_at',
+        'trello_move_pending_at',
         'name',
         'description',
         'list_name',
@@ -77,6 +89,7 @@ final class Task extends Model
         'labels',
         'trello_url',
         'is_completed',
+        'finished_at',
         'source',
         'type',
         'is_reviewed',
@@ -91,6 +104,7 @@ final class Task extends Model
         'ai_priority_reasoning',
         'recurrence_period_days',
         'parent_task_id',
+        'recurrence_predecessor_id',
         'agent_lane',
         'cli',
         'session_port',
@@ -142,6 +156,18 @@ final class Task extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(TaskAttachment::class)->orderBy('id');
+    }
+
+    /** The CRM's own brief on the task: where, done when, constraints, notes. */
+    public function brief(): HasOne
+    {
+        return $this->hasOne(TaskBrief::class);
+    }
+
+    /** The cached checklists, comments and attachment list of a Trello card. */
+    public function cardDetails(): HasOne
+    {
+        return $this->hasOne(TaskCardDetails::class);
     }
 
     public function sessions(): HasMany
@@ -202,25 +228,94 @@ final class Task extends Model
     }
 
     /**
-     * Complete the task through the canonical path: Done list, completed
-     * flag, agent lane mirrored, and — when this crossed the not-done → done
-     * boundary — the recurring successor spawned. Used by the crm:task-done
-     * agent verb; the controllers keep their own field-level updates but
-     * share spawnRecurringInstance().
+     * The one definition of an open task: not finished by the owner, not
+     * completed on its board, not archived, and not left on the Done list
+     * (a card on Done is finished even when nobody ticked it). Its project
+     * must still be live: not archived, and its client (if any) not deleted.
+     *
+     * @param  Builder<self>  $query
      */
-    public function markDone(): void
+    public function scopeOpen(Builder $query): void
     {
-        $wasCompleted = (bool) $this->is_completed;
+        $query->whereNull($query->qualifyColumn('finished_at'))
+            ->where($query->qualifyColumn('is_completed'), false)
+            ->whereNull($query->qualifyColumn('archived_at'))
+            ->where(fn (Builder $q) => $q->whereNull($query->qualifyColumn('list_name'))
+                ->orWhere($query->qualifyColumn('list_name'), '!=', TrelloListMapper::LANE_DONE))
+            ->whereHas('project', fn (Builder $project) => $project
+                ->whereNull($project->qualifyColumn('archived_at'))
+                ->where(fn (Builder $q) => $q->whereNull($project->qualifyColumn('client_id'))->orWhereHas('client')));
+    }
 
-        $update = ['list_name' => 'Done', 'is_completed' => true];
-        if ($this->agent_lane !== null) {
-            $update['agent_lane'] = self::AGENT_LANE_DONE;
-        }
-        $this->update($update);
+    /** A synced card: Trello owns its title, description, list and completion. */
+    public function hasTrelloCard(): bool
+    {
+        return $this->trello_card_id !== null;
+    }
 
-        if (! $wasCompleted) {
-            $this->spawnRecurringInstance();
+    /** Done for the owner: ticked in the CRM, or completed on its board. */
+    public function isDone(): bool
+    {
+        return $this->finished_at !== null || (bool) $this->is_completed;
+    }
+
+    /**
+     * The calendar day the task is due. A CRM due date is a date, stored as its
+     * midnight, so it is read as written; a Trello card's due is an instant,
+     * read in the display timezone.
+     */
+    public function dueDay(): ?string
+    {
+        if ($this->due_date === null) {
+            return null;
         }
+
+        return $this->hasTrelloCard()
+            ? $this->due_date->copy()->setTimezone(LocalCalendar::timezone())->toDateString()
+            : $this->due_date->toDateString();
+    }
+
+    /**
+     * The row's own half of scopeOpen: not finished, not completed, not
+     * archived and not on the Done list. (The scope also checks the project.)
+     */
+    public function isOpen(): bool
+    {
+        return ! $this->isDone() && ! $this->isArchived() && $this->list_name !== TrelloListMapper::LANE_DONE;
+    }
+
+    /** Overdue once its due day has ended in the display timezone, and only while it is still open. */
+    public function isOverdue(): bool
+    {
+        $day = $this->dueDay();
+
+        return $day !== null && $day < LocalCalendar::today()->toDateString() && $this->isOpen();
+    }
+
+    /**
+     * Whether a CRM untick can make this task open again. A card completed
+     * on its board stays done whatever the CRM clears, so only Trello reopens it.
+     */
+    public function canUnfinish(): bool
+    {
+        return $this->hasTrelloCard()
+            ? $this->finished_at !== null && ! $this->is_completed
+            : $this->isDone();
+    }
+
+    /**
+     * The two facts behind "done", as the agent verbs report them: the
+     * owner's finish, and for a Trello card where the card itself sits.
+     *
+     * @return array{finished_at: ?string, is_completed: bool, card_lane: ?string}
+     */
+    public function completionState(): array
+    {
+        return [
+            'finished_at' => $this->finished_at?->toIso8601String(),
+            'is_completed' => (bool) $this->is_completed,
+            'card_lane' => $this->hasTrelloCard() ? $this->list_name : null,
+        ];
     }
 
     /**
@@ -230,7 +325,7 @@ final class Task extends Model
     public function latestOpenSuccessor(): ?self
     {
         return self::query()
-            ->where('parent_task_id', $this->id)
+            ->where('recurrence_predecessor_id', $this->id)
             ->where('is_completed', false)
             ->orderByDesc('id')
             ->first();
@@ -239,7 +334,10 @@ final class Task extends Model
     /**
      * If this task has a recurrence period, create the next instance dated
      * `period_days` after today. Carries over the CLI choice so the new task
-     * is immediately ready to launch on its due date.
+     * is immediately ready to launch on its due date, and whether it shows in
+     * client reports. One next instance per task: a repeated finish, or an
+     * untick and a tick again, keeps the one it already made, even once that
+     * one is itself done.
      */
     public function spawnRecurringInstance(): void
     {
@@ -247,20 +345,32 @@ final class Task extends Model
             return;
         }
 
-        self::create([
-            'project_id' => $this->project_id,
-            'name' => $this->name,
-            'description' => $this->description,
-            'list_name' => 'To-Do',
-            'due_date' => now()->addDays($this->recurrence_period_days)->startOfDay(),
-            'priority' => $this->priority,
-            'source' => 'manual',
-            'is_reviewed' => true,
-            'is_completed' => false,
-            'recurrence_period_days' => $this->recurrence_period_days,
-            'parent_task_id' => $this->id,
-            'cli' => $this->cli,
-        ]);
+        // Open or already done, the next instance exists: a re-finish never adds another,
+        // whatever the interval is now. The unique column settles a race.
+        if (self::query()->where('recurrence_predecessor_id', $this->id)->exists()) {
+            return;
+        }
+
+        try {
+            self::create([
+                'project_id' => $this->project_id,
+                'name' => $this->name,
+                'description' => $this->description,
+                'list_name' => 'To-Do',
+                'due_date' => LocalCalendar::today()->addDays($this->recurrence_period_days)->toDateString(),
+                'priority' => $this->priority,
+                'source' => 'manual',
+                'is_reviewed' => true,
+                'is_completed' => false,
+                'recurrence_period_days' => $this->recurrence_period_days,
+                'is_reportable' => (bool) $this->is_reportable,
+                'parent_task_id' => $this->id,
+                'recurrence_predecessor_id' => $this->id,
+                'cli' => $this->cli,
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            // Another finish of this task spawned it first.
+        }
     }
 
     /**
@@ -276,6 +386,14 @@ final class Task extends Model
             self::query()
                 ->where('parent_task_id', $task->id)
                 ->update(['parent_task_id' => null]);
+            self::query()
+                ->where('recurrence_predecessor_id', $task->id)
+                ->update(['recurrence_predecessor_id' => null]);
+
+            // Logged time outlives the task: it keeps its project and client, so it is still billed.
+            TimeEntry::query()
+                ->where('task_id', $task->id)
+                ->update(['task_id' => null]);
 
             // Attachment files live outside the DB — without this, deleting a
             // task (or its project, which deletes tasks through Eloquent)
@@ -287,11 +405,15 @@ final class Task extends Model
     protected function casts(): array
     {
         return [
-            'description' => HumanizedText::class,
+            'description' => TaskDescription::class,
             'labels' => 'array',
             'review_changes' => 'array',
             'due_date' => 'datetime',
             'is_completed' => 'boolean',
+            'trello_due_complete' => 'boolean',
+            'trello_activity_at' => 'datetime',
+            'trello_move_pending_at' => 'datetime',
+            'finished_at' => 'datetime',
             'is_reviewed' => 'boolean',
             'is_reportable' => 'boolean',
             'rejected_at' => 'datetime',

@@ -23,12 +23,13 @@ interface Integration {
 
 interface IndexPageProps extends SharedData {
     integrations: Integration[];
+    demo: boolean;
 }
 
 export default function Integrations() {
     const { t } = useTranslation();
     const { setBreadcrumbs } = usePageActions();
-    const { integrations: integrationsData } = usePage<IndexPageProps>().props;
+    const { integrations: integrationsData, demo } = usePage<IndexPageProps>().props;
 
     const breadcrumbs: BreadcrumbItem[] = React.useMemo(
         () => [
@@ -49,7 +50,11 @@ export default function Integrations() {
             <Head title={t('Integrations')} />
 
             <h1 className={styles.title}>{t('Integrations')}</h1>
-            <p className={styles.subtitle}>{t('Connect your CRM with external services')}</p>
+            <p className={styles.subtitle}>
+                {demo
+                    ? t('Integrations are not part of the demo. In your own install they connect Trello, Infakt and your lead forms.')
+                    : t('Connect your CRM with external services')}
+            </p>
 
             <div className={styles.grid}>
                 {integrationsData.map((integration) => (

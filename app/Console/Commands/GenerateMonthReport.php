@@ -4,14 +4,19 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Models\Client;
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\ClientReport;
+use App\Services\Agent\CrmEntityResolver;
+use App\Services\Agent\ReferenceException;
 use App\Services\Reports\ReportComposerRegistry;
 use App\Services\Reports\ReportContext;
 use App\Services\Reports\ReportDataAggregator;
+use App\Support\LocalCalendar;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\App;
+use InvalidArgumentException;
 
 /**
  * Headless twin of ClientReportsController::store, for closing a month from the
@@ -19,11 +24,14 @@ use Illuminate\Support\Facades\App;
  * snapshot, never on the time entries: pass the rounded figure and the body and
  * the stored actual_hours agree.
  */
+#[AccountScope(AccountScope::ACTING)]
 final class GenerateMonthReport extends Command
 {
+    use AgentConsoleOutput;
+
     protected $signature = 'reports:generate
         {client : Client id}
-        {--period= : YYYY-MM}
+        {--period= : Billed month YYYY-MM (default: previous month)}
         {--hours= : Override actual_hours (rounded billing figure)}
         {--composer= : Composer key}
         {--locale=pl}';
@@ -32,8 +40,26 @@ final class GenerateMonthReport extends Command
 
     public function handle(ReportDataAggregator $aggregator, ReportComposerRegistry $composers): int
     {
-        $client = Client::findOrFail((int) $this->argument('client'));
-        $start = Carbon::parse($this->option('period').'-01')->startOfMonth();
+        $accountId = $this->actingAccountId();
+        if ($accountId === null) {
+            return self::FAILURE;
+        }
+
+        try {
+            $client = app(CrmEntityResolver::class)->client((string) $this->argument('client'), $accountId);
+        } catch (ReferenceException $e) {
+            return $this->referenceFailure($e);
+        }
+
+        // The same default as month-close:tick and infakt:draft-invoice: a close bills the month just ended.
+        try {
+            $start = Carbon::instance(LocalCalendar::monthFrom((string) ($this->option('period') ?? LocalCalendar::previousMonth()), (string) config('app.timezone')));
+        } catch (InvalidArgumentException $e) {
+            $this->error($e->getMessage());
+
+            return self::FAILURE;
+        }
+        $period = $start->format('Y-m');
         $end = $start->copy()->endOfMonth();
 
         App::setLocale($this->option('locale'));
@@ -77,8 +103,8 @@ final class GenerateMonthReport extends Command
         ]);
 
         $this->line(sprintf(
-            '#%d %s | opening %.2f + contracted %.2f - actual %.2f = closing %.2f | %s',
-            $report->id, $client->name,
+            '#%d %s [%s] | opening %.2f + contracted %.2f - actual %.2f = closing %.2f | %s',
+            $report->id, $client->name, $period,
             $ctx->openingBalanceHours, (float) $ctx->contractedHours(),
             $ctx->actualHours, (float) $ctx->closingBalanceHours(), $composer->key()
         ));

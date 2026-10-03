@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\ClientDocument;
+use App\Support\UploadLimits;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -50,7 +51,7 @@ final class ClientDocumentsController extends Controller
             'file' => [
                 'required',
                 'file',
-                'max:'.self::MAX_FILE_KB,
+                'max:'.UploadLimits::maxKilobytes(self::MAX_FILE_KB),
                 'extensions:'.implode(',', self::ALLOWED_EXTENSIONS),
                 'mimetypes:'.implode(',', self::ALLOWED_MIMETYPES),
             ],

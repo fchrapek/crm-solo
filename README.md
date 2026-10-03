@@ -26,13 +26,20 @@ production.
 ```bash
 git clone <your fork> crm-solo && cd crm-solo
 composer install && bun install
-cp .env.example .env && php artisan key:generate
+cp .env.example .env && php artisan key:generate && php artisan setup:reverb-keys
+# Plain HTTP, no local proxy: in .env set APP_URL=http://127.0.0.1:8101
 
 docker compose up -d          # MariaDB, Valkey, Mailpit
-php artisan migrate --seed    # seeds a webmaster@crm-solo.test / test1234 login
+php artisan migrate --seed    # seeds webmaster@crm-solo.test and prints its password once
 
 composer run dev              # PHP server + Horizon + Vite + scheduler + Reverb
 ```
+
+Then open http://127.0.0.1:8101. Vite follows `APP_URL`: with plain http it
+serves assets and hot reload over http on 127.0.0.1:5180. The HTTPS route at
+`https://crm-solo.test` (`.env.example`'s default) needs a local TLS proxy
+(DDEV's traefik router) and its certificate; see
+[docs/development/setup.md](docs/development/setup.md).
 
 `php artisan test` runs the suite. `bun run build` builds for production, and
 `bun run types` type-checks.
@@ -43,11 +50,11 @@ AI provider is set up.
 
 ## What is worth knowing before reading the code
 
-**`CLAUDE.md` is the real architecture document.** It covers the data models,
-the conventions and the pitfalls that cost someone a day. It is written for an
-AI coding assistant, which turns out to be the same thing a new human reader
-wants: what the models mean, why a decision went the way it did, and which
-mistakes the codebase has already made.
+**Start with `CLAUDE.md`, then `docs/development/`.** `CLAUDE.md` holds the
+conventions, the hard rules and the pitfalls that cost someone a day; it is
+written for an AI coding assistant, which turns out to be what a new human
+reader wants too. What the models mean and how each feature works lives in
+`docs/development/` (start with `data-models.md`).
 
 **Integrations sit behind registries, not conditionals.** Task sources
 (Trello today, GitHub Issues planned), report composers and AI providers each

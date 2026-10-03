@@ -1,0 +1,108 @@
+.button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--solo-space-2);
+    border: 0;
+    border-radius: var(--solo-radius-full);
+    font-family: var(--solo-font-text);
+    font-weight: 700;
+    line-height: 1.3;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.button:focus-visible {
+    outline: 2px solid var(--solo-fg);
+    outline-offset: 3px;
+}
+
+.primary {
+    background: var(--solo-accent);
+    color: var(--solo-on-accent);
+}
+
+.ghost {
+    background: none;
+    color: var(--solo-fg);
+    opacity: 0.8;
+}
+
+.ghost:hover {
+    opacity: 1;
+}
+
+.sm {
+    font-size: var(--solo-button-sm);
+    padding: 7px 16px;
+}
+
+.md {
+    font-size: var(--solo-button-md);
+    padding: 10px 20px;
+}
+
+.lg {
+    font-size: var(--solo-button-lg);
+    padding: 16px 34px;
+}
+
+.block {
+    width: 100%;
+}
+
+.sectionHead {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--solo-space-4);
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--solo-rule-strong);
+}
+
+.sectionLabel {
+    margin: 0;
+    font-size: var(--solo-text-label);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.sectionMeta {
+    font-size: var(--solo-text-meta);
+    font-weight: 500;
+    color: var(--solo-fg-muted);
+}
+
+.eyebrow {
+    margin: 0;
+    font-size: var(--solo-text-eyebrow);
+    font-weight: 500;
+    color: var(--solo-fg-muted);
+}
+
+.poster {
+    margin: 0;
+    font-family: var(--solo-font-display);
+    font-stretch: 62%;
+    font-weight: 900;
+    font-size: var(--solo-display-poster);
+    line-height: 0.88;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+}
+
+.sectionQuiet {
+    border-bottom-color: var(--solo-rule);
+}
+
+.sectionQuiet .sectionLabel {
+    color: var(--solo-fg-muted);
+}

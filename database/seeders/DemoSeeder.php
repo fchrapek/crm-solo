@@ -17,11 +17,21 @@ use App\Models\MonthCloseRun;
 use App\Models\Project;
 use App\Models\Setting;
 use App\Models\Task;
+use App\Models\TaskAttachment;
+use App\Models\TaskBrief;
+use App\Models\TaskSession;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\Agent\AgentIdentity;
+use App\Services\Agent\TaskBriefWriter;
+use App\Services\Day\DayPlanner;
+use App\Services\Tasks\TaskCompletion;
+use App\Support\LocalCalendar;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 /**
  * Fictional demo data for the public demo instance (demo.crm-solo.com).
@@ -45,15 +55,21 @@ final class DemoSeeder extends Seeder
 
     private int $invoiceSeq = 0;
 
+    /** @var array<string, Task> */
+    private array $tasks = [];
+
+    /** @var list<TimeEntry> */
+    private array $agentEntries = [];
+
     public function run(): void
     {
-        if (User::withTrashed()->where('email', 'demo@crm-solo.test')->exists()) {
+        if (User::withTrashed()->where('email', User::DEMO_EMAIL)->exists()) {
             $this->command->warn('Demo user already exists. Run `php artisan migrate:fresh --force` first, then reseed.');
 
             return;
         }
 
-        $password = env('DEMO_PASSWORD') ?: Str::password(16, symbols: false);
+        $password = (string) config('app.demo_password') ?: Str::password(16, symbols: false);
 
         $this->account = Account::create([
             'name' => 'Brzoza Digital',
@@ -63,7 +79,7 @@ final class DemoSeeder extends Seeder
         $this->owner = $this->account->users()->create([
             'first_name' => 'Anna',
             'last_name' => 'Zielińska',
-            'email' => 'demo@crm-solo.test',
+            'email' => User::DEMO_EMAIL,
             'password' => $password,
         ]);
         $this->owner->forceFill([
@@ -76,10 +92,12 @@ final class DemoSeeder extends Seeder
         $this->seedFoundation();
         $this->seedMovementStudio();
         $this->seedLeads();
+        $this->seedAgentWork();
+        $this->seedDays();
 
         $this->command->info('');
         $this->command->info('Demo data seeded for account "Brzoza Digital".');
-        $this->command->info('  Login:    demo@crm-solo.test');
+        $this->command->info('  Login:    '.User::DEMO_EMAIL);
         $this->command->info("  Password: {$password}");
         $this->command->info('');
         $this->command->info(sprintf(
@@ -113,6 +131,7 @@ final class DemoSeeder extends Seeder
             'is_pinned' => true,
             'month_close_type' => 'maintenance',
             'report_mode' => 'report',
+            'include_in_month_close' => true,
             'notes' => "Rodzinna pracownia mebli na wymiar. Strona firmowa na WordPressie + galeria realizacji.\nKontakt najlepiej mailowo, Marek odpisuje wieczorami.",
             'report_baseline_markdown' => <<<'MD'
 ## W ramach abonamentu
@@ -170,8 +189,10 @@ MD,
             'effective_from' => now()->subMonthsNoOverflow(4)->startOfMonth()->toDateString(),
         ]);
 
-        $general = $this->makeProject($client, 'General');
+        $general = $client->ensureGeneralProject();
         $www = $this->makeProject($client, 'Strona WWW meble-przykladowe.test', 'Serwis firmowy: WordPress, galeria realizacji, formularze kontaktowe.');
+        // Before the close is started: the run takes its site steps from this flag once.
+        $www->update(['include_in_month_close' => true]);
 
         $formularz = $this->makeTask($www, 'Formularz wyceny mebli na wymiar', 'Doing', [
             'type' => 'feature',
@@ -185,27 +206,31 @@ MD,
             'parent_task_id' => $formularz->id,
             'is_reportable' => true,
         ]);
-        $this->makeTask($www, 'Sekcja realizacji: filtry kategorii', 'Backlog', ['type' => 'feature', 'priority' => 'medium']);
-        $this->makeTask($www, 'Optymalizacja zdjęć w galerii', 'Backlog', ['priority' => 'low']);
-        $this->makeTask($www, 'Aktualizacja cennika PDF', 'To-Do', ['priority' => 'medium', 'is_reportable' => true]);
-        $this->makeTask($www, 'Poprawka RWD nagłówka na tablecie', 'Testing', ['type' => 'bug', 'priority' => 'medium', 'is_reportable' => true]);
+        $filtry = $this->makeTask($www, 'Sekcja realizacji: filtry kategorii', 'Backlog', ['type' => 'feature', 'priority' => 'medium']);
+        $zdjecia = $this->makeTask($www, 'Optymalizacja zdjęć w galerii', 'Backlog', ['priority' => 'low']);
+        $cennik = $this->makeTask($www, 'Aktualizacja cennika PDF', 'To-Do', ['priority' => 'medium', 'is_reportable' => true]);
+        $rwd = $this->makeTask($www, 'Poprawka RWD nagłówka na tablecie', 'Testing', ['type' => 'bug', 'priority' => 'medium', 'is_reportable' => true]);
         $migracja = $this->makeTask($www, 'Migracja hostingu na PHP 8.3', 'Done', ['is_reportable' => true]);
         $updates = $this->makeTask($www, 'Aktualizacja WordPress i wtyczek (czerwiec)', 'Done', ['recurrence_period_days' => 30]);
         $this->makeTask($general, 'Przygotować ofertę rozbudowy o sklep', 'To-Do', ['priority' => 'medium']);
 
         // Time entries: last month + early current month.
-        $lastMonth = now()->subMonthNoOverflow();
-        $this->makeTime($client, $www, $formularz, 'Formularz wyceny: szkielet i pola', 165, $lastMonth->copy()->setDay(9)->setTime(9, 30), 'terminal_session');
-        $this->makeTime($client, $www, $formularz, 'Formularz wyceny: obsługa załączników', 120, $lastMonth->copy()->setDay(16)->setTime(10, 0), 'terminal_session');
+        $lastMonth = $this->monthsAgo(1);
+        $this->agentEntries[] = $this->makeTime($client, $www, $formularz, 'Formularz wyceny: szkielet i pola', 165, $lastMonth->copy()->setDay(9)->setTime(9, 30), 'terminal_session');
+        $this->agentEntries[] = $this->makeTime($client, $www, $formularz, 'Formularz wyceny: obsługa załączników', 120, $lastMonth->copy()->setDay(16)->setTime(10, 0), 'terminal_session');
         $this->makeTime($client, $www, $formularz, 'Formularz wyceny: stylowanie i RWD', 90, $lastMonth->copy()->setDay(23)->setTime(13, 15));
         $this->makeTime($client, $www, $migracja, 'Migracja PHP 8.3: testy po przełączeniu', 105, $lastMonth->copy()->setDay(5)->setTime(11, 0));
         $this->makeTime($client, $www, $updates, 'Aktualizacje WP + wtyczki, kopia zapasowa', 45, $lastMonth->copy()->setDay(3)->setTime(8, 30));
-        $this->makeTime($client, $www, null, 'Naprawa galerii po aktualizacji wtyczki', 50, now()->subDays(12)->setTime(14, 40), 'manual', 'Cofnięcie wtyczki galerii do poprzedniej wersji, testy na mobile.');
-        $this->makeTime($client, $www, $formularz, 'Formularz wyceny: walidacja pól', 75, now()->subDays(3)->setTime(9, 0), 'terminal_session');
+        if ($slot = $this->recentSlot(12, 14, 40, 50)) {
+            $this->makeTime($client, $www, null, 'Naprawa galerii po aktualizacji wtyczki', $slot[1], $slot[0], 'manual', 'Cofnięcie wtyczki galerii do poprzedniej wersji, testy na mobile.');
+        }
+        if ($slot = $this->recentSlot(3, 9, 0, 75)) {
+            $this->makeTime($client, $www, $formularz, 'Formularz wyceny: walidacja pól', $slot[1], $slot[0], 'terminal_session');
+        }
 
         // Reports: previous month finalized, last month draft.
-        $may = now()->subMonthsNoOverflow(2);
-        $june = now()->subMonthNoOverflow();
+        $may = $this->monthsAgo(2);
+        $june = $this->monthsAgo(1);
 
         $finalized = ClientReport::create([
             'account_id' => $this->account->id,
@@ -219,8 +244,8 @@ MD,
             'currency' => 'PLN',
             'composer_key' => 'structured_list',
             'status' => 'finalized',
-            'generated_at' => $june->copy()->startOfMonth()->addDays(1)->setTime(9, 0),
-            'finalized_at' => $june->copy()->startOfMonth()->addDays(2)->setTime(12, 30),
+            'generated_at' => $june->copy()->startOfMonth()->addDays(1)->setTime(9, 0)->setTimezone(config('app.timezone')),
+            'finalized_at' => $june->copy()->startOfMonth()->addDays(2)->setTime(12, 30)->setTimezone(config('app.timezone')),
             'body_markdown' => <<<'MD'
 # Raport miesięczny: maj 2026
 
@@ -259,7 +284,7 @@ MD,
             'actual_hours_before' => 7.5,
             'currency_before' => 'PLN',
             'composer_key_before' => 'structured_list',
-            'created_at' => $june->copy()->startOfMonth()->addDays(2)->setTime(12, 30),
+            'created_at' => $june->copy()->startOfMonth()->addDays(2)->setTime(12, 30)->setTimezone(config('app.timezone')),
         ]);
 
         $draftBodyV1 = <<<'MD'
@@ -335,14 +360,16 @@ MD,
         $this->makeInvoice($client, '2026-07-06', 1390, false); // wystawiona, niezapłacona
 
         // Month-close: maintenance run for last month, in progress.
-        $run = MonthCloseRun::startFor($client, $lastMonth->format('Y-m'));
+        $run = MonthCloseRun::startFor($client, LocalCalendar::previousMonth());
         $this->tickSteps($run, [
-            'live_check' => ['done', 'Strona działa, SSL ważny do listopada.'],
-            'db_dump' => ['done', null],
-            'full_site_copy' => ['skipped', 'Pełna kopia była przy migracji PHP na początku miesiąca.'],
+            'db_archived' => ['done', 'Zrzut bazy w archiwum, SSL ważny do listopada.'],
+            'local_db_import' => ['skipped', 'Same aktualizacje, lokalna baza wystarczy.'],
             'wp_updates' => ['done', null],
+            'local_verify' => ['done', 'Formularze i galeria sprawdzone lokalnie.'],
             'reconcile_log' => ['done', null],
         ]);
+
+        $this->tasks += compact('formularz', 'migracja', 'filtry', 'zdjecia', 'cennik', 'rwd');
     }
 
     // Client 2: hourly + gig month-close (completed)
@@ -363,6 +390,7 @@ MD,
             'hourly_rate' => 160,
             'month_close_type' => 'gig',
             'report_mode' => 'summary_email',
+            'include_in_month_close' => true,
             'notes' => 'Kawiarnia z paleniem na miejscu. Sklep online na WooCommerce, rozliczenie godzinowe.',
         ], createdMonthsAgo: 3, history: [
             ['active', 11, 'Start współpracy godzinowej: 160 zł netto/h, rozliczenie na koniec miesiąca.'],
@@ -370,7 +398,7 @@ MD,
 
         $karolina = $this->makeContact($client, 'Karolina', 'Młynarska', ['hej@kawiarnia-przykladowa.test'], 'Właścicielka', '+48 100 000 103');
 
-        $general = $this->makeProject($client, 'General');
+        $general = $client->ensureGeneralProject();
         $sklep = $this->makeProject($client, 'Sklep online', 'WooCommerce ze świeżo paloną kawą, subskrypcje i wysyłki.');
 
         $blik = $this->makeTask($sklep, 'Konfiguracja płatności BLIK', 'To-Do', [
@@ -382,11 +410,13 @@ MD,
         $this->makeTask($sklep, 'Aktualizacja menu sezonowego', 'Done', ['is_reportable' => true]);
         $this->makeTask($general, 'Zebrać zdjęcia z palarni do nowej galerii', 'Backlog', ['priority' => 'low']);
 
-        $lastMonth = now()->subMonthNoOverflow();
+        $lastMonth = $this->monthsAgo(1);
         $this->makeTime($client, $sklep, $ziarna, 'Podstrona Nasze ziarna: layout', 120, $lastMonth->copy()->setDay(12)->setTime(15, 0));
         $this->makeTime($client, $sklep, $ziarna, 'Podstrona Nasze ziarna: treści i zdjęcia', 90, $lastMonth->copy()->setDay(19)->setTime(10, 30));
         $this->makeTime($client, $sklep, null, 'Menu sezonowe: podmiana i testy', 60, $lastMonth->copy()->setDay(26)->setTime(9, 0), 'manual', 'Nowe menu letnie, sprawdzenie na telefonie.');
-        $this->makeTime($client, $sklep, $blik, 'BLIK: research bramek i sandbox', 45, now()->subDays(2)->setTime(11, 30));
+        if ($slot = $this->recentSlot(2, 11, 30, 45)) {
+            $this->makeTime($client, $sklep, $blik, 'BLIK: research bramek i sandbox', $slot[1], $slot[0]);
+        }
 
         // Invoices: hourly billing, amount varies with hours worked (160 zł/h).
         $this->makeInvoice($client, '2026-04-08', 960, true);  // 6 h
@@ -394,8 +424,10 @@ MD,
         $this->makeInvoice($client, '2026-06-09', 1120, true); // 7 h
         $this->makeInvoice($client, '2026-07-07', 480, false); // 3 h, niezapłacona
 
+        $this->tasks['blik'] = $blik;
+
         // Gig month-close: everything done, run completed.
-        $run = MonthCloseRun::startFor($client, $lastMonth->format('Y-m'));
+        $run = MonthCloseRun::startFor($client, LocalCalendar::previousMonth());
         $this->tickSteps($run, [
             'reconcile_log' => ['done', 'Godziny spięte z wpisami czasu, 4,5 h.'],
             'summary_email' => ['done', 'Podsumowanie wysłane mailem.'],
@@ -429,17 +461,20 @@ MD,
 
         $tomasz = $this->makeContact($client, 'Tomasz', 'Gajda', ['t.gajda@fundacja-testowa.test'], 'Koordynator projektów');
 
-        $general = $this->makeProject($client, 'General');
+        $general = $client->ensureGeneralProject();
         $strona = $this->makeProject($client, 'Nowa strona fundacji', 'Etap 1: makiety i struktura. Etap 2: wdrożenie. Etap 3: migracja treści.');
 
-        $this->makeTask($strona, 'Makiety: strona główna i podstrona projektu', 'Doing', ['type' => 'feature', 'priority' => 'medium', 'is_reportable' => true]);
+        $makiety = $this->makeTask($strona, 'Makiety: strona główna i podstrona projektu', 'Doing', ['type' => 'feature', 'priority' => 'medium', 'is_reportable' => true]);
         $this->makeTask($strona, 'Struktura treści z zespołem fundacji', 'Done', ['is_reportable' => true]);
-        $this->makeTask($strona, 'Wybór hostingu i domeny', 'To-Do', ['priority' => 'low']);
+        $hosting = $this->makeTask($strona, 'Wybór hostingu i domeny', 'To-Do', ['priority' => 'low']);
+        $this->tasks += compact('makiety', 'hosting');
         $this->makeTask($strona, 'Moduł aktualności z tagami', 'Backlog', ['type' => 'feature']);
 
-        $lastMonth = now()->subMonthNoOverflow();
+        $lastMonth = $this->monthsAgo(1);
         $this->makeTime($client, $strona, null, 'Warsztat: struktura treści', 150, $lastMonth->copy()->setDay(20)->setTime(10, 0), 'manual', 'Spotkanie online z zespołem fundacji, notatki w projekcie.');
-        $this->makeTime($client, $strona, null, 'Makiety strony głównej', 180, now()->subDays(8)->setTime(9, 0));
+        if ($slot = $this->recentSlot(8, 9, 0, 180)) {
+            $this->makeTime($client, $strona, null, 'Makiety strony głównej', $slot[1], $slot[0]);
+        }
 
         // Invoices: project billed in milestones (etapy).
         $this->makeInvoice($client, '2026-05-12', 3200, true);  // etap 1: makiety i struktura
@@ -555,6 +590,182 @@ MD,
             ['won', 92, 'Akceptacja stawki. Zakładam klienta i pierwsze zadania.'],
         ]);
         $won->forceFill(['client_id' => $this->zlotyMlyn->id])->save();
+    }
+
+    // The agent board on the furniture site: one card per lane, two ended sessions, a confirmed brief, an attachment.
+    private function seedAgentWork(): void
+    {
+        $completion = app(TaskCompletion::class);
+        $formularz = $this->tasks['formularz'];
+
+        foreach (['filtry' => Task::AGENT_LANE_BACKLOG, 'formularz' => Task::AGENT_LANE_IN_PROGRESS, 'rwd' => Task::AGENT_LANE_IN_REVIEW] as $key => $lane) {
+            $this->tasks[$key]->update(['cli' => 'claude', 'agent_lane' => $lane]);
+        }
+        $this->tasks['migracja']->update(['cli' => 'claude']);
+        $completion->finish($this->tasks['migracja']->fresh());
+
+        foreach ($this->agentEntries as $entry) {
+            TaskSession::create([
+                'task_id' => $formularz->id,
+                'account_id' => $this->account->id,
+                'cli' => 'claude',
+                'base_branch' => 'main',
+                'branch_name' => $formularz->sessionBranchName(),
+                'worktree_path' => $formularz->sessionWorktreePath('/home/demo/meble-przykladowe'),
+                'time_entry_id' => $entry->id,
+                'started_at' => $entry->start_time,
+                'ended_at' => $entry->end_time,
+                'ended_reason' => 'stopped',
+            ]);
+        }
+
+        app(TaskBriefWriter::class)->write($formularz, [
+            'where' => 'Strona WWW meble-przykladowe.test, podstrona Wycena.',
+            'done_when' => 'Formularz wysyła wycenę mailem do pracowni, a walidacja działa na telefonie.',
+            'constraints' => 'Bez nowych wtyczek, na obecnym motywie.',
+            'notes' => 'Szkic od klienta jest w załączniku.',
+        ], true, new AgentIdentity($this->account, $this->owner), TaskBrief::VIA_CLI);
+
+        $pdf = $this->demoPdf([
+            'Brief: formularz wyceny mebli na wymiar',
+            'Pola: szerokosc, wysokosc, glebokosc, material, szkic (PDF lub JPG).',
+            'Po wyslaniu: mail do pracowni i potwierdzenie dla klienta.',
+            'Dokument przykladowy do wersji demo.',
+        ]);
+        $path = "task-attachments/{$formularz->id}/".Str::uuid()->toString().'.pdf';
+        if (! Storage::disk('local')->put($path, $pdf)) {
+            throw new RuntimeException("Could not write the demo attachment to {$path}.");
+        }
+        TaskAttachment::create([
+            'task_id' => $formularz->id,
+            'file_path' => $path,
+            'original_name' => 'brief-formularz-wyceny.pdf',
+            'mime' => 'application/pdf',
+            'size' => mb_strlen($pdf, '8bit'),
+            'label' => 'Szkic od klienta',
+        ]);
+    }
+
+    // Today, tomorrow and the month card, all from the local calendar so the nightly reset lands on the right days.
+    private function seedDays(): void
+    {
+        $planner = app(DayPlanner::class);
+        $today = LocalCalendar::today();
+        $accountId = $this->account->id;
+
+        foreach (['cennik', 'blik', 'makiety'] as $key) {
+            $planner->addPick($accountId, $today, $this->tasks[$key]->id);
+        }
+        $planner->addPick($accountId, $today->addDay(), $this->tasks['hosting']->id);
+
+        $blik = $this->tasks['blik'];
+        $makiety = $this->tasks['makiety'];
+        $zdjecia = $this->tasks['zdjecia'];
+        $work = [[$blik, 'BLIK: konfiguracja bramki w sandboxie', 30], [$makiety, 'Makiety: poprawki po uwagach fundacji', 45], [$zdjecia, 'Galeria: kompresja zdjęć realizacji', 20]];
+        foreach ($this->todayBlock(array_column($work, 2)) as $i => [$start, $minutes]) {
+            [$task, $title] = $work[$i];
+            $this->makeTime($task->project->client, $task->project, $task, $title, $minutes, $start);
+        }
+
+        $planner->completeTask($this->tasks['cennik']->fresh());
+
+        $closed = 0;
+        for ($day = $today->startOfMonth(); $day->lessThan($today); $day = $day->addDay()) {
+            if ($day->isWeekend()) {
+                continue;
+            }
+            if ($closed++ % 4 === 0) {
+                $start = Carbon::instance($day->setTime(9, 0));
+                $this->makeTime($makiety->project->client, $makiety->project, $makiety, 'Makiety: przegląd z zespołem fundacji', 30, $start);
+            }
+            $planner->close($accountId, $day);
+        }
+    }
+
+    /** The first day of the local month $months ago, in the display timezone. */
+    private function monthsAgo(int $months): Carbon
+    {
+        return Carbon::instance(LocalCalendar::now()->startOfMonth()->subMonthsNoOverflow($months));
+    }
+
+    /**
+     * Days ago at a local time, kept inside the current month so last month's hours still match its report; null when
+     * only today is left, whose room belongs to today's own work.
+     *
+     * @return array{0: Carbon, 1: int}|null start and minutes
+     */
+    private function recentSlot(int $daysAgo, int $hour, int $minute, int $minutes): ?array
+    {
+        $day = LocalCalendar::today()->subDays($daysAgo)->max(LocalCalendar::today()->startOfMonth());
+
+        return $day->isSameDay(LocalCalendar::today()) ? null : [Carbon::instance($day->setTime($hour, $minute)), $minutes];
+    }
+
+    /**
+     * Today's entries back to back from 07:00, or ending just before the seed when it runs earlier; after local
+     * midnight the last ones are shortened or left out, so none overlaps another or ends in the future.
+     *
+     * @param  list<int>  $lengths
+     * @return array<int, array{0: Carbon, 1: int}> index => start and minutes
+     */
+    private function todayBlock(array $lengths): array
+    {
+        $gap = 5;
+        $today = LocalCalendar::today();
+        $latestEnd = LocalCalendar::now()->subMinutes($gap);
+        $span = array_sum($lengths) + $gap * (count($lengths) - 1);
+        $start = $today->setTime(7, 0);
+        if ($start->addMinutes($span)->greaterThan($latestEnd)) {
+            $start = $latestEnd->subMinutes($span)->max($today);
+        }
+
+        $slots = [];
+        foreach ($lengths as $i => $length) {
+            $minutes = min($length, intdiv($latestEnd->getTimestamp() - $start->getTimestamp(), 60));
+            if ($minutes < 1) {
+                break;
+            }
+            $slots[$i] = [Carbon::instance($start), $minutes];
+            $start = $start->addMinutes($minutes + $gap);
+        }
+
+        return $slots;
+    }
+
+    /**
+     * One page of ASCII text as a PDF built by hand: no document info dictionary, so no author, producer or dates.
+     *
+     * @param  list<string>  $lines
+     */
+    private function demoPdf(array $lines): string
+    {
+        $text = "BT /F1 12 Tf 56 780 Td 18 TL\n";
+        foreach ($lines as $line) {
+            $text .= '('.strtr($line, ['\\' => '\\\\', '(' => '\\(', ')' => '\\)']).") Tj T*\n";
+        }
+        $text .= 'ET';
+
+        $objects = [
+            '<< /Type /Catalog /Pages 2 0 R >>',
+            '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+            '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+            '<< /Length '.mb_strlen($text, '8bit')." >>\nstream\n{$text}\nendstream",
+        ];
+
+        $pdf = "%PDF-1.4\n";
+        $offsets = [];
+        foreach ($objects as $i => $object) {
+            $offsets[] = mb_strlen($pdf, '8bit');
+            $pdf .= ($i + 1)." 0 obj\n{$object}\nendobj\n";
+        }
+        $xref = mb_strlen($pdf, '8bit');
+        $pdf .= 'xref'."\n0 ".(count($objects) + 1)."\n0000000000 65535 f \n";
+        foreach ($offsets as $offset) {
+            $pdf .= sprintf("%010d 00000 n \n", $offset);
+        }
+
+        return $pdf.'trailer'."\n<< /Size ".(count($objects) + 1)." /Root 1 0 R >>\nstartxref\n{$xref}\n%%EOF\n";
     }
 
     /**
@@ -675,6 +886,9 @@ MD,
 
     private function makeTime(Client $client, Project $project, ?Task $task, string $title, int $minutes, Carbon $start, string $source = 'manual', ?string $description = null): TimeEntry
     {
+        // Eloquent stores a Carbon's wall clock, so a local time is converted first.
+        $start = $start->copy()->setTimezone(config('app.timezone'));
+
         return TimeEntry::create([
             'account_id' => $this->account->id,
             'client_id' => $client->id,

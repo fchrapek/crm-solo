@@ -14,7 +14,9 @@ fix lands once for every site instead of being copy-pasted around a fleet.
 snapshot: a fleet catalogue names which hosts to reach and where each install
 sits, which is reconnaissance whether or not it carries a password.
 
-Verbs: `dump | update | verify | all`. Every mutation sits between gates
+Verbs: `dump | update | verify | dbcheck | all`. `dbcheck` is read-only (table
+count through `wp db query`). `DUMP_DIR_OVERRIDE=<dir>` sends a dump somewhere
+other than the site's backup folder, for tests. Every mutation sits between gates
 (baseline health, same-day dump on file, post-update health plus checksums);
 any red gate stops that site with a machine-readable `step|status|detail`
 line. Verbs are idempotent, so a second run skips whatever is already done
@@ -27,8 +29,15 @@ Per-site facts worth knowing about, as they come up:
   PHP. A host serving 8.3 with a 7.4 CLI default needs an explicit binary.
 - `EXCLUDE` lists plugins that `plugin update --all` must skip, typically a
   commercial plugin whose licence is not active on that install.
-- Dumps read database credentials through `wp config get` at runtime, so it
-  does not matter how a host splits wp-config.
+- Dumps run `wp db export - --single-transaction --quick | gzip` under remote
+  `pipefail`, and a dump is kept only when gzip is intact, it has tables, the
+  closing `-- Dump completed` line, and the site's own siteurl. A same-day
+  file gets the same checks instead of a silent skip.
+- `wp db` on SeoHost: wp-cli 2.12 runs `mariadb` / `mariadb-dump` by bare
+  name, which SeoHost keeps only in a versioned `/usr/local/mariadb-*/bin`
+  outside the SSH PATH. `rssh` resolves that folder on every call and adds it
+  to PATH (tested on h67, 02.10.2026). Restores go through a file on the
+  server and `wp db import <file>`, never a stream.
 - A Composer-managed site with no wp-cli on the host is a different shape:
   the dump parses the live defines, and code updates go through the deploy
   (git push plus composer install) rather than wp-cli.

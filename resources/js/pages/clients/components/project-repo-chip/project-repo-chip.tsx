@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useHostExec } from '@/hooks/use-host-exec';
 
 import { RepositoryFormDialog, type RepositoryDialogValues } from '../repository-form-dialog';
 
@@ -32,6 +33,7 @@ interface Props {
  */
 export function ProjectRepoChip({ projectId, repositories }: Props) {
     const { t } = useTranslation();
+    const hostExec = useHostExec();
     const [popoverOpen, setPopoverOpen] = useState(false);
     const [repoDialogOpen, setRepoDialogOpen] = useState(false);
     const [editingRepo, setEditingRepo] = useState<RepositoryDialogValues | undefined>(undefined);
@@ -64,6 +66,8 @@ export function ProjectRepoChip({ projectId, repositories }: Props) {
 
     // 0 repos → outline badge that opens the create dialog directly
     if (!hasRepos) {
+        if (!hostExec) return null;
+
         return (
             <>
                 <Badge variant="outline" asChild>
@@ -112,9 +116,11 @@ export function ProjectRepoChip({ projectId, repositories }: Props) {
                                         <ExternalLink size={12} />
                                     </a>
                                 )}
-                                <button type="button" onClick={() => openEdit(repo)} aria-label={t('Edit repository')} className={styles.iconButton}>
-                                    <Pencil size={12} />
-                                </button>
+                                {hostExec && (
+                                    <button type="button" onClick={() => openEdit(repo)} aria-label={t('Edit repository')} className={styles.iconButton}>
+                                        <Pencil size={12} />
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -129,12 +135,14 @@ export function ProjectRepoChip({ projectId, repositories }: Props) {
                             </div>
                         ))}
                     </div>
-                    <div className={styles.popoverFooter}>
-                        <Button size="sm" variant="ghost" onClick={openCreate}>
-                            <Plus size={12} className={styles.iconLeading} />
-                            {t('Add repository')}
-                        </Button>
-                    </div>
+                    {hostExec && (
+                        <div className={styles.popoverFooter}>
+                            <Button size="sm" variant="ghost" onClick={openCreate}>
+                                <Plus size={12} className={styles.iconLeading} />
+                                {t('Add repository')}
+                            </Button>
+                        </div>
+                    )}
                 </PopoverContent>
             </Popover>
 

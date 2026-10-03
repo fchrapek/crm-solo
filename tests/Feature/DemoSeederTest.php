@@ -9,6 +9,8 @@ use App\Models\Lead;
 use App\Models\User;
 use Database\Seeders\DemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -19,6 +21,12 @@ use Tests\TestCase;
 final class DemoSeederTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Storage::fake('local');
+    }
 
     public function test_demo_seeder_builds_the_fictional_world(): void
     {
@@ -68,5 +76,14 @@ final class DemoSeederTest extends TestCase
     public function test_demo_reset_refuses_outside_demo_mode(): void
     {
         $this->artisan('demo:reset')->assertFailed();
+    }
+
+    public function test_the_demo_password_comes_from_config_so_a_cached_config_keeps_it(): void
+    {
+        config(['app.demo_password' => 'from-config']);
+
+        $this->seed(DemoSeeder::class);
+
+        $this->assertTrue(Hash::check('from-config', User::query()->sole()->password));
     }
 }

@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\ClientRetainer;
+use App\Support\LocalCalendar;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -40,7 +41,7 @@ final class ClientRetainersController extends Controller
             'is_active' => $data['is_active'] ?? true,
             'sort_order' => $data['sort_order'] ?? 0,
             'currency' => $data['currency'] ?? $client->currency ?? 'PLN',
-            'effective_from' => Carbon::parse($data['effective_from'] ?? now()->toDateString())->startOfDay(),
+            'effective_from' => Carbon::parse($data['effective_from'] ?? LocalCalendar::today()->toDateString())->startOfDay(),
             'effective_to' => null,
             'notes' => $data['notes'] ?? null,
         ]);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Console\Commands\Concerns\ResolvesProjectAndClient;
 use App\Models\Integration;
 use App\Models\Project;
@@ -19,23 +21,30 @@ use RuntimeException;
  * reach and says which are already in — that listing is also the honest answer
  * to "what is Trello actually exposing to this integration".
  */
+#[AccountScope(AccountScope::ACTING)]
 final class TrelloAdopt extends Command
 {
+    use AgentConsoleOutput;
     use ResolvesProjectAndClient;
 
     protected $signature = 'trello:adopt
                             {board? : Trello board ID to adopt}
                             {--client= : Client ID or name to file it under}
                             {--name= : Project name (defaults to the board name)}
-                            {--account= : Restrict to this account ID}';
+                            {--account= : Account ID; must be the acting account}';
 
     protected $description = 'List Trello boards and adopt one as a project. Only adopted boards are synced.';
 
     public function handle(TaskSourceRegistry $taskSources): int
     {
+        $accountId = $this->actingAccountId();
+        if ($accountId === null) {
+            return self::FAILURE;
+        }
+
         $integration = Integration::where('provider', 'trello')
             ->where('is_enabled', true)
-            ->when($this->option('account'), fn ($q, $id) => $q->where('account_id', (int) $id))
+            ->where('account_id', $accountId)
             ->get()
             ->first(fn (Integration $i): bool => $i->hasValidApiKey());
 

@@ -166,6 +166,30 @@ final class CrmVerbsTest extends TestCase
             ->expectsOutputToContain('"attention_tasks"');
     }
 
+    public function test_today_lists_every_open_month_close_oldest_first(): void
+    {
+        $this->travelTo('2026-10-03 09:00:00');
+        $other = Client::factory()->create(['account_id' => $this->account->id, 'name' => 'Older Close Co']);
+        foreach ([[$this->client, '2026-09', 'open'], [$other, '2026-08', 'open'], [$this->client, '2026-07', 'completed']] as [$client, $period, $status]) {
+            \App\Models\MonthCloseRun::create([
+                'account_id' => $this->account->id,
+                'client_id' => $client->id,
+                'period' => $period,
+                'close_type' => 'maintenance',
+                'status' => $status,
+            ]);
+        }
+
+        $this->artisan('crm:today')
+            ->assertSuccessful()
+            ->expectsOutputToContain('2026-08 Older Close Co (maintenance)')
+            ->expectsOutputToContain('2026-09 Verb Test Co (maintenance)');
+
+        $this->artisan('crm:today', ['--json' => true])
+            ->assertSuccessful()
+            ->expectsOutputToContain('"month_close_open":[{"client":"Older Close Co","period":"2026-08","type":"maintenance"},{"client":"Verb Test Co","period":"2026-09","type":"maintenance"}]');
+    }
+
     public function test_timer_start_and_stop_round_trip(): void
     {
         $project = Project::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'name' => 'P']);

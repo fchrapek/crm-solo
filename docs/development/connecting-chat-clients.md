@@ -19,7 +19,7 @@ Today the CRM runs **on your own computer**, so a chat app can only reach it if 
 | **chatgpt.com in a browser** | Not yet | Same |
 | **Phone apps** | Not yet | Same |
 
-The browser and phone cases are not missing features, they are the *next* piece of work: see [When the CRM is hosted](#when-the-crm-is-hosted) below.
+Once the CRM is hosted, Claude Code also reaches it over HTTPS with an agent token. The browser and phone apps need an OAuth sign-in the CRM does not offer yet, so they remain the next piece of work: see [When the CRM is hosted](#when-the-crm-is-hosted) below.
 
 ## Before you start
 
@@ -114,7 +114,7 @@ Approve the tool call if the app asks. Approving once per tool is normal.
 
 ## What it can and cannot do
 
-It can: read the day's attention list, brief a client, start and stop timers, log time after the fact, complete tasks, write journal notes, capture and move leads, and drive the month-close checklist.
+It can: read the day's attention list, brief a client, read one task with its Trello checklists, comments and files, write a short brief on a task, start and stop timers, log time after the fact, complete tasks, write journal notes, capture and move leads, and drive the month-close checklist.
 
 It cannot: issue invoices to Infakt (deliberate — that writes to an external system, so it stays a terminal command), or do anything the CRM itself cannot do. It is the same set of actions the CLI has, reached a different way.
 
@@ -127,12 +127,36 @@ Two behaviours worth knowing, because they look like quirks and are not:
 
 ## When the CRM is hosted
 
-Everything above depends on the CRM being on the same machine. Giving it a public address (planned, not built) changes three things for the person setting it up:
+Once the CRM runs on a server (say `https://app.example.test`), the local server above talks to a database nobody uses any more. Clients then connect to the hosted MCP endpoint, `https://app.example.test/mcp`, which has the same tools and the same answers.
 
-- **The browser and phone start working.** claude.ai and chatgpt.com both accept a remote server by web address, so setup becomes "paste a URL, sign in" — no file editing, no paths, no Docker running locally.
-- **Setup moves into the UI.** Claude Desktop's **Settings → Connectors → Add custom connector** and ChatGPT's equivalent both take a URL. The JSON block on this page becomes unnecessary.
-- **It needs a login.** A public address means access control: each client sends a token, and the CRM resolves *which user* that token belongs to. Attribution stops being "the owner" and starts being the real person.
+**Which apps can use it today.** Claude Code, and any MCP client that can send its own HTTP headers. Every request needs two credentials: the Cloudflare Access service token that lets it past Access, and the CRM's own agent token. claude.ai, Claude Desktop connectors and ChatGPT sign in to remote servers with OAuth and cannot send those headers, so they stay on the local server (or wait for OAuth support, which is not built).
 
-The code is already arranged for this. The transport is one line in `routes/ai.php`, and identity resolution sits behind `AgentIdentityResolver`, which a hosted setup rebinds to read the token. The tools themselves do not change — which is the point of keeping them free of transport concerns.
+**What you need, once per Mac**
 
-Until then, a genuinely one-click local install is also possible by packaging the server as a Claude Desktop extension (Settings → Extensions), which would remove the file editing without needing a public address.
+1. The agent token, issued by the owner on the server (`php artisan agent-tokens:issue`), saved as `~/.config/crm-solo/agent.token`. It is shown once when issued. `chmod 600` the file; the tools refuse it otherwise.
+2. The Access service token, saved as `~/.config/crm-solo/remote.headers`, also `chmod 600`:
+
+   ```
+   CF-Access-Client-Id: <client id>
+   CF-Access-Client-Secret: <client secret>
+   ```
+
+   Instead of the token file you can keep the agent token in the Keychain (`security add-generic-password -s crm-solo-agent -a "$USER" -w`, which prompts for it) and export `CRM_REMOTE_KEYCHAIN_SERVICE=crm-solo-agent`.
+
+**Claude Code**
+
+```bash
+claude mcp remove crm-solo
+claude mcp add-json crm-solo '{"type":"http","url":"https://app.example.test/mcp","headersHelper":"/absolute/path/to/crm-solo/bin/crm-mcp-headers"}'
+```
+
+`bin/crm-mcp-headers` prints the headers from the two files above at connect time, so the token never sits in Claude Code's own config. If your Claude Code version does not know `headersHelper`, the fallback is static headers (`--header "Authorization: Bearer ..."` and the two `CF-Access-*` headers); they are then stored in plain text in `~/.claude.json`.
+
+**What changes once it is hosted**
+
+- **What a token may do is limited.** A token carries abilities: `read`, plus one write group each for notes, tasks, time, leads and the month close. A token without a write group does not even see those tools. A read-only token is the safe default for an experiment.
+- **Writes are attributed.** Every record a tool writes leaves an audit row with the token's name, the tool and the MCP session, and journal entries, timers and ticks carry the same marks. A note written from chat shows the token owner's name in the Activity tab.
+- **A revoked or expired token stops at once.** The client then reports an authentication error; ask for a new token rather than retrying.
+- **There is a rate limit** (120 requests a minute per token by default). An agent stuck in a loop hits it and gets HTTP 429.
+
+The `crm` command line works against the hosted CRM too; see `agent-crm-interface.md`, "Remote mode".

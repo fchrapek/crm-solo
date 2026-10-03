@@ -1,0 +1,38 @@
+# Local git hooks, installed by `bun install` (lefthook is a trusted
+# dependency). CI runs the full `composer run check` on every push and PR;
+# these catch the same problems before they leave the machine.
+# Skip once with LEFTHOOK=0, never by editing this file.
+
+commit-msg:
+  jobs:
+    - name: house style
+      run: scripts/hooks/commit-msg.sh {1}
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: pint
+      glob: "*.php"
+      run: vendor/bin/pint {staged_files}
+      stage_fixed: true
+    - name: eslint
+      glob: "*.{ts,tsx,js,mjs}"
+      run: bunx eslint --fix {staged_files}
+      stage_fixed: true
+    # The token linter scans all of resources/ in one pass and takes no file list.
+    - name: css tokens
+      glob: "*.css"
+      run: bun run lint:tokens
+
+# Git hands a hook its repository variables (GIT_DIR and its kin); nothing a
+# job spawns may inherit them, or a git command aimed at another directory acts
+# on this repository. tests/bootstrap.php clears them as well.
+pre-push:
+  jobs:
+    - name: types
+      run: env $(git rev-parse --local-env-vars | sed 's/^/-u /') sh -c 'php artisan wayfinder:generate >/dev/null && bun run types'
+    - name: js tests
+      run: env $(git rev-parse --local-env-vars | sed 's/^/-u /') bun test
+    - name: php tests
+      glob: "{*.php,lang/*.json,phpunit.xml,composer.lock,resources/prompts/*}"
+      run: env $(git rev-parse --local-env-vars | sed 's/^/-u /') php artisan test --parallel

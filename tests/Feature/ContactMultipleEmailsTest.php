@@ -42,7 +42,7 @@ final class ContactMultipleEmailsTest extends TestCase
         $contact = Contact::create([
             'account_id' => $this->account->id,
             'client_id' => $this->client->id,
-            'first_name' => 'Filip', 'last_name' => 'Ch',
+            'first_name' => 'Jan', 'last_name' => 'Ch',
             'emails' => ['one@primary.test', 'two@secondary.test'],
         ]);
 

@@ -8,7 +8,8 @@ use App\Models\Client;
 use App\Models\MonthCloseRun;
 use App\Models\MonthCloseStep;
 use App\Models\User;
-use Illuminate\Support\Carbon;
+use App\Support\LocalCalendar;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
@@ -36,24 +37,29 @@ final class MonthCloseTicker
             throw new InvalidArgumentException('state must be one of: '.implode(', ', $valid));
         }
 
-        $run = MonthCloseRun::startFor($client, $period);
-        $step = $this->resolveStep($run, $stepKey, $projectNeedle);
+        // One transaction, so a step or site that does not resolve leaves no freshly started run behind.
+        $run = DB::transaction(function () use ($client, $period, $stepKey, $projectNeedle, $state, $actor, $note): MonthCloseRun {
+            $run = MonthCloseRun::startFor($client, $period);
+            $step = $this->resolveStep($run, $stepKey, $projectNeedle);
 
-        $isPending = $state === MonthCloseStep::STATE_PENDING;
-        $attributes = [
-            'state' => $state,
-            'completed_at' => $isPending ? null : now(),
-            'completed_by' => $isPending ? null : $actor?->id,
-        ];
+            $isPending = $state === MonthCloseStep::STATE_PENDING;
+            $attributes = [
+                'state' => $state,
+                'completed_at' => $isPending ? null : now(),
+                'completed_by' => $isPending ? null : $actor?->id,
+            ];
 
-        // Only overwrite the note when one is given, so re-ticking a step does
-        // not silently erase the reason someone recorded earlier.
-        if ($note !== null) {
-            $attributes['note'] = $note;
-        }
+            // Only overwrite the note when one is given, so re-ticking a step does
+            // not silently erase the reason someone recorded earlier.
+            if ($note !== null) {
+                $attributes['note'] = $note;
+            }
 
-        $step->update($attributes);
-        $run->refreshStatusFromSteps();
+            $step->update($attributes);
+            $run->refreshStatusFromSteps();
+
+            return $run;
+        });
 
         return $this->checklist($run->fresh());
     }
@@ -121,7 +127,7 @@ final class MonthCloseTicker
 
     public function defaultPeriod(): string
     {
-        return Carbon::now()->subMonthNoOverflow()->format('Y-m');
+        return LocalCalendar::previousMonth();
     }
 
     /**
@@ -190,8 +196,6 @@ final class MonthCloseTicker
 
     private function assertPeriod(string $period): void
     {
-        if (preg_match('/^\d{4}-\d{2}$/', $period) !== 1) {
-            throw new InvalidArgumentException('Invalid period (expected YYYY-MM).');
-        }
+        LocalCalendar::monthFrom($period);
     }
 }

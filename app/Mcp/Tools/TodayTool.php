@@ -22,6 +22,6 @@ final class TodayTool extends Tool
 
     public function handle(Request $request, TodayDigest $digest): Response
     {
-        return $this->payload($digest->build());
+        return $this->payload($digest->build($this->identity()->account->id));
     }
 }

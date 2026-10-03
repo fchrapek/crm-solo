@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\Lead;
+use App\Services\Agent\ReferenceNotFoundException;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
 
@@ -13,19 +16,23 @@ use InvalidArgumentException;
  * the append-only stage history — the funnel's measurement — records the hop
  * exactly like a kanban drag.
  */
+#[AccountScope(AccountScope::ACTING)]
 final class CrmLeadStage extends Command
 {
+    use AgentConsoleOutput;
+
     protected $signature = 'crm:lead-stage {lead : Lead id} {stage : Target stage} {--note= : Optional note on the event} {--json : Machine-readable output}';
 
     protected $description = 'Move a lead to a stage (append-only history, like the board)';
 
     public function handle(): int
     {
-        $lead = Lead::find((int) $this->argument('lead'));
+        $id = (string) $this->argument('lead');
+        $lead = ctype_digit($id)
+            ? Lead::query()->where('account_id', $this->actingIdentity()->account->id)->find((int) $id)
+            : null;
         if ($lead === null) {
-            $this->error('No lead with id ['.$this->argument('lead').'].');
-
-            return self::FAILURE;
+            return $this->referenceFailure(new ReferenceNotFoundException('lead', $id));
         }
 
         try {
@@ -38,16 +45,16 @@ final class CrmLeadStage extends Command
         }
 
         if ($this->option('json')) {
-            $this->line((string) json_encode([
+            $this->raw($this->encodeJson([
                 'id' => $lead->id,
                 'stage' => $lead->stage,
                 'is_won' => $lead->isWon(),
-            ], JSON_UNESCAPED_UNICODE));
+            ]));
 
             return self::SUCCESS;
         }
 
-        $this->info("Lead #{$lead->id} {$lead->name} → {$lead->stage}".($lead->isWon() ? ' (won — convert in the UI)' : ''));
+        $this->raw("Lead #{$lead->id} ".$this->literal($lead->name)." -> {$lead->stage}".($lead->isWon() ? ' (won, convert in the UI)' : ''));
 
         return self::SUCCESS;
     }

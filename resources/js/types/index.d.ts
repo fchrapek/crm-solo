@@ -184,5 +184,6 @@ export interface SharedData {
     translations: TranslationStore | null;
     live_sessions?: LiveSession[];
     terminal_session_host: string;
+    host_exec: boolean;
     [key: string]: unknown;
 }

@@ -4,20 +4,32 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Process;
+use RuntimeException;
 
+#[AccountScope(AccountScope::OPERATOR)]
 final class RestoreDatabase extends Command
 {
+    use Concerns\IgnoresClientOptionFiles;
+
     protected $signature = 'db:restore
                             {file? : Backup filename to restore (lists available if omitted)}
                             {--force : Skip the confirmation prompt}';
 
-    protected $description = 'Restore a MariaDB backup';
+    protected $description = 'Restore a MariaDB backup (operator: the whole database, every account)';
 
     public function handle(): int
     {
-        $backupDir = storage_path('backups');
+        // Overwrites the whole database, so it is a local dev tool only, --force included.
+        if (! app()->isLocal()) {
+            $this->error('db:restore only runs in the local environment (current: '.app()->environment().').');
+
+            return self::FAILURE;
+        }
+
+        $backupDir = config('backup.path');
         $file = $this->argument('file');
 
         if (! $file) {
@@ -52,11 +64,18 @@ final class RestoreDatabase extends Command
         $host = config('database.connections.mariadb.host');
         $port = config('database.connections.mariadb.port');
         $username = config('database.connections.mariadb.username');
-        $password = config('database.connections.mariadb.password');
+        $password = (string) config('database.connections.mariadb.password');
 
-        $restoreCommand = $this->buildRestoreCommand($filepath, $host, (string) $port, $username, $password, $database);
+        try {
+            $restoreCommand = $this->buildRestoreCommand($filepath, $host, (string) $port, $username, $database);
+        } catch (RuntimeException $e) {
+            $this->error('Restore failed: '.$e->getMessage());
 
-        $result = Process::run(['bash', '-c', $restoreCommand]);
+            return self::FAILURE;
+        }
+
+        // No timeout: restoring a large dump legitimately runs for minutes.
+        $result = Process::forever()->env(['MYSQL_PWD' => $password])->run(['bash', '-c', $restoreCommand]);
 
         if ($result->failed()) {
             $this->error('Restore failed: '.$result->errorOutput());
@@ -107,30 +126,33 @@ final class RestoreDatabase extends Command
         return preg_replace('/\s+\(.+\)$/', '', $selected);
     }
 
-    private function buildRestoreCommand(string $filepath, string $host, string $port, string $username, string $password, string $database): string
+    /**
+     * The password travels in MYSQL_PWD, never on the command line; pipefail fails the run when either side of the pipe does.
+     * --no-defaults (it must come first) keeps a ~/.my.cnf password from overriding MYSQL_PWD.
+     */
+    private function buildRestoreCommand(string $filepath, string $host, string $port, string $username, string $database): string
     {
         $clientBin = $this->findClientBinary();
 
         if ($clientBin === 'docker') {
             return sprintf(
-                'gunzip -c %s | docker compose exec -T mariadb mariadb -u %s -p%s %s',
+                'set -o pipefail; gunzip -c %s | docker compose exec -T -e MYSQL_PWD mariadb mariadb -u %s %s',
                 escapeshellarg($filepath),
                 escapeshellarg($username),
-                escapeshellarg($password),
                 escapeshellarg($database),
             );
         }
 
         $args = sprintf(
-            '-h %s -P %s -u %s -p%s %s',
+            '%s -h %s -P %s -u %s %s',
+            $this->optionFileArgs($clientBin),
             escapeshellarg($host),
             escapeshellarg($port),
             escapeshellarg($username),
-            escapeshellarg($password),
             escapeshellarg($database),
         );
 
-        return sprintf('gunzip -c %s | %s %s', escapeshellarg($filepath), $clientBin, $args);
+        return sprintf('set -o pipefail; gunzip -c %s | %s %s', escapeshellarg($filepath), $clientBin, $args);
     }
 
     private function findClientBinary(): string

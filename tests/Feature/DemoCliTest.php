@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Account;
+use App\Models\AgentAuditEvent;
 use App\Models\Client;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -96,5 +97,34 @@ final class DemoCliTest extends TestCase
 
         $this->assertNotSame('', mb_trim((string) $response->json('output')));
         $this->assertDatabaseHas('clients', ['name' => 'Acme']);
+    }
+
+    public function test_each_visitor_ip_gets_its_own_throttle_bucket(): void
+    {
+        config(['app.demo' => true]);
+
+        $run = fn (string $ip) => $this->actingAs($this->user)
+            ->withServerVariables(['REMOTE_ADDR' => $ip])
+            ->postJson('/demo/cli', ['command' => 'crm today']);
+
+        foreach (range(1, 30) as $_) {
+            $run('198.51.100.1')->assertOk();
+        }
+        $run('198.51.100.1')->assertStatus(429);
+
+        $run('198.51.100.2')->assertOk();
+    }
+
+    public function test_a_demo_prompt_write_is_audited_as_the_demo_prompt_not_the_cli(): void
+    {
+        config(['app.demo' => true]);
+        Client::create(['account_id' => $this->user->account_id, 'name' => 'Acme']);
+
+        $this->actingAs($this->user)
+            ->postJson('/demo/cli', ['command' => 'crm note Acme "Called them"'])
+            ->assertOk();
+
+        $audit = AgentAuditEvent::query()->sole();
+        $this->assertSame(['web-demo', 'crm:note', null], [$audit->via, $audit->verb, $audit->session_id]);
     }
 }

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { StartSessionDialog } from '@/components/start-session-dialog';
 import { KanbanBoard, KanbanCard, type KanbanCardAction, type KanbanLane } from '@/components/ui/kanban-board';
+import { useHostExec } from '@/hooks/use-host-exec';
 import { RepositoryFormDialog } from '@/pages/clients/components/repository-form-dialog';
 import { TaskFormDialog, type TaskDialogValues } from '@/pages/clients/components/task-form-dialog';
 
@@ -29,6 +30,7 @@ export interface AgentKanbanTask {
     parent_task?: { id: number; name: string } | null;
     child_tasks_count?: number;
     source: string | null;
+    has_trello_card?: boolean;
     agent_lane: string;
     cli?: 'claude' | 'codex' | null;
     session_branch_name?: string | null;
@@ -52,6 +54,7 @@ const LANE_LABEL_KEY = (lane: string) => `agent_lane_${lane}`;
 
 export function AgentKanban({ tasks: initialTasks, lanes, showProjectChip = false, reloadOnly }: Props) {
     const { t } = useTranslation();
+    const hostExec = useHostExec();
     const [tasks, setTasks] = useState<AgentKanbanTask[]>(initialTasks);
     useEffect(() => setTasks(initialTasks), [initialTasks]);
 
@@ -155,8 +158,9 @@ export function AgentKanban({ tasks: initialTasks, lanes, showProjectChip = fals
                 <KanbanBoard
                     lanes={kanbanLanes}
                     renderCard={(task) => {
-                        const isManual = task.source === 'manual';
+                        const isManual = !task.has_trello_card;
                         const showSessionButton =
+                            hostExec &&
                             task.cli !== null && task.cli !== undefined && (task.agent_lane === 'backlog' || task.agent_lane === 'in_progress');
                         const waitingForUser = task.session_attention_at !== null && task.session_attention_at !== undefined;
 
@@ -175,7 +179,7 @@ export function AgentKanban({ tasks: initialTasks, lanes, showProjectChip = fals
                             chips.push({ label: t('Parent: {{name}}', { name: task.parent_task.name }), tone: 'label' as const });
                         }
                         if ((task.child_tasks_count ?? 0) > 0) {
-                            chips.push({ label: t('{{count}} subtasks', { count: task.child_tasks_count }), tone: 'label' as const });
+                            chips.push({ label: t('subtask_count', { count: task.child_tasks_count }), tone: 'label' as const });
                         }
                         if (task.cli) {
                             chips.push({ label: task.cli, tone: 'label' as const, icon: <Terminal size={10} /> });

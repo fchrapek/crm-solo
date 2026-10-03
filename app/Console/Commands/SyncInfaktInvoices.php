@@ -4,18 +4,20 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
 use App\Models\Integration;
 use App\Services\Integrations\InfaktApiException;
 use App\Services\Integrations\InfaktService;
 use Illuminate\Console\Command;
 
+#[AccountScope(AccountScope::OPERATOR)]
 final class SyncInfaktInvoices extends Command
 {
     protected $signature = 'infakt:sync-invoices
                             {--account= : The account ID to sync (syncs all if not specified)}
                             {--since= : Only sync invoices issued on/after this YYYY-MM-DD date}';
 
-    protected $description = 'Sync invoices from Infakt into the local invoices table for revenue analytics';
+    protected $description = 'Sync invoices from Infakt into the local invoices table for revenue analytics (operator: every account with Infakt, or the one named by --account)';
 
     public function handle(): int
     {

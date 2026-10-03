@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Services\Agent\AmbiguousReferenceException;
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Services\Agent\ClientBrief as ClientBriefData;
 use App\Services\Agent\CrmEntityResolver;
 use App\Services\Agent\ReferenceException;
@@ -18,8 +19,11 @@ use Illuminate\Console\Command;
  * journal. Part of the crm:* verb contract (docs/development/
  * agent-crm-interface.md).
  */
+#[AccountScope(AccountScope::ACTING)]
 final class CrmBrief extends Command
 {
+    use AgentConsoleOutput;
+
     protected $signature = 'crm:brief {client : Client id or name fragment} {--json : Machine-readable output}';
 
     protected $description = 'Full client context for agents: status, retainer, hours, tasks, latest report, journal';
@@ -27,43 +31,42 @@ final class CrmBrief extends Command
     public function handle(CrmEntityResolver $resolver, ClientBriefData $brief): int
     {
         try {
-            $client = $resolver->client((string) $this->argument('client'));
+            $client = $resolver->client((string) $this->argument('client'), $this->actingIdentity()->account->id);
         } catch (ReferenceException $e) {
-            $this->error($e->getMessage());
-            if ($e instanceof AmbiguousReferenceException) {
-                $this->line($e->candidateLines());
-            }
-
-            return self::FAILURE;
+            return $this->referenceFailure($e);
         }
 
         $data = $brief->for($client);
 
         if ($this->option('json')) {
-            $this->line((string) json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            $this->raw($this->encodeJson($data));
 
             return self::SUCCESS;
         }
 
-        $this->info("# {$data['name']} (#{$data['id']}) — {$data['status']}");
-        $this->line("Cooperation: {$data['cooperation_type']} · Segment: {$data['segment']} · Currency: {$data['currency']}");
-        $this->line("Hours this month: {$data['hours']['month']} / {$data['hours']['contracted']}");
+        $this->raw("# Client #{$data['id']} - ".$this->literal($data['status']));
+        $this->raw('Cooperation: '.$this->literal($data['cooperation_type']).' · Segment: '.$this->literal($data['segment']).' · Currency: '.$this->literal($data['currency']));
+        $this->raw("Hours this month: {$data['hours']['month']} / {$data['hours']['contracted']}");
         foreach ($data['retainers'] as $r) {
-            $this->line("Retainer: {$r['label']} — {$r['monthly_hours']}h".($r['monthly_fee'] !== null ? " / {$r['monthly_fee']}" : ''));
+            $this->raw('Retainer: '.$this->literal($r['label'])." - {$r['monthly_hours']}h".($r['monthly_fee'] !== null ? " / {$r['monthly_fee']}" : ''));
         }
-        $this->line($data['latest_report'] ? "Latest report: {$data['latest_report']['period']} ({$data['latest_report']['status']})" : 'Latest report: none');
+        $this->raw($data['latest_report'] ? "Latest report: {$data['latest_report']['period']} ({$data['latest_report']['status']})" : 'Latest report: none');
         $this->newLine();
-        $this->info('Open tasks:');
+
+        // The client name (often imported) and task titles (often from cards) are fenced.
+        $lines = ['Client: '.$this->literal($data['name']), 'Open tasks:'];
         foreach ($data['open_tasks'] as $task) {
-            $this->line("  #{$task['id']} [{$task['project']}] {$task['name']}".($task['due'] ? " (due {$task['due']})" : ''));
+            $lines[] = "  #{$task['id']} [".$this->literal($task['project']).'] '.$this->literal($task['name']).($task['due'] ? " (due {$task['due']})" : '');
         }
         if (count($data['open_tasks']) === 0) {
-            $this->line('  none');
+            $lines[] = '  none';
         }
+        $this->fenced($lines);
+
         $this->newLine();
-        $this->info('Journal (latest 5):');
+        $this->raw('Journal (latest 5):');
         foreach ($data['journal'] as $entry) {
-            $this->line("  {$entry['at']} — {$entry['change']}".($entry['note'] ? ": {$entry['note']}" : ''));
+            $this->raw("  {$entry['at']} - ".$this->literal($entry['change']).($entry['note'] ? ': '.$this->literal($entry['note']) : ''));
         }
 
         return self::SUCCESS;

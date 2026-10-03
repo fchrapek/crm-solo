@@ -206,6 +206,7 @@ final class LeadsControllerTest extends TestCase
         // The link is what makes "which channel produced this client" answerable.
         $this->assertSame($client->id, $lead->fresh()->client_id);
         $this->assertSame('referral', $lead->fresh()->source);
+        $this->assertSame(['General'], $client->projects()->pluck('name')->all(), 'a converted client can take time straight away');
     }
 
     public function test_convert_refuses_a_lead_that_has_not_been_won(): void

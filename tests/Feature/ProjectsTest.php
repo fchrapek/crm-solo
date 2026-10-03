@@ -70,15 +70,16 @@ final class ProjectsTest extends TestCase
             ->get("/clients/{$client->id}/edit")
             ->assertInertia(fn (Assert $assert) => $assert
                 ->component('clients/edit')
-                ->has('projects', 1)
-                ->where('projects.0.name', 'Test Project')
-                ->where('projects.0.tasks_count', 2)
-                ->where('projects.0.completed_tasks_count', 1)
-                ->has('projects.0.tasks', 2)
+                ->has('projects', 2)
+                ->where('projects.0.name', 'General')
+                ->where('projects.1.name', 'Test Project')
+                ->where('projects.1.tasks_count', 2)
+                ->where('projects.1.completed_tasks_count', 1)
+                ->has('projects.1.tasks', 2)
             );
     }
 
-    public function test_client_with_no_projects(): void
+    public function test_a_new_client_starts_with_only_its_general_project(): void
     {
         $client = Client::create([
             'account_id' => $this->account->id,
@@ -88,7 +89,9 @@ final class ProjectsTest extends TestCase
         $this->actingAs($this->user)
             ->get("/clients/{$client->id}/edit")
             ->assertInertia(fn (Assert $assert) => $assert
-                ->has('projects', 0)
+                ->has('projects', 1)
+                ->where('projects.0.name', 'General')
+                ->where('projects.0.is_private', true)
             );
     }
 
@@ -112,7 +115,7 @@ final class ProjectsTest extends TestCase
         ]);
 
         $this->assertSame(1, $project->tasks()->count());
-        $this->assertSame(1, $client->projects()->count());
+        $this->assertSame(['General', 'Project A'], $client->projects()->orderBy('id')->pluck('name')->all());
         $this->assertSame($this->account->id, $project->account->id);
     }
 

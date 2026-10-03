@@ -4,22 +4,29 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\Task;
+use App\Services\Agent\ReferenceNotFoundException;
 use Illuminate\Console\Command;
 
+#[AccountScope(AccountScope::ACTING)]
 final class SetTaskCliCommand extends Command
 {
+    use AgentConsoleOutput;
+
     protected $signature = 'tasks:cli {task : Task ID} {cli? : claude | codex | null (clears)}';
 
     protected $description = 'Set the terminal-session CLI on a task (claude/codex/null).';
 
     public function handle(): int
     {
-        $task = Task::find((int) $this->argument('task'));
+        $id = (string) $this->argument('task');
+        $task = ctype_digit($id)
+            ? Task::query()->whereHas('project', fn ($q) => $q->where('account_id', $this->actingIdentity()->account->id))->find((int) $id)
+            : null;
         if ($task === null) {
-            $this->error('Task not found.');
-
-            return self::FAILURE;
+            return $this->referenceFailure(new ReferenceNotFoundException('task', $id));
         }
 
         $cli = $this->argument('cli');

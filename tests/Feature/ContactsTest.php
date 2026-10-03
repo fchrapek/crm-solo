@@ -128,14 +128,14 @@ final class ContactsTest extends TestCase
 
         $this->actingAs($this->user)
             ->post('/contacts', [
-                'first_name' => 'Filip',
-                'last_name' => 'Chrapek',
+                'first_name' => 'Jan',
+                'last_name' => 'Kowalski',
                 'client_id' => $client->id,
                 'emails' => ['primary@example.test', 'secondary@example.test'],
             ])
             ->assertRedirect();
 
-        $contact = $this->user->account->contacts()->where('first_name', 'Filip')->first();
+        $contact = $this->user->account->contacts()->where('first_name', 'Jan')->first();
         $this->assertNotNull($contact);
         $this->assertSame(['primary@example.test', 'secondary@example.test'], $contact->emails);
         $this->assertSame('primary@example.test', $contact->primaryEmail());

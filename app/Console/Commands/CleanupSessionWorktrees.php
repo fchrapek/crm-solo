@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
 use App\Models\Repository;
 use App\Models\Task;
+use App\Services\Concerns\SpawnEnvironment;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Process;
 
+#[AccountScope(AccountScope::OPERATOR)]
 final class CleanupSessionWorktrees extends Command
 {
     protected $signature = 'sessions:cleanup {--prune : Remove eligible worktrees (default is a dry-run listing)}';
 
-    protected $description = 'List (and with --prune remove) session worktrees for archived/completed tasks — each is a full checkout that otherwise sits on disk forever';
+    protected $description = 'List (and with --prune remove) session worktrees for archived/completed tasks — each is a full checkout that otherwise sits on disk forever (operator: every account)';
 
     public function handle(): int
     {
@@ -36,7 +39,7 @@ final class CleanupSessionWorktrees extends Command
                         && $task->session_pid !== null
                         && posix_kill((int) $task->session_pid, 0);
                     $done = $task === null || $task->archived_at !== null || (bool) $task->is_completed;
-                    $dirty = mb_trim(Process::path($path)->run(['git', 'status', '--porcelain'])->output()) !== '';
+                    $dirty = mb_trim(Process::path($path)->env(SpawnEnvironment::withoutGitRepository())->run(['git', 'status', '--porcelain'])->output()) !== '';
 
                     $state = match (true) {
                         $sessionLive => 'session live — kept',
@@ -75,7 +78,7 @@ final class CleanupSessionWorktrees extends Command
             // so uncommitted agent work is never destroyed. The session branch
             // is intentionally kept — it may hold unmerged commits; deleting
             // branches stays a human decision.
-            $result = Process::path($item['repo'])->run(['git', 'worktree', 'remove', $item['path']]);
+            $result = Process::path($item['repo'])->env(SpawnEnvironment::withoutGitRepository())->run(['git', 'worktree', 'remove', $item['path']]);
             if ($result->successful()) {
                 $this->info('Removed '.$item['path']);
             } else {
@@ -88,7 +91,7 @@ final class CleanupSessionWorktrees extends Command
             ->get()
             ->filter(fn (Repository $repo): bool => is_dir((string) $repo->local_path.'/.git'))
             ->each(function (Repository $repo): void {
-                Process::path((string) $repo->local_path)->run(['git', 'worktree', 'prune']);
+                Process::path((string) $repo->local_path)->env(SpawnEnvironment::withoutGitRepository())->run(['git', 'worktree', 'prune']);
             });
 
         return self::SUCCESS;

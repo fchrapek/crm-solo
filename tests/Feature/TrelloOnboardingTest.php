@@ -187,6 +187,8 @@ final class TrelloOnboardingTest extends TestCase
             'is_reviewed' => true,
         ]);
 
+        $projectsBefore = \App\Models\Project::where('client_id', $client->id)->count();
+
         $service = new TrelloOnboardingService;
         $result = $service->connectExistingProject($project, $this->integration);
 
@@ -195,7 +197,7 @@ final class TrelloOnboardingTest extends TestCase
         $this->assertSame('https://trello.com/b/board789', $result->trello_url);
         // Existing manual task survives
         $this->assertSame(1, $project->tasks()->count());
-        $this->assertSame(1, \App\Models\Project::where('client_id', $client->id)->count());
+        $this->assertSame($projectsBefore, \App\Models\Project::where('client_id', $client->id)->count());
     }
 
     public function test_connect_existing_refuses_already_connected_project(): void

@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
 use App\Jobs\SyncTrelloProjectsJob;
 use App\Models\Integration;
 use App\Services\TaskSources\TaskSourceRegistry;
 use Illuminate\Console\Command;
 
+#[AccountScope(AccountScope::OPERATOR)]
 final class SyncTrelloProjects extends Command
 {
     protected $signature = 'trello:sync
@@ -16,7 +18,7 @@ final class SyncTrelloProjects extends Command
                             {--force : Skip the confirmation prompt}
                             {--sync : Run synchronously instead of dispatching a job}';
 
-    protected $description = 'Sync projects and tasks from connected Trello boards';
+    protected $description = 'Sync projects and tasks from connected Trello boards (operator: every account with Trello, or the one named by --account)';
 
     public function handle(TaskSourceRegistry $taskSources): int
     {

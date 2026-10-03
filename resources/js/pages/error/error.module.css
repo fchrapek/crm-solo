@@ -23,3 +23,12 @@
     font-size: var(--font-size-lg);
     line-height: 1.25;
 }
+
+.link {
+    display: inline-block;
+    margin-top: var(--spacing-5);
+    color: inherit;
+    font-weight: var(--font-weight-semibold);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}

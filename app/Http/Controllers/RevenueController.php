@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Services\Revenue\RevenueAggregator;
+use App\Support\LocalCalendar;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Request;
@@ -55,7 +56,8 @@ final class RevenueController extends Controller
      */
     private function resolvePeriod(string $period): array
     {
-        $now = Carbon::now();
+        // Wall-clock local time: the periods bound invoice dates, which are calendar dates.
+        $now = Carbon::parse(LocalCalendar::now()->toDateTimeString());
 
         return match ($period) {
             'this_month' => [$now->copy()->startOfMonth(), $now->copy()->endOfMonth()],

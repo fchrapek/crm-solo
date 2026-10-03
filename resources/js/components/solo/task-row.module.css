@@ -1,0 +1,135 @@
+.row {
+    /* everything hangs off the title's first line, whatever the meta wraps to */
+    --title-line: calc(var(--solo-text-row) * 1.35);
+
+    display: flex;
+    align-items: flex-start;
+    gap: var(--solo-space-4);
+    padding-block: 15px;
+    border-bottom: 1px solid var(--solo-rule);
+    list-style: none;
+}
+
+.compact {
+    padding-block: 12px;
+}
+
+.check {
+    flex: none;
+    margin-top: calc((var(--title-line) - 18px) / 2);
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 2px solid var(--solo-fg);
+    border-radius: var(--solo-radius-sm);
+    background: none;
+    color: var(--solo-on-accent);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.check:focus-visible {
+    outline: 2px solid var(--solo-fg);
+    outline-offset: 3px;
+}
+
+.done .check {
+    background: var(--solo-fg);
+    cursor: default;
+}
+
+.done .check.untick {
+    cursor: pointer;
+}
+
+.done .check.untick:hover {
+    opacity: 0.6;
+}
+
+.text {
+    flex: 1;
+    min-width: 0;
+}
+
+.title,
+.meta {
+    margin: 0;
+}
+
+.title {
+    font-size: var(--solo-text-row);
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.compact {
+    --title-line: calc(var(--solo-text-action) * 1.35);
+}
+
+.compact .title {
+    font-weight: 500;
+    font-size: var(--solo-text-action);
+}
+
+.done .title {
+    color: var(--solo-fg-muted);
+    text-decoration: line-through;
+}
+
+.meta {
+    display: flex;
+    gap: 0.4em;
+    margin-top: 3px;
+    font-size: var(--solo-text-meta);
+    color: var(--solo-fg-muted);
+    white-space: nowrap;
+}
+
+/* one line: the client name gives way first, the project stays whole */
+.client {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sep,
+.project {
+    flex: none;
+}
+
+.project {
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.trailing {
+    flex: none;
+    height: var(--title-line);
+    display: flex;
+    align-items: center;
+    gap: var(--solo-space-3);
+    font-size: var(--solo-text-meta);
+    color: var(--solo-fg-muted);
+}
+
+.titleLink {
+    color: inherit;
+    text-decoration: none;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 4px;
+}
+
+.titleLink:hover {
+    text-decoration: underline;
+}
+
+.titleLink:focus-visible {
+    text-decoration: underline;
+    outline: 2px solid var(--solo-fg);
+    outline-offset: 3px;
+}

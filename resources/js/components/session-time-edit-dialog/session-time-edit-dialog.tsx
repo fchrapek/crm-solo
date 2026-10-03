@@ -30,7 +30,6 @@ export interface SessionTimeEntry {
     description: string | null;
     task_id: number | null;
     billable: boolean;
-    pushed_to_clockify: boolean;
 }
 
 interface Props {
@@ -46,8 +45,7 @@ interface Props {
  * Edit an existing TimeEntry - typically the one linked to a session history
  * row. Server-side update() also keeps the linked TaskSession.started_at/ended_at
  * in sync, so the row above the dialog refreshes to the corrected times after
- * save. If the entry is already mirrored to Clockify, the PUT is fired
- * best-effort on the server; we only surface the Clockify hint here.
+ * save.
  */
 export function SessionTimeEditDialog({ open, onOpenChange, entry, tasks, onSaved }: Props) {
     const { t } = useTranslation();
@@ -128,11 +126,6 @@ export function SessionTimeEditDialog({ open, onOpenChange, entry, tasks, onSave
                 <DialogHeader>
                     <DialogTitle>{t('Edit session time')}</DialogTitle>
                 </DialogHeader>
-                {entry.pushed_to_clockify && (
-                    <p style={{ fontSize: '0.8125rem', color: 'var(--color-muted-foreground)' }}>
-                        {t('This entry is mirrored to Clockify - saving will push the updated time upstream.')}
-                    </p>
-                )}
                 <form
                     onSubmit={(e) => {
                         e.preventDefault();

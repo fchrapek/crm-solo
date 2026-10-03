@@ -5,7 +5,7 @@
 When implementing a new feature, follow this order:
 
 ### 1. Plan
-- Review or create a plan document in the project root (or `docs/roadmap/`)
+- Review or create a plan document
 - Break the feature into logical branches/steps
 - Identify files to create and modify
 

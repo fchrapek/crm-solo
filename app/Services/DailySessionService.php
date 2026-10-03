@@ -7,17 +7,15 @@ namespace App\Services;
 use App\Models\Repository;
 use App\Models\Setting;
 use App\Services\Concerns\ManagesTtydProcess;
+use App\Support\HostExec;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 
 /**
- * The daily-session bridge to herdr (https://herdr.dev) — the terminal agent
- * multiplexer Filip drives from his native terminal. The CRM's role is
- * status-first: read `herdr agent list` for live agent states (working /
- * blocked / idle) mapped onto CRM clients via repository paths, and offer an
- * optional browser attach (ttyd running `herdr` — herdr's own daemon is the
- * persistence, so no tmux wrapper, and closing the browser view never stops
- * the agents). The native terminal stays the primary attach point.
+ * Status-first bridge to herdr (https://herdr.dev), the terminal agent
+ * multiplexer: live agent states mapped onto clients by repository path, plus
+ * an optional browser attach. herdr's daemon holds the sessions, so closing
+ * the browser view never stops an agent.
  */
 final class DailySessionService
 {
@@ -36,6 +34,10 @@ final class DailySessionService
         // shell - it gets fixture agents plus the whitelisted crm prompt.
         if (config('app.demo')) {
             return $this->demoSnapshot($accountId);
+        }
+
+        if (! HostExec::enabled()) {
+            return ['available' => false, 'agents' => [], 'attach' => null];
         }
 
         $herdr = $this->locateBinary(config('terminal.daily_command', 'herdr'), throwIfMissing: false);
@@ -102,6 +104,8 @@ final class DailySessionService
      */
     public function attach(int $accountId): array
     {
+        HostExec::ensureEnabled();
+
         $existing = $this->attachState($accountId);
         if ($existing !== null) {
             return $existing;

@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Jobs\SyncClockifyTimeEntriesJob;
 use App\Jobs\SyncTrelloProjectsJob;
 use App\Models\Integration;
 use App\Services\Integrations\InfaktApiException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -19,6 +19,10 @@ final class IntegrationsController extends Controller
 {
     public function index(): Response
     {
+        if (config('app.demo')) {
+            return Inertia::render('integrations/index', ['integrations' => [], 'demo' => true]);
+        }
+
         $account = Auth::user()->account;
 
         $providers = collect(Integration::PROVIDERS)->map(function ($config, $provider) use ($account) {
@@ -39,6 +43,7 @@ final class IntegrationsController extends Controller
 
         return Inertia::render('integrations/index', [
             'integrations' => $providers,
+            'demo' => false,
         ]);
     }
 
@@ -68,7 +73,9 @@ final class IntegrationsController extends Controller
                 'last_synced_at' => $integration?->last_synced_at,
                 'last_sync_error' => $integration?->last_sync_error,
                 'has_trello_api_key' => ! empty($settings['trello_api_key']),
+                'has_unreadable_credentials' => ($integration?->unreadableSecrets() ?? []) !== [],
                 'connected_email' => $settings['email'] ?? null,
+                'client_conflicts' => array_values($settings['client_conflicts'] ?? []),
             ],
         ]);
     }
@@ -86,32 +93,72 @@ final class IntegrationsController extends Controller
             'trello_api_key' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $account = Auth::user()->account;
+        $integration = Auth::user()->account->integrations()->firstOrNew(['provider' => $provider]);
+        $secretFields = Integration::secretFields($provider);
 
-        $settings = $validated['settings'] ?? [];
-        if ($provider === 'trello') {
-            $existingIntegration = $account->integrations()->where('provider', $provider)->first();
-            $trelloSettings = [];
-            if (! empty($validated['trello_api_key'])) {
-                $trelloSettings['trello_api_key'] = $validated['trello_api_key'];
+        // Only the provider's declared settings keys merge into what is stored;
+        // credentials only come from their own fields.
+        $settings = [
+            ...($integration->settings ?? []),
+            ...Arr::only($validated['settings'] ?? [], Integration::settingsFields($provider)),
+        ];
+
+        // A credential field left blank keeps the stored value.
+        foreach ($secretFields as $field) {
+            $value = $validated[$field] ?? null;
+            if (! is_string($value) || mb_trim($value) === '') {
+                continue;
             }
-            if ($trelloSettings) {
-                $settings = array_merge($existingIntegration?->settings ?? [], $settings, $trelloSettings);
+
+            if ($field === 'api_key') {
+                $integration->api_key = $value;
+            } else {
+                $settings[$field] = $value;
             }
         }
 
-        $account->integrations()->updateOrCreate(
-            ['provider' => $provider],
-            [
-                'is_enabled' => $validated['is_enabled'] ?? false,
-                'settings' => $settings,
-                ...($validated['api_key'] ? ['api_key' => $validated['api_key']] : []),
-                'last_sync_error' => null,
-            ]
-        );
+        $integration->fill([
+            'is_enabled' => $validated['is_enabled'] ?? false,
+            'settings' => $settings,
+            'last_sync_error' => null,
+        ])->save();
 
         return redirect()->route('integrations.edit', $provider)
             ->with('success', __('Integration updated.'));
+    }
+
+    /**
+     * The explicit way to clear credentials, since a blank field on save keeps
+     * them: removes every credential of the provider (unreadable ones too),
+     * turns the integration off, and keeps synced data and other settings.
+     */
+    public function disconnect(string $provider): RedirectResponse
+    {
+        if (! array_key_exists($provider, Integration::PROVIDERS)) {
+            abort(404);
+        }
+
+        $integration = Auth::user()->account->integrations()->where('provider', $provider)->first();
+
+        if ($integration !== null) {
+            $settings = $integration->settings ?? [];
+            foreach (Integration::secretFields($provider) as $field) {
+                if ($field !== 'api_key') {
+                    // An explicit null removes the key, including a value this APP_KEY cannot read.
+                    $settings[$field] = null;
+                }
+            }
+
+            $integration->api_key = null;
+            $integration->fill([
+                'is_enabled' => false,
+                'settings' => $settings,
+                'last_sync_error' => null,
+            ])->save();
+        }
+
+        return redirect()->route('integrations.edit', $provider)
+            ->with('success', __('Integration disconnected.'));
     }
 
     public function sync(string $provider): RedirectResponse
@@ -145,7 +192,21 @@ final class IntegrationsController extends Controller
                 'updated' => $stats['updated'],
             ]);
 
-            return back()->with('success', $message);
+            $conflicts = $stats['conflicts'];
+            if ($conflicts === []) {
+                return back()->with('success', $message);
+            }
+
+            // Conflicts need a human, so they come back as an error with the first few named.
+            $shown = array_slice($conflicts, 0, 3);
+            $rest = count($conflicts) - count($shown);
+
+            return back()->with('error', implode(' ', array_filter([
+                $message.'.',
+                trans_choice(':count Infakt client was not linked because its NIP belongs to a CRM client linked to another Infakt client:', count($conflicts)),
+                implode(' ', $shown),
+                $rest > 0 ? trans_choice('(and :count more, listed on the integration page)', $rest) : null,
+            ])));
         }
 
         if ($provider === 'trello') {
@@ -153,14 +214,6 @@ final class IntegrationsController extends Controller
 
             return back()
                 ->with('success', __('Project sync started. This may take a few minutes.'))
-                ->with('syncUuid', $uuid);
-        }
-
-        if ($provider === 'clockify') {
-            SyncClockifyTimeEntriesJob::dispatch($integration, null, $uuid);
-
-            return back()
-                ->with('success', __('Time entries sync started.'))
                 ->with('syncUuid', $uuid);
         }
 

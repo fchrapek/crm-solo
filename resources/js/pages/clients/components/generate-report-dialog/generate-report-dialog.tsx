@@ -82,7 +82,6 @@ export function GenerateReportDialog({ open, onOpenChange, clientId, composers }
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="month">{t('Monthly')}</SelectItem>
-                                <SelectItem value="week">{t('Weekly')}</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

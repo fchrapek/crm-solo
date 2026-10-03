@@ -4,48 +4,64 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Attributes\AccountScope;
+use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\Task;
+use App\Services\Agent\ReferenceNotFoundException;
+use App\Services\Tasks\TaskCompletion;
 use Illuminate\Console\Command;
 
 /**
- * Agent verb: complete a task through the canonical path (Done list,
- * completed flag, agent lane mirror, recurrence spawn) — identical to
- * completing it in the UI, so an agent finishing work can close the loop
- * without a browser.
+ * Agent verb: tick a task through the same path as the day screen. Running
+ * timers on the task stop first; a manual task moves to Done, a Trello card
+ * records only that the owner's work is finished.
  */
+#[AccountScope(AccountScope::ACTING)]
 final class CrmTaskDone extends Command
 {
+    use AgentConsoleOutput;
+
     protected $signature = 'crm:task-done {task : Task id} {--json : Machine-readable output}';
 
-    protected $description = 'Complete a task (canonical path: Done + recurrence spawn), e.g. from an agent session';
+    protected $description = 'Finish a task (stops its timers; manual: Done + recurrence, Trello: finished_at only)';
 
-    public function handle(): int
+    public function handle(TaskCompletion $completion): int
     {
-        $task = Task::find((int) $this->argument('task'));
+        $id = (string) $this->argument('task');
+        $task = ctype_digit($id)
+            ? Task::query()->whereHas('project', fn ($q) => $q->where('account_id', $this->actingIdentity()->account->id))->find((int) $id)
+            : null;
         if ($task === null) {
-            $this->error('No task with id ['.$this->argument('task').'].');
-
-            return self::FAILURE;
+            return $this->referenceFailure(new ReferenceNotFoundException('task', $id));
         }
 
-        $alreadyDone = (bool) $task->is_completed;
-        $task->markDone();
+        $result = $completion->finish($task);
+        $alreadyDone = $result->wasAlreadyDone;
         $task->refresh();
 
         $successor = $task->latestOpenSuccessor();
 
         if ($this->option('json')) {
-            $this->line((string) json_encode([
-                'id' => $task->id,
-                'name' => $task->name,
-                'was_already_done' => $alreadyDone,
+            $this->raw($this->encodeJson([
+                ...$result->payload($task),
                 'recurring_successor_id' => $successor?->id,
-            ], JSON_UNESCAPED_UNICODE));
+            ]));
 
             return self::SUCCESS;
         }
 
-        $this->info("Done: #{$task->id} {$task->name}".($alreadyDone ? ' (was already completed)' : ''));
+        if ($alreadyDone) {
+            $this->raw("Already finished: #{$task->id}".($task->finished_at ? " (finished {$task->finished_at->toDateString()})" : '').'. Nothing new to finish.');
+        } else {
+            $this->raw("Done: #{$task->id}");
+        }
+        $this->fenced(['Task: '.$this->literal($task->name)]);
+        foreach ($result->stoppedTimers() as $timer) {
+            $this->line("Stopped timer #{$timer['id']} at {$timer['minutes']} min");
+        }
+        if ($task->hasTrelloCard()) {
+            $this->raw('Trello card stays on: '.$this->literal($task->list_name));
+        }
         if ($successor !== null && ! $alreadyDone) {
             $this->line("Recurring successor: #{$successor->id} due {$successor->due_date?->toDateString()}");
         }

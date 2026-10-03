@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Reports\Composers;
 
+use App\Services\Reports\BillingSummary;
 use App\Services\Reports\ReportComposerInterface;
 use App\Services\Reports\ReportContext;
 
@@ -23,10 +24,9 @@ use App\Services\Reports\ReportContext;
  * description opens with a clean plain-text sentence, that sentence. The
  * owner edits the draft from there.
  *
- * Note on wording: the AI prompt's Polish billing lines decline the month
- * name ("Bilans na start marca"). A model inflects for free; PHP cannot, and
- * Carbon's 'F' yields the nominative only. The labels here are therefore
- * declension-free and grammatical in every month.
+ * Note on wording: the billing summary uses fixed month labels ("Bilans na
+ * start miesiąca"), grammatical in every month, and is shared with the AI
+ * composer through BillingSummary so both read identically.
  */
 final class StructuredListComposer implements ReportComposerInterface
 {
@@ -135,39 +135,18 @@ final class StructuredListComposer implements ReportComposerInterface
     }
 
     /**
-     * Four plain lines: what rolled in, this period's pool, what was used,
-     * what rolls out. Plus one line when the agreed carry-over cap clipped
-     * the balance, since those hours are gone and the client should see why.
-     *
      * @return list<string>
      */
     private function billingSummary(ReportContext $context): array
     {
-        $contracted = (float) $context->contractedHours();
-        $available = (float) $context->availableHours();
-        $uncapped = $context->openingBalanceHours + $contracted;
-        $forfeited = round($uncapped - $available, 2);
-
-        $lines = [
-            '## '.__('Billing summary'),
-            '',
-            __('Opening balance').': '.$this->signedHours($context->openingBalanceHours),
-            '',
-            __('Pool for the period').': '.$this->signedHours($contracted),
-            '',
-            __('Used in the period').': '.$this->signedHours(-$context->actualHours),
-            '',
-            __('Closing balance').': '.$this->signedHours((float) $context->closingBalanceHours()),
-        ];
-
-        if ($forfeited > 0) {
-            $lines[] = '';
-            $lines[] = __('Hours above the agreed carry-over cap, not carried forward: :hours', [
-                'hours' => $this->formatHours($forfeited),
-            ]);
-        }
-
-        return $lines;
+        return BillingSummary::lines(
+            $context->openingBalanceHours,
+            (float) $context->contractedHours(),
+            $context->actualHours,
+            $context->rolloverCapHours,
+            null,
+            $context->periodType,
+        );
     }
 
     private function title(ReportContext $context): string
@@ -177,33 +156,5 @@ final class StructuredListComposer implements ReportComposerInterface
         }
 
         return __('Week of :date', ['date' => $context->periodStart->toDateString()]);
-    }
-
-    /**
-     * Signed so the direction reads at a glance. Zero carries no sign, and
-     * the minus is a real minus sign, not a hyphen.
-     */
-    private function signedHours(float $hours): string
-    {
-        $rounded = round($hours, 2);
-
-        if ($rounded > 0) {
-            return '+'.$this->formatHours($rounded);
-        }
-
-        if ($rounded < 0) {
-            return '−'.$this->formatHours(abs($rounded));
-        }
-
-        return $this->formatHours(0.0);
-    }
-
-    private function formatHours(float $hours): string
-    {
-        $rounded = round($hours, 2);
-
-        return $rounded === floor($rounded)
-            ? sprintf('%dh', (int) $rounded)
-            : sprintf('%.2fh', $rounded);
     }
 }

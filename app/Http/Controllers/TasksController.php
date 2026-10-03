@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
+use App\Services\Tasks\TaskCompletion;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,9 +20,8 @@ final class TasksController extends Controller
     private const MANUAL_STATUSES = ['Backlog', 'To-Do', 'Doing', 'Testing', 'Done'];
 
     /**
-     * When a task is dragged on the agent kanban, mirror its lane onto the
-     * Trello-style status so the per-project view stays in sync. Unmapped
-     * lanes leave the status untouched.
+     * When a manual task is dragged on the agent kanban, mirror its lane onto
+     * the Trello-style status so the per-project view stays in sync.
      */
     private const AGENT_LANE_TO_LIST_NAME = [
         Task::AGENT_LANE_BACKLOG => 'To-Do',
@@ -30,7 +30,7 @@ final class TasksController extends Controller
         Task::AGENT_LANE_DONE => 'Done',
     ];
 
-    public function store(Request $request, Project $project): RedirectResponse
+    public function store(Request $request, Project $project, TaskCompletion $completion): RedirectResponse
     {
         if ($project->account_id !== Auth::user()->account_id) {
             abort(403);
@@ -48,7 +48,7 @@ final class TasksController extends Controller
         ]);
         $parentTaskId = $this->resolveParentTaskId($project, $validated['parent_task_id'] ?? null);
 
-        Task::create([
+        $task = Task::create([
             'project_id' => $project->id,
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
@@ -60,17 +60,21 @@ final class TasksController extends Controller
             'source' => 'manual',
             'is_reviewed' => true,
             'is_reportable' => (bool) ($validated['is_reportable'] ?? false),
-            'is_completed' => ($validated['list_name'] ?? null) === 'Done',
         ]);
+
+        // A task born on Done is finished through the same transition as a tick.
+        if ($task->list_name === 'Done') {
+            $completion->finish($task);
+        }
 
         return back()->with('success', __('Task created.'));
     }
 
-    public function update(Request $request, Task $task): RedirectResponse
+    public function update(Request $request, Task $task, TaskCompletion $completion): RedirectResponse
     {
         $this->authorizeTask($task);
 
-        if ($task->source === 'trello') {
+        if ($task->hasTrelloCard()) {
             abort(422, 'Trello-source tasks must be edited on the Trello board.');
         }
 
@@ -85,9 +89,7 @@ final class TasksController extends Controller
             'is_reportable' => 'nullable|boolean',
         ]);
 
-        $wasCompleted = $task->is_completed;
         $newListName = $validated['list_name'] ?? $task->list_name;
-        $isCompleted = $newListName === 'Done';
         $parentTaskId = array_key_exists('parent_task_id', $validated)
             ? $this->resolveParentTaskId($task->project, $validated['parent_task_id'] ?? null, $task)
             : $task->parent_task_id;
@@ -95,11 +97,9 @@ final class TasksController extends Controller
         $update = [
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
-            'list_name' => $newListName,
             'due_date' => $validated['due_date'] ?? null,
             'priority' => $validated['priority'] ?? null,
             'parent_task_id' => $parentTaskId,
-            'is_completed' => $isCompleted,
         ];
         if (array_key_exists('cli', $validated)) {
             $update['cli'] = $validated['cli'];
@@ -109,8 +109,8 @@ final class TasksController extends Controller
         }
         $task->update($update);
 
-        if (! $wasCompleted && $isCompleted) {
-            $this->spawnRecurringInstance($task);
+        if ($newListName !== null) {
+            $completion->moveToLane($task, $newListName);
         }
 
         return back()->with('success', __('Task updated.'));
@@ -120,7 +120,7 @@ final class TasksController extends Controller
     {
         $this->authorizeTask($task);
 
-        if ($task->source === 'trello') {
+        if ($task->hasTrelloCard()) {
             abort(422, 'Trello-source tasks must be deleted on the Trello board.');
         }
 
@@ -146,7 +146,7 @@ final class TasksController extends Controller
     {
         $this->authorizeTask($task);
 
-        if ($task->source === 'trello') {
+        if ($task->hasTrelloCard()) {
             abort(422, 'Trello-source tasks must be archived on the Trello board.');
         }
 
@@ -163,11 +163,11 @@ final class TasksController extends Controller
         ]);
     }
 
-    public function updateListName(Request $request, Task $task): JsonResponse
+    public function updateListName(Request $request, Task $task, TaskCompletion $completion): JsonResponse
     {
         $this->authorizeTask($task);
 
-        if ($task->source === 'trello') {
+        if ($task->hasTrelloCard()) {
             abort(422, 'Trello-source tasks must be moved on the Trello board. Try archiving on Trello instead.');
         }
 
@@ -175,22 +175,12 @@ final class TasksController extends Controller
             'list_name' => 'required|string|max:100',
         ]);
 
-        $newListName = $validated['list_name'];
-        $isCompleted = $newListName === 'Done';
-        $wasCompleted = $task->is_completed;
-
-        $task->update([
-            'list_name' => $newListName,
-            'is_completed' => $isCompleted,
-        ]);
-
-        if (! $wasCompleted && $isCompleted) {
-            $this->spawnRecurringInstance($task);
-        }
+        $completion->moveToLane($task, $validated['list_name']);
 
         return response()->json([
             'list_name' => $task->list_name,
             'is_completed' => $task->is_completed,
+            'finished_at' => $task->finished_at?->toIso8601String(),
         ]);
     }
 
@@ -207,7 +197,7 @@ final class TasksController extends Controller
         return response()->json(['cli' => $task->cli]);
     }
 
-    public function updateAgentLane(Request $request, Task $task): JsonResponse
+    public function updateAgentLane(Request $request, Task $task, TaskCompletion $completion): JsonResponse
     {
         $this->authorizeTask($task);
 
@@ -219,27 +209,27 @@ final class TasksController extends Controller
             'agent_lane' => ['required', Rule::in(Task::AGENT_LANES)],
         ]);
 
-        $update = ['agent_lane' => $validated['agent_lane']];
+        $lane = $validated['agent_lane'];
 
-        $mappedListName = self::AGENT_LANE_TO_LIST_NAME[$validated['agent_lane']] ?? null;
-        if ($mappedListName !== null) {
-            $update['list_name'] = $mappedListName;
-            $update['is_completed'] = $mappedListName === 'Done';
-        }
-
-        $wasCompleted = (bool) $task->is_completed;
-        $task->update($update);
-
-        // Completing via agent-kanban drag must spawn the next recurring
-        // instance exactly like list-name completion does.
-        if (! $wasCompleted && (bool) $task->is_completed) {
-            $this->spawnRecurringInstance($task);
+        if ($lane === Task::AGENT_LANE_DONE) {
+            $completion->finish($task);
+        } else {
+            // A Trello card's list belongs to Trello: the drag only moves the agent lane.
+            if ($task->hasTrelloCard()) {
+                if ($task->finished_at !== null) {
+                    $completion->unfinish($task);
+                }
+            } else {
+                $completion->moveToLane($task, self::AGENT_LANE_TO_LIST_NAME[$lane]);
+            }
+            $task->update(['agent_lane' => $lane]);
         }
 
         return response()->json([
             'agent_lane' => $task->agent_lane,
             'list_name' => $task->list_name,
             'is_completed' => $task->is_completed,
+            'finished_at' => $task->finished_at?->toIso8601String(),
         ]);
     }
 
@@ -252,7 +242,7 @@ final class TasksController extends Controller
         $task->load([
             'project.client',
             'parentTask:id,name',
-            'childTasks:id,parent_task_id,name,is_completed,agent_lane,cli',
+            'childTasks:id,parent_task_id,name,is_completed,finished_at,agent_lane,cli',
             'attachments',
             'sessions.timeEntry:id,duration_minutes,start_time,end_time',
         ]);
@@ -297,7 +287,9 @@ final class TasksController extends Controller
                 'description' => $task->description,
                 'list_name' => $task->list_name,
                 'is_completed' => (bool) $task->is_completed,
+                'finished_at' => $task->finished_at?->toIso8601String(),
                 'due_date' => $task->due_date?->toIso8601String(),
+                'is_overdue' => $task->isOverdue(),
                 'labels' => $task->labels,
                 'priority' => $task->priority,
                 'parent_task_id' => $task->parent_task_id,
@@ -309,10 +301,13 @@ final class TasksController extends Controller
                     'id' => $child->id,
                     'name' => $child->name,
                     'is_completed' => (bool) $child->is_completed,
+                    'finished_at' => $child->finished_at?->toIso8601String(),
+                    'is_done' => $child->isDone(),
                     'agent_lane' => $child->agent_lane,
                     'cli' => $child->cli,
                 ])->values(),
                 'source' => $task->source,
+                'has_trello_card' => $task->hasTrelloCard(),
                 'trello_url' => $task->trello_url,
                 'created_at' => $task->created_at?->toIso8601String(),
                 'updated_at' => $task->updated_at?->toIso8601String(),
@@ -388,10 +383,6 @@ final class TasksController extends Controller
                             'end_time' => $s->timeEntry->end_time?->toIso8601String(),
                             'description' => $s->timeEntry->description,
                             'billable' => (bool) $s->timeEntry->billable,
-                            // Whether this entry is already mirrored to Clockify.
-                            // UI uses this to hint that saves will push an update
-                            // upstream — the actual push is server-side.
-                            'pushed_to_clockify' => $s->timeEntry->clockify_entry_id !== null && $s->timeEntry->clockify_entry_id !== '',
                         ] : null,
                     ];
                 })->values(),
@@ -415,15 +406,6 @@ final class TasksController extends Controller
                 })(),
             ],
         ]);
-    }
-
-    /**
-     * Recurrence lives on the Task model so every completion path (controller
-     * or the crm:task-done CLI verb) spawns identically.
-     */
-    private function spawnRecurringInstance(Task $task): void
-    {
-        $task->spawnRecurringInstance();
     }
 
     private function authorizeTask(Task $task): void

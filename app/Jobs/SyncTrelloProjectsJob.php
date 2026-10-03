@@ -33,6 +33,11 @@ final class SyncTrelloProjectsJob implements ShouldQueue
 
     public function handle(TaskSourceRegistry $taskSources): void
     {
+        // A job queued before the demo lost its integrations, or retrying, must not reach Trello.
+        if (config('app.demo')) {
+            return;
+        }
+
         $stats = $taskSources->get('trello')->syncAll($this->integration);
 
         $this->integration->update([

@@ -1,0 +1,137 @@
+/*
+ * Solo tokens: the day screens and every page built on them.
+ * Mirrors the Figma file (Solo / Primitives, Solo / Surface, Solo / Layout).
+ * Surface colours switch by the day's state: [data-day="paper|timer|done"].
+ * Switzer is linked from Fontshare in app.blade.php (not redistributed here).
+ */
+
+@font-face {
+    font-family: 'Archivo Solo';
+    font-style: normal;
+    font-weight: 100 900;
+    font-stretch: 62% 125%;
+    font-display: swap;
+    src: url('../fonts/archivo-var-latin-ext.woff2') format('woff2');
+    unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+        U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+    font-family: 'Archivo Solo';
+    font-style: normal;
+    font-weight: 100 900;
+    font-stretch: 62% 125%;
+    font-display: swap;
+    src: url('../fonts/archivo-var-latin.woff2') format('woff2');
+    unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+        U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+    /* primitives */
+    --solo-paper: #f3ede2;
+    --solo-ink: #151412;
+    --solo-vermilion: #e0421f;
+    --solo-cobalt: #2341d8;
+    --solo-stone: #6a645b;
+    --solo-sand: #d6cdbe;
+    --solo-paper-72: rgb(243 237 226 / 0.72);
+    --solo-paper-28: rgb(243 237 226 / 0.28);
+
+    /* type */
+    --solo-font-display: 'Archivo Solo', 'Archivo', 'Arial Narrow', sans-serif;
+    --solo-font-text: 'Switzer', 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --solo-display-clock: 20rem;
+    --solo-display-poster: 9.5rem;
+    --solo-display-title: 4rem;
+    --solo-display-stat: 3.625rem;
+    --solo-heading-task: 2.875rem;
+    --solo-text-eyebrow: 1.0625rem;
+    --solo-text-row: 1rem;
+    --solo-text-action: 0.9375rem;
+    --solo-text-meta: 0.8125rem;
+    --solo-text-label: 0.75rem;
+    --solo-button-sm: 0.8125rem;
+    --solo-button-md: 0.9375rem;
+    --solo-button-lg: 1.0625rem;
+
+    /* layout */
+    --solo-space-1: 4px;
+    --solo-space-2: 8px;
+    --solo-space-3: 12px;
+    --solo-space-4: 16px;
+    --solo-space-5: 24px;
+    --solo-space-6: 32px;
+    --solo-space-7: 48px;
+    --solo-space-8: 96px;
+    --solo-grid-margin: 120px;
+    --solo-grid-gutter: 24px;
+    --solo-grid-max: 1440px;
+    --solo-radius-sm: 4px;
+    --solo-radius-md: 6px;
+    --solo-radius-lg: 8px;
+    --solo-radius-full: 999px;
+    --solo-tile-size: 36px;
+    --solo-tile-gap: 5px;
+}
+
+/* surface: Paper is the default mode */
+[data-day] {
+    --solo-bg: var(--solo-paper);
+    --solo-fg: var(--solo-ink);
+    --solo-fg-muted: var(--solo-stone);
+    --solo-rule: var(--solo-sand);
+    --solo-rule-strong: var(--solo-ink);
+    --solo-accent: var(--solo-vermilion);
+    --solo-on-accent: var(--solo-paper);
+    --solo-tile-done: var(--solo-ink);
+    --solo-tile-now: var(--solo-vermilion);
+    --solo-late: var(--solo-vermilion);
+    --solo-field-bg: var(--solo-paper);
+    --solo-field-fg: var(--solo-ink);
+    --solo-field-border: var(--solo-ink);
+
+    background: var(--solo-bg);
+    color: var(--solo-fg);
+    font-family: var(--solo-font-text);
+}
+
+[data-day='timer'],
+[data-day='done'] {
+    --solo-bg: var(--solo-vermilion);
+    --solo-fg: var(--solo-paper);
+    --solo-fg-muted: var(--solo-paper-72);
+    --solo-rule: var(--solo-paper-28);
+    --solo-rule-strong: var(--solo-paper);
+    --solo-accent: var(--solo-paper);
+    --solo-on-accent: var(--solo-vermilion);
+    --solo-tile-done: var(--solo-paper);
+    --solo-tile-now: var(--solo-paper);
+    --solo-late: var(--solo-paper);
+    --solo-field-border: var(--solo-paper);
+}
+
+[data-day='done'] {
+    --solo-bg: var(--solo-cobalt);
+    --solo-on-accent: var(--solo-cobalt);
+}
+
+@media (max-width: 1100px) {
+    :root {
+        --solo-grid-margin: 48px;
+        --solo-display-clock: 12rem;
+        --solo-display-poster: 6rem;
+    }
+}
+
+@media (max-width: 640px) {
+    :root {
+        --solo-grid-margin: 20px;
+        --solo-display-clock: 7rem;
+        --solo-display-poster: 3.75rem;
+        --solo-display-title: 3rem;
+        --solo-heading-task: 1.75rem;
+    }
+}

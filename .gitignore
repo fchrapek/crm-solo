@@ -48,6 +48,6 @@ docs/handoffs/
 
 # Work journal and per-client production scripts: this repository's own
 # copies stay out of any clone.
-/docs/session-log.md
+/docs/SESSION-LOG.md
 /scripts/prod/sites/
 bun.lockb
