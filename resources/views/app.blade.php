@@ -32,7 +32,7 @@
 
         <title inertia>{{ config('app.name', 'Laravel') }}</title>
 
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
         {{-- Switzer is Fontshare-licensed, so it loads from their CDN instead of shipping in the repo. --}}
         <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
         <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700&display=swap">
