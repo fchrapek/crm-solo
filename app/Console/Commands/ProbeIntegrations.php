@@ -51,7 +51,7 @@ final class ProbeIntegrations extends Command
             $this->probe($integration);
         }
 
-        $this->probeKiwwwi($accountId ?? Account::query()->orderBy('id')->value('id'));
+        $this->probeKiwwwi($accountId ?? Account::operatorId());
 
         if ($this->option('json')) {
             $this->line((string) json_encode($this->results, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));

@@ -6,6 +6,7 @@ namespace App\Mcp\Tools\Concerns;
 
 use App\Services\Agent\AgentIdentity;
 use App\Services\Agent\AgentIdentityResolver;
+use App\Services\Agent\AgentRefusal;
 use App\Services\Agent\ReferenceException;
 use Laravel\Mcp\Response;
 
@@ -17,6 +18,11 @@ use Laravel\Mcp\Response;
 trait HandlesReferenceErrors
 {
     protected function referenceError(ReferenceException $e): Response
+    {
+        return $this->errorPayload($e->toPayload());
+    }
+
+    protected function refusalError(AgentRefusal $e): Response
     {
         return $this->errorPayload($e->toPayload());
     }

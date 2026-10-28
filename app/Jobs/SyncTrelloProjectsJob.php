@@ -6,6 +6,7 @@ namespace App\Jobs;
 
 use App\Events\SyncCompleted;
 use App\Models\Integration;
+use App\Services\Integrations\Trello\TrelloService;
 use App\Services\TaskSources\TaskSourceRegistry;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -38,7 +39,8 @@ final class SyncTrelloProjectsJob implements ShouldQueue
             return;
         }
 
-        $stats = $taskSources->get('trello')->syncAll($this->integration);
+        // Stops before the worker's timeout would kill it mid-card and leave a board locked.
+        $stats = $taskSources->get('trello')->syncAll($this->integration, TrelloService::deadline($this->timeout - 30));
 
         $this->integration->update([
             'last_synced_at' => now(),

@@ -60,6 +60,7 @@ final class AgentAccountScopingTest extends TestCase
 
         // The identity resolves to the first account and its owner.
         $this->mine = Account::factory()->create();
+        config(['agent.local_account' => $this->mine->id]);
         $this->owner = User::factory()->create(['account_id' => $this->mine->id, 'owner' => true]);
         $mineClient = Client::factory()->create(['account_id' => $this->mine->id, 'name' => 'Mine Co']);
         $mineProject = Project::create(['account_id' => $this->mine->id, 'client_id' => $mineClient->id, 'name' => 'General']);
@@ -74,7 +75,7 @@ final class AgentAccountScopingTest extends TestCase
         ]);
         $this->otherTimer = TimeEntry::startFor($this->otherTask);
         $this->otherLead = Lead::create([
-            'account_id' => $other->id, 'pipeline' => Lead::pipelines()[0], 'name' => 'Other lead', 'source' => Lead::sources()[0],
+            'account_id' => $other->id, 'pipeline' => Lead::pipelines()[0], 'name' => 'Other lead', 'source' => config('leadgen.sources')[0],
         ]);
         MonthCloseRun::create(['account_id' => $other->id, 'client_id' => $this->otherClient->id, 'period' => '2026-09', 'close_type' => 'maintenance', 'status' => 'open']);
     }
@@ -152,8 +153,8 @@ final class AgentAccountScopingTest extends TestCase
 
     public function test_lead_capture_writes_into_the_acting_account(): void
     {
-        Artisan::call('crm:lead-capture', ['--name' => 'Cli lead', '--source' => Lead::sources()[0], '--json' => true]);
-        CrmServer::tool(LeadCaptureTool::class, ['name' => 'Mcp lead', 'source' => Lead::sources()[0]])->assertOk();
+        Artisan::call('crm:lead-capture', ['--name' => 'Cli lead', '--source' => config('leadgen.sources')[0], '--json' => true]);
+        CrmServer::tool(LeadCaptureTool::class, ['name' => 'Mcp lead', 'source' => config('leadgen.sources')[0]])->assertOk();
 
         $this->assertSame([$this->mine->id, $this->mine->id], Lead::whereIn('name', ['Cli lead', 'Mcp lead'])->pluck('account_id')->all());
     }
@@ -181,17 +182,6 @@ final class AgentAccountScopingTest extends TestCase
         $this->assertToolNotFound(MonthCloseTickTool::class, ['client' => (string) $this->otherClient->id, 'step' => 'report', 'state' => 'done', 'period' => '2026-09']);
 
         $this->assertSame(0, MonthCloseRun::sole()->steps()->where('state', 'done')->count());
-    }
-
-    public function test_the_demo_prompt_acts_as_the_signed_in_visitors_account(): void
-    {
-        config(['app.demo' => true]);
-        $visitor = User::factory()->create(['account_id' => $this->otherClient->account_id]);
-
-        $output = (string) $this->actingAs($visitor)->postJson('/demo/cli', ['command' => 'crm today --json'])->assertOk()->json('output');
-
-        $this->assertStringContainsString('Secret task', $output);
-        $this->assertStringNotContainsString('Mine urgent', $output);
     }
 
     private function assertLeaksNothing(string $output): void

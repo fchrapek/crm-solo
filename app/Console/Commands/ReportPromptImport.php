@@ -8,7 +8,7 @@ use App\Console\Attributes\AccountScope;
 use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\Account;
 use App\Models\Setting;
-use App\Services\Reports\SettingsNarrativePromptResolver;
+use App\Services\Reports\NarrativePromptResolver;
 use Illuminate\Console\Command;
 
 /**
@@ -82,15 +82,15 @@ final class ReportPromptImport extends Command
     {
         $setting = Setting::query()->firstOrNew([
             'account_id' => $accountId,
-            'scope' => SettingsNarrativePromptResolver::SETTING_SCOPE,
+            'scope' => NarrativePromptResolver::SETTING_SCOPE,
         ]);
 
         $data = is_array($setting->data) ? $setting->data : [];
 
         if ($prompt === null) {
-            unset($data[SettingsNarrativePromptResolver::SETTING_KEY]);
+            unset($data[NarrativePromptResolver::SETTING_KEY]);
         } else {
-            $data[SettingsNarrativePromptResolver::SETTING_KEY] = $prompt;
+            $data[NarrativePromptResolver::SETTING_KEY] = $prompt;
         }
 
         $setting->data = $data;

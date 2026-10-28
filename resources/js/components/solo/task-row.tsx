@@ -1,3 +1,4 @@
+import tasks from '@/routes/tasks';
 import { Link, type InertiaLinkProps } from '@inertiajs/react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,18 +29,42 @@ interface TaskRowProps {
     onUncomplete?: () => void;
     trailing?: ReactNode;
     compact?: boolean;
-    /** Makes the title a link, e.g. into the focus view of the running task. */
+    /** Where the title leads, e.g. the focus view of the running task; the task page by default. */
     href?: InertiaLinkProps['href'];
+    due?: ReactNode;
+    /** done is the Done row in Podsumowanie's box, queue the timer's Queue row: title and one status, no client or project. */
+    kind?: 'day' | 'client' | 'done' | 'queue';
+    /** Queue row State=Current: the task the timer runs on. */
+    current?: boolean;
+    className?: string;
 }
 
-/** Figma: Task row (Open / Done). */
-export function TaskRow({ task, onComplete, onUncomplete, trailing, compact, href }: TaskRowProps) {
+const KIND_CLASS = { day: styles.day, client: styles.clientRow, done: styles.doneRow, queue: styles.queueRow };
+
+/**
+ * Figma: A2f / Task row; kind client is Client task row, done the Done row, queue the Queue row.
+ * compact is the A2f / List row of Wszystkie zadania and Propozycje: the title, the project as end meta, one action.
+ */
+export function TaskRow({ task, onComplete, onUncomplete, trailing, compact, href, due, kind = 'day', current = false, className }: TaskRowProps) {
     const { t } = useTranslation();
-    const where = [task.client, task.project].filter(Boolean).join(' · ');
+    const brief = kind === 'done' || kind === 'queue';
+    const where = brief ? '' : [task.client, task.project].filter(Boolean).join(' · ');
     const untick = task.done && task.can_untick && onUncomplete ? onUncomplete : undefined;
+    const link = href ?? (task.task_id > 0 ? tasks.show(task.task_id) : undefined);
 
     return (
-        <li className={[styles.row, compact ? styles.compact : '', task.done ? styles.done : ''].filter(Boolean).join(' ')}>
+        <li
+            className={[
+                styles.row,
+                compact ? styles.compact : KIND_CLASS[kind],
+                current ? styles.current : '',
+                task.done ? styles.done : '',
+                className,
+            ]
+                .filter(Boolean)
+                .join(' ')}
+            aria-current={current ? 'step' : undefined}
+        >
             {onComplete && (
                 <button
                     type="button"
@@ -54,13 +79,13 @@ export function TaskRow({ task, onComplete, onUncomplete, trailing, compact, hre
                 </button>
             )}
             <div className={styles.text}>
-                <p className={styles.title}>
-                    {href ? (
-                        <Link href={href} className={styles.titleLink}>
-                            {task.name}
+                <p className={styles.title} title={task.name}>
+                    {link ? (
+                        <Link href={link} className={styles.titleLink}>
+                            <span className={styles.titleText}>{task.name}</span>
                         </Link>
                     ) : (
-                        task.name
+                        <span className={styles.titleText}>{task.name}</span>
                     )}
                 </p>
                 {where && (
@@ -71,6 +96,7 @@ export function TaskRow({ task, onComplete, onUncomplete, trailing, compact, hre
                     </p>
                 )}
             </div>
+            {due !== undefined && <div className={styles.due}>{due}</div>}
             {trailing && <div className={styles.trailing}>{trailing}</div>}
         </li>
     );

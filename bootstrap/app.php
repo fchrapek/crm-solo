@@ -15,8 +15,6 @@ use Symfony\Component\HttpFoundation\Response;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
-        api: __DIR__.'/../routes/api.php',
-        apiPrefix: 'api',
         commands: __DIR__.'/../routes/console.php',
         channels: __DIR__.'/../routes/channels.php',
         health: '/up',
@@ -25,7 +23,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Closed mode sends guests to the /czesc splash; /login still works.
         $middleware->redirectGuestsTo(fn () => config('waitlist.closed') ? route('czesc') : route('login'));
         $middleware->redirectUsersTo(AppServiceProvider::HOME);
-        $middleware->encryptCookies(except: ['appearance']);
+        $middleware->encryptCookies(except: ['appearance', 'theme']);
+        // Sessions and remember cookies stamped with an older password hash are refused.
+        $middleware->authenticateSessions();
 
         // SecurityHeaders is outermost so early refusals (unknown host, 413,
         // maintenance) carry the headers too.
@@ -39,9 +39,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'agent.token' => App\Http\Middleware\AuthenticateAgentToken::class,
-            'host-exec' => App\Http\Middleware\EnsureHostExecEnabled::class,
             'closed' => App\Http\Middleware\EnsureClosedMode::class,
             'not-in-demo' => App\Http\Middleware\AbsentInDemo::class,
+            'feature' => App\Http\Middleware\AccountFeature::class,
         ]);
 
         $middleware->web(append: [
@@ -58,8 +58,8 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->respond(function (Response $response, Throwable $exception, Request $request) {
-            // Agent transports are machine clients: never an HTML error page or a redirect.
-            if ($request->is('mcp', 'agent/*')) {
+            // Agent transports and the token issue fetch read JSON: never an HTML error page or a redirect.
+            if ($request->is('mcp', 'agent/*') || ($request->is('settings/agent-tokens') && $request->expectsJson())) {
                 return $response;
             }
             if (! app()->environment(['local', 'testing']) && in_array($response->getStatusCode(), [500, 503, 404, 403])) {

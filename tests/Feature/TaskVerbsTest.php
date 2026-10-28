@@ -46,6 +46,7 @@ final class TaskVerbsTest extends TestCase
         Http::preventStrayRequests();
 
         $account = Account::factory()->create();
+        config(['agent.local_account' => $account->id]);
         $this->owner = User::factory()->create(['account_id' => $account->id, 'owner' => true, 'first_name' => 'Jan', 'last_name' => 'C']);
         $client = Client::factory()->create(['account_id' => $account->id, 'name' => 'Verb Co']);
         $this->project = Project::create(['account_id' => $account->id, 'client_id' => $client->id, 'name' => 'Site', 'trello_board_id' => 'b1']);
@@ -235,21 +236,15 @@ final class TaskVerbsTest extends TestCase
         Http::assertSentCount(1);
     }
 
-    public function test_the_demo_prompt_reads_a_task_without_calling_trello(): void
+    public function test_the_demo_reads_a_task_without_calling_trello(): void
     {
         config(['app.demo' => true]);
         $this->card->update(['trello_activity_at' => '2026-10-01 09:59:00']);
 
-        $this->actingAs($this->owner)
-            ->postJson('/demo/cli', ['command' => 'crm task '.$this->card->id])
-            ->assertOk()
-            ->assertJson(fn ($json) => $json->where('output', fn ($output) => str_contains((string) $output, 'Footer phone')));
-        $this->actingAs($this->owner)
-            ->postJson('/demo/cli', ['command' => 'crm task-brief '.$this->card->id.' --where=x'])
-            ->assertOk()
-            ->assertJson(fn ($json) => $json->where('output', fn ($output) => str_contains((string) $output, 'Unknown command')));
+        $this->artisan('crm:task', ['task' => (string) $this->card->id])
+            ->expectsOutputToContain('Footer phone')
+            ->assertSuccessful();
 
         Http::assertNothingSent();
-        $this->assertSame(0, TaskBrief::count());
     }
 }

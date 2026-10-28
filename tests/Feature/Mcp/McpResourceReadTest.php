@@ -40,6 +40,7 @@ final class McpResourceReadTest extends TestCase
     {
         parent::setUp();
         $account = Account::factory()->create();
+        config(['agent.local_account' => $account->id]);
         User::factory()->create(['account_id' => $account->id, 'owner' => true]);
         $this->client = Client::factory()->create(['account_id' => $account->id, 'name' => 'Res Co']);
         $project = Project::create(['account_id' => $account->id, 'client_id' => $this->client->id, 'name' => 'Site']);

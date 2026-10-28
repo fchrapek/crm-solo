@@ -18,10 +18,12 @@ if (config('app.demo')) {
 
 // Integrations are not part of the public demo, so nothing there pulls from a third party.
 if (! config('app.demo')) {
-    Schedule::command('trello:sync --force --sync')->everyFiveMinutes()->when($integrationConfigured('trello'));
+    // schedule:work starts a runner every minute, so a slow sync would get a second one beside it; the lock expires so a killed run cannot stop syncing.
+    Schedule::command('trello:sync --force --sync')->everyFiveMinutes()->withoutOverlapping(10)->when($integrationConfigured('trello'));
     // Leads land only while the scheduler runs; the email notification is the real-time channel.
     Schedule::command('kiwwwi:sync-leads')->everyFifteenMinutes()->withoutOverlapping(10)->when(fn (): bool => config('services.kiwwwi.leads.app_password') !== null);
     Schedule::command('infakt:sync-invoices')->dailyAt('03:00')->when($integrationConfigured('infakt'));
+    Schedule::command('messages:dispatch')->everyMinute()->withoutOverlapping(5);
 }
 // Local installs dump nightly; a hosted stack opts in with BACKUP_SCHEDULE_AT (UTC, the scheduler's zone) and ships the dumps off the box itself.
 $backupAt = config('backup.schedule_at') ?: (app()->isLocal() ? '02:00' : null);
@@ -32,8 +34,3 @@ if (is_string($backupAt)) {
     }
     Schedule::command('db:backup')->dailyAt($backupAt);
 }
-
-// Reap sessions whose ttyd died without a Stop (reboot/crash) — otherwise the
-// auto-opened billable TimeEntry accrues until someone notices. Five-minute
-// cadence bounds the billing drift on a crashed session to five minutes.
-Schedule::command('sessions:reap')->everyFiveMinutes();

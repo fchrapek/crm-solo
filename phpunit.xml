@@ -39,6 +39,8 @@
         <env name="TURNSTILE_SECRET" value=""/>
         <!-- Same for closed mode: tests expect guests sent to /login. -->
         <env name="APP_CLOSED" value="false"/>
+        <!-- Same for the agent's local account: a test that needs one names it. -->
+        <env name="AGENT_LOCAL_ACCOUNT" value="(null)" force="true"/>
         <!-- Pinned in both $_SERVER (which Laravel reads first and the shell
              fills) and the forced env, so a shell-exported DB_* cannot win.
              DB_URL is emptied because its parsed driver and database

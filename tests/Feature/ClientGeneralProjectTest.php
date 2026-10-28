@@ -7,6 +7,8 @@ namespace Tests\Feature;
 use App\Models\Account;
 use App\Models\Client;
 use App\Models\Project;
+use App\Models\TimeEntry;
+use App\Services\Agent\TimeLogger;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -83,6 +85,57 @@ final class ClientGeneralProjectTest extends TestCase
 
         $this->assertSame(1, $mine->projects()->count());
         $this->assertSame(0, $theirs->projects()->count());
+    }
+
+    public function test_the_general_project_is_the_one_still_named_general_else_the_oldest_private_one(): void
+    {
+        $client = $this->clientWithoutProjects('Direct');
+        Project::create(['account_id' => $this->account->id, 'client_id' => $client->id, 'name' => 'Board', 'trello_board_id' => 'b1']);
+        $site = Project::create(['account_id' => $this->account->id, 'client_id' => $client->id, 'name' => 'Site']);
+        Project::create(['account_id' => $this->account->id, 'client_id' => $client->id, 'name' => 'Shop']);
+
+        $this->assertSame($site->id, $client->generalProject()?->id);
+
+        $general = Project::create(['account_id' => $this->account->id, 'client_id' => $client->id, 'name' => 'General']);
+
+        $this->assertSame($general->id, $client->generalProject()?->id);
+        $this->assertSame($general->id, $client->ensureGeneralProject()->id);
+    }
+
+    public function test_reading_the_general_project_never_creates_one(): void
+    {
+        $client = $this->clientWithoutProjects('Bare');
+
+        $this->assertNull($client->generalProject());
+        $this->assertSame(0, $client->projects()->count());
+    }
+
+    public function test_client_level_time_lands_on_the_renamed_catch_all_project(): void
+    {
+        $client = $this->clientWithoutProjects('Direct');
+        Project::create(['account_id' => $this->account->id, 'client_id' => $client->id, 'name' => 'Board', 'trello_board_id' => 'b1']);
+        $catchAll = Project::create(['account_id' => $this->account->id, 'client_id' => $client->id, 'name' => 'Audyt energetyczny']);
+
+        app(TimeLogger::class)->log(accountId: $this->account->id, minutes: 30, client: (string) $client->id);
+
+        $this->assertSame($catchAll->id, TimeEntry::sole()->project_id);
+    }
+
+    public function test_wiping_a_clients_projects_keeps_the_renamed_catch_all_project(): void
+    {
+        $client = Client::create(['account_id' => $this->account->id, 'name' => 'Direct']);
+        $catchAll = $client->generalProject();
+        $catchAll->update(['name' => 'Audyt energetyczny']);
+        $site = Project::create(['account_id' => $this->account->id, 'client_id' => $client->id, 'name' => 'Site']);
+
+        $this->artisan('projects:delete', ['--client' => (string) $client->id, '--force' => true])->assertSuccessful();
+
+        $this->assertNotNull(Project::find($catchAll->id));
+        $this->assertNull(Project::find($site->id));
+
+        $this->artisan('projects:delete', ['--client' => (string) $client->id, '--include-general' => true, '--force' => true])->assertSuccessful();
+
+        $this->assertNull(Project::find($catchAll->id));
     }
 
     private function clientWithoutProjects(string $name): Client

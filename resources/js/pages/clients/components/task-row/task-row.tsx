@@ -29,8 +29,6 @@ export interface TaskRowTask {
     parent_task_id?: number | null;
     parent_task?: { id: number; name: string } | null;
     child_tasks_count?: number;
-    cli?: 'claude' | 'codex' | null;
-    agent_lane?: string | null;
 }
 
 /**

@@ -63,4 +63,28 @@ final class GenerateMonthReportCommandTest extends TestCase
 
         $this->assertSame(0, ClientReport::count());
     }
+
+    public function test_the_generate_command_refuses_a_month_that_has_a_report(): void
+    {
+        $existing = ClientReport::create([
+            'account_id' => $this->client->account_id,
+            'client_id' => $this->client->id,
+            'period_type' => ClientReport::PERIOD_MONTH,
+            'period_start' => '2026-09-01',
+            'period_end' => '2026-09-30',
+            'actual_hours' => 0,
+            'composer_key' => 'structured_list',
+            'status' => ClientReport::STATUS_DRAFT,
+        ]);
+
+        $this->artisan('reports:generate', ['client' => (string) $this->client->id, '--period' => '2026-09', '--composer' => 'structured_list'])
+            ->expectsOutputToContain("Report #{$existing->id} for [2026-09] already exists")
+            ->assertFailed();
+
+        $this->assertSame(1, ClientReport::count());
+
+        $this->artisan('reports:generate', ['client' => (string) $this->client->id, '--period' => '2026-08', '--composer' => 'structured_list'])
+            ->assertSuccessful();
+        $this->assertSame(2, ClientReport::count());
+    }
 }

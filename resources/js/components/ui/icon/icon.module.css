@@ -1,3 +1,33 @@
 .icon {
+    display: inline-flex;
     flex-shrink: 0;
+}
+
+.icon > svg {
+    display: block;
+}
+
+.icon > .saas {
+    display: none;
+}
+
+:global(:root[data-theme='boring-saas']) .paper {
+    display: none;
+}
+
+:global(:root[data-theme='boring-saas']) .icon > .saas {
+    display: block;
+}
+
+/* Lucide draws in a 24-unit box: the per-size stroke is in pixels, so a 16 px icon is not thinner than a 24 px one. */
+.size16 > :global(svg.lucide) {
+    stroke-width: calc(var(--icon-stroke-16) * 24 / 16);
+}
+
+.size20 > :global(svg.lucide) {
+    stroke-width: calc(var(--icon-stroke-20) * 24 / 20);
+}
+
+.size24 > :global(svg.lucide) {
+    stroke-width: var(--icon-stroke-24);
 }

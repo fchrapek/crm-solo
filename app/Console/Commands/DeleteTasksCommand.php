@@ -8,6 +8,7 @@ use App\Console\Attributes\AccountScope;
 use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Console\Commands\Concerns\ResolvesProjectAndClient;
 use App\Models\Task;
+use App\Services\Time\PeriodSettled;
 use Illuminate\Console\Command;
 use RuntimeException;
 
@@ -93,7 +94,15 @@ final class DeleteTasksCommand extends Command
             $this->info("Archived {$affected} tasks.");
         } else {
             // One by one so Task::deleting runs: subtasks and time entries are detached, attachment files removed.
-            $affected = $query->get()->each(fn (Task $task) => $task->delete())->count();
+            $affected = 0;
+            foreach ($query->get() as $task) {
+                try {
+                    $task->delete();
+                    $affected++;
+                } catch (PeriodSettled $settled) {
+                    $this->warn("#{$task->id} \"{$task->name}\" kept: ".$settled->deleteRefusal());
+                }
+            }
             $this->info("Deleted {$affected} tasks. Their time entries stay, detached from the task.");
         }
 

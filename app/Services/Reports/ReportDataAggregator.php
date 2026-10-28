@@ -7,15 +7,19 @@ namespace App\Services\Reports;
 use App\Models\Client;
 use App\Models\Task;
 use App\Models\TimeEntry;
+use App\Services\Clients\HoursBank;
 use App\Support\LocalCalendar;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 final class ReportDataAggregator
 {
+    public function __construct(private readonly HoursBank $hoursBank) {}
+
     /**
-     * The opening balance is carried in from the previous report unless the
-     * caller passes one, as a regenerate does with the report's saved figure.
+     * The opening balance is carried in from the previous settled point unless the
+     * caller passes one, as a regenerate does with the report's saved figure. A
+     * closed month's figures come from its closure, whatever the entries say now.
      */
     public function aggregate(
         Client $client,
@@ -24,6 +28,7 @@ final class ReportDataAggregator
         string $periodType,
         string $locale = 'en',
         ?float $openingBalanceHours = null,
+        ?ClosureFigures $closure = null,
     ): ReportContext {
         $start = $periodStart->copy()->startOfDay();
         $end = $periodEnd->copy()->endOfDay();
@@ -31,29 +36,14 @@ final class ReportDataAggregator
         // An entry belongs to the day it started on, even when it runs past midnight.
         [$from, $to] = LocalCalendar::dateRange($start, $end);
 
-        // Pull every time entry in window for accounting / debugging, then
-        // narrow to reportable ones (linked to a task with is_reportable=true)
-        // for everything the client sees. Non-reportable tasks still consume
-        // your real hours but never appear in the report — their scope
-        // shows up via clients.report_baseline_markdown instead.
-        $allTimeEntries = TimeEntry::query()
+        // Non-reportable scope is told by the baseline markdown instead; an entry counts for its own client_id, wherever its task lives now.
+        $timeEntries = TimeEntry::query()
+            ->reportable()
             ->where('client_id', $client->id)
             ->where('start_time', '>=', $from)
             ->where('start_time', '<', $to)
             ->orderBy('start_time')
             ->get();
-
-        // An entry belongs to the client it was logged for (its own client_id, selected above), so
-        // only the task's reportable flag is read here, never where the task lives now.
-        $reportableTaskIds = Task::query()
-            ->whereIn('id', $allTimeEntries->pluck('task_id')->filter()->unique()->values())
-            ->where('is_reportable', true)
-            ->pluck('id');
-
-        $timeEntries = $allTimeEntries->filter(
-            fn (TimeEntry $entry): bool => $entry->task_id !== null
-                && $reportableTaskIds->contains($entry->task_id),
-        )->values();
 
         $actualMinutes = (int) $timeEntries->sum('duration_minutes');
         $actualHours = round($actualMinutes / 60, 2);
@@ -120,32 +110,15 @@ final class ReportDataAggregator
             periodEnd: $end,
             periodType: $periodType,
             retainer: $retainer,
-            actualHours: $actualHours,
+            actualHours: $closure?->used ?? $actualHours,
             tasks: $tasks,
             timeEntries: $timeEntryRows,
             locale: $locale,
-            openingBalanceHours: $openingBalanceHours ?? $this->openingBalanceFor($client, $start),
-            rolloverCapHours: $retainer?->rollover_cap_hours !== null
+            openingBalanceHours: $closure?->opening ?? $openingBalanceHours ?? $this->hoursBank->openingBalance($client, $start),
+            rolloverCapHours: $closure !== null ? $closure->cap : ($retainer?->rollover_cap_hours !== null
                 ? (float) $retainer->rollover_cap_hours
-                : null,
+                : null),
+            closure: $closure,
         );
-    }
-
-    /**
-     * The balance the client carries into this period, taken from the closing
-     * balance of the most recent report that ended before it starts.
-     *
-     * Read from the previous report rather than recomputed from scratch: that
-     * report is what the client was actually shown, and its opening balance may
-     * have been adjusted by hand.
-     */
-    private function openingBalanceFor(Client $client, Carbon $start): float
-    {
-        $previous = $client->reports()
-            ->where('period_end', '<', $start)
-            ->orderByDesc('period_end')
-            ->first();
-
-        return $previous !== null ? $previous->closingBalanceHours() : 0.0;
     }
 }

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -72,6 +73,21 @@ final class Client extends Model
             ->firstOrFail();
     }
 
+    public function assignee(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_user_id');
+    }
+
+    public function fieldEvents(): HasMany
+    {
+        return $this->hasMany(ClientFieldEvent::class)->orderByDesc('created_at')->orderByDesc('id');
+    }
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
+    }
+
     public function contacts(): HasMany
     {
         return $this->hasMany(Contact::class);
@@ -114,6 +130,16 @@ final class Client extends Model
         return $this->hasMany(ClientReport::class)->orderByDesc('period_start');
     }
 
+    public function monthClosures(): HasMany
+    {
+        return $this->hasMany(ClientMonthClosure::class)->orderByDesc('period');
+    }
+
+    public function settlementEvents(): HasMany
+    {
+        return $this->hasMany(ClientMonthSettlementEvent::class)->orderByDesc('created_at')->orderByDesc('id');
+    }
+
     public function monthCloseRuns(): HasMany
     {
         return $this->hasMany(MonthCloseRun::class)->orderByDesc('period');
@@ -121,14 +147,7 @@ final class Client extends Model
 
     public function activeRetainerOn(\Illuminate\Support\Carbon $date): ?ClientRetainer
     {
-        return $this->retainers()
-            ->activeOn($date)
-            ->where('is_active', true)
-            ->reorder()
-            ->orderByDesc('monthly_hours')
-            ->orderByDesc('effective_from')
-            ->orderByDesc('id')
-            ->first();
+        return $this->retainers()->leadingOn($date)->first();
     }
 
     /**
@@ -168,7 +187,7 @@ final class Client extends Model
      * Returns the created event, or null when the call is a true no-op
      * (same stage, no note).
      */
-    public function transitionTo(string $toStage, ?string $note = null, ?User $user = null): ?ClientLifecycleEvent
+    public function transitionTo(string $toStage, ?string $note = null, ?User $user = null, ?Task $task = null): ?ClientLifecycleEvent
     {
         $toStage = mb_trim($toStage);
         $note = $note !== null ? mb_trim($note) : null;
@@ -180,7 +199,7 @@ final class Client extends Model
             return null;
         }
 
-        return DB::transaction(function () use ($toStage, $note, $user): ClientLifecycleEvent {
+        return DB::transaction(function () use ($toStage, $note, $user, $task): ClientLifecycleEvent {
             $fromStage = $this->lifecycle_stage;
 
             if ($fromStage !== $toStage) {
@@ -194,6 +213,7 @@ final class Client extends Model
                 'from_stage' => $fromStage,
                 'to_stage' => $toStage,
                 'note' => $note,
+                'task_id' => $task?->id,
                 'created_at' => now(),
             ]);
         });
@@ -204,27 +224,26 @@ final class Client extends Model
     {
         $query
             ->when($filters['search'] ?? null, fn ($query, $search) => $this->applySearchFilter($query, $search, $accountId, $filters['trashed'] ?? null))
-            ->when($filters['trashed'] ?? null, fn ($query, $trashed) => $this->applyTrashedFilter($query, $trashed))
-            ->when(
-                ($filters['stage'] ?? null) && $filters['stage'] !== 'all',
-                fn ($query) => $query->where('lifecycle_stage', $filters['stage'])
-            )
-            ->when(
-                ($filters['month_close_type'] ?? null) && in_array($filters['month_close_type'], self::MONTH_CLOSE_TYPES, true),
-                fn ($query) => $query->where('month_close_type', $filters['month_close_type'])
-            );
+            ->when($filters['trashed'] ?? null, fn ($query, $trashed) => $this->applyTrashedFilter($query, $trashed));
+    }
+
+    /** Read only: ensureGeneralProject() is the one path that creates the catch-all project. */
+    public function generalProject(): ?Project
+    {
+        return $this->projects()
+            ->whereNull('trello_board_id')
+            ->orderByRaw("CASE WHEN name = 'General' THEN 0 ELSE 1 END")
+            ->orderBy('id')
+            ->first();
     }
 
     /**
-     * The client's private catch-all project, created as "General" when the
-     * client has no private project. Every create path gets one through the
-     * created hook; clients:ensure-general-project covers older rows.
+     * The catch-all project, created as "General" when the client has no private project. Every create path gets one
+     * through the created hook; clients:ensure-general-project covers older rows.
      */
     public function ensureGeneralProject(): Project
     {
-        $existing = $this->projects()->whereNull('trello_board_id')->orderBy('id')->first();
-
-        return $existing ?? $this->projects()->create([
+        return $this->generalProject() ?? $this->projects()->create([
             'account_id' => $this->account_id,
             'name' => 'General',
         ]);
@@ -254,8 +273,10 @@ final class Client extends Model
             'report_baseline_markdown' => HumanizedText::class,
             'maintenance_invoice_description' => HumanizedText::class,
             'external_ids' => 'array',
+            'custom_fields' => 'array',
             'is_pinned' => 'boolean',
             'include_in_month_close' => 'boolean',
+            'sms_opt_out' => 'boolean',
         ];
     }
 

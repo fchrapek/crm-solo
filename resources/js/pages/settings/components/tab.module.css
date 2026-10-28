@@ -1,0 +1,497 @@
+/* The Ustawienia tab bodies: phone rows first, the desktop rows from 768 px. Each list renders both, CSS shows one. */
+
+.section {
+    padding: var(--solo-card-pad, 0);
+    border: var(--solo-card-width, 0) solid var(--solo-card-border, transparent);
+    border-radius: var(--solo-card-radius, 0);
+    background: var(--solo-card, none);
+    box-shadow: var(--solo-card-shadow, none);
+}
+
+/* a card that ends in a note rather than a row */
+.section:has(> .note:last-child) {
+    padding-bottom: var(--solo-card-pad-end, 0);
+}
+
+.section + .section {
+    margin-top: var(--solo-card-gap, var(--solo-space-6));
+}
+
+.list,
+.settings {
+    margin: 0;
+    padding: var(--solo-block-pad, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    list-style: none;
+}
+
+.list:empty {
+    display: none;
+}
+
+.wide {
+    display: none;
+}
+
+.note {
+    margin: 0;
+    padding-top: var(--solo-space-3);
+    padding-inline: var(--solo-head-inset, 0);
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.fieldNote {
+    margin: 0;
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.note[data-tone='accent'] {
+    color: var(--solo-accent);
+}
+
+.dot::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: var(--solo-space-2);
+    border-radius: 50%;
+    background: var(--solo-accent);
+    vertical-align: middle;
+}
+
+.mono {
+    font: 400 var(--solo-mono-micro) / 1.4 var(--solo-font-mono);
+    color: var(--solo-fg-muted);
+}
+
+.accent {
+    color: var(--solo-accent);
+}
+
+.selected {
+    color: var(--solo-link, var(--solo-accent));
+}
+
+/* desktop rows */
+.row {
+    display: flex;
+    align-items: center;
+    gap: var(--solo-space-4);
+    padding-block: var(--solo-space-3);
+    padding-inline: var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+}
+
+.row:last-child {
+    border-bottom-color: var(--solo-rule-end, var(--solo-rule));
+}
+
+.row:has(.rowEnd :is(button, a), button.rowTitle):hover {
+    border-radius: var(--solo-row-radius, 0);
+    background: var(--solo-hover, none);
+}
+
+.row:not(:last-child):has(.rowEnd :is(button, a), button.rowTitle):hover {
+    border-bottom-color: var(--solo-hover-rule, var(--solo-rule));
+}
+
+.rowText {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.rowTitle {
+    margin: 0;
+    color: var(--solo-fg);
+    font: 600 var(--solo-text-control) / 1.35 var(--solo-font-text);
+    overflow-wrap: anywhere;
+}
+
+button.rowTitle {
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+}
+
+button.rowTitle:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.rowSub {
+    margin: 0;
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.rowEnd {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--solo-space-4);
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-meta) / normal var(--solo-font-text);
+    white-space: nowrap;
+}
+
+.rowEnd strong {
+    color: var(--solo-fg);
+    font-weight: 500;
+}
+
+.rowEnd strong[data-tone='accent'] {
+    color: var(--solo-accent);
+}
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: var(--solo-space-3);
+}
+
+.chipBlock {
+    display: var(--solo-chip-phone, block);
+    padding: var(--solo-row-inset, 0) var(--solo-head-inset, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+}
+
+.chipBlock > .chips {
+    padding-top: calc(var(--solo-space-3) - var(--solo-row-inset, 0px));
+}
+
+.chipList {
+    display: var(--solo-chip-list, none);
+}
+
+.emptyBlock {
+    padding: var(--solo-empty-top, var(--solo-space-4)) var(--solo-head-inset, 0) var(--solo-empty-bottom, var(--solo-space-4));
+    font-size: var(--solo-empty-size, var(--solo-text-sub));
+    line-height: var(--solo-empty-leading, 1.35);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+}
+
+.chip {
+    padding: var(--solo-chip-pad, 3px 8px);
+    border: 1px solid var(--solo-control-border, var(--solo-field-border));
+    border-radius: var(--solo-radius-sm);
+    background: var(--solo-chip-bg, var(--solo-field-bg));
+    color: var(--solo-chip-fg, var(--solo-fg));
+    font: 400 var(--solo-chip-size, var(--solo-text-meta)) / 1.4 var(--solo-chip-family, var(--solo-font-text));
+}
+
+.plainButton {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.plainButton:hover {
+    color: var(--solo-fg);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.plainButton:focus-visible,
+button.rowTitle:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.state {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--solo-space-2);
+    margin-left: var(--solo-space-3);
+    color: var(--solo-fg);
+    vertical-align: middle;
+}
+
+.state::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.state[data-state='off'],
+.state[data-state='none'] {
+    color: var(--solo-fg-muted);
+}
+
+.serverValue {
+    margin-left: var(--solo-space-2);
+    color: var(--solo-fg);
+    font-weight: 500;
+}
+
+/* Wygląd: a setting is a label and its choices, on a segmented track */
+.setting {
+    display: var(--solo-setting-phone, flex);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--solo-space-2);
+    padding: var(--solo-space-3) var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+}
+
+.setting:not(:has(~ .setting)) {
+    border-bottom-color: var(--solo-rule-end, var(--solo-rule));
+}
+
+.settingLabel {
+    margin: 0;
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-field) / normal var(--solo-font-text);
+}
+
+.settingSheet {
+    display: var(--solo-setting-sheet, none);
+}
+
+/* the note below the list, not the list, ends the sheet rows, so the last one keeps its rule */
+.settings > .settingSheet.phone:last-child > :only-child {
+    border-bottom-color: var(--solo-rule);
+}
+
+.choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--solo-space-2) var(--solo-choice-gap, 0px);
+    width: fit-content;
+    max-width: 100%;
+    padding: var(--solo-choice-track-pad, 3px);
+    border-radius: var(--solo-radius-full);
+    background: var(--solo-soft, none);
+}
+
+.choice {
+    padding: var(--solo-nav-pad, 6px 14px);
+    border: 0;
+    border-bottom: var(--solo-nav-line, 0px) solid transparent;
+    border-radius: var(--solo-nav-radius, var(--solo-radius-full));
+    background: none;
+    color: var(--solo-fg-muted);
+    font: var(--solo-label-weight, 500) var(--solo-label-size, var(--solo-text-control)) / 1.3 var(--solo-font-text);
+    letter-spacing: var(--solo-label-tracking, 0);
+    text-transform: var(--solo-label-case, none);
+    cursor: pointer;
+}
+
+.choice:hover:not(:disabled),
+.choice[aria-pressed='true'] {
+    color: var(--solo-fg);
+}
+
+.choice[aria-pressed='true'] {
+    border-bottom-color: var(--solo-fg);
+    background: var(--solo-nav-active, var(--solo-field-bg));
+    font-weight: var(--solo-choice-on-weight, 600);
+}
+
+.choice:disabled {
+    cursor: not-allowed;
+}
+
+.choice:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+/* forms in the dialogs */
+.checks {
+    display: flex;
+    flex-direction: column;
+    gap: var(--solo-space-2);
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.checks legend {
+    margin-bottom: var(--solo-space-2);
+    padding: 0;
+    color: var(--solo-fg-muted);
+    font: var(--solo-label-weight, 700) var(--solo-label-size, var(--solo-text-label)) / 1.3 var(--solo-font-text);
+    letter-spacing: var(--solo-label-tracking, 0.08em);
+    text-transform: var(--solo-label-case, uppercase);
+}
+
+.check {
+    display: flex;
+    align-items: center;
+    gap: var(--solo-space-2-5);
+    min-height: var(--solo-touch);
+    color: var(--solo-fg);
+    font: 400 var(--solo-text-field) / normal var(--solo-font-text);
+}
+
+.check input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--solo-fg);
+}
+
+.message {
+    margin: 0;
+    color: var(--solo-fg);
+    font: 400 var(--solo-text-sub) / 1.45 var(--solo-font-text);
+}
+
+.message[data-tone='accent'] {
+    color: var(--solo-accent);
+}
+
+.message[data-tone='error'] {
+    color: var(--solo-error);
+}
+
+.message[data-tone='warn'] {
+    color: var(--solo-warn);
+}
+
+.secret {
+    display: flex;
+    align-items: stretch;
+    gap: var(--solo-space-2);
+}
+
+.secret input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--solo-font-mono);
+}
+
+.dialogActions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--solo-space-3);
+}
+
+.dialogActions > :first-child[data-start] {
+    margin-right: auto;
+}
+
+.sheetEnd {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: var(--solo-space-3);
+    padding-top: var(--solo-space-2);
+}
+
+.sheetEnd:empty {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .phone {
+        display: none;
+    }
+
+    .wide,
+    .chipBlock {
+        display: block;
+    }
+
+    .setting {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: var(--solo-space-4);
+        min-height: 42px;
+    }
+
+    .settingLabel {
+        flex: 0 0 200px;
+        font-size: var(--solo-text-sub);
+    }
+
+    .settingSheet {
+        display: none;
+    }
+
+    .sheetEnd {
+        display: none;
+    }
+
+    .check {
+        min-height: 28px;
+    }
+}
+
+/* Pola klienta and Wiadomości SMS */
+.rowTitle[data-tone='muted'] {
+    color: var(--solo-fg-muted);
+}
+
+.monoInput {
+    font-family: var(--solo-font-mono);
+}
+
+.options {
+    display: flex;
+    flex-direction: column;
+    gap: var(--solo-space-3);
+}
+
+.optionRow {
+    display: flex;
+    align-items: center;
+    gap: var(--solo-space-2);
+}
+
+.optionRow > input {
+    flex: 1;
+    min-width: 0;
+}
+
+.chips:has(.chipsLabel) {
+    align-items: center;
+    padding-top: 0;
+}
+
+.chipsLabel {
+    margin-right: var(--solo-space-1);
+    color: var(--solo-fg-muted);
+    font: var(--solo-label-weight, 700) var(--solo-label-size, var(--solo-text-label)) / 1.3 var(--solo-font-text);
+    letter-spacing: var(--solo-label-tracking, 0.08em);
+    text-transform: var(--solo-label-case, uppercase);
+}
+
+button.chip {
+    background: none;
+    cursor: pointer;
+}
+
+button.chip:hover:not(:disabled) {
+    border-color: var(--solo-fg);
+    color: var(--solo-fg);
+}
+
+.preview {
+    display: flex;
+    flex-direction: column;
+    gap: var(--solo-space-3);
+}

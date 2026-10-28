@@ -1,14 +1,23 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { Check, ChevronRight, CircleDashed, ExternalLink, Minus } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import FlashMessages from '@/components/flash-messages';
+import { Masthead } from '@/components/solo/masthead';
+import { Poster } from '@/components/solo/primitives';
+import { SoloSurface } from '@/components/solo/surface';
+import { SoloToaster } from '@/components/solo/toaster';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { usePageActions } from '@/contexts/page-context';
 import clients from '@/routes/clients';
 import monthClose from '@/routes/month-close';
-import { BreadcrumbItem, MonthCloseType, SharedData } from '@/types';
+import { MonthCloseType, SharedData } from '@/types';
 
+import { hoursNumber, localeOf } from '../clients/components/client-list/format';
+import { nextPeriod } from '../clients/components/client-overview/format';
+import { CloseMonthDialog } from '../clients/components/month-settlement';
+
+import { monthName, shortDate } from '@/lib/dates';
 import styles from './index.module.css';
 
 type StepState = 'pending' | 'done' | 'skipped';
@@ -40,10 +49,21 @@ interface Run {
     client_steps: RunStep[];
 }
 
+/** The financial close of the month, beside the checklist: never a step, never tickable. */
+interface SettlementRow {
+    state: 'ready' | 'closed' | 'blocked';
+    period: string;
+    active_period: string;
+    closed_on: string | null;
+    closing: number | null;
+}
+
 interface ClientRow {
     client: { id: number; name: string; type: MonthCloseType; site_count: number };
     template_total: number;
+    can_start_checklist: boolean;
     run: Run | null;
+    settlement: SettlementRow | null;
 }
 
 interface MonthClosePageProps extends SharedData {
@@ -89,9 +109,11 @@ const STEP_HINTS: Record<string, string> = {
     full_site_copy: 'Optional - a full-site archive when it is warranted.',
 };
 
-const GROUPS: { type: CloseType; titleKey: string }[] = [
+/** null: a client with no checklist that still owes this month's hours. */
+const GROUPS: { type: CloseType | null; titleKey: string }[] = [
     { type: 'maintenance', titleKey: 'Maintenance sites' },
     { type: 'gig', titleKey: 'Agency gigs' },
+    { type: null, titleKey: 'Hours still to close' },
 ];
 
 function formatPeriod(period: string): string {
@@ -102,7 +124,6 @@ function formatPeriod(period: string): string {
 
 export default function Index() {
     const { t } = useTranslation();
-    const { setBreadcrumbs } = usePageActions();
     const { period, periods, clients: rows } = usePage<MonthClosePageProps>().props;
 
     // Cards are collapsed by default; track which are expanded.
@@ -118,11 +139,6 @@ export default function Index() {
             return next;
         });
     }
-
-    const breadcrumbs: BreadcrumbItem[] = React.useMemo(() => [{ title: 'Month Close', href: monthClose.index().url }], []);
-    useEffect(() => {
-        setBreadcrumbs(breadcrumbs);
-    }, [breadcrumbs, setBreadcrumbs]);
 
     function changePeriod(next: string) {
         router.get(monthClose.index().url, { period: next }, { replace: true, preserveState: true, preserveScroll: true });
@@ -173,7 +189,7 @@ export default function Index() {
         );
     }
 
-    function renderCard({ client, run, template_total: templateTotal }: ClientRow) {
+    function renderCard({ client, run, template_total: templateTotal, can_start_checklist: canStart, settlement }: ClientRow) {
         const resolved = run ? run.resolved : 0;
         const total = run ? run.total : templateTotal;
 
@@ -189,7 +205,11 @@ export default function Index() {
                     aria-expanded={run ? isExpanded : undefined}
                 >
                     {run && <ChevronRight size={15} className={styles.chevron} data-expanded={isExpanded ? 'true' : 'false'} aria-hidden />}
-                    <a href={clients.edit(client.id).url} className={styles.clientName} onClick={(e) => e.stopPropagation()}>
+                    <a
+                        href={clients.show({ client: client.id, tab: 'przeglad' }).url}
+                        className={styles.clientName}
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         {client.name}
                         <ExternalLink size={13} />
                     </a>
@@ -198,9 +218,11 @@ export default function Index() {
                             {run.status === 'completed' ? t('Completed') : `${resolved}/${total}`}
                         </span>
                     ) : (
-                        <button type="button" className={styles.startBtn} onClick={() => startClose(client.id)}>
-                            {t('Start close')} · {total}
-                        </button>
+                        canStart && (
+                            <button type="button" className={styles.startBtn} onClick={() => startClose(client.id)}>
+                                {t('Start close')} · {total}
+                            </button>
+                        )
                     )}
                 </header>
 
@@ -230,52 +252,100 @@ export default function Index() {
                         )}
                     </>
                 )}
+
+                {settlement !== null && <SettlementLine clientId={client.id} settlement={settlement} />}
             </section>
         );
     }
 
     return (
-        <>
+        <SoloSurface className={styles.page} day="paper">
             <Head title={t('Month Close')} />
-
-            <div className="pageContainer">
-                <div className={styles.controls}>
-                    <Select value={period} onValueChange={changePeriod}>
-                        <SelectTrigger className={styles.periodControl}>
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {periods.map((p) => (
-                                <SelectItem key={p} value={p}>
-                                    {formatPeriod(p)}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <span className={styles.subtitle}>{t('Monthly close checklist')}</span>
-                </div>
-
-                {rows.length === 0 && (
-                    <div className={styles.empty}>
-                        {t('No clients in monthly close yet. Tag a client as a maintenance site or agency gig to add it here.')}
+            <div className={styles.frame}>
+                <Masthead current="clients" />
+                <main className={styles.main}>
+                    <Poster>{t('Month close')}</Poster>
+                    <div className={styles.controls}>
+                        <Select value={period} onValueChange={changePeriod}>
+                            <SelectTrigger look="solo-pill" aria-label={t('Month')}>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent look="solo-menu" align="start" sideOffset={8}>
+                                {periods.map((p) => (
+                                    <SelectItem key={p} value={p}>
+                                        {formatPeriod(p)}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <span className={styles.subtitle}>{t('Monthly close checklist')}</span>
                     </div>
-                )}
 
-                {GROUPS.map(({ type, titleKey }) => {
-                    const groupRows = rows.filter((row) => row.client.type === type);
-                    if (groupRows.length === 0) {
-                        return null;
-                    }
-                    return (
-                        <section key={type} className={styles.group}>
-                            <h2 className={styles.groupTitle}>
-                                {t(titleKey)} <span className={styles.groupCount}>{groupRows.length}</span>
-                            </h2>
-                            <div className={styles.grid}>{groupRows.map(renderCard)}</div>
-                        </section>
-                    );
-                })}
+                    {rows.length === 0 && (
+                        <div className={styles.empty}>
+                            {t('No clients in monthly close yet. Tag a client as a maintenance site or agency gig to add it here.')}
+                        </div>
+                    )}
+
+                    {GROUPS.map(({ type, titleKey }) => {
+                        const groupRows = rows.filter((row) => row.client.type === type);
+                        if (groupRows.length === 0) {
+                            return null;
+                        }
+                        return (
+                            <section key={type} className={styles.group}>
+                                <h2 className={styles.groupTitle}>
+                                    {t(titleKey)} <span className={styles.groupCount}>{groupRows.length}</span>
+                                </h2>
+                                <div className={styles.grid}>{groupRows.map(renderCard)}</div>
+                            </section>
+                        );
+                    })}
+                </main>
             </div>
-        </>
+            <FlashMessages toaster={<SoloToaster />} />
+        </SoloSurface>
+    );
+}
+
+/** Figma: D3 flow F7, on this page's own styling: closable for the month being settled, its date once closed, else the month to close first. */
+export function SettlementLine({ clientId, settlement }: { clientId: number; settlement: SettlementRow }) {
+    const { t, i18n } = useTranslation();
+    const locale = localeOf(i18n.language);
+    const [open, setOpen] = useState(false);
+    const month = monthName(settlement.period, locale);
+
+    return (
+        <div className={styles.settlement} data-state={settlement.state}>
+            <div className={styles.stepBody}>
+                <span className={styles.stepLabel}>{t('Close {{month}}', { month })}</span>
+                <span className={styles.stepHint}>
+                    {settlement.state === 'ready' && settlement.closing !== null
+                        ? t('Freezes the hours bank: balance {{balance}} h carries into {{next}}', {
+                              balance: hoursNumber(settlement.closing, locale, true),
+                              next: monthName(nextPeriod(settlement.period), locale),
+                          })
+                        : t('Freezes the hours bank for the month')}
+                </span>
+            </div>
+            {settlement.state === 'ready' ? (
+                <>
+                    <button type="button" className={styles.startBtn} onClick={() => setOpen(true)}>
+                        {t('Close the month')}
+                    </button>
+                    <SoloSurface day="paper" className={styles.dialogHost}>
+                        <CloseMonthDialog clientId={clientId} period={settlement.period} open={open} onOpenChange={setOpen} />
+                    </SoloSurface>
+                </>
+            ) : (
+                <span className={styles.settlementState}>
+                    {settlement.state === 'closed'
+                        ? settlement.closed_on !== null
+                            ? t('ledger_closed', { date: shortDate(settlement.closed_on, locale) })
+                            : t('ledger_closed_undated')
+                        : t('close {{month}} first', { month: monthName(settlement.active_period, locale) })}
+                </span>
+            )}
+        </div>
     );
 }

@@ -12,74 +12,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
-use Inertia\Inertia;
-use Inertia\Response;
 
+/** The writes behind Ustawienia · Integracje. */
 final class IntegrationsController extends Controller
 {
-    public function index(): Response
-    {
-        if (config('app.demo')) {
-            return Inertia::render('integrations/index', ['integrations' => [], 'demo' => true]);
-        }
-
-        $account = Auth::user()->account;
-
-        $providers = collect(Integration::PROVIDERS)->map(function ($config, $provider) use ($account) {
-            $integration = $account->integrations()->where('provider', $provider)->first();
-
-            return [
-                'provider' => $provider,
-                'name' => $config['name'],
-                'description' => $config['description'],
-                'website' => $config['website'],
-                'features' => $config['features'],
-                'auth_type' => $config['auth_type'] ?? 'api_key',
-                'is_enabled' => $integration?->is_enabled ?? false,
-                'is_configured' => $integration?->isConfigured() ?? false,
-                'last_synced_at' => $integration?->last_synced_at,
-            ];
-        })->values();
-
-        return Inertia::render('integrations/index', [
-            'integrations' => $providers,
-            'demo' => false,
-        ]);
-    }
-
-    public function edit(string $provider): Response
-    {
-        if (! array_key_exists($provider, Integration::PROVIDERS)) {
-            abort(404);
-        }
-
-        $account = Auth::user()->account;
-        $integration = $account->integrations()->where('provider', $provider)->first();
-        $config = Integration::PROVIDERS[$provider];
-
-        $settings = $integration?->settings ?? [];
-
-        return Inertia::render('integrations/edit', [
-            'integration' => [
-                'provider' => $provider,
-                'name' => $config['name'],
-                'description' => $config['description'],
-                'website' => $config['website'],
-                'features' => $config['features'],
-                'auth_type' => $config['auth_type'] ?? 'api_key',
-                'is_enabled' => $integration?->is_enabled ?? false,
-                'has_api_key' => $integration?->hasValidApiKey() ?? false,
-                'is_configured' => $integration?->isConfigured() ?? false,
-                'last_synced_at' => $integration?->last_synced_at,
-                'last_sync_error' => $integration?->last_sync_error,
-                'has_trello_api_key' => ! empty($settings['trello_api_key']),
-                'has_unreadable_credentials' => ($integration?->unreadableSecrets() ?? []) !== [],
-                'connected_email' => $settings['email'] ?? null,
-                'client_conflicts' => array_values($settings['client_conflicts'] ?? []),
-            ],
-        ]);
-    }
-
     public function update(Request $request, string $provider): RedirectResponse
     {
         if (! array_key_exists($provider, Integration::PROVIDERS)) {
@@ -123,8 +59,7 @@ final class IntegrationsController extends Controller
             'last_sync_error' => null,
         ])->save();
 
-        return redirect()->route('integrations.edit', $provider)
-            ->with('success', __('Integration updated.'));
+        return back()->with('success', __('Integration updated.'));
     }
 
     /**
@@ -157,8 +92,7 @@ final class IntegrationsController extends Controller
             ])->save();
         }
 
-        return redirect()->route('integrations.edit', $provider)
-            ->with('success', __('Integration disconnected.'));
+        return back()->with('success', __('Integration disconnected.'));
     }
 
     public function sync(string $provider): RedirectResponse

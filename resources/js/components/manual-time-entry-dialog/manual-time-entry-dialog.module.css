@@ -1,0 +1,73 @@
+.actions {
+    flex-direction: row;
+    justify-content: flex-end;
+}
+
+.checking {
+    margin: 0;
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-sub) / 1.4 var(--solo-font-text);
+}
+
+.warning {
+    display: flex;
+    flex-direction: column;
+    gap: var(--solo-space-3);
+}
+
+.warningText {
+    margin: 0;
+    color: var(--solo-fg);
+    font: 400 var(--solo-mobile-body) / 1.3 var(--solo-font-text);
+}
+
+/* Figma 800:21650: white rows, the entry's title then od HH:MM at the end */
+.running {
+    display: flex;
+    flex-direction: column;
+    gap: var(--solo-space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.runningRow {
+    display: flex;
+    align-items: baseline;
+    gap: var(--solo-space-3);
+    padding: var(--solo-space-3) 20px;
+    border-radius: var(--solo-radius-lg);
+    background: var(--solo-field-bg);
+    color: var(--solo-field-fg);
+}
+
+.runningTitle {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font: 600 var(--solo-text-action) / 1.35 var(--solo-font-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.runningSince {
+    flex: none;
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.billable {
+    display: flex;
+    align-items: center;
+    gap: var(--solo-space-3);
+    padding: var(--solo-space-1) var(--solo-space-2);
+    color: var(--solo-fg);
+    font: 600 var(--solo-text-sub) / 1.35 var(--solo-font-text);
+    cursor: pointer;
+}
+
+@media (min-width: 768px) {
+    .warningText {
+        font-size: var(--solo-text-action);
+    }
+}

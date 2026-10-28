@@ -49,16 +49,15 @@ final class RetiredIntegrationRowTest extends TestCase
     public function test_integrations_page_lists_only_known_providers(): void
     {
         $this->actingAs($this->user)
-            ->get('/integrations')
+            ->get('/settings/integracje')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->component('integrations/index')
-                ->where('integrations', fn ($integrations) => collect($integrations)->pluck('provider')->sort()->values()->all() === ['infakt', 'trello']));
+                ->component('settings/index')
+                ->where('integrations', fn ($integrations) => collect($integrations)->pluck('provider')->sort()->values()->all() === ['infakt', 'smsapi', 'trello']));
     }
 
-    public function test_retired_provider_has_no_settings_page_and_cannot_sync(): void
+    public function test_retired_provider_cannot_be_saved_or_synced(): void
     {
-        $this->actingAs($this->user)->get('/integrations/clockify')->assertNotFound();
         $this->actingAs($this->user)->post('/integrations/clockify/sync')->assertNotFound();
         $this->actingAs($this->user)->put('/integrations/clockify', ['is_enabled' => true])->assertNotFound();
 

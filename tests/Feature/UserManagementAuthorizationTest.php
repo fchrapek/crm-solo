@@ -33,7 +33,6 @@ final class UserManagementAuthorizationTest extends TestCase
     {
         $stranger = User::factory()->create(['account_id' => Account::create(['name' => 'Other'])->id, 'owner' => true]);
 
-        $this->actingAs($this->owner)->get("/users/{$stranger->id}/edit")->assertNotFound();
         $this->actingAs($this->owner)->put("/users/{$stranger->id}", $this->payload($stranger, ['email' => 'taken@example.com']))->assertNotFound();
         $this->actingAs($this->owner)->delete("/users/{$stranger->id}")->assertNotFound();
         $this->actingAs($this->owner)->put("/users/{$stranger->id}/restore")->assertNotFound();
@@ -44,7 +43,6 @@ final class UserManagementAuthorizationTest extends TestCase
 
     public function test_a_member_cannot_create_change_or_delete_other_users(): void
     {
-        $this->actingAs($this->member)->get('/users/create')->assertForbidden();
         $this->actingAs($this->member)->post('/users', [
             'first_name' => 'New', 'last_name' => 'User', 'email' => 'new@example.com', 'password' => 'a-long-password', 'owner' => false,
         ])->assertForbidden();
@@ -88,7 +86,7 @@ final class UserManagementAuthorizationTest extends TestCase
 
         foreach ([
             ['email' => 'mine@example.com'],
-            ['password' => 'a-new-long-password'],
+            ['password' => 'a-new-long-password', 'current_password' => 'demo-password'],
             ['owner' => false],
         ] as $change) {
             $this->actingAs($demo)
@@ -99,6 +97,8 @@ final class UserManagementAuthorizationTest extends TestCase
 
         $this->actingAs($demo)->delete("/users/{$demo->id}")
             ->assertSessionHas('error', 'The demo login cannot be changed or deleted.');
+        // Another user is another browser session; auth.session ends one that switches user.
+        $this->flushSession();
         $this->actingAs($this->owner)->delete("/users/{$demo->id}")
             ->assertSessionHas('error', 'The demo login cannot be changed or deleted.');
 

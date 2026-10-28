@@ -1,1 +1,1 @@
-export { ToggleGroup, ToggleGroupItem } from './toggle-group';
+export { ToggleGroup, ToggleGroupItem, segmentedLinkClasses } from './toggle-group';

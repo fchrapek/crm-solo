@@ -155,7 +155,10 @@ export function ConnectTrelloDialog({ open, onOpenChange, projectId }: Props) {
                             )}
                             {!loadingBoards && !boardsError && boards !== null && boards.length > 0 && (
                                 <Select value={selectedBoardId} onValueChange={setSelectedBoardId} disabled={submitting}>
-                                    <SelectTrigger className={styles.boardSelectTrigger}>
+                                    <SelectTrigger
+                                        className={styles.boardSelectTrigger}
+                                        title={boards.find((board) => board.id === selectedBoardId)?.name}
+                                    >
                                         <SelectValue placeholder={t('Select a board')} />
                                     </SelectTrigger>
                                     <SelectContent className={styles.boardSelectContent}>

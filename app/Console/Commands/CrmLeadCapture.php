@@ -41,7 +41,7 @@ final class CrmLeadCapture extends Command
         $name = mb_trim((string) $this->option('name'));
         $source = mb_trim((string) $this->option('source'));
         if ($name === '' || $source === '') {
-            $this->error('--name and --source are required. Sources: '.implode(', ', Lead::sources()));
+            $this->error('--name and --source are required. Sources: '.implode(', ', Lead::sources($account->id)));
 
             return self::FAILURE;
         }

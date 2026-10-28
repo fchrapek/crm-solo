@@ -35,12 +35,12 @@ final class LeadCaptureTool extends Tool
                 'note' => ['nullable', 'string'],
             ], [
                 'name.required' => 'Pass the lead name.',
-                'source.required' => 'Pass the source slug — it is permanent channel attribution. Valid sources: '.implode(', ', Lead::sources()),
+                'source.required' => 'Pass the source slug — it is permanent channel attribution. Valid sources: '.implode(', ', Lead::sources($this->identity()->account->id)),
             ]);
         } catch (ValidationException $e) {
             return $this->invalidArgument(
                 implode(' ', $e->validator->errors()->all()),
-                ['valid_sources' => Lead::sources()],
+                ['valid_sources' => Lead::sources($this->identity()->account->id)],
             );
         }
 
@@ -56,7 +56,7 @@ final class LeadCaptureTool extends Tool
             ]);
         } catch (InvalidArgumentException $e) {
             return $this->invalidArgument($e->getMessage(), [
-                'valid_sources' => Lead::sources(),
+                'valid_sources' => Lead::sources($this->identity()->account->id),
                 'valid_pipelines' => Lead::pipelines(),
             ]);
         }
@@ -79,8 +79,7 @@ final class LeadCaptureTool extends Tool
                 ->required(),
 
             'source' => $schema->string()
-                ->enum(Lead::sources())
-                ->description('Where the lead came from. Permanent attribution — it cannot be changed later.')
+                ->description('Where the lead came from, a source slug of the account. Permanent attribution, it cannot be changed later; an unknown slug is refused with the valid ones listed.')
                 ->required(),
 
             'pipeline' => $schema->string()

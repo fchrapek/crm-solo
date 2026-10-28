@@ -9,6 +9,7 @@ use App\Services\Agent\AgentCall;
 use App\Services\Agent\AgentCallContext;
 use App\Services\Agent\AgentIdentity;
 use App\Services\Agent\AgentIdentityResolver;
+use App\Services\Agent\AgentRefusal;
 use App\Services\Agent\AmbiguousReferenceException;
 use App\Services\Agent\ReferenceException;
 use App\Services\Agent\ReferenceNotFoundException;
@@ -67,6 +68,32 @@ trait AgentConsoleOutput
             ));
             if ($e instanceof AmbiguousReferenceException && $e->total > count($candidates)) {
                 $this->raw('  ... and '.($e->total - count($candidates)).' more');
+            }
+        }
+
+        return self::FAILURE;
+    }
+
+    /** A refused write: its JSON payload, or the message with the records and values it names. */
+    private function refusal(AgentRefusal $e): int
+    {
+        if ($this->wantsJson()) {
+            $this->raw($this->encodeJson($e->toPayload()));
+
+            return self::FAILURE;
+        }
+
+        $this->raw('ERROR '.$this->literal($e->getMessage()));
+        $candidates = $e->context['candidates'] ?? [];
+        if ($candidates !== []) {
+            $this->fenced(array_map(
+                fn (array $c): string => "  #{$c['id']} ".$this->literal($c['name']).($c['context'] !== null ? ' ('.$this->literal($c['context']).')' : ''),
+                $candidates,
+            ));
+        }
+        foreach (['valid_lists', 'valid_types', 'valid_stages'] as $key) {
+            if (isset($e->context[$key])) {
+                $this->raw('Valid: '.implode(', ', $e->context[$key]));
             }
         }
 

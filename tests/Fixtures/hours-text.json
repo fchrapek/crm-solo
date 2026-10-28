@@ -1,0 +1,121 @@
+[
+  {
+    "value": -16,
+    "locale": "pl",
+    "kind": "hours",
+    "signed": true,
+    "expected": "−16,0"
+  },
+  {
+    "value": -0.25,
+    "locale": "pl",
+    "kind": "hours",
+    "signed": true,
+    "expected": "−0,25"
+  },
+  {
+    "value": 11.5,
+    "locale": "pl",
+    "kind": "hours",
+    "signed": true,
+    "expected": "+11,5"
+  },
+  {
+    "value": 0,
+    "locale": "pl",
+    "kind": "hours",
+    "signed": true,
+    "expected": "0,0"
+  },
+  {
+    "value": -0.001,
+    "locale": "pl",
+    "kind": "hours",
+    "signed": true,
+    "expected": "0,0"
+  },
+  {
+    "value": -16,
+    "locale": "pl",
+    "kind": "hours",
+    "signed": false,
+    "expected": "−16,0"
+  },
+  {
+    "value": 1000,
+    "locale": "pl",
+    "kind": "hours",
+    "signed": false,
+    "expected": "1 000,0"
+  },
+  {
+    "value": 12345.5,
+    "locale": "pl",
+    "kind": "hours",
+    "signed": true,
+    "expected": "+12 345,5"
+  },
+  {
+    "value": 9.449,
+    "locale": "en",
+    "kind": "hours",
+    "signed": false,
+    "expected": "9.45"
+  },
+  {
+    "value": 1000,
+    "locale": "en",
+    "kind": "hours",
+    "signed": true,
+    "expected": "+1,000.0"
+  },
+  {
+    "value": -1234.56,
+    "locale": "en",
+    "kind": "hours",
+    "signed": false,
+    "expected": "−1,234.56"
+  },
+  {
+    "value": 30,
+    "locale": "en",
+    "kind": "hours",
+    "signed": false,
+    "expected": "30.0"
+  },
+  {
+    "value": 30,
+    "locale": "pl",
+    "kind": "terms",
+    "signed": false,
+    "expected": "30"
+  },
+  {
+    "value": 7.5,
+    "locale": "pl",
+    "kind": "terms",
+    "signed": false,
+    "expected": "7,5"
+  },
+  {
+    "value": 60,
+    "locale": "en",
+    "kind": "terms",
+    "signed": false,
+    "expected": "60"
+  },
+  {
+    "value": 0.25,
+    "locale": "en",
+    "kind": "terms",
+    "signed": false,
+    "expected": "0.25"
+  },
+  {
+    "value": 1200,
+    "locale": "pl",
+    "kind": "terms",
+    "signed": false,
+    "expected": "1 200"
+  }
+]

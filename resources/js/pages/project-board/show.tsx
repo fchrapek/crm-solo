@@ -1,220 +1,284 @@
-import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowLeft, ExternalLink, FolderKanban, Pencil, Plus } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { Head, router, usePage } from '@inertiajs/react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { usePageActions } from '@/contexts/page-context';
-import { listLaneLabel } from '@/lib/list-lane-label';
-import { ProjectKanban } from '@/pages/clients/components/project-kanban';
-import { type TaskDialogValues, TaskFormDialog } from '@/pages/clients/components/task-form-dialog';
-import { ownerFinishLabel, type TaskRowTask } from '@/pages/clients/components/task-row';
+import FlashMessages from '@/components/flash-messages';
+import { ActionMenuItem } from '@/components/solo/action-menu';
+import { AgentChip, HeaderAction, RecordHeader, useInHeaderMenu } from '@/components/solo/client-header';
+import { IconButton } from '@/components/solo/icon-button';
+import { KvRow } from '@/components/solo/kv-row';
+import { LiveLine } from '@/components/solo/live-line';
+import { Masthead } from '@/components/solo/masthead';
+import { SectionAction, SectionHead } from '@/components/solo/primitives';
+import { SoloSurface } from '@/components/solo/surface';
+import { SoloToaster } from '@/components/solo/toaster';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Icon } from '@/components/ui/icon';
+import { useNow } from '@/hooks/use-now';
+import { capitalize, inMonth, minutesSince } from '@/lib/dates';
+import { hoursText, localeOf } from '@/lib/hours-text';
+import { type ClientTasks, ClientTasksTab } from '@/pages/clients/components/client-tasks';
+import { ConnectTrelloDialog } from '@/pages/clients/components/connect-trello-dialog';
+import { ListMappingDialog } from '@/pages/clients/components/list-mapping-dialog';
+import { ProjectFormDialog } from '@/pages/clients/components/project-form-dialog';
 import clients from '@/routes/clients';
-import { BreadcrumbItem, SharedData } from '@/types';
-
+import projectBoard from '@/routes/project-board';
+import { type SharedData } from '@/types';
 import styles from './show.module.css';
 
-interface ProjectBoardTask extends TaskRowTask {
-    description?: string | null;
+interface ProjectData {
+    id: number;
+    name: string;
+    description: string | null;
+    is_private: boolean;
+    trello_url: string | null;
+    trello_lists: { id: string; name: string }[];
+    trello_list_mapping: Record<string, string>;
+    custom_lanes: string[];
+    include_in_month_close: boolean;
+    backup_path: string | null;
+    synced_at: string | null;
+    month: string;
+    month_minutes: number;
+    /** An agent's timer running on one of the project's tasks. */
+    live_agent: { agent: string; started_at: string } | null;
 }
 
-type TFn = ReturnType<typeof useTranslation>['t'];
-
-function priorityLabel(priority: string | null | undefined, t: TFn): string {
-    if (priority === 'high') return t('High');
-    if (priority === 'medium') return t('Medium');
-    if (priority === 'low') return t('Low');
-    return '-';
+interface ProjectPageProps {
+    client: { id: number; name: string; short_name: string };
+    project: ProjectData;
+    tasks: ClientTasks;
+    trelloEnabled: boolean;
+    trelloActions: boolean;
+    [key: string]: unknown;
 }
 
-interface PageProps extends SharedData {
-    client: { id: number; name: string };
-    project: {
-        id: number;
-        name: string;
-        is_private: boolean;
-        trello_url: string | null;
-        custom_lanes: string[];
-    };
-    tasks: ProjectBoardTask[];
+type Dialog = 'edit' | 'connect' | 'mapping' | 'disconnect' | 'delete' | null;
+
+/** Figma: Projekt (770:56830; phones 849:21156). The Zadania lanes for one project, the Projekt column beside them. */
+export default function ProjectPage() {
+    const { client, project, tasks, trelloEnabled, trelloActions } = usePage<SharedData & ProjectPageProps>().props;
+    const { t } = useTranslation();
+    const [dialog, setDialog] = useState<Dialog>(null);
+    const open = (next: Dialog) => () => setDialog(next);
+    const back = { href: clients.show({ client: client.id, tab: 'dziennik' }).url, label: client.short_name };
+    const actions = <ProjectActions project={project} trelloEnabled={trelloEnabled} trelloActions={trelloActions} onOpen={setDialog} />;
+    const now = useNow(15_000);
+    const agent = project.live_agent;
+    const agentMinutes = agent !== null && now !== null ? minutesSince(agent.started_at, now) : null;
+
+    return (
+        <SoloSurface className={styles.page} day="paper">
+            <Head title={project.name} />
+            <div className={styles.frame}>
+                <Masthead current="clients" />
+                <main>
+                    <RecordHeader
+                        size="poster"
+                        back={back}
+                        trail={[
+                            { label: t('Clients'), href: clients.index().url },
+                            { label: client.short_name, href: back.href },
+                            { label: project.name },
+                        ]}
+                        title={project.name}
+                        menu={actions}
+                        chip={
+                            agent !== null && agentMinutes !== null ? (
+                                <AgentChip>{t('{{agent}} · {{minutes}} min', { agent: agent.agent, minutes: agentMinutes })}</AgentChip>
+                            ) : undefined
+                        }
+                        live={
+                            agent !== null && agentMinutes !== null ? (
+                                <LiveLine>{t('{{agent}} working · {{minutes}} min', { agent: agent.agent, minutes: agentMinutes })}</LiveLine>
+                            ) : undefined
+                        }
+                    />
+                    <ClientTasksTab
+                        clientId={client.id}
+                        tasks={tasks}
+                        laneHref={(lane) => projectBoard.show({ client: client.id, project: project.id }, { query: { wszystkie: lane } }).url}
+                        bottomAction
+                        side={<ProjectSection project={project} trelloActions={trelloActions} actions={actions} onEdit={open('edit')} />}
+                    />
+                </main>
+            </div>
+
+            <ProjectFormDialog
+                open={dialog === 'edit'}
+                onOpenChange={(next) => setDialog(next ? 'edit' : null)}
+                initial={{
+                    id: project.id,
+                    name: project.name,
+                    description: project.description,
+                    include_in_month_close: project.include_in_month_close,
+                    backup_path: project.backup_path,
+                }}
+            />
+            <ConnectTrelloDialog open={dialog === 'connect'} onOpenChange={(next) => setDialog(next ? 'connect' : null)} projectId={project.id} />
+            <ListMappingDialog
+                open={dialog === 'mapping'}
+                onOpenChange={(next) => setDialog(next ? 'mapping' : null)}
+                projectId={project.id}
+                lists={project.trello_lists}
+                mapping={project.trello_list_mapping}
+                customLanes={project.custom_lanes}
+            />
+            <ConfirmDialog
+                open={dialog === 'disconnect'}
+                onOpenChange={(next) => setDialog(next ? 'disconnect' : null)}
+                title={t('Disconnect from Trello?')}
+                description={t(
+                    'The board will be detached from this project. The project will become private and existing Trello tasks will remain as historical records (read-only, no further sync updates).',
+                )}
+                confirmLabel={t('Disconnect')}
+                variant="destructive"
+                onConfirm={() => router.post(`/projects/${project.id}/disconnect-trello`, {}, { preserveScroll: true })}
+            />
+            <ConfirmDialog
+                open={dialog === 'delete'}
+                onOpenChange={(next) => setDialog(next ? 'delete' : null)}
+                title={t('Delete project?')}
+                description={t('All tasks in this project will be deleted permanently. This cannot be undone.')}
+                confirmLabel={t('Delete project')}
+                variant="destructive"
+                onConfirm={() => router.delete(`/projects/${project.id}`, { onSuccess: () => router.visit(back.href) })}
+            />
+            <FlashMessages toaster={<SoloToaster />} />
+        </SoloSurface>
+    );
 }
 
-/**
- * One project's board. The client Work tab lists projects; drag lives here, on
- * a page wide enough for five-plus lanes without squeezing them under the rest
- * of a tab's content.
- */
-export default function ProjectBoardShow() {
-    const { t, i18n } = useTranslation();
-    const { setBreadcrumbs } = usePageActions();
-    const { client, project, tasks } = usePage<PageProps>().props;
+/** Synchronizuj, Mapowanie list, Odłącz or Połącz z Trello, Usuń projekt: menu items in the phone •••, a ••• menu beside Edytuj on desktop. */
+function ProjectActions({
+    project,
+    trelloEnabled,
+    trelloActions,
+    onOpen,
+}: {
+    project: ProjectData;
+    trelloEnabled: boolean;
+    trelloActions: boolean;
+    onOpen: (dialog: Dialog) => void;
+}) {
+    const { t } = useTranslation();
+    const inMenu = useInHeaderMenu();
+    const sync = () => router.post(`/projects/${project.id}/sync-trello`, {}, { preserveScroll: true });
 
-    const [taskDialogOpen, setTaskDialogOpen] = useState(false);
-    const [editingTask, setEditingTask] = useState<TaskDialogValues | undefined>(undefined);
-    const [view, setView] = useState<'board' | 'list'>('board');
-
-    const breadcrumbs: BreadcrumbItem[] = useMemo(
-        () => [
-            { title: t('Clients'), href: clients.index().url, count: 2 },
-            { title: client.name, href: clients.edit(client.id).url },
-            { title: project.name, href: '' },
-        ],
-        [t, client.name, client.id, project.name],
+    const items = (
+        <>
+            {inMenu && (
+                <HeaderAction icon={<Icon name="pencil" size={16} />} onClick={() => onOpen('edit')}>
+                    {t('Edit project')}
+                </HeaderAction>
+            )}
+            {!project.is_private && trelloActions && (
+                <>
+                    {inMenu && (
+                        <HeaderAction icon={<Icon name="refresh" size={16} />} onClick={sync}>
+                            {t('Sync Now')}
+                        </HeaderAction>
+                    )}
+                    <ActionMenuItem
+                        icon={<Icon name="settings" size={16} />}
+                        disabled={project.trello_lists.length === 0}
+                        onSelect={() => onOpen('mapping')}
+                    >
+                        {t('Configure list mapping')}
+                    </ActionMenuItem>
+                    <ActionMenuItem icon={<Icon name="unlink" size={16} />} onSelect={() => onOpen('disconnect')}>
+                        {t('Disconnect from Trello')}
+                    </ActionMenuItem>
+                </>
+            )}
+            {project.is_private && trelloEnabled && (
+                <ActionMenuItem icon={<Icon name="refresh" size={16} />} onSelect={() => onOpen('connect')}>
+                    {t('Connect to Trello')}
+                </ActionMenuItem>
+            )}
+            {project.is_private && (
+                <ActionMenuItem icon={<Icon name="trash" size={16} />} onSelect={() => onOpen('delete')}>
+                    {t('Delete project')}
+                </ActionMenuItem>
+            )}
+        </>
     );
 
-    useEffect(() => setBreadcrumbs(breadcrumbs), [breadcrumbs, setBreadcrumbs]);
+    if (inMenu) return items;
 
-    const openCreate = () => {
-        setEditingTask(undefined);
-        setTaskDialogOpen(true);
-    };
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <IconButton icon="more" size="sm" label={t('Project actions')} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={8} collisionPadding={16}>
+                {items}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
 
-    const openEdit = (task: TaskRowTask) => {
-        const full = tasks.find((entry) => entry.id === task.id);
-        setEditingTask({
-            id: task.id,
-            name: task.name,
-            description: full?.description ?? '',
-            list_name: (task.list_name as TaskDialogValues['list_name']) ?? 'To-Do',
-            due_date: task.due_date ?? '',
-            priority: (task.priority as TaskDialogValues['priority']) ?? '',
-            parent_task_id: task.parent_task_id ?? null,
-            is_agent_ready: false,
-            source: task.source ?? null,
-        });
-        setTaskDialogOpen(true);
-    };
+/** "dziś 10:42" for a sync today, the day and the time before that. */
+function syncedText(synced: Date, locale: string, t: ReturnType<typeof useTranslation>['t']): string {
+    const time = synced.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+    const sameDay = synced.toDateString() === new Date().toDateString();
+
+    return sameDay ? t('today {{time}}', { time }) : `${synced.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' })} ${time}`;
+}
+
+function ProjectSection({
+    project,
+    trelloActions,
+    actions,
+    onEdit,
+}: {
+    project: ProjectData;
+    trelloActions: boolean;
+    actions: ReactNode;
+    onEdit: () => void;
+}) {
+    const { t, i18n } = useTranslation();
+    const locale = localeOf(i18n.language);
+    const synced = project.synced_at !== null ? new Date(project.synced_at) : null;
 
     return (
         <>
-            <Head title={`${project.name} - ${client.name}`} />
-
-            <div className={styles.header}>
-                <Link href={clients.edit(client.id).url} className={styles.backLink}>
-                    <ArrowLeft size={14} />
-                    {client.name}
-                </Link>
-                <div className={styles.titleRow}>
-                    <h1 className={styles.title}>
-                        <FolderKanban size={20} />
-                        {project.name}
-                    </h1>
-                    {project.is_private && <Badge variant="secondary">{t('Private')}</Badge>}
-                    {project.trello_url && (
-                        <a
-                            href={project.trello_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={styles.boardLink}
-                            aria-label={t('View board in Trello')}
-                            title={t('View board in Trello')}
-                        >
-                            <ExternalLink size={14} />
-                        </a>
-                    )}
-                    <div className={styles.actions}>
-                        <div className={styles.viewToggle} role="tablist">
-                            <button
-                                type="button"
-                                role="tab"
-                                aria-selected={view === 'board'}
-                                className={`${styles.viewPill} ${view === 'board' ? styles.viewPillActive : ''}`}
-                                onClick={() => setView('board')}
-                            >
-                                {t('Board')}
-                            </button>
-                            <button
-                                type="button"
-                                role="tab"
-                                aria-selected={view === 'list'}
-                                className={`${styles.viewPill} ${view === 'list' ? styles.viewPillActive : ''}`}
-                                onClick={() => setView('list')}
-                            >
-                                {t('List')}
-                            </button>
-                        </div>
-                        <Button size="sm" variant="outline" onClick={openCreate}>
-                            <Plus size={14} className={styles.iconLeading} />
-                            {t('New task')}
-                        </Button>
-                    </div>
-                </div>
-                {view === 'board' && (
-                    <p className={styles.subtitle}>
-                        {project.is_private
-                            ? t('Drag cards between lanes to move tasks.')
-                            : t('Trello-sourced cards are read-only here. Move them on the board in Trello.')}
-                    </p>
-                )}
-            </div>
-
-            {view === 'board' ? (
-                <ProjectKanban
-                    tasks={tasks}
-                    lanes={['Backlog', 'To-Do', 'Doing', 'Testing', 'Done', ...project.custom_lanes]}
-                    onEditTask={openEdit}
-                />
-            ) : (
-                /* The same table anatomy as the Leads list - one list style
-                   across the app. */
-                <div className={styles.taskList}>
-                    {tasks.length === 0 ? (
-                        <p className={styles.taskListEmpty}>{t('No tasks yet.')}</p>
-                    ) : (
-                        <table className={styles.table}>
-                            <thead>
-                                <tr>
-                                    <th>{t('Task')}</th>
-                                    <th>{t('Status')}</th>
-                                    <th>{t('Priority')}</th>
-                                    <th>{t('Due')}</th>
-                                    <th>{t('Source')}</th>
-                                    <th />
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {tasks.map((task) => {
-                                    const overdue = task.is_overdue ?? false;
-                                    return (
-                                        <tr key={task.id}>
-                                            <td>
-                                                <Link className={styles.rowLink} href={`/tasks/${task.id}`} prefetch>
-                                                    {task.name}
-                                                </Link>
-                                            </td>
-                                            <td className={styles.cellMuted}>{ownerFinishLabel(task, t, i18n.language) ?? listLaneLabel(t, task.list_name)}</td>
-                                            <td className={task.priority === 'high' ? styles.priorityHigh : styles.cellMuted}>
-                                                {priorityLabel(task.priority, t)}
-                                            </td>
-                                            <td className={overdue ? styles.dateOverdue : styles.cellMuted}>
-                                                {task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'}
-                                            </td>
-                                            <td className={styles.cellMuted}>{task.source ?? '-'}</td>
-                                            <td className={styles.editCell}>
-                                                {!task.has_trello_card && (
-                                                    <Button variant="ghost" size="icon" aria-label={t('Edit task')} onClick={() => openEdit(task)}>
-                                                        <Pencil size={14} />
-                                                    </Button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
-            )}
-
-            <TaskFormDialog
-                open={taskDialogOpen}
-                onOpenChange={setTaskDialogOpen}
-                projectId={project.id}
-                initial={editingTask}
-                parentOptions={tasks.map((task) => ({ id: task.id, name: task.name }))}
-                mode={editingTask ? 'edit' : 'create'}
+            <SectionHead
+                kind="body"
+                label={t('Project')}
+                action={
+                    <span className={styles.actions}>
+                        {!project.is_private && trelloActions && (
+                            <SectionAction onClick={() => router.post(`/projects/${project.id}/sync-trello`, {}, { preserveScroll: true })}>
+                                {t('Synchronize')}
+                            </SectionAction>
+                        )}
+                        <SectionAction onClick={onEdit}>{t('Edit')}</SectionAction>
+                        <span className={styles.wideOnly}>{actions}</span>
+                    </span>
+                }
             />
+            <dl className={styles.facts}>
+                <KvRow layout="ledger" label="Trello">
+                    {project.trello_url !== null && !project.is_private ? (
+                        <a href={project.trello_url} target="_blank" rel="noopener noreferrer" className={styles.link}>
+                            {t('connected')} ↗
+                        </a>
+                    ) : (
+                        t('private')
+                    )}
+                </KvRow>
+                {synced !== null && (
+                    <KvRow layout="ledger" label={t('Synchronization')}>
+                        {syncedText(synced, locale, t)}
+                    </KvRow>
+                )}
+                <KvRow layout="ledger" label={t('Hours')}>
+                    {t('{{hours}} h {{when}}', { hours: hoursText(project.month_minutes / 60, locale), when: inMonth(project.month, t) })}
+                </KvRow>
+            </dl>
+            {project.description && <p className={styles.description}>{capitalize(project.description)}</p>}
         </>
     );
 }

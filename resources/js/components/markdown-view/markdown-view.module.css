@@ -1,0 +1,43 @@
+/* a list of tasks only sits flush; ordinary items in a mixed list keep their bullets and indent */
+.view :global(.contains-task-list:not(:has(> li:not(.task-list-item)))) {
+    margin-left: 0;
+    padding-left: 0;
+}
+
+.view :global(.contains-task-list .contains-task-list) {
+    padding-left: 1.5em;
+}
+
+.view :global(.task-list-item) {
+    padding-left: 0;
+    list-style: none;
+}
+
+/* drawn in the text colour at full strength, since the browser and the base styles grey out a disabled checkbox; a loose list wraps it in a paragraph */
+.view :global(.task-list-item input[type='checkbox']) {
+    appearance: none;
+    display: inline-grid;
+    place-content: center;
+    width: 1em;
+    height: 1em;
+    margin: 0 0.5em 0 0;
+    border: var(--solo-check-width, 1.5px) solid var(--solo-check-border, currentColor);
+    border-radius: 3px;
+    vertical-align: middle;
+    color: inherit;
+    opacity: 1;
+    cursor: default;
+}
+
+.view :global(.task-list-item input[type='checkbox']:checked) {
+    border-color: var(--solo-primary, currentColor);
+    background: var(--solo-primary, currentColor);
+}
+
+.view :global(.task-list-item input[type='checkbox']:checked)::before {
+    content: '✓';
+    color: var(--solo-on-primary, var(--solo-bg, var(--color-background)));
+    font-size: 0.75em;
+    font-weight: 700;
+    line-height: 1;
+}

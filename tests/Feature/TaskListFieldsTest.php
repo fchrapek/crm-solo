@@ -58,14 +58,14 @@ final class TaskListFieldsTest extends TestCase
         $card = $this->task('Card', null, 'https://trello.com/c/k');
         $card->update(['priority' => 'high']);
         $manual = Task::create(['project_id' => $this->project->id, 'name' => 'Mine', 'source' => 'manual', 'priority' => 'high']);
-        $lead = Lead::create(['account_id' => $this->client->account_id, 'pipeline' => Lead::pipelines()[0], 'name' => 'Form lead', 'source' => Lead::sources()[0]]);
+        $lead = Lead::create(['account_id' => $this->client->account_id, 'pipeline' => Lead::pipelines()[0], 'name' => 'Form lead', 'source' => config('leadgen.sources')[0]]);
         config(['leadgen.tiers.gold_min' => 0]);
 
         $brief = collect(app(ClientBrief::class)->for($this->client)['open_tasks'])->keyBy('id');
         $today = app(TodayDigest::class)->build($this->client->account_id);
 
         $this->assertSame(['name', 'project', 'list', 'card_lane', 'card_url'], $brief[$card->id]['untrusted']);
-        $this->assertSame([], $brief[$manual->id]['untrusted']);
+        $this->assertSame(['project'], $brief[$manual->id]['untrusted'], 'a manual task on a board still carries the board name');
         $this->assertSame(['name', 'project', 'card_lane', 'card_url'], $today['attention_tasks']->firstWhere('id', $card->id)['untrusted']);
         $this->assertSame(['name'], $today['hot_leads']->firstWhere('id', $lead->id)['untrusted']);
     }

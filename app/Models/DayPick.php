@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Auth;
  */
 final class DayPick extends Model
 {
-    protected $fillable = ['account_id', 'task_id', 'date', 'slot', 'position'];
+    protected $fillable = ['account_id', 'task_id', 'date', 'slot', 'position', 'dismissed_at'];
 
     public function task(): BelongsTo
     {
@@ -29,6 +29,6 @@ final class DayPick extends Model
 
     protected function casts(): array
     {
-        return ['date' => 'date'];
+        return ['date' => 'date', 'dismissed_at' => 'datetime'];
     }
 }

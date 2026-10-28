@@ -1,7 +1,8 @@
 import * as SheetPrimitive from '@radix-ui/react-dialog';
-import { XIcon } from 'lucide-react';
 import * as React from 'react';
 
+import { useSoloPortalSurface } from '@/components/solo/surface';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils';
 import styles from './sheet.module.css';
 
@@ -18,7 +19,9 @@ function SheetClose({ ...props }: React.ComponentProps<typeof SheetPrimitive.Clo
 }
 
 function SheetPortal({ ...props }: React.ComponentProps<typeof SheetPrimitive.Portal>) {
-    return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />;
+    const container = useSoloPortalSurface();
+
+    return <SheetPrimitive.Portal data-slot="sheet-portal" container={container} {...props} />;
 }
 
 function SheetOverlay({ className, ...props }: React.ComponentProps<typeof SheetPrimitive.Overlay>) {
@@ -42,23 +45,29 @@ function SheetContent({
     className,
     children,
     side = 'right',
+    showCloseButton = true,
     ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
     side?: 'top' | 'right' | 'bottom' | 'left';
+    /** Off when the content draws its own close control (the Solo bottom sheet header). */
+    showCloseButton?: boolean;
 }) {
     return (
         <SheetPortal>
             <SheetOverlay />
             <SheetPrimitive.Content
                 data-slot="sheet-content"
+                data-side={side}
                 className={cn(styles.content, sideStyles[side], className)}
                 {...props}
             >
                 {children}
-                <SheetPrimitive.Close className={styles.closeButton}>
-                    <XIcon className={styles.closeIcon} />
-                    <span className="sr-only">Close</span>
-                </SheetPrimitive.Close>
+                {showCloseButton && (
+                    <SheetPrimitive.Close className={styles.closeButton}>
+                        <Icon name="close" size={16} />
+                        <span className="sr-only">Close</span>
+                    </SheetPrimitive.Close>
+                )}
             </SheetPrimitive.Content>
         </SheetPortal>
     );

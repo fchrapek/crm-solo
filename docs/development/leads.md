@@ -43,7 +43,7 @@ Custom sources and label overrides saved in Settings (settings row
 - **`PATCH /leads/{lead}/stage` answers JSON, not a redirect.** The board uses
   `fetch()`, which follows a 302 with the same method into a GET-only route
   (405) and rolls the card back although the move committed. The same holds for
-  `PATCH /tasks/{task}/agent-lane`.
+  `PATCH /tasks/{task}/list-name`.
 - **Convert to client** only from `Lead::wonStage()`. The lead keeps
   `client_id`, so "which channel produced this client" stays answerable.
 - Leads soft-delete; `PUT /leads/{lead}/restore` brings one back.

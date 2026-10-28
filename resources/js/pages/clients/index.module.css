@@ -1,91 +1,486 @@
-.nameCell {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-1);
+/* Phone first: Klient · Lista · mobile (Figma 328:818); the table from 768 px. */
+.page {
+    --lista-search-band: 100px;
+    min-height: 100vh;
 }
 
-.pinButton {
-    position: relative;
-    z-index: 11;
-    display: inline-flex;
+/* the surface already clears the tab bar and one floating button; the search band is taller than that */
+.frame {
+    max-width: var(--solo-grid-max);
+    margin: 0 auto;
+    padding-inline: var(--solo-grid-margin);
+    padding-bottom: calc(var(--lista-search-band) - var(--solo-fab-clearance) + var(--solo-space-4));
+}
+
+/* Mobile / Nav bar, root actions: Filtr and + */
+.navBar {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-40);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--solo-space-2);
+    margin-inline: calc(-1 * var(--solo-grid-margin));
+    padding: env(safe-area-inset-top, 0px) var(--solo-space-4) 0;
+    background: var(--solo-bg);
+}
+
+.head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--solo-space-2);
+    padding: var(--solo-space-1) 0 var(--solo-space-4);
+}
+
+.actionRow {
+    display: none;
+}
+
+.rowLink:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.stageLine {
+    margin: 0;
+    color: var(--solo-fg-muted);
+    font: 500 var(--solo-text-field) / normal var(--solo-font-text);
+}
+
+/* Mobile / Search field over its backdrop, in thumb reach above the tab bar */
+.filterBar {
+    position: fixed;
+    inset-inline: 0;
+    bottom: calc(var(--solo-tab-bar-height) + env(safe-area-inset-bottom, 0px));
+    z-index: var(--z-banner);
+    display: flex;
+    align-items: flex-end;
+    height: var(--lista-search-band);
+    padding: 40px calc(var(--solo-space-4) + env(safe-area-inset-right, 0px)) var(--solo-space-3)
+        calc(var(--solo-space-4) + env(safe-area-inset-left, 0px));
+    background: color-mix(in srgb, var(--solo-bg) 94%, transparent);
+}
+
+.searchField {
+    display: flex;
+    flex: 1 1 auto;
     align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border: none;
-    border-radius: var(--radius-md);
+    gap: var(--solo-space-2-5);
+    min-width: 0;
+    height: 48px;
+    padding: 0 18px 0 var(--solo-space-4);
+    border: 1px solid var(--solo-control-border, var(--solo-field-border));
+    border-radius: var(--solo-radius-full);
+    background: var(--solo-control-bg, var(--solo-field-bg));
+    color: var(--solo-fg);
+}
+
+.searchField:focus-within {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 2px;
+}
+
+.searchIcon {
+    flex: none;
+}
+
+.search {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
     background: transparent;
-    color: var(--color-muted-foreground);
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: color 0.15s;
+    color: var(--solo-fg);
+    font: 400 var(--solo-mobile-body) / 21px var(--solo-font-text);
+    outline: none;
 }
 
-.pinButton:hover {
-    color: var(--color-foreground);
+.search::placeholder {
+    color: var(--solo-fg-muted);
+    opacity: 1;
 }
 
-.pinButton[data-pinned='true'] {
-    color: var(--color-warning);
+.filterBar .filterSelect {
+    display: none;
 }
 
-.pinButton[data-pinned='true']:hover {
-    color: var(--tone-amber-fg);
-}
-
-.actionsCell {
-    position: relative;
-    z-index: 11;
+.openNote {
     display: flex;
     align-items: center;
-    gap: 0;
+    gap: var(--solo-space-2);
+    width: fit-content;
+    margin: 0;
+    color: var(--solo-fg);
+    text-decoration: none;
 }
 
-.checkboxRow {
+.openNote:hover > span {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.openNote:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.openNote::before {
+    content: '';
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--solo-accent);
+}
+
+/* Mobile / Note line, under the poster */
+.notePhone {
+    align-items: flex-start;
+    font-size: var(--solo-text-meta);
+    line-height: 1.4;
+}
+
+.notePhone::before {
+    margin-top: 6px;
+}
+
+.noteTable {
+    display: none;
+}
+
+.pinMark {
+    flex: none;
+}
+
+.monthMark {
+    margin-left: var(--solo-space-2);
+    color: var(--solo-accent);
+    font-size: var(--solo-text-micro);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+    cursor: help;
+}
+
+.phoneList {
+    margin: 0;
+    padding: var(--solo-block-pad, 0);
+    border-top: var(--solo-head-rule, 1px) solid var(--solo-rule);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    list-style: none;
+}
+
+.phoneEmpty {
+    padding: var(--solo-space-5) var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-row);
+}
+
+.phoneBalance[data-tone='over'] {
+    color: var(--solo-accent);
+}
+
+/* Filtr sheet */
+.sheetStatus {
     display: flex;
-    align-items: center;
-    gap: var(--spacing-2);
-    padding: var(--spacing-2) 0;
+    flex-direction: column;
+    gap: var(--solo-space-2);
+    padding: var(--solo-space-2) 0 20px;
 }
 
-.deleteButton {
-    background-color: var(--color-destructive);
-    color: var(--color-white);
+.sheetOptions {
+    margin: 0;
+    padding: 0;
+    list-style: none;
 }
 
-.deleteButton:hover {
-    background-color: color-mix(in srgb, var(--color-destructive) 80%, var(--color-black));
+.sheetOptions .optionActive {
+    color: var(--solo-accent);
 }
 
-.stageBadge {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    border-radius: var(--radius-md);
-    font-size: 0.75rem;
-    font-weight: 500;
-    background: var(--tone-grey-bg);
-    color: var(--tone-grey-fg);
+.table {
+    display: none;
+    width: 100%;
+    border: var(--solo-card-width, 0) solid var(--solo-card-border, transparent);
+    border-collapse: var(--solo-table-collapse, separate);
+    border-spacing: 0;
+    border-radius: var(--solo-card-radius, 0);
+    overflow: var(--solo-table-clip, visible);
+    background: var(--solo-card, none);
+    box-shadow: var(--solo-card-shadow, none);
+    table-layout: fixed;
+}
+
+/* from 768 px the bar is gone and the other secondary columns are narrow, so the name keeps its room */
+.colHours {
+    width: 150px;
+}
+
+.colBar {
+    width: 0;
+}
+
+.colBalance {
+    width: 90px;
+}
+
+.colFlag {
+    width: 160px;
+}
+
+.table th {
+    padding: var(--solo-th-top, var(--solo-space-2)) var(--solo-space-4) var(--solo-space-2-5) 0;
+    border-bottom: var(--solo-head-rule, 2px) solid var(--solo-rule-strong);
+    background: var(--solo-band, none);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-label-size, var(--solo-text-label));
+    font-weight: var(--solo-label-weight, 700);
+    line-height: 1.3;
+    letter-spacing: var(--solo-label-tracking, 0.08em);
+    text-align: left;
+    text-transform: var(--solo-label-case, uppercase);
+    vertical-align: bottom;
     white-space: nowrap;
 }
 
-.stageBadge[data-tone='blue'] {
-    background: var(--tone-blue-bg);
-    color: var(--tone-blue-fg);
+.table tbody tr {
+    position: relative;
 }
 
-.stageBadge[data-tone='green'] {
-    background: var(--tone-green-bg);
-    color: var(--tone-green-fg);
+.table th:first-child,
+.table td:first-child {
+    padding-left: var(--solo-cell-inset, var(--solo-row-inset, 0));
 }
 
-.stageBadge[data-tone='amber'] {
-    background: var(--tone-amber-bg);
-    color: var(--tone-amber-fg);
+.table tbody tr:last-child td {
+    border-bottom-color: var(--solo-rule-end, var(--solo-rule));
 }
 
-.stageBadge[data-tone='grey'] {
-    background: var(--tone-grey-bg);
-    color: var(--tone-grey-fg);
+.table td {
+    overflow: hidden;
+    padding: var(--solo-space-2-5) var(--solo-space-4) var(--solo-space-2-5) 0;
+    border-bottom: 1px solid var(--solo-rule);
+    color: var(--solo-fg);
+    font: 500 var(--solo-text-cell) / normal var(--solo-font-text);
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.table td[data-tone='over'] {
+    color: var(--solo-accent);
+}
+
+.table td[data-tone='none'] {
+    color: var(--solo-fg-muted);
+}
+
+.nameLine {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--solo-space-2);
+    max-width: 100%;
+    vertical-align: middle;
+}
+
+.rowLink {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--solo-fg);
+    font-weight: 600;
+    line-height: 1.35;
+    text-decoration: none;
+}
+
+/* the name link covers the whole row, so any cell opens the client */
+.rowLink::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+}
+
+.table tbody tr:hover .rowLink {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.table tbody tr:has(.rowLink):hover td {
+    background: var(--solo-hover, none);
+}
+
+.table tbody tr:not(:last-child):has(.rowLink):hover td {
+    border-bottom-color: var(--solo-hover-rule, var(--solo-rule));
+}
+
+.table tbody tr:hover td:first-child {
+    border-radius: var(--solo-row-radius, 0) 0 0 var(--solo-row-radius, 0);
+}
+
+.table tbody tr:hover td:last-child {
+    border-radius: 0 var(--solo-row-radius, 0) var(--solo-row-radius, 0) 0;
+}
+
+.barCell {
+    line-height: 0;
+}
+
+.barCell > * {
+    vertical-align: middle;
+}
+
+.table td.flagCell {
+    padding-right: var(--solo-cell-inset, var(--solo-row-inset, 0));
+}
+
+.pagination {
+    padding: 22px var(--solo-row-inset, 0) var(--solo-row-inset, 0);
+}
+
+.table td.empty {
+    padding-block: var(--solo-space-5);
+    color: var(--solo-fg-muted);
+    white-space: normal;
+}
+
+.table th.barHead,
+.table td.barCell {
+    padding: 0;
+}
+
+.table .barCell > * {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .frame {
+        padding-bottom: 72px;
+    }
+
+    .navBar,
+    .stageLine,
+    .notePhone,
+    .phoneList,
+    .searchIcon {
+        display: none;
+    }
+
+    /* the poster on the left, search and filter on the right of it, + Klient on the row above, as on Kontakty */
+    .head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        column-gap: var(--solo-space-6);
+        align-items: end;
+        padding: var(--solo-record-top, 79px) 0 0;
+    }
+
+    .actionRow {
+        /* the poster's glyphs rise above its line box and would swallow clicks on + Klient */
+        position: relative;
+        z-index: 1;
+        display: flex;
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+        min-height: 28px;
+    }
+
+    .filterBar {
+        position: static;
+        z-index: auto;
+        align-items: center;
+        gap: var(--solo-space-6);
+        height: auto;
+        padding: 0;
+        background: none;
+    }
+
+    .searchField {
+        display: contents;
+    }
+
+    .search {
+        flex: 0 1 auto;
+        width: min(280px, 100%);
+        height: auto;
+        padding: var(--solo-search-pad, 9px var(--solo-space-3));
+        border: var(--solo-boxed, 1px solid var(--solo-field-border));
+        border-bottom: var(--solo-boxed, 1px solid var(--solo-field-border));
+        border-radius: var(--solo-field-radius, var(--solo-radius-lg));
+        background: var(--solo-control-bg, var(--solo-field-bg));
+        font: 500 var(--solo-text-field) / normal var(--solo-font-text);
+    }
+
+    .search:focus-visible {
+        border-bottom-width: var(--solo-boxed-focus, 1px);
+        margin-bottom: var(--solo-boxed-shift, 0);
+        box-shadow: var(--solo-focus-ring, 0 0 0 2px var(--solo-focus, var(--solo-fg)));
+    }
+
+    .filterBar .filterSelect {
+        display: flex;
+        white-space: nowrap;
+    }
+
+    /* Figma: the note 28 px under the search, the table head 34 px under the note */
+    .tableWrap {
+        padding-top: 28px;
+    }
+
+    .tableWrap:not(:has(.noteTable)) {
+        padding-top: 34px;
+    }
+
+    .noteTable {
+        display: flex;
+        margin: 0 0 34px;
+        color: var(--solo-fg);
+        font: 500 var(--solo-text-sub) / normal var(--solo-font-text);
+    }
+
+    .table {
+        display: table;
+    }
+
+    .listBlock {
+        padding: var(--solo-block-pad, 0);
+        border-radius: var(--solo-block-radius, 0);
+        background: var(--solo-block, none);
+    }
+}
+
+/* the Figma widths and the hours bar from the wide breakpoint */
+@media (min-width: 1100px) {
+    .colBar {
+        width: 196px;
+    }
+
+    .colBalance {
+        width: 110px;
+    }
+
+    .colFlag {
+        width: 244px;
+    }
+
+    .table th.barHead {
+        padding: 0 var(--solo-space-4) var(--solo-space-2-5) 0;
+    }
+
+    .table td.barCell {
+        padding: var(--solo-space-2-5) var(--solo-space-4) var(--solo-space-2-5) 0;
+    }
+
+    .table .barCell > * {
+        display: flex;
+    }
+}
+
+.phoneValue {
+    color: var(--solo-fg-muted);
 }

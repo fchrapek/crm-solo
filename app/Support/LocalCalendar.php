@@ -58,6 +58,39 @@ final class LocalCalendar
         return self::now()->startOfMonth()->subMonthNoOverflow()->format('Y-m');
     }
 
+    /** The local month an instant falls in, as YYYY-MM. */
+    public static function monthOf(CarbonInterface $instant): string
+    {
+        return CarbonImmutable::instance($instant)->setTimezone(self::timezone())->format('Y-m');
+    }
+
+    /** The month after a YYYY-MM month. */
+    public static function nextMonth(string $period): string
+    {
+        return self::monthFrom($period)->addMonthNoOverflow()->format('Y-m');
+    }
+
+    /**
+     * Every month from the first up to, not including, the last.
+     *
+     * @return list<string>
+     */
+    public static function monthsBetween(string $from, string $until): array
+    {
+        $months = [];
+        for ($month = self::monthFrom($from); $month->format('Y-m') < $until; $month = $month->addMonthNoOverflow()) {
+            $months[] = $month->format('Y-m');
+        }
+
+        return $months;
+    }
+
+    /** A month as words in the app locale: "wrzesień 2026", "September 2026". */
+    public static function monthName(string $period): string
+    {
+        return self::monthFrom($period)->locale(app()->getLocale())->translatedFormat('F Y');
+    }
+
     /** Whether the text is exactly one calendar month as YYYY-MM, 01 to 12. */
     public static function isMonth(string $period): bool
     {

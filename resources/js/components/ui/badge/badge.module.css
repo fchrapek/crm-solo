@@ -21,7 +21,8 @@
   overflow: auto;
 }
 
-.badge svg {
+/* an Icon keeps its own size */
+.badge svg:not([data-icon] > svg) {
   width: 0.75rem;
   height: 0.75rem;
   pointer-events: none;
@@ -73,7 +74,7 @@ a.secondary:hover {
 .destructive {
   border-color: transparent;
   background-color: var(--color-destructive);
-  color: var(--color-white);
+  color: var(--color-destructive-foreground);
 }
 
 a.destructive:hover {

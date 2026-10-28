@@ -104,18 +104,13 @@ final class GitHookEnvironmentTest extends TestCase
                 // The statement around the call: a few lines up to the
                 // Process or run( that opens it, a few down to its close.
                 $context = implode('', array_slice($lines, max(0, $i - 3), 12));
-                if (! str_contains($context, 'withoutGitRepository()') && ! str_contains($context, '$this->run(')) {
+                if (! str_contains($context, 'withoutGitRepository()')) {
                     $unguarded[] = $file->getRelativePathname().':'.($i + 1);
                 }
             }
         }
 
         $this->assertSame([], $unguarded, 'git spawned without SpawnEnvironment::withoutGitRepository()');
-        $this->assertStringContainsString(
-            'new Process($command, null, SpawnEnvironment::withoutGitRepository())',
-            File::get(app_path('Services/Concerns/ManagesTtydProcess.php')),
-            'ManagesTtydProcess::run(), which the launcher uses for git, must drop the variables',
-        );
     }
 
     private function inheritGitDir(): void

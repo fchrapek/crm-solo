@@ -1,5 +1,5 @@
+import { Icon } from '@/components/ui/icon';
 import { router } from '@inertiajs/react';
-import { ExternalLink, FolderGit2, Pencil, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useHostExec } from '@/hooks/use-host-exec';
 
 import { RepositoryFormDialog, type RepositoryDialogValues } from '../repository-form-dialog';
 
@@ -33,7 +32,6 @@ interface Props {
  */
 export function ProjectRepoChip({ projectId, repositories }: Props) {
     const { t } = useTranslation();
-    const hostExec = useHostExec();
     const [popoverOpen, setPopoverOpen] = useState(false);
     const [repoDialogOpen, setRepoDialogOpen] = useState(false);
     const [editingRepo, setEditingRepo] = useState<RepositoryDialogValues | undefined>(undefined);
@@ -66,13 +64,11 @@ export function ProjectRepoChip({ projectId, repositories }: Props) {
 
     // 0 repos → outline badge that opens the create dialog directly
     if (!hasRepos) {
-        if (!hostExec) return null;
-
         return (
             <>
                 <Badge variant="outline" asChild>
                     <button type="button" className={styles.chipButton} onClick={openCreate} aria-label={t('Add repository')}>
-                        <Plus size={12} />
+                        <Icon name="plus" size={16} />
                         {t('Repository')}
                     </button>
                 </Badge>
@@ -90,7 +86,7 @@ export function ProjectRepoChip({ projectId, repositories }: Props) {
                 <PopoverTrigger asChild>
                     <Badge variant="secondary" asChild>
                         <button type="button" className={styles.chipButton} aria-label={t('Manage repositories')}>
-                            <FolderGit2 size={12} />
+                            <Icon name="project" size={16} />
                             <span className={styles.chipLabel}>{chipLabel}</span>
                         </button>
                     </Badge>
@@ -100,7 +96,7 @@ export function ProjectRepoChip({ projectId, repositories }: Props) {
                     <div className={styles.repoList}>
                         {repositories.map((repo) => (
                             <div key={repo.id} className={styles.repoRow}>
-                                <FolderGit2 size={14} className={styles.repoIcon} />
+                                <Icon name="project" size={16} className={styles.repoIcon} />
                                 <div className={styles.repoMeta}>
                                     <span className={styles.repoName}>{repo.name}</span>
                                     {repo.local_path && <code className={styles.repoPath}>{repo.local_path}</code>}
@@ -113,14 +109,12 @@ export function ProjectRepoChip({ projectId, repositories }: Props) {
                                         className={styles.repoExternal}
                                         aria-label={t('Open remote')}
                                     >
-                                        <ExternalLink size={12} />
+                                        <Icon name="external-link" size={16} />
                                     </a>
                                 )}
-                                {hostExec && (
-                                    <button type="button" onClick={() => openEdit(repo)} aria-label={t('Edit repository')} className={styles.iconButton}>
-                                        <Pencil size={12} />
-                                    </button>
-                                )}
+                                <button type="button" onClick={() => openEdit(repo)} aria-label={t('Edit repository')} className={styles.iconButton}>
+                                    <Icon name="pencil" size={16} />
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -130,19 +124,17 @@ export function ProjectRepoChip({ projectId, repositories }: Props) {
                                     aria-label={t('Unlink repository')}
                                     className={styles.iconButton}
                                 >
-                                    <X size={12} />
+                                    <Icon name="close" size={16} />
                                 </button>
                             </div>
                         ))}
                     </div>
-                    {hostExec && (
-                        <div className={styles.popoverFooter}>
-                            <Button size="sm" variant="ghost" onClick={openCreate}>
-                                <Plus size={12} className={styles.iconLeading} />
-                                {t('Add repository')}
-                            </Button>
-                        </div>
-                    )}
+                    <div className={styles.popoverFooter}>
+                        <Button size="sm" variant="ghost" onClick={openCreate}>
+                            <Icon name="plus" size={16} className={styles.iconLeading} />
+                            {t('Add repository')}
+                        </Button>
+                    </div>
                 </PopoverContent>
             </Popover>
 

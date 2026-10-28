@@ -40,8 +40,11 @@ final class TranslationHelper
         }
 
         $gender = self::getGenderForItem($itemLower, $locale);
+        $gendered = "$action.$gender";
+        $message = trans($gendered, ['item' => $displayItem]);
 
-        return trans("$action.$gender", ['item' => $displayItem]);
+        // A locale without gendered forms keeps one plain key per action.
+        return $message === $gendered ? trans($action, ['item' => $displayItem]) : $message;
     }
 
     private static function getGenderForItem(string $item, ?string $locale = null): string

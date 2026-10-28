@@ -1,0 +1,41 @@
+.line {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--solo-space-2);
+    min-width: 0;
+    color: var(--solo-agent);
+    white-space: nowrap;
+}
+
+.mark {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: var(--solo-radius-xs);
+    background: var(--solo-agent);
+}
+
+.label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--solo-label-size, var(--solo-text-label));
+    font-weight: var(--solo-label-weight, 700);
+    line-height: 1.3;
+    letter-spacing: var(--solo-label-tracking, 0.08em);
+    text-transform: var(--solo-label-case, uppercase);
+}
+
+.line[data-size='sm'] {
+    gap: 6px;
+}
+
+.line[data-size='sm'] .mark {
+    width: 8px;
+    height: 8px;
+}
+
+.line[data-size='sm'] .label {
+    font: 400 var(--solo-mono-row) / 1.4 var(--solo-font-mono);
+    letter-spacing: 0;
+    text-transform: none;
+}

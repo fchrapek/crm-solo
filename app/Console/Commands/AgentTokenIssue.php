@@ -8,6 +8,7 @@ use App\Console\Attributes\AccountScope;
 use App\Models\AgentToken;
 use App\Models\User;
 use App\Services\Agent\AgentAbilities;
+use App\Services\Agent\AgentTokens;
 use Illuminate\Console\Command;
 use InvalidArgumentException;
 
@@ -21,14 +22,14 @@ final class AgentTokenIssue extends Command
     protected $signature = 'agent-tokens:issue
         {user : The user the token acts as: id or email}
         {name : What holds the token, e.g. "claude-code macbook"}
-        {--ability=* : read, write:notes, write:tasks, write:time, write:leads, write:month-close, or write for every write group (default: read)}
+        {--ability=* : read, write:notes, write:tasks, write:time, write:leads, write:month-close, write:clients, write:messages, or write for every write group (default: read)}
         {--days= : Days until it expires (default AGENT_TOKEN_DAYS)}
         {--no-expiry : Never expires; revoke it by hand}
         {--to-file= : Write the token to this file (mode 0600) instead of printing it}';
 
     protected $description = "Issue an agent token acting as a user, in that user's account (operator: names any account's user)";
 
-    public function handle(): int
+    public function handle(AgentTokens $tokens): int
     {
         $needle = (string) $this->argument('user');
         $user = ctype_digit($needle)
@@ -40,26 +41,8 @@ final class AgentTokenIssue extends Command
             return self::FAILURE;
         }
 
-        $name = mb_trim((string) $this->argument('name'));
-        if ($name === '' || mb_strlen($name) > 120) {
-            $this->error('Give the token a name of 1 to 120 characters.');
-
-            return self::FAILURE;
-        }
-
-        try {
-            $requested = (array) $this->option('ability');
-            $abilities = AgentAbilities::normalise($requested === [] ? [AgentAbilities::READ] : $requested);
-        } catch (InvalidArgumentException $e) {
-            $this->error($e->getMessage());
-
-            return self::FAILURE;
-        }
-        if (! in_array(AgentAbilities::READ, $abilities, true)) {
-            $this->error('Every token needs read: each verb and tool reads before it writes.');
-
-            return self::FAILURE;
-        }
+        $requested = (array) $this->option('ability');
+        $abilities = $requested === [] ? [AgentAbilities::READ] : $requested;
 
         $days = $this->option('days') ?? config('agent.token_days');
         if (! $this->option('no-expiry') && (! is_numeric($days) || (int) $days < 1)) {
@@ -80,13 +63,22 @@ final class AgentTokenIssue extends Command
             }
         }
 
-        $issued = $user->createToken($name, $abilities, $expires);
+        try {
+            $issued = $tokens->issue($user, (string) $this->argument('name'), $abilities, $expires);
+        } catch (InvalidArgumentException $e) {
+            if (is_resource($handle)) {
+                fclose($handle);
+                @unlink((string) $file);
+            }
+            $this->error($e->getMessage());
+
+            return self::FAILURE;
+        }
         /** @var AgentToken $token */
         $token = $issued->accessToken;
-        $token->forceFill(['account_id' => $user->account_id])->save();
 
-        $this->line("Token #{$token->id} \"{$name}\" for {$user->email} (account {$user->account_id}).");
-        $this->line('Abilities: '.implode(', ', $abilities).'. Expires: '.($expires?->toDateString() ?? 'never').'.');
+        $this->line("Token #{$token->id} \"{$token->name}\" for {$user->email} (account {$user->account_id}).");
+        $this->line('Abilities: '.implode(', ', (array) $token->abilities).'. Expires: '.($expires?->toDateString() ?? 'never').'.');
 
         if (is_resource($handle)) {
             $written = fwrite($handle, $issued->plainTextToken."\n");

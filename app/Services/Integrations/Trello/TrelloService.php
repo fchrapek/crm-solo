@@ -7,6 +7,7 @@ namespace App\Services\Integrations\Trello;
 use App\Models\Integration;
 use App\Models\Project;
 use App\Models\Task;
+use Carbon\CarbonInterface;
 use Exception;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Http\Client\PendingRequest;
@@ -29,6 +30,12 @@ final class TrelloService
         'green' => 'low',
     ];
 
+    /** A sync run stops taking on boards and cards after this long, well inside its lock lease and the scheduler's overlap lock. */
+    public const int SYNC_DEADLINE_SECONDS = 480;
+
+    /** Starting an account or a board costs up to three 30-second requests before the card loop checks the deadline again. */
+    private const int START_HEADROOM_SECONDS = 90;
+
     private const BASE_URL = 'https://api.trello.com/1';
 
     /** Longest a board sync may hold its lock; a crashed run frees the board after this. */
@@ -36,9 +43,6 @@ final class TrelloService
 
     /** The most cards Trello returns in one nested card list; a response this long may be truncated. */
     private const CARD_LIST_CAP = 1000;
-
-    /** A board sync stops taking on cards after this long, well inside its lock lease. */
-    private const SYNC_DEADLINE_SECONDS = 480;
 
     /** Move lookups per board sync; the rest stay pending and are asked on the next run. */
     private const MOVE_LOOKUPS_PER_RUN = 10;
@@ -91,6 +95,17 @@ final class TrelloService
     public static function boardLock(string $boardId): Lock
     {
         return Cache::lock('trello-sync:board:'.$boardId, self::BOARD_LOCK_SECONDS);
+    }
+
+    public static function deadline(int $seconds = self::SYNC_DEADLINE_SECONDS): CarbonInterface
+    {
+        return now()->addSeconds($seconds);
+    }
+
+    /** Too late to start another account or board; the deadline is cooperative, checked between steps. */
+    public static function outOfTime(CarbonInterface $deadline): bool
+    {
+        return now()->addSeconds(self::START_HEADROOM_SECONDS)->gte($deadline);
     }
 
     public function testConnection(): bool
@@ -308,7 +323,7 @@ final class TrelloService
      * queued job can overlap. The lock expires on its own, so a crashed run
      * cannot hold the board forever.
      */
-    public function syncBoard(string $boardId, int $accountId, ?int $clientId = null): array
+    public function syncBoard(string $boardId, int $accountId, ?int $clientId = null, ?CarbonInterface $deadline = null): array
     {
         $lock = self::boardLock($boardId);
         if (! $lock->get()) {
@@ -316,7 +331,7 @@ final class TrelloService
         }
 
         try {
-            return $this->syncBoardLocked($boardId, $accountId, $clientId);
+            return $this->syncBoardLocked($boardId, $accountId, $clientId, $deadline ?? self::deadline());
         } finally {
             $lock->release();
         }
@@ -326,9 +341,15 @@ final class TrelloService
      * Sync only adopted boards: the token sees every board its owner was ever
      * added to, most of which belong to no client.
      */
-    public function syncAllBoards(int $accountId): array
+    public function syncAllBoards(int $accountId, ?CarbonInterface $deadline = null): array
     {
+        $deadline ??= self::deadline();
         $totalStats = ['boards' => 0, 'created' => 0, 'updated' => 0, 'errors' => 0, 'skipped' => 0];
+        if (self::outOfTime($deadline)) {
+            Log::warning('Trello sync stopped at its deadline before an account', ['account_id' => $accountId]);
+
+            return $totalStats;
+        }
 
         $boards = $this->fetchBoards();
 
@@ -346,8 +367,14 @@ final class TrelloService
 
                     continue;
                 }
+                // Out of time: the boards left wait for the next run, as cards left over do.
+                if (self::outOfTime($deadline)) {
+                    Log::warning('Trello sync stopped at its deadline before a board', ['board_id' => $board['id']]);
 
-                $stats = $this->syncBoard($board['id'], $accountId, $existingProject?->client_id);
+                    break;
+                }
+
+                $stats = $this->syncBoard($board['id'], $accountId, $existingProject?->client_id, $deadline);
 
                 $workspaceName = $board['organization']['displayName'] ?? null;
                 if ($workspaceName) {
@@ -421,9 +448,8 @@ final class TrelloService
         return CardMove::answered($latest instanceof Carbon ? $latest : null);
     }
 
-    private function syncBoardLocked(string $boardId, int $accountId, ?int $clientId): array
+    private function syncBoardLocked(string $boardId, int $accountId, ?int $clientId, CarbonInterface $deadline): array
     {
-        $deadline = now()->addSeconds(self::SYNC_DEADLINE_SECONDS);
         $this->moveLookupsLeft = self::MOVE_LOOKUPS_PER_RUN;
         $stats = ['created' => 0, 'updated' => 0, 'errors' => 0];
 

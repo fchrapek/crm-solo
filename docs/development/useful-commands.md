@@ -46,7 +46,6 @@ php artisan tasks:create --project=42 --name="Cookie banner QA" --list=Testing -
 Notes:
 - Defaults to `is_reviewed=true` so the task doesn't queue at `/tasks/review`.
 - `source=manual` keeps the task CRM-only on a Trello-backed project (no `trello_card_id` → invisible to the sync upserter).
-- To flag a task as agent-track (so it appears on the agent kanban with a Start Session button), set `cli` via `php artisan tasks:cli <task-id> claude|codex` or the "Send to agent kanban" dropdown on any task card.
 
 ### `tasks:delete`
 
@@ -124,7 +123,7 @@ Delete a single project, or wipe every project for a client.
 php artisan projects:delete <project>           # single-project mode
 php artisan projects:delete --client=<id|name>  # wipe-all mode (preserves "General")
 
-    --include-general                # also delete the "General" project (wipe-all mode)
+    --include-general                # also delete the catch-all General project (wipe-all mode)
     --force                          # skip confirmation
     --account=1                      # must be the acting account (the default); another fails
 ```

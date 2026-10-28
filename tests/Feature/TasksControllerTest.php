@@ -8,7 +8,6 @@ use App\Models\Account;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
-use App\Models\TaskSession;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -88,79 +87,55 @@ final class TasksControllerTest extends TestCase
             );
     }
 
-    public function test_task_show_surfaces_terminal_session_state(): void
+    public function test_the_task_page_carries_no_session_lane_or_preview_state(): void
     {
-        $client = Client::create(['account_id' => $this->account->id, 'name' => 'C']);
-        $project = Project::create(['account_id' => $this->account->id, 'client_id' => $client->id, 'name' => 'P']);
-
-        $task = Task::create([
-            'project_id' => $project->id,
-            'name' => 'Session task',
-            'source' => 'manual',
-            'cli' => Task::CLI_CLAUDE,
-            'agent_lane' => Task::AGENT_LANE_IN_PROGRESS,
-            'session_port' => 7681,
-            'session_pid' => 99999,
-        ]);
+        $project = Project::create(['account_id' => $this->account->id, 'name' => 'P', 'preview_command' => 'bun run dev']);
+        $task = Task::create(['project_id' => $project->id, 'name' => 'Former agent task']);
+        Task::whereKey($task->id)->update(['cli' => 'claude', 'agent_lane' => 'in_progress', 'session_port' => 7681, 'session_pid' => 99999]);
 
         $this->actingAs($this->user)
             ->get("/tasks/{$task->id}")
+            ->assertOk()
             ->assertInertia(fn (Assert $assert) => $assert
                 ->component('tasks/show')
-                ->has('task', fn (Assert $assert) => $assert
-                    ->where('cli', 'claude')
-                    ->where('agent_lane', 'in_progress')
-                    ->where('session_port', 7681)
-                    ->where('session_branch_name', 'session/task-'.$task->id)
+                ->has('task', fn (Assert $task) => $task
+                    ->missing('cli')
+                    ->missing('agent_lane')
+                    ->missing('session_port')
+                    ->missing('sessions')
+                    ->missing('tmux_alive')
+                    ->missing('preview')
+                    ->missing('project.preview_command')
                     ->etc()
                 )
+                ->missing('live_sessions')
+                ->missing('host_exec')
+                ->missing('terminal_session_host')
             );
     }
 
-    public function test_task_show_surfaces_session_history(): void
+    public function test_the_terminal_session_preview_and_agent_lane_routes_are_gone(): void
     {
-        $project = Project::create(['account_id' => $this->account->id, 'name' => 'P']);
-        $task = Task::create([
-            'project_id' => $project->id,
-            'name' => 'Task with history',
-            'cli' => Task::CLI_CLAUDE,
-        ]);
+        $client = Client::create(['account_id' => $this->account->id, 'name' => 'C']);
+        $project = Project::create(['account_id' => $this->account->id, 'client_id' => $client->id, 'name' => 'P']);
+        $task = Task::create(['project_id' => $project->id, 'name' => 'Task']);
+        $as = $this->actingAs($this->user);
 
-        // Past session that ended cleanly.
-        TaskSession::create([
-            'task_id' => $task->id,
-            'account_id' => $this->account->id,
-            'cli' => 'claude',
-            'base_branch' => 'main',
-            'branch_name' => 'session/task-'.$task->id,
-            'worktree_path' => '/tmp/repo/.worktrees/task-'.$task->id,
-            'started_at' => now()->subHours(3),
-            'ended_at' => now()->subHours(2),
-            'ended_reason' => TaskSession::ENDED_STOPPED,
-        ]);
-        // Currently-running session — no ended_at.
-        TaskSession::create([
-            'task_id' => $task->id,
-            'account_id' => $this->account->id,
-            'cli' => 'claude',
-            'base_branch' => 'develop',
-            'branch_name' => 'session/task-'.$task->id,
-            'worktree_path' => '/tmp/repo/.worktrees/task-'.$task->id,
-            'started_at' => now()->subMinutes(20),
-        ]);
-
-        $this->actingAs($this->user)
-            ->get("/tasks/{$task->id}")
-            ->assertInertia(fn (Assert $assert) => $assert
-                ->component('tasks/show')
-                ->has('task.sessions', 2)
-                // Newest-first ordering — running session is first.
-                ->where('task.sessions.0.is_running', true)
-                ->where('task.sessions.0.base_branch', 'develop')
-                ->where('task.sessions.1.is_running', false)
-                ->where('task.sessions.1.ended_reason', 'stopped')
-                ->where('task.sessions.1.base_branch', 'main')
-            );
+        $as->post("/tasks/{$task->id}/start-session")->assertNotFound();
+        $as->get("/tasks/{$task->id}/session-branches")->assertNotFound();
+        $as->delete("/tasks/{$task->id}/stop-session")->assertNotFound();
+        $as->post("/tasks/{$task->id}/resume-session")->assertNotFound();
+        $as->delete("/tasks/{$task->id}/kill-session")->assertNotFound();
+        $as->post("/tasks/{$task->id}/clear-session-attention")->assertNotFound();
+        $as->post("/tasks/{$task->id}/preview/start")->assertNotFound();
+        $as->delete("/tasks/{$task->id}/preview/stop")->assertNotFound();
+        $as->patchJson("/tasks/{$task->id}/agent-lane", ['agent_lane' => 'done'])->assertNotFound();
+        $as->patchJson("/tasks/{$task->id}/cli", ['cli' => 'claude'])->assertNotFound();
+        $as->get("/clients/{$client->id}/projects/{$project->id}/agent-board")->assertNotFound();
+        $as->get('/sesje')->assertNotFound();
+        $as->post('/daily-session/attach')->assertNotFound();
+        $as->postJson('/demo/cli', ['command' => 'crm today'])->assertNotFound();
+        $this->postJson('/api/session-events/token', ['event' => 'notification'])->assertNotFound();
     }
 
     public function test_cannot_view_task_from_other_account(): void

@@ -1,0 +1,18 @@
+.line {
+    overflow: hidden;
+    padding: var(--solo-space-3) var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+    color: var(--solo-fg);
+    font: 400 var(--solo-mono-row) / 1.4 var(--solo-font-mono);
+    list-style: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.line:last-child {
+    border-bottom-color: var(--solo-rule-end, var(--solo-rule));
+}
+
+.line[data-tone='agent'] {
+    color: var(--solo-agent);
+}

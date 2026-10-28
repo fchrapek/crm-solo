@@ -13,6 +13,8 @@ export interface UseDeletionControlsOptions {
     canDelete?: boolean;
     deleteAction: RouteDefinition;
     restoreAction: RouteDefinition;
+    /** An opt-in checkbox on delete, sent as a boolean under `field`. */
+    deleteOption?: { field: string; label: string };
 }
 
 export interface DeletionControlsResult {
@@ -25,8 +27,10 @@ export const useDeletionControls = ({
     canDelete = true,
     deleteAction,
     restoreAction,
+    deleteOption,
 }: UseDeletionControlsOptions): DeletionControlsResult => {
     const [processing, setProcessing] = useState(false);
+    const [optionChecked, setOptionChecked] = useState(false);
 
     const handleAction = async (e: React.MouseEvent<HTMLButtonElement>) => {
         e.preventDefault();
@@ -40,6 +44,7 @@ export const useDeletionControls = ({
         setProcessing(true);
         router.visit(action.url, {
             method: action.method as 'get' | 'post' | 'put' | 'patch' | 'delete',
+            data: !isDeleted && deleteOption ? { [deleteOption.field]: optionChecked } : {},
             onFinish: () => setProcessing(false),
         });
     };
@@ -49,7 +54,15 @@ export const useDeletionControls = ({
             return null;
         }
 
-        return <DeletionControls resourceType={resourceType} isDeleted={isDeleted} processing={processing} onAction={handleAction} />;
+        return (
+            <DeletionControls
+                resourceType={resourceType}
+                isDeleted={isDeleted}
+                processing={processing}
+                onAction={handleAction}
+                option={!isDeleted && deleteOption ? { label: deleteOption.label, checked: optionChecked, onChange: setOptionChecked } : undefined}
+            />
+        );
     };
 
     return {

@@ -8,10 +8,12 @@ use App\Models\DayPick;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Services\Day\DayPlanner;
+use App\Support\LocalCalendar;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -52,13 +54,16 @@ final class TodayController extends Controller
             'state' => $state,
             'closed' => $closed,
             'date' => $today->toDateString(),
+            'dayStart' => LocalCalendar::dayRange($today)[0]->toIso8601String(),
             'maxPicks' => DayPlanner::MAX_PICKS,
             'picks' => $picks,
+            'carried' => $this->planner->carried($account, $today),
             'offPlan' => $offPlan,
             'looseTimers' => $this->planner->looseTimers($timers, $picks, $offPlan)->map(fn (TimeEntry $entry) => $this->timer($entry))->values(),
             'month' => $this->planner->month($account, $today),
             'totals' => $this->planner->totals($account, $today),
             'tomorrowPicks' => $this->planner->picks($account, $today->addDay())->count(),
+            'overdue' => $state === DayPlanner::STATE_DONE ? $this->planner->overdue($account) : null,
             'running' => $running === null ? null : $this->timer($running),
             'timers' => $timers->map(fn (TimeEntry $entry) => $this->timer($entry))->values(),
         ]);
@@ -74,6 +79,25 @@ final class TodayController extends Controller
             'date' => $tomorrow->toDateString(),
             'maxPicks' => DayPlanner::MAX_PICKS,
             'picks' => $this->planner->picks($account, $tomorrow),
+            'suggestions' => $this->planner->suggestions($account, $tomorrow),
+        ]);
+    }
+
+    /**
+     * Tydzień: this week's or next week's seven dates, Monday first, each with its picks.
+     */
+    public function week(Request $request): Response
+    {
+        $account = $this->accountId();
+        $next = $request->boolean('nastepny');
+        $monday = $this->planner->today()->startOfWeek(CarbonImmutable::MONDAY)->addWeeks($next ? 1 : 0);
+
+        return Inertia::render('today/week', [
+            'today' => $this->planner->today()->toDateString(),
+            'week' => $next ? 'next' : 'this',
+            'maxPicks' => DayPlanner::MAX_PICKS,
+            'month' => $this->planner->month($account, $this->planner->today()),
+            'days' => $this->planner->week($account, $monday),
         ]);
     }
 
@@ -83,40 +107,84 @@ final class TodayController extends Controller
     public function tasks(Request $request): Response
     {
         $account = $this->accountId();
-        $forTomorrow = $request->query('na') === 'jutro';
-        $date = $forTomorrow ? $this->planner->today()->addDay() : $this->planner->today();
+        $date = $this->listDate($request->query('na'));
+        $withHidden = $request->boolean('ukryte');
+        $hideable = $this->planner->hideableGroups($account);
+        $hidden = $hideable->where('hidden', true);
 
         return Inertia::render('today/tasks', [
             'closed' => $this->planner->isClosed($account, $this->planner->today()),
             'date' => $date->toDateString(),
-            'target' => $forTomorrow ? 'tomorrow' : 'today',
+            'target' => match ($date->toDateString()) {
+                $this->planner->today()->toDateString() => 'today',
+                $this->planner->today()->addDay()->toDateString() => 'tomorrow',
+                default => 'date',
+            },
+            'lastPlannable' => $this->planner->lastPlannableDay()->toDateString(),
             'maxPicks' => DayPlanner::MAX_PICKS,
             'pickedCount' => $this->planner->picks($account, $date)->count(),
-            'groups' => $this->planner->openList($account, $date),
+            'groups' => $this->planner->openList($account, $date, $withHidden),
+            'hideable' => $hideable,
+            'hidden' => ['groups' => $hidden->count(), 'tasks' => $hidden->sum('count')],
+            'showHidden' => $withHidden,
         ]);
+    }
+
+    public function toggleHiddenGroup(Request $request): RedirectResponse
+    {
+        $account = $this->accountId();
+        $data = $request->validate([
+            'project_id' => ['required', 'integer', Rule::exists('projects', 'id')->where('account_id', $account)],
+            'list_name' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $this->planner->toggleHidden($account, (int) $data['project_id'], $data['list_name'] ?? null);
+
+        return back();
+    }
+
+    public function toggleHiddenClient(Request $request): RedirectResponse
+    {
+        $account = $this->accountId();
+        $data = $request->validate([
+            'client_id' => ['required', 'integer', Rule::exists('clients', 'id')->where('account_id', $account)],
+        ]);
+
+        $this->planner->toggleClientHidden($account, (int) $data['client_id']);
+
+        return back();
+    }
+
+    public function restoreHiddenGroups(): RedirectResponse
+    {
+        $this->planner->restoreHidden($this->accountId());
+
+        return back();
     }
 
     public function storePick(Request $request): RedirectResponse
     {
         $data = $request->validate([
             'task_id' => ['required', 'integer'],
-            'date' => ['required', 'date_format:Y-m-d'],
+            'date' => ['nullable', 'date_format:Y-m-d'],
         ]);
 
-        $date = CarbonImmutable::parse($data['date'], config('app.display_timezone'));
-        $today = $this->planner->today();
-        if ($date->lt($today) || $date->gt($today->addDay())) {
-            return back()->withErrors(['task_id' => __('Picks can be set for today or tomorrow only.')]);
-        }
-
-        $this->planner->addPick($this->accountId(), $date, (int) $data['task_id']);
+        $date = isset($data['date']) ? CarbonImmutable::parse($data['date'], config('app.display_timezone')) : $this->planner->today();
+        $this->planner->pick($this->accountId(), $date, (int) $data['task_id']);
 
         return back();
     }
 
     public function destroyPick(DayPick $dayPick): RedirectResponse
     {
-        $dayPick->delete();
+        $this->planner->unpick($this->accountId(), $dayPick);
+
+        return back();
+    }
+
+    public function dismissCarried(DayPick $dayPick): RedirectResponse
+    {
+        $this->planner->dismissCarried($this->accountId(), $dayPick);
 
         return back();
     }
@@ -158,6 +226,22 @@ final class TodayController extends Controller
         $this->planner->reopen($this->accountId(), $this->planner->today());
 
         return to_route('dashboard');
+    }
+
+    /** `na=jutro` or a plannable YYYY-MM-DD; anything else is today. */
+    private function listDate(mixed $value): CarbonImmutable
+    {
+        $today = $this->planner->today();
+        if ($value === 'jutro') {
+            return $today->addDay();
+        }
+        if (! is_string($value) || preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1) {
+            return $today;
+        }
+        $date = CarbonImmutable::createFromFormat('!Y-m-d', $value, LocalCalendar::timezone());
+
+        // Carbon rolls 2026-10-32 over to 1 November; only a date that reads back the same counts.
+        return $date !== null && $date->format('Y-m-d') === $value && $this->planner->isPlannable($date) ? $date : $today;
     }
 
     /**

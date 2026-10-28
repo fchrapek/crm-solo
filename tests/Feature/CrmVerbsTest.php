@@ -64,8 +64,6 @@ final class CrmVerbsTest extends TestCase
             'source' => 'manual',
             'is_completed' => false,
             'recurrence_period_days' => 7,
-            'cli' => 'claude',
-            'agent_lane' => Task::AGENT_LANE_IN_PROGRESS,
         ]);
 
         $this->artisan('crm:task-done', ['task' => (string) $task->id])->assertSuccessful();
@@ -73,11 +71,9 @@ final class CrmVerbsTest extends TestCase
         $task->refresh();
         $this->assertTrue((bool) $task->is_completed);
         $this->assertSame('Done', $task->list_name);
-        $this->assertSame(Task::AGENT_LANE_DONE, $task->agent_lane);
 
         $successor = Task::query()->where('parent_task_id', $task->id)->first();
         $this->assertNotNull($successor);
-        $this->assertSame('claude', $successor->cli);
         $this->assertFalse((bool) $successor->is_completed);
     }
 

@@ -40,6 +40,8 @@ final class AmbiguousReferenceException extends ReferenceException
             'message' => $this->getMessage(),
             'candidates' => $this->candidates,
             'total' => $this->total,
+            // Candidate names can be card titles and board names.
+            'untrusted' => ['candidates'],
         ];
     }
 

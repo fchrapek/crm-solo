@@ -13,6 +13,8 @@ import {
     AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 
 import styles from './deletion-controls.module.css';
 
@@ -21,9 +23,10 @@ export interface DeletionControlsProps {
     isDeleted: boolean;
     processing: boolean;
     onAction: (e: React.MouseEvent<HTMLButtonElement>) => Promise<void>;
+    option?: { label: string; checked: boolean; onChange: (checked: boolean) => void };
 }
 
-export const DeletionControls: React.FC<DeletionControlsProps> = ({ resourceType, isDeleted, processing, onAction }) => {
+export const DeletionControls: React.FC<DeletionControlsProps> = ({ resourceType, isDeleted, processing, onAction, option }) => {
     const { t } = useTranslation();
 
     const getResourceName = () => {
@@ -63,6 +66,13 @@ export const DeletionControls: React.FC<DeletionControlsProps> = ({ resourceType
                         ? t(`This will restore the ${resourceType} and make it visible again.`)
                         : t(`The ${resourceType} will be moved to trash, but can be restored later.`)}
                 </AlertDialogDescription>
+
+                {option && (
+                    <div className={styles.optionRow}>
+                        <Checkbox id="deletion-option" checked={option.checked} onCheckedChange={(checked) => option.onChange(checked === true)} />
+                        <Label htmlFor="deletion-option">{option.label}</Label>
+                    </div>
+                )}
 
                 <AlertDialogFooter className={styles.footerGap}>
                     <AlertDialogCancel asChild>

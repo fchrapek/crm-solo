@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Reports;
 
+use App\Services\Clients\HoursBank;
 use App\Services\MarkdownBlocks;
 
 /**
@@ -34,9 +35,8 @@ final class BillingSummary
      */
     public static function lines(float $opening, float $contracted, float $actual, ?float $cap, ?string $locale = null, string $periodType = 'month'): array
     {
-        $uncapped = $opening + $contracted;
-        $available = $cap !== null ? min($uncapped, $cap) : $uncapped;
-        $forfeited = round($uncapped - $available, 2);
+        $available = HoursBank::available($opening, $contracted, $cap);
+        $forfeited = HoursBank::forfeited($opening, $contracted, $cap);
 
         [$openLabel, $poolLabel, $usedLabel, $closeLabel] = $periodType === 'month'
             ? ['Opening balance for the month', 'Pool for the month', 'Used in the month', 'Opening balance for next month']
@@ -51,7 +51,7 @@ final class BillingSummary
             '',
             __($usedLabel, [], $locale).': '.self::signedHours(-$actual),
             '',
-            __($closeLabel, [], $locale).': '.self::signedHours(round($available - $actual, 2)),
+            __($closeLabel, [], $locale).': '.self::signedHours(HoursBank::closing($available, $actual)),
         ];
 
         if ($forfeited > 0) {

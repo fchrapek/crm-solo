@@ -168,7 +168,6 @@ final class TrelloSyncFinishedTest extends TestCase
         $task->refresh();
         $this->assertNull($task->finished_at);
         $this->assertSame('To-Do', $task->list_name);
-        $this->assertSame(Task::AGENT_LANE_BACKLOG, $task->agent_lane);
         $this->assertSame([$task->id], Task::open()->pluck('id')->all());
     }
 
@@ -332,7 +331,6 @@ final class TrelloSyncFinishedTest extends TestCase
         $task->refresh();
         $this->assertTrue($task->is_completed);
         $this->assertSame('2026-09-16 08:00:00', $task->finished_at->toDateTimeString());
-        $this->assertSame(Task::AGENT_LANE_DONE, $task->agent_lane);
     }
 
     public function test_a_board_already_syncing_is_not_synced_twice_and_frees_itself(): void
@@ -522,6 +520,17 @@ final class TrelloSyncFinishedTest extends TestCase
         $this->assertNull($gone->fresh()->archived_at);
     }
 
+    public function test_a_crm_task_on_the_board_survives_every_sync_untouched(): void
+    {
+        $typed = Task::create(['project_id' => $this->project->id, 'name' => 'Raport', 'source' => 'manual', 'list_name' => 'Doing']);
+
+        $this->syncAt('2026-09-16 08:00:00');
+        $this->syncAt('2026-09-16 08:05:00');
+
+        $fresh = $typed->fresh();
+        $this->assertSame(['Raport', 'Doing', null, null], [$fresh->name, $fresh->list_name, $fresh->archived_at, $fresh->trello_card_id]);
+    }
+
     public function test_a_failed_or_partial_card_fetch_archives_nothing(): void
     {
         $this->extraCards = [$this->card('card2', 'l_doing')];
@@ -674,7 +683,6 @@ final class TrelloSyncFinishedTest extends TestCase
     {
         $this->syncAt('2026-09-16 07:55:00');
         $task = Task::where('trello_card_id', 'card1')->sole();
-        $task->update(['cli' => 'claude', 'agent_lane' => Task::AGENT_LANE_IN_PROGRESS]);
 
         Carbon::setTestNow(Carbon::parse('2026-09-16 08:00:00', 'UTC'));
         app(TaskCompletion::class)->finish($task);

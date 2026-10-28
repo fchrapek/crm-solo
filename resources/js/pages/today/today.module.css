@@ -9,58 +9,78 @@
     padding-bottom: var(--solo-space-8);
 }
 
-/* 12 columns, the same grid as the Figma frames */
+/* the day screens sit on the shared record split (components/solo/split): the head and the day in the main column, the month in the side */
 .grid {
+    padding-top: var(--solo-page-top, var(--solo-space-7));
+}
+
+/* one-line metas truncate instead of widening a column */
+.head,
+.main,
+.rail {
     display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    column-gap: var(--solo-grid-gutter);
-    row-gap: var(--solo-space-7);
-    padding-top: 80px;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    min-width: 0;
 }
 
 .head {
-    min-width: 0;
-    /* one-line metas truncate instead of widening the column */
-    grid-template-columns: minmax(0, 1fr);
-    grid-column: 1 / span 8;
-    display: grid;
     gap: 18px;
-    align-content: start;
+    margin-bottom: var(--solo-space-5);
 }
 
 .main {
-    min-width: 0;
-    /* one-line metas truncate instead of widening the column */
-    grid-template-columns: minmax(0, 1fr);
-    grid-column: 1 / span 6;
-    display: grid;
     gap: var(--solo-space-5);
-    align-content: start;
-}
-
-.mainWide {
-    grid-column: 1 / span 7;
 }
 
 .rail {
-    min-width: 0;
-    /* one-line metas truncate instead of widening the column */
-    grid-template-columns: minmax(0, 1fr);
-    grid-column: 10 / span 3;
-    grid-row: 1 / span 2;
-    display: grid;
     gap: var(--solo-space-7);
-    align-content: start;
+    margin-top: var(--solo-space-7);
 }
 
-.railWide {
-    grid-column: 8 / span 5;
-    grid-row: 2;
+@media (min-width: 768px) {
+    .grid {
+        padding-top: var(--solo-page-top, 80px);
+    }
+
+    .rail {
+        margin-top: 0;
+    }
 }
 
 .list {
     margin: 0;
+    padding: var(--solo-block-pad, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+}
+
+/* an empty list leaves no box and no gap */
+.list:not(:has(li)) {
+    display: none;
+}
+
+/* Paper keeps the add row inside the block; Boring SaaS puts it below */
+.addItem {
+    display: var(--solo-add-inline, flex);
+    padding: var(--solo-space-3) var(--solo-row-inset, 0);
+    list-style: none;
+}
+
+.card {
+    padding: var(--solo-card-pad, 0);
+    border: var(--solo-card-width, 0) solid var(--solo-card-border, transparent);
+    border-radius: var(--solo-card-radius, 0);
+    background: var(--solo-card, none);
+    box-shadow: var(--solo-card-shadow, none);
+}
+
+/* with no rows yet the section is only its head, and the add row below belongs to it, so no card is drawn */
+.card:not(:has(li:not(.addItem))) {
     padding: 0;
+    border-width: 0;
+    background: none;
+    box-shadow: none;
 }
 
 .addRow {
@@ -75,27 +95,117 @@
     cursor: pointer;
 }
 
-.addRow span:first-child {
-    font-size: 1.75rem;
-    font-weight: 400;
-    color: var(--solo-fg);
-    line-height: 1;
+/* the task above the add row is the list's last one under Boring SaaS */
+.list > li:has(+ .addItem) {
+    --solo-hover-rule: var(--solo-add-cut, transparent);
+    border-bottom-color: var(--solo-add-cut, var(--solo-rule));
 }
 
+.addBelow {
+    display: var(--solo-add-below, none);
+}
+
+/* Figma A2f / Free slots: a dashed outline the width of the column */
 .slot {
-    border: 1.5px dashed var(--solo-rule);
-    border-radius: var(--solo-radius-md);
-    padding: 14px 16px;
-    font-size: var(--solo-text-action);
-    font-weight: 500;
+    margin: 0;
+    border: 1px dashed var(--solo-slot-edge, var(--solo-rule));
+    border-radius: var(--solo-slot-radius, var(--solo-radius-lg));
+    padding: 14px var(--solo-space-4);
+    font-size: var(--solo-text-sub);
+    color: var(--solo-fg-muted);
+    text-decoration: none;
+}
+
+a.slot:hover {
+    color: var(--solo-fg);
+}
+
+.quiet,
+.note {
+    margin: 0;
+    font-size: var(--solo-text-sub);
     color: var(--solo-fg-muted);
 }
 
-.quiet {
-    margin: 0;
-    font-size: var(--solo-text-action);
+.subLine {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--solo-space-1) var(--solo-space-4);
+    align-items: baseline;
+}
+
+.weekSwitch {
+    justify-self: start;
+}
+
+.pickActions {
+    display: contents;
+}
+
+.dayMenu {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-link, var(--solo-fg));
+    cursor: pointer;
+}
+
+.subAction {
+    font-size: var(--solo-text-sub);
     font-weight: 500;
-    color: var(--solo-fg-muted);
+}
+
+/* a Bottom action's wrapper: on phones the bar is fixed above the tab bar and leaves no gap in the column */
+.actions.barSlot {
+    display: contents;
+}
+
+@media (min-width: 768px) {
+    .actions.barSlot {
+        display: flex;
+    }
+
+    .planAction {
+        margin-top: var(--solo-space-3);
+    }
+}
+
+/* Plan jutro: the head spans the page above the split; Propozycje and the way to the full list sit beside the list from 768 px and below it on phones */
+.headApart {
+    margin-bottom: var(--solo-space-6);
+}
+
+.suggestions {
+    gap: var(--solo-space-4);
+    margin-top: var(--solo-space-6);
+}
+
+@media (min-width: 768px) {
+    .headApart {
+        margin-bottom: var(--solo-space-7);
+    }
+
+    .suggestions {
+        margin-top: 0;
+    }
+}
+
+.allTasks {
+    justify-self: start;
+    color: var(--solo-fg);
+    font: 600 var(--solo-text-meta) / normal var(--solo-font-text);
+    text-decoration: none;
+}
+
+.allTasks:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.allTasks:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
 }
 
 .actions {
@@ -105,6 +215,12 @@
     gap: var(--solo-space-5);
 }
 
+.late {
+    color: var(--solo-late);
+    font-size: var(--solo-text-meta);
+    white-space: nowrap;
+}
+
 .error {
     margin: 0;
     font-size: var(--solo-text-action);
@@ -112,45 +228,67 @@
     color: var(--solo-late);
 }
 
-/* timer */
-.live {
-    color: var(--solo-fg);
-    display: inline-flex;
-    align-items: center;
-    gap: var(--solo-space-3);
-    margin: 0;
-    font-size: var(--solo-text-label);
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+/* Timer A2: the task, its clock and the start time in the main column; the day's queue, the total and Stop beside it */
+.timerMain {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: var(--solo-space-4);
+    min-width: 0;
 }
 
-.dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--solo-fg);
-    box-shadow: 0 0 0 5px var(--solo-rule);
+.timerTask {
+    display: grid;
+    gap: var(--solo-space-1);
 }
 
+/* Solo/Heading/Task: sans, never a poster, two lines at most */
 .taskTitle {
+    display: -webkit-box;
+    overflow: hidden;
     margin: 0;
     font-size: var(--solo-heading-task);
     font-weight: 600;
     line-height: 1.08;
     letter-spacing: -0.02em;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
+.where,
+.since {
+    margin: 0;
+    font-size: var(--solo-text-eyebrow);
+    line-height: 1.4;
+}
+
+.where {
+    font-size: var(--solo-text-sub);
+}
+
+.where {
+    overflow: hidden;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.clockBlock {
+    display: grid;
+    gap: var(--solo-space-3);
+}
+
+/* Figma A2f / Timer clock: the seconds are the Stat size at 60 % (58 beside 320, 29 beside 160) */
 .clock {
     display: flex;
     align-items: flex-start;
     gap: var(--solo-space-2);
     margin: 0;
     font-family: var(--solo-font-display);
-    font-stretch: 62%;
-    font-weight: 900;
+    font-stretch: var(--solo-display-stretch, 62%);
+    font-weight: var(--solo-display-weight, 900);
     line-height: 0.86;
-    letter-spacing: -0.02em;
+    letter-spacing: var(--solo-display-tracking, -0.02em);
     font-variant-numeric: tabular-nums;
 }
 
@@ -159,170 +297,146 @@
 }
 
 .clockSecs {
-    font-size: calc(var(--solo-display-clock) / 3);
-    color: var(--solo-fg-muted);
-    margin-top: 0.12em;
-}
-
-.stop {
-    grid-column: 10 / span 3;
-    align-self: center;
-    justify-self: end;
-}
-
-.footer {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    column-gap: var(--solo-grid-gutter);
-    padding-top: 18px;
-    border-top: 2px solid var(--solo-rule-strong);
-}
-
-.footBlock {
-    display: grid;
-    gap: 6px;
-    align-content: start;
-    grid-column: span 3;
-}
-
-.footBlockWide {
-    grid-column: 4 / span 5;
-}
-
-.caps {
-    margin: 0;
-    font-size: var(--solo-text-label);
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--solo-fg-muted);
-}
-
-.segs {
-    display: flex;
-    gap: 6px;
-    padding-block: 4px 2px;
-}
-
-.seg {
-    width: 48px;
-    height: 10px;
-    border-radius: 5px;
-    background: var(--solo-rule);
-}
-
-.segDone {
-    background: var(--solo-fg);
-}
-
-.segNow {
-    background: none;
-    box-shadow: inset 0 0 0 2px var(--solo-fg);
-}
-
-.footTitle {
-    margin: 0;
-    font-size: var(--solo-text-row);
-    font-weight: 600;
-}
-
-/* done */
-.stats {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 44px;
-}
-
-.stat {
-    display: grid;
-    gap: 4px;
-}
-
-.statValue {
-    font-family: var(--solo-font-display);
-    font-stretch: 70%;
-    font-weight: 900;
-    font-size: var(--solo-display-stat);
+    font-size: calc(var(--solo-display-clock) * 0.18125);
     line-height: 0.92;
+    opacity: 0.6;
 }
 
-.statLabel {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--solo-fg-muted);
+.timerSide {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    justify-items: start;
+    gap: var(--solo-space-6);
+    min-width: 0;
+    margin-top: var(--solo-space-6);
+}
+
+.queue {
+    justify-self: stretch;
+}
+
+@media (min-width: 768px) {
+    .timerMain {
+        gap: var(--solo-space-5);
+    }
+
+    .timerTask {
+        gap: var(--solo-space-2);
+    }
+
+    .where {
+        font-size: var(--solo-text-eyebrow);
+    }
+
+    .clockBlock {
+        gap: 0;
+    }
+
+    .timerSide {
+        margin-top: 0;
+    }
+}
+
+/* Boring SaaS draws GOTOWE? at its own 237 px on wide screens */
+@media (min-width: 1100px) {
+    .doneHead {
+        --solo-poster-display: var(--solo-done-poster, 9.5rem);
+    }
 }
 
 .body {
     margin: 0;
-    font-size: var(--solo-text-row);
-    line-height: 1.45;
-}
-
-@media (max-width: 1100px) {
-    .head,
-    .main,
-    .mainWide,
-    .rail,
-    .railWide,
-    .stop {
-        grid-column: 1 / -1;
-        grid-row: auto;
-    }
-
-    .stop {
-        justify-self: start;
-    }
-
-    .footBlock,
-    .footBlockWide {
-        grid-column: span 6;
-    }
-}
-
-@media (max-width: 640px) {
-    .grid {
-        padding-top: var(--solo-space-7);
-    }
-
-    .footBlock,
-    .footBlockWide {
-        grid-column: 1 / -1;
-        padding-bottom: var(--solo-space-4);
-    }
-}
-
-.title {
-    margin: 0;
-    font-family: var(--solo-font-display);
-    font-stretch: 62%;
-    font-weight: 900;
-    font-size: var(--solo-display-title);
-    line-height: 0.9;
-    letter-spacing: -0.01em;
-    text-transform: uppercase;
+    font-size: var(--solo-text-control);
+    line-height: 1.4;
 }
 
 .main section + section {
-    margin-top: var(--solo-space-6);
+    margin-top: var(--solo-card-stack, var(--solo-space-6));
 }
 
-.closeBox {
+/* Podsumowanie's side column: calendar, day status (with Zamknij dzień before a close), JUTRO and its line, the main action; on the column's edge and none in a box */
+.summaryRail {
+    gap: var(--solo-space-6);
+    margin-top: var(--solo-space-5);
+}
+
+.status,
+.tomorrow {
     display: grid;
-    gap: 14px;
+    gap: var(--solo-space-3);
     justify-items: start;
 }
 
-/* a ghost action that starts a column sits on the column edge */
-.flush {
-    padding-left: 0;
+.tomorrow {
+    justify-items: stretch;
 }
 
-/* the running row on the default day list */
-.running {
-    display: inline-flex;
+/* Section head Inset=None: no padding under the label either */
+.tomorrow > .headTight {
+    padding-bottom: 0;
+}
+
+.tomorrow > a {
+    justify-self: start;
+}
+
+/* Figma: A2f / Day status */
+.dayStatus {
+    display: flex;
     align-items: center;
-    gap: var(--solo-space-3);
+    gap: var(--solo-space-2);
+    margin: 0;
+    font: 500 var(--solo-text-control) / 1.3 var(--solo-font-text);
+}
+
+.dayStatus [data-icon] {
+    flex: none;
+}
+
+/* Dziś's side column holds only the calendar, which phones do not draw */
+.wideRail {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .wideRail {
+        display: grid;
+    }
+
+    .summaryRail {
+        margin-top: 0;
+    }
+
+    .phoneOnly {
+        display: none;
+    }
+}
+
+/* a ghost action that starts a column sits on the column edge; a boxed ghost keeps its inset */
+.actions .flush {
+    padding-left: var(--solo-flush-inset, 0);
+}
+
+/* the running row on the default day list; on phones the clock sits above Stop in the row's end column */
+.running {
+    display: grid;
+    grid-template-columns: auto auto;
+    justify-content: end;
+    justify-items: end;
+    align-items: center;
+    gap: var(--solo-space-1) var(--solo-space-2);
+}
+
+.running > :last-child {
+    grid-column: 1 / -1;
+}
+
+@media (min-width: 768px) {
+    .running {
+        display: inline-flex;
+        gap: var(--solo-space-3);
+    }
 }
 
 .liveDot {
@@ -331,7 +445,7 @@
     height: 8px;
     border-radius: 50%;
     background: var(--solo-tile-now);
-    box-shadow: 0 0 0 4px var(--solo-rule);
+    box-shadow: 0 0 0 4px var(--solo-line-quiet, var(--solo-rule));
 }
 
 .elapsed {
@@ -341,27 +455,141 @@
     font-variant-numeric: tabular-nums;
 }
 
-
-/* Toasts stay paper on ink whatever the day's surface, so they read on vermilion and cobalt too. */
-.toasts [data-sonner-toast] {
-    background-color: var(--solo-paper);
-    color: var(--solo-ink);
-    border: 2px solid var(--solo-ink);
-    border-radius: var(--solo-radius-md);
-    box-shadow: none;
-    font-family: var(--solo-font-text);
-    font-size: var(--solo-text-action);
+/* Wszystkie zadania: the list under the record header, about 40 px between client groups */
+.listGrid {
+    padding-top: var(--solo-space-1);
 }
 
-.toasts [data-sonner-toast] [data-title] {
-    font-weight: 600;
+.group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
 }
 
-.toasts [data-sonner-toast] [data-description] {
-    color: var(--solo-stone);
-    font-size: var(--solo-text-meta);
+.main .group + .group {
+    margin-top: var(--solo-space-4);
 }
 
-.toasts [data-sonner-toast] [data-icon] {
-    color: var(--solo-vermilion);
+.countEnd {
+    display: none;
+}
+
+.more {
+    justify-self: start;
+    margin-top: var(--solo-space-4);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-fg-muted);
+    font: 500 var(--solo-text-control) / 1.3 var(--solo-font-text);
+    cursor: pointer;
+}
+
+.more:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.more:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.wideOnly {
+    display: none;
+}
+
+/* phones: the whole row picks (the action covers it, its label unseen), and a picked row is the List row Active fill */
+.pickRow > :last-child {
+    display: contents;
+}
+
+.pickAction {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--solo-row-radius, 0);
+    color: transparent;
+}
+
+.pickAction:hover {
+    text-decoration: none;
+}
+
+/* a full day leaves the row to its title link */
+.pickAction:disabled {
+    pointer-events: none;
+}
+
+.pickAction:focus-visible {
+    outline-offset: -2px;
+    border-radius: var(--solo-row-radius, 0);
+}
+
+/* a pick for another day names that action on phones too; the whole row still picks */
+.pickAction.named {
+    position: static;
+    color: var(--solo-link, var(--solo-fg));
+    font-weight: 500;
+}
+
+.pickAction.named::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--solo-row-radius, 0);
+}
+
+.pickRow:has(.picked) {
+    border-radius: var(--solo-row-radius, 0);
+    background: var(--solo-soft);
+}
+
+.picked {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+    .listGrid {
+        padding-top: var(--solo-space-5);
+    }
+
+    .countInline {
+        display: none;
+    }
+
+    .countEnd {
+        display: inline;
+    }
+
+    .pickRow > :last-child {
+        display: flex;
+    }
+
+    .pickAction {
+        position: static;
+        color: var(--solo-link, var(--solo-fg));
+        font-weight: 500;
+    }
+
+    .pickAction:hover {
+        text-decoration: underline;
+    }
+
+    .picked {
+        position: static;
+        width: auto;
+        height: auto;
+        clip-path: none;
+        color: var(--solo-fg-muted);
+        font: 500 var(--solo-text-control) / normal var(--solo-font-text);
+    }
+
+    .wideOnly {
+        display: inline;
+    }
 }

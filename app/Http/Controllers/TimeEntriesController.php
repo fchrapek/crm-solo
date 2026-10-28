@@ -5,23 +5,24 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\Task;
-use App\Models\TaskSession;
 use App\Models\TimeEntry;
+use App\Services\Clients\LoggedTimeFreeze;
+use App\Services\Time\PeriodSettled;
+use App\Services\Time\TimeEntryChanged;
+use App\Services\Time\TimeEntryWriter;
+use App\Support\LocalCalendar;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 /**
- * Manual time-entry CRUD. Auto-tracked terminal-session entries are written
- * by `TerminalSessionLauncher` directly — this controller only handles user-
- * created `manual` entries plus edit/delete for any source.
+ * Manual time-entry CRUD: creates `manual` entries, edits and deletes any source.
  *
  * Conflict check: the picker dialog calls `running()` to discover any open
  * entry (`end_time IS NULL`) before letting the user submit. If one exists
  * the frontend surfaces a themed warning before opening the entry form so
- * the user doesn't accidentally double-log against an active agent session.
+ * the user doesn't accidentally double-log against a running timer.
  */
 final class TimeEntriesController extends Controller
 {
@@ -46,7 +47,7 @@ final class TimeEntriesController extends Controller
         return response()->json(['entries' => $entries]);
     }
 
-    public function store(Request $request, Task $task): JsonResponse
+    public function store(Request $request, Task $task, TimeEntryWriter $writer): JsonResponse
     {
         $this->authorizeTask($task);
 
@@ -76,24 +77,28 @@ final class TimeEntriesController extends Controller
             ], 422);
         }
 
-        $entry = TimeEntry::create([
-            'account_id' => $task->project->account_id,
-            'project_id' => $task->project_id,
-            'client_id' => $task->project->client_id,
-            'task_id' => $task->id,
-            'source' => TimeEntry::SOURCE_MANUAL,
-            'title' => $data['title'] ?? null,
-            'description' => $data['description'] ?? $task->name,
-            'start_time' => $start,
-            'end_time' => $end,
-            'duration_minutes' => $minutes,
-            'billable' => (bool) ($data['billable'] ?? true),
-        ]);
+        try {
+            $entry = $writer->create([
+                'account_id' => $task->project->account_id,
+                'project_id' => $task->project_id,
+                'client_id' => $task->project->client_id,
+                'task_id' => $task->id,
+                'source' => TimeEntry::SOURCE_MANUAL,
+                'title' => $data['title'] ?? null,
+                'description' => $data['description'] ?? $task->name,
+                'start_time' => $start,
+                'end_time' => $end,
+                'duration_minutes' => $minutes,
+                'billable' => (bool) ($data['billable'] ?? true),
+            ]);
+        } catch (PeriodSettled $settled) {
+            return $this->settled($settled);
+        }
 
         return response()->json($this->serialize($entry->fresh()), 201);
     }
 
-    public function update(Request $request, TimeEntry $timeEntry): JsonResponse
+    public function update(Request $request, TimeEntry $timeEntry, TimeEntryWriter $writer): JsonResponse
     {
         $this->authorizeEntry($timeEntry);
 
@@ -103,81 +108,55 @@ final class TimeEntriesController extends Controller
             'task_id' => ['sometimes', 'nullable', 'integer'],
             'start_time' => ['sometimes', 'date'],
             'end_time' => ['nullable', 'date', 'after:start_time'],
-            // No upper cap on duration_minutes — overnight / multi-day sessions
-            // (claude left running over a weekend) need to be editable to the
-            // real span. The previous 1440-minute cap silently rejected those
-            // with a confusing 422.
+            // No upper cap: a session can run over several days.
             'duration_minutes' => ['nullable', 'integer', 'min:0'],
             'billable' => ['boolean'],
         ]);
 
-        DB::transaction(function () use ($data, $timeEntry): void {
-            if (array_key_exists('title', $data)) {
-                $timeEntry->title = $data['title'];
-            }
-            if (array_key_exists('description', $data)) {
-                $timeEntry->description = $data['description'];
-            }
-            if (array_key_exists('task_id', $data)) {
-                if ($data['task_id'] === null) {
-                    $timeEntry->task_id = null;
-                } else {
-                    // Only connect a task that belongs to the same account;
-                    // backfill project/client so the entry stays consistent.
-                    $task = Task::whereKey($data['task_id'])
-                        ->whereHas('project', fn ($q) => $q->where('account_id', $timeEntry->account_id))
-                        ->with('project:id,client_id')
-                        ->first();
-                    if ($task !== null) {
-                        $timeEntry->task_id = $task->id;
-                        $timeEntry->project_id = $task->project_id;
-                        if ($task->project?->client_id !== null) {
-                            $timeEntry->client_id = $task->project->client_id;
-                        }
-                    }
-                }
-            }
-            if (isset($data['billable'])) {
-                $timeEntry->billable = (bool) $data['billable'];
-            }
-            if (isset($data['start_time'])) {
-                $timeEntry->start_time = $this->instant($data['start_time']);
-            }
-            if (array_key_exists('end_time', $data) && $data['end_time'] !== null) {
-                $end = $this->instant($data['end_time']);
-                $timeEntry->end_time = $end;
-                $timeEntry->duration_minutes = TimeEntry::minutesBetween($timeEntry->start_time, $end);
-            } elseif (isset($data['duration_minutes'])) {
-                $minutes = (int) $data['duration_minutes'];
-                $timeEntry->duration_minutes = $minutes;
-                $timeEntry->end_time = (clone $timeEntry->start_time)->addMinutes($minutes);
-            }
-
-            $timeEntry->save();
-
-            // Keep the linked TaskSession row in sync — the history list shows
-            // its started_at/ended_at, so editing the time should also correct
-            // the row the user sees. Only TimeEntries from terminal sessions
-            // have a TaskSession; manual entries no-op here.
-            $session = TaskSession::query()
-                ->where('time_entry_id', $timeEntry->id)
+        $changes = array_intersect_key($data, array_flip(['title', 'description']));
+        if (array_key_exists('task_id', $data)) {
+            // A task from another account is ignored, never connected.
+            $task = $data['task_id'] === null ? null : Task::whereKey($data['task_id'])
+                ->whereHas('project', fn ($q) => $q->where('account_id', $timeEntry->account_id))
                 ->first();
-            if ($session !== null) {
-                $patch = ['started_at' => $timeEntry->start_time];
-                if ($timeEntry->end_time !== null) {
-                    $patch['ended_at'] = $timeEntry->end_time;
-                }
-                $session->update($patch);
+            if ($data['task_id'] === null || $task !== null) {
+                $changes['task'] = $task;
             }
-        });
+        }
+        if (isset($data['billable'])) {
+            $changes['billable'] = (bool) $data['billable'];
+        }
+        if (isset($data['start_time'])) {
+            $changes['start'] = $this->instant($data['start_time']);
+        }
+        if (array_key_exists('end_time', $data) && $data['end_time'] !== null) {
+            $changes['end'] = $this->instant($data['end_time']);
+        } elseif (isset($data['duration_minutes'])) {
+            $changes['minutes'] = (int) $data['duration_minutes'];
+        }
 
-        return response()->json($this->serialize($timeEntry));
+        try {
+            $written = $writer->update($timeEntry, $changes);
+        } catch (PeriodSettled $settled) {
+            return $this->settled($settled);
+        } catch (TimeEntryChanged) {
+            return response()->json(['message' => __('This entry changed while you were editing it. Reload and try again.')], 409);
+        }
+
+        return response()->json($this->serialize($written));
     }
 
-    public function destroy(TimeEntry $timeEntry): JsonResponse
+    public function destroy(TimeEntry $timeEntry, TimeEntryWriter $writer): JsonResponse
     {
         $this->authorizeEntry($timeEntry);
-        $timeEntry->delete();
+
+        try {
+            $writer->delete($timeEntry);
+        } catch (PeriodSettled $settled) {
+            return $this->settled($settled);
+        } catch (TimeEntryChanged) {
+            return response()->json(['message' => __('This entry changed while you were editing it. Reload and try again.')], 409);
+        }
 
         return response()->json(['ok' => true]);
     }
@@ -187,7 +166,7 @@ final class TimeEntriesController extends Controller
      * a running stopwatch. Distinct from `store()`: that one logs past work
      * (always closed), this one starts a live timer the user stops later.
      *
-     * Runs alongside terminal-session entries by design; conflict warning
+     * Runs alongside other running timers by design; conflict warning
      * for double-tracking is surfaced by the UI before this call (via the
      * existing `/time-entries/running` endpoint).
      *
@@ -211,10 +190,7 @@ final class TimeEntriesController extends Controller
         return response()->json($this->serialize($entry), $entry->wasRecentlyCreated ? 201 : 200);
     }
 
-    /**
-     * Works for any source: the manual stopwatch, or — though no UI offers
-     * it — closing a terminal_session entry early.
-     */
+    /** Works for any source. */
     public function stop(TimeEntry $timeEntry): JsonResponse
     {
         $this->authorizeEntry($timeEntry);
@@ -224,6 +200,16 @@ final class TimeEntriesController extends Controller
         }
 
         return response()->json($this->serialize($timeEntry->fresh()));
+    }
+
+    private function settled(PeriodSettled $settled): JsonResponse
+    {
+        $month = LocalCalendar::monthName($settled->month);
+
+        return response()->json(['message' => $settled->reason === LoggedTimeFreeze::CLOSED
+            ? __(':Month is closed. Reopen it to change its time.', ['month' => $month])
+            : __('The report for :month is finalized or sent. Reopen it to change its time.', ['month' => $month]),
+        ], 422);
     }
 
     private function authorizeTask(Task $task): void

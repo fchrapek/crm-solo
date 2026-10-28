@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\AgentToken;
 use App\Models\Client;
 use App\Models\ClientReport;
 use App\Models\DayClose;
 use App\Models\DayPick;
+use App\Models\Invoice;
 use App\Models\MonthCloseRun;
 use App\Models\Task;
 use App\Models\TaskAttachment;
 use App\Models\TaskBrief;
-use App\Models\TaskSession;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\Day\DayPlanner;
@@ -21,6 +22,7 @@ use Carbon\CarbonImmutable;
 use Database\Seeders\DemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -61,6 +63,7 @@ final class DemoSeederScreensTest extends TestCase
             'a new local month while UTC is still in the old one' => ['2026-11-30 23:30:00', 'Europe/Warsaw', [25]],
             'an old local month while UTC is already in the new one' => ['2026-12-01 03:30:00', 'America/New_York', $full],
             'exactly local midnight' => ['2026-12-01 03:30:00', 'America/St_Johns', []],
+            'the first of March after a short February' => ['2027-03-01 03:30:00', 'UTC', $full],
         ];
     }
 
@@ -107,6 +110,10 @@ final class DemoSeederScreensTest extends TestCase
         }
         $this->assertSame($todayLengths, $todayEntries->pluck('duration_minutes')->all(), 'today\'s entries have exactly the room the seed instant leaves');
         $this->assertCount(1, $planner->picks($accountId, $today->addDay()));
+        $this->assertFalse(TimeEntry::query()->where('end_time', '>', now())->exists(), 'no entry ends after the seed instant');
+        $measured = TimeEntry::query()->where('title', 'Pomiary i termowizja')->sole();
+        $this->assertSame(LocalCalendar::previousMonth(), LocalCalendar::monthOf($measured->start_time), 'last month\'s work stays in last month');
+        $this->assertSame(LocalCalendar::previousMonth(), mb_substr((string) Invoice::query()->where('gross_price', 240000)->sole()->invoice_date?->toDateString(), 0, 7));
 
         $this->assertSame(0, TimeEntry::query()->whereNull('end_time')->count(), 'no timer runs on the demo');
         foreach (TimeEntry::all() as $entry) {
@@ -123,41 +130,16 @@ final class DemoSeederScreensTest extends TestCase
         $closed = DayClose::query()->pluck('date')->map(fn ($d) => CarbonImmutable::parse($d)->toDateString())->sort()->values()->all();
         $this->assertSame($expected, $closed, 'every weekday before today this month is closed, nothing else');
 
-        $this->assertSame(
-            [Task::AGENT_LANE_BACKLOG, Task::AGENT_LANE_DONE, Task::AGENT_LANE_IN_PROGRESS, Task::AGENT_LANE_IN_REVIEW],
-            Task::query()->onAgentBoard()->pluck('agent_lane')->unique()->sort()->values()->all(),
-        );
         $this->assertNotNull(Task::query()->where('name', 'Migracja hostingu na PHP 8.3')->sole()->finished_at);
-        $this->assertTrue(
-            Task::query()->onAgentBoard()->where('agent_lane', '!=', Task::AGENT_LANE_DONE)->whereNotNull('finished_at')->doesntExist(),
-            'only the done lane holds finished cards',
-        );
-
-        $sessions = TaskSession::query()->with('timeEntry')->get();
-        $this->assertCount(2, $sessions);
-        $this->assertCount(2, $sessions->pluck('time_entry_id')->unique());
-        foreach ($sessions as $session) {
-            $this->assertTrue($session->started_at->equalTo($session->timeEntry->start_time));
-            $this->assertTrue($session->ended_at->equalTo($session->timeEntry->end_time));
-            $this->assertSame('stopped', $session->ended_reason);
-            $this->assertSame($accountId, $session->account_id);
-            $this->assertSame($session->task_id, $session->timeEntry->task_id);
-            $this->assertSame('terminal_session', $session->timeEntry->source);
-            $this->assertStringStartsWith('/home/demo/', $session->worktree_path);
-        }
 
         $formularz = Task::query()->where('name', 'Formularz wyceny mebli na wymiar')->sole();
-        $this->assertNull($formularz->session_pid);
-        $this->assertNull($formularz->session_port);
-        $this->assertNull($formularz->session_token);
         $brief = TaskBrief::query()->where('task_id', $formularz->id)->sole();
         foreach (TaskBrief::FIELDS as $field => $column) {
             $this->assertNotNull($brief->{$column}, "brief field {$field} is filled");
             $this->assertSame($owner->id, $brief->confirmations[$field]['user_id'] ?? null, "brief field {$field} is confirmed by the owner");
         }
 
-        $attachment = TaskAttachment::query()->sole();
-        $this->assertSame($formularz->id, $attachment->task_id);
+        $attachment = TaskAttachment::query()->where('task_id', $formularz->id)->sole();
         $pdf = Storage::disk('local')->get($attachment->file_path);
         $this->assertStringStartsWith('%PDF-1.4', $pdf);
         $this->assertStringEndsWith("%%EOF\n", $pdf);
@@ -206,8 +188,38 @@ final class DemoSeederScreensTest extends TestCase
         $this->assertEquals($draft->actual_hours * 60, $minutes, 'last month\'s entries match its draft report');
 
         $project = $formularz->project;
-        foreach (['/', '/jutro', '/zadania', '/month-close', "/clients/{$project->client_id}/projects/{$project->id}/agent-board"] as $page) {
+        foreach (['/', '/jutro', '/zadania', '/month-close', "/clients/{$project->client_id}/projects/{$project->id}", "/tasks/{$formularz->id}"] as $page) {
             $this->actingAs($owner)->get($page)->assertOk();
         }
+    }
+
+    public function test_the_demo_has_a_card_task_page_with_agent_work_and_no_timer_left_running(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-14 12:00:00', 'UTC'));
+        $this->seed(DemoSeeder::class);
+        $owner = User::query()->sole();
+        $card = Task::query()->whereNotNull('trello_card_id')->sole();
+
+        $this->assertFalse(TimeEntry::query()->whereNull('end_time')->exists(), 'no timer runs all day on the demo');
+        $this->assertNull(AgentToken::query()->sole()->revoked_at);
+
+        $this->actingAs($owner)->get(route('tasks.show', ['task' => $card, 'historia' => 1]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('tasks/show')
+                ->where('task.has_trello_card', true)
+                ->where('card.total', 3)
+                ->where('card.done', 1)
+                ->where('brief.filled', 4)
+                ->where('brief.last_change.actor', ['kind' => 'agent', 'name' => 'Codex'])
+                ->has('resources.files', 2)
+                ->has('resources.images', 2)
+                ->has('resources.links', 2)
+                ->where('live', null)
+                ->where('time.today_minutes', 38)
+                ->where('activity.rows', fn ($rows) => collect($rows)->contains(fn ($row) => $row['kind'] === 'note' && $row['actor']['name'] === 'Codex')
+                    && collect($rows)->contains(fn ($row) => $row['kind'] === 'time' && $row['actor']['kind'] === 'owner')
+                    && collect($rows)->contains(fn ($row) => $row['kind'] === 'brief' && $row['fields'] === ['done_when', 'notes']))
+            );
     }
 }

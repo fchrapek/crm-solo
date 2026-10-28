@@ -6,7 +6,10 @@ namespace Tests\Feature;
 
 use App\Models\Account;
 use App\Models\User;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
@@ -36,6 +39,8 @@ final class ClientIpBehindCloudflareTest extends TestCase
         ]);
         $this->user = User::factory()->create(['account_id' => Account::create(['name' => 'Demo', 'is_test' => true])->id, 'owner' => true]);
         Route::get('/_client-ip', fn () => request()->ip());
+        RateLimiter::for('per-visitor', fn (Request $request): Limit => Limit::perMinute(30)->by($request->ip()));
+        Route::post('/_per-visitor', fn () => 'ok')->middleware('throttle:per-visitor');
     }
 
     public function test_visitors_behind_one_edge_resolve_to_their_own_address(): void
@@ -50,11 +55,11 @@ final class ClientIpBehindCloudflareTest extends TestCase
     public function test_two_visitors_behind_one_edge_get_separate_buckets(): void
     {
         foreach (range(1, 30) as $_) {
-            $this->actingAs($this->user)->viaCloudflare('198.51.100.10')->postJson('/demo/cli', ['command' => 'crm today'])->assertOk();
+            $this->actingAs($this->user)->viaCloudflare('198.51.100.10')->postJson('/_per-visitor')->assertOk();
         }
-        $this->actingAs($this->user)->viaCloudflare('198.51.100.10')->postJson('/demo/cli', ['command' => 'crm today'])->assertStatus(429);
+        $this->actingAs($this->user)->viaCloudflare('198.51.100.10')->postJson('/_per-visitor')->assertStatus(429);
 
-        $this->actingAs($this->user)->viaCloudflare('198.51.100.11')->postJson('/demo/cli', ['command' => 'crm today'])->assertOk();
+        $this->actingAs($this->user)->viaCloudflare('198.51.100.11')->postJson('/_per-visitor')->assertOk();
     }
 
     public function test_the_login_throttle_is_per_visitor_behind_one_edge(): void
@@ -81,9 +86,9 @@ final class ClientIpBehindCloudflareTest extends TestCase
         $direct('198.51.100.99')->get('/_client-ip')->assertSeeText('203.0.113.50');
 
         foreach (range(1, 30) as $i) {
-            $direct('198.51.100.'.$i)->postJson('/demo/cli', ['command' => 'crm today'])->assertOk();
+            $direct('198.51.100.'.$i)->postJson('/_per-visitor')->assertOk();
         }
-        $direct('198.51.100.200')->postJson('/demo/cli', ['command' => 'crm today'])->assertStatus(429);
+        $direct('198.51.100.200')->postJson('/_per-visitor')->assertStatus(429);
     }
 
     public function test_a_malformed_header_from_a_trusted_peer_falls_back_to_the_forwarded_chain(): void
@@ -112,9 +117,9 @@ final class ClientIpBehindCloudflareTest extends TestCase
         $direct('198.51.100.99')->get('/_client-ip')->assertSeeText('203.0.113.50');
 
         foreach (range(1, 30) as $i) {
-            $direct('198.51.100.'.$i)->postJson('/demo/cli', ['command' => 'crm today'])->assertOk();
+            $direct('198.51.100.'.$i)->postJson('/_per-visitor')->assertOk();
         }
-        $direct('198.51.100.200')->postJson('/demo/cli', ['command' => 'crm today'])->assertStatus(429);
+        $direct('198.51.100.200')->postJson('/_per-visitor')->assertStatus(429);
     }
 
     public function test_a_header_with_several_values_is_ignored(): void

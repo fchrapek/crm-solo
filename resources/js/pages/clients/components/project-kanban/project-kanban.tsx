@@ -1,10 +1,12 @@
+import { Icon } from '@/components/ui/icon';
 import { router } from '@inertiajs/react';
-import { Archive, ArchiveRestore, ExternalLink, Eye, EyeOff, Pencil, Terminal, Trash } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { KanbanBoard, KanbanCard, type KanbanCardAction, type KanbanLane } from '@/components/ui/kanban-board';
+import { jsonRequest, JsonRequestError } from '@/lib/json-request';
 import { listLaneLabel } from '@/lib/list-lane-label';
 import { markdownPreview } from '@/lib/markdown-to-text';
 import tasksRoute from '@/routes/tasks';
@@ -33,6 +35,7 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
     const [tasks, setTasks] = useState<TaskRowTask[]>(initialTasks);
     const [showArchived, setShowArchived] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [archiveOffer, setArchiveOffer] = useState<{ task: TaskRowTask; reason: string } | null>(null);
     useEffect(() => setTasks(initialTasks), [initialTasks]);
 
     const archivedCount = useMemo(() => tasks.filter((task) => task.archived_at !== null && task.archived_at !== undefined).length, [tasks]);
@@ -140,34 +143,20 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
     };
 
     const performDelete = () => {
-        if (deleteId === null) return;
-        router.delete(`/tasks/${deleteId}`, { preserveScroll: true });
-    };
-
-    const setCli = (task: TaskRowTask, cli: 'claude' | 'codex' | null) => {
-        const id = task.id;
-        const previous = task.cli ?? null;
-        setTasks((prev) => prev.map((entry) => (entry.id === id ? { ...entry, cli } : entry)));
-        fetch(`/tasks/${id}/cli`, {
-            method: 'PATCH',
-            credentials: 'same-origin',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                'X-XSRF-TOKEN': readXsrfToken(),
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            body: JSON.stringify({ cli }),
-        })
-            .then((res) => {
-                if (!res.ok) {
-                    setTasks((prev) => prev.map((entry) => (entry.id === id ? { ...entry, cli: previous } : entry)));
-                    return;
-                }
+        const task = tasks.find((entry) => entry.id === deleteId);
+        if (!task) return;
+        jsonRequest(tasksRoute.destroy(task.id).url, 'DELETE')
+            .then(() => {
+                toast.success(t('Task deleted.'));
                 router.reload({ only: ['tasks'] });
             })
-            .catch(() => {
-                setTasks((prev) => prev.map((entry) => (entry.id === id ? { ...entry, cli: previous } : entry)));
+            .catch((error: unknown) => {
+                const reason = error instanceof JsonRequestError ? error.errors.archive_instead?.[0] : undefined;
+                if (reason) {
+                    setArchiveOffer({ task, reason });
+                } else {
+                    toast.error(error instanceof Error ? error.message : String(error));
+                }
             });
     };
 
@@ -182,26 +171,12 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
 
                     const actions: KanbanCardAction[] = [];
                     if (!task.has_trello_card && onEditTask && !isArchived) {
-                        actions.push({ label: t('Edit'), icon: <Pencil size={14} />, onClick: () => onEditTask(task) });
-                    }
-                    if (!isArchived && task.cli === null) {
-                        actions.push({
-                            label: t('Send to agent kanban'),
-                            icon: <Terminal size={14} />,
-                            onClick: () => setCli(task, 'claude'),
-                        });
-                    }
-                    if (!isArchived && task.cli !== null && task.cli !== undefined) {
-                        actions.push({
-                            label: t('Remove from agent kanban'),
-                            icon: <Terminal size={14} />,
-                            onClick: () => setCli(task, null),
-                        });
+                        actions.push({ label: t('Edit'), icon: <Icon name="pencil" size={16} />, onClick: () => onEditTask(task) });
                     }
                     if (task.trello_url) {
                         actions.push({
                             label: t('Open in Trello'),
-                            icon: <ExternalLink size={14} />,
+                            icon: <Icon name="external-link" size={16} />,
                             onClick: () => undefined,
                             href: task.trello_url,
                             target: '_blank',
@@ -211,21 +186,21 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
                     if (!isTrelloSource && !isArchived) {
                         actions.push({
                             label: t('Archive'),
-                            icon: <Archive size={14} />,
+                            icon: <Icon name="archive" size={16} />,
                             onClick: () => performArchive(task, true),
                         });
                     }
                     if (!isTrelloSource && isArchived) {
                         actions.push({
                             label: t('Restore'),
-                            icon: <ArchiveRestore size={14} />,
+                            icon: <Icon name="restore" size={16} />,
                             onClick: () => performArchive(task, false),
                         });
                     }
                     if (!isTrelloSource) {
                         actions.push({
                             label: t('Delete'),
-                            icon: <Trash size={14} />,
+                            icon: <Icon name="trash" size={16} />,
                             onClick: () => setDeleteId(task.id),
                             destructive: true,
                         });
@@ -243,9 +218,6 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
                     }
                     if ((task.child_tasks_count ?? 0) > 0) {
                         chips.push({ label: t('subtask_count', { count: task.child_tasks_count }), tone: 'label' });
-                    }
-                    if (task.cli) {
-                        chips.push({ label: task.cli, tone: 'label' });
                     }
                     const finishLabel = ownerFinishLabel(task, t, i18n.language);
                     if (finishLabel) {
@@ -275,7 +247,7 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
 
             {archivedCount > 0 && (
                 <button type="button" className={styles.toggleArchived} onClick={() => setShowArchived((v) => !v)}>
-                    {showArchived ? <EyeOff size={12} /> : <Eye size={12} />}
+                    {showArchived ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
                     {showArchived
                         ? t('Hide archived ({{count}})', { count: archivedCount })
                         : t('Show archived ({{count}})', { count: archivedCount })}
@@ -292,6 +264,17 @@ export function ProjectKanban({ tasks: initialTasks, lanes: laneOrder, onEditTas
                 confirmLabel={t('Delete')}
                 variant="destructive"
                 onConfirm={performDelete}
+            />
+
+            <ConfirmDialog
+                open={archiveOffer !== null}
+                onOpenChange={(open) => {
+                    if (!open) setArchiveOffer(null);
+                }}
+                title={t('Delete task')}
+                description={archiveOffer?.reason}
+                confirmLabel={t('Archive task')}
+                onConfirm={() => archiveOffer && performArchive(archiveOffer.task, true)}
             />
         </>
     );

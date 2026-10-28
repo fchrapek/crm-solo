@@ -3,7 +3,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: var(--z-50);
+  z-index: var(--z-modal);
   background-color: color-mix(in srgb, var(--color-black) 80%, transparent);
 }
 
@@ -17,7 +17,7 @@
 
 .content {
   position: fixed;
-  z-index: var(--z-50);
+  z-index: var(--z-modal);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-4);
@@ -125,7 +125,7 @@
   opacity: 1;
 }
 
-.closeButton:focus {
+.closeButton:focus-visible {
   box-shadow: 0 0 0 2px var(--color-ring), 0 0 0 4px var(--color-background);
   outline: none;
 }
@@ -136,11 +136,6 @@
 
 .closeButton[data-state="open"] {
   background-color: var(--color-secondary);
-}
-
-.closeIcon {
-  width: 1rem;
-  height: 1rem;
 }
 
 .header {
@@ -216,4 +211,42 @@
 @keyframes slideOutToBottom {
   from { transform: translateY(0); }
   to { transform: translateY(100%); }
+}
+
+/* Solo: under a Solo page the portal container is a [data-day] surface (components/solo/surface.tsx) */
+:global([data-day]) .overlay {
+  background-color: var(--solo-scrim, color-mix(in srgb, var(--solo-ink) 40%, transparent));
+}
+
+/* Figma Mobile / Bottom sheet: height follows the content up to the viewport, only the body scrolls */
+:global([data-day]) .bottom {
+  gap: 0;
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - var(--solo-space-5));
+  padding: var(--solo-space-2) var(--solo-space-4) max(var(--solo-space-4), env(safe-area-inset-bottom, 0px));
+  border: 0;
+  border-radius: var(--solo-radius-2xl) var(--solo-radius-2xl) 0 0;
+  background-color: var(--solo-dialog-bg, var(--solo-pop-bg, var(--solo-bg)));
+  color: var(--solo-fg);
+  font-family: var(--solo-font-text);
+  box-shadow: var(--solo-sheet-shadow, none);
+}
+
+@media (min-width: 768px) {
+  :global([data-day]) .bottom {
+    max-width: 520px;
+    margin-inline: auto;
+  }
+}
+
+:global([data-day]) .bottom:focus {
+  outline: none;
+}
+
+/* Night: the sheet shares the page's ink, so its edge is a rule and the scrim dims with black. */
+:global(.dark [data-day='paper']) .overlay {
+  background-color: var(--solo-scrim, color-mix(in srgb, var(--color-black) 60%, transparent));
+}
+
+:global(.dark [data-day='paper']) .bottom {
+  border-top: var(--solo-pop-width, 2px) solid var(--solo-pop-border, var(--solo-rule-strong));
 }

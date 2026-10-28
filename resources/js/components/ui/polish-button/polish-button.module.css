@@ -53,8 +53,8 @@
   font-size: var(--font-size-xs);
   font-weight: 600;
   color: var(--color-muted-foreground);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  text-transform: var(--solo-label-case, uppercase);
+  letter-spacing: var(--solo-label-tracking, 0.04em);
 }
 
 .diffActions {

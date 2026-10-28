@@ -1,6 +1,6 @@
-import { router } from '@inertiajs/react';
+import { Icon } from '@/components/ui/icon';
 import { CANONICAL_LANES, isCanonicalLane, listLaneLabel } from '@/lib/list-lane-label';
-import { Plus, X } from 'lucide-react';
+import { router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import styles from './list-mapping-dialog.module.css';
-
 
 export interface TrelloList {
     id: string;
@@ -27,8 +26,6 @@ interface Props {
     /** Additional CRM lanes beyond the canonical 5, defined per project. */
     customLanes?: string[];
 }
-
-
 
 export function ListMappingDialog({ open, onOpenChange, projectId, lists, mapping: initialMapping, customLanes: initialCustomLanes }: Props) {
     const { t } = useTranslation();
@@ -165,7 +162,7 @@ export function ListMappingDialog({ open, onOpenChange, projectId, lists, mappin
                                     onClick={() => removeCustomLane(lane)}
                                     disabled={processing}
                                 >
-                                    <X size={14} />
+                                    <Icon name="close" size={16} />
                                 </Button>
                             </div>
                         ))}
@@ -185,7 +182,7 @@ export function ListMappingDialog({ open, onOpenChange, projectId, lists, mappin
                                 }}
                             />
                             <Button type="button" variant="outline" onClick={addCustomLane} disabled={processing || newLaneName.trim() === ''}>
-                                <Plus size={14} />
+                                <Icon name="plus" size={16} />
                                 {t('Add lane')}
                             </Button>
                         </div>
@@ -196,7 +193,7 @@ export function ListMappingDialog({ open, onOpenChange, projectId, lists, mappin
                             {t('Cancel')}
                         </Button>
                         <Button type="submit" disabled={processing || lists.length === 0}>
-                            {processing ? t('Saving...') : t('Save')}
+                            {processing ? t('Saving…') : t('Save')}
                         </Button>
                     </DialogFooter>
                 </form>

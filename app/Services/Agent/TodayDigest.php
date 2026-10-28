@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Agent;
 
+use App\Models\Account;
 use App\Models\Lead;
 use App\Models\MonthCloseRun;
+use App\Models\OutboundMessage;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Support\LocalCalendar;
@@ -14,10 +16,13 @@ use App\Support\LocalCalendar;
  * The cross-client morning glance for one account: what needs attention today. Mirrors the
  * dashboard's attention rule (priority high, or AI-high with no human override)
  * plus overdue tasks, every open month-close run (oldest period first), hot
- * leads still in play, and any running time entry.
+ * leads still in play, text messages that failed, any running time entry,
+ * and the plan for today and tomorrow.
  */
 final class TodayDigest
 {
+    public function __construct(private readonly DayPlan $plan) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -57,7 +62,7 @@ final class TodayDigest
             ]);
 
         // Every outstanding close, oldest first: a close normally runs for the previous month.
-        $monthClose = MonthCloseRun::query()
+        $monthClose = ! Account::query()->findOrFail($accountId)->hasFeature('billing') ? collect() : MonthCloseRun::query()
             ->where('status', 'open')
             ->whereHas('client', fn ($q) => $q->where('account_id', $accountId))
             ->with('client:id,name')
@@ -98,11 +103,33 @@ final class TodayDigest
                 'untrusted' => $entry->task !== null && TaskRecord::isExternal($entry->task) ? ['task'] : [],
             ]);
 
+        // A failed text waits for the owner until it is sent again or cancelled.
+        $failedMessages = OutboundMessage::query()
+            ->where('account_id', $accountId)
+            ->where('status', OutboundMessage::FAILED)
+            ->with('client:id,name', 'rule.template:id,name')
+            ->orderByDesc('scheduled_for')
+            ->limit(30)
+            ->get()
+            ->map(fn (OutboundMessage $message) => [
+                'id' => $message->id,
+                'client' => $message->client?->name,
+                'template' => $message->rule?->template?->name,
+                'error' => $message->error,
+                'may_have_gone_out' => OutboundMessage::mayHaveGoneOut($message->error),
+                'untrusted' => ['client', 'template', 'error'],
+            ]);
+
         return [
             'attention_tasks' => $attention,
             'month_close_open' => $monthClose,
             'hot_leads' => $hotLeads,
+            'failed_messages' => $failedMessages,
             'running_time_entries' => $running,
+            'plan' => [
+                'today' => $this->plan->read($accountId, LocalCalendar::today()),
+                'tomorrow' => $this->plan->read($accountId, LocalCalendar::today()->addDay()),
+            ],
         ];
     }
 }

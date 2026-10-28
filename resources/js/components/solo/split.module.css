@@ -1,0 +1,25 @@
+/* Figma: every record view is a main column and the side column, 760 + 380 with 60 between (the 1200 px frame). Side by side while 480 and 300 fit (about a 900 px window), stacked below; each view keeps its own phone order. */
+.split {
+    display: flex;
+    flex-direction: column;
+}
+
+@media (min-width: 768px) {
+    .split {
+        flex-flow: row wrap;
+        justify-content: space-between;
+        gap: var(--solo-space-7) var(--solo-split-gap);
+    }
+
+    .main {
+        flex: 1 1 480px;
+        max-width: var(--solo-split-main);
+        min-width: 0;
+    }
+
+    .side {
+        flex: 1 1 300px;
+        max-width: var(--solo-split-side);
+        min-width: 0;
+    }
+}

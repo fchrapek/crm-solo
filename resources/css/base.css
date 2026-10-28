@@ -10,6 +10,13 @@ html {
     color: var(--color-foreground);
     background-color: var(--color-background);
     tab-size: 4;
+    /* Short and long pages keep the same width, so navigating never shifts the layout sideways. */
+    scrollbar-gutter: stable;
+}
+
+/* The gutter already holds the scrollbar's space, so the dialog scroll lock must not add it again. */
+html body[data-scroll-locked] {
+    margin-right: 0 !important;
 }
 
 body {

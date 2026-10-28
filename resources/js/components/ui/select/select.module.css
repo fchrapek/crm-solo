@@ -8,7 +8,7 @@
   justify-content: space-between;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-input);
-  background-color: transparent;
+  background-color: var(--input-bg, transparent);
   padding: var(--spacing-2) var(--spacing-3);
   font-size: var(--font-size-sm);
   box-shadow: var(--shadow-xs);
@@ -75,7 +75,7 @@
 
 .content {
   position: relative;
-  z-index: var(--z-50);
+  z-index: var(--z-modal);
   max-height: 24rem;
   min-width: 8rem;
   overflow: hidden;
@@ -248,4 +248,125 @@
 @keyframes slideFromRight {
   from { transform: translateX(0.5rem); }
   to { transform: translateX(-0.25rem); }
+}
+
+/* Solo: under a Solo page the portal container is a [data-day] surface (components/solo/surface.tsx) */
+:global([data-day]) .content {
+  border: var(--solo-pop-width, 2px) solid var(--solo-pop-border, var(--solo-fg));
+  border-radius: var(--solo-pop-radius, var(--solo-radius-xl));
+  background-color: var(--solo-pop-bg, var(--solo-bg));
+  color: var(--solo-fg);
+  box-shadow: var(--solo-pop-shadow, none);
+}
+
+:global([data-day]) .item:focus {
+  background-color: var(--solo-pop-rule, var(--solo-rule));
+  color: var(--solo-fg);
+}
+
+:global([data-day]) .item svg:not([class*="text-"]) {
+  color: var(--solo-fg-muted);
+}
+
+:global([data-day]) .separator {
+  background-color: var(--solo-pop-rule, var(--solo-rule));
+}
+
+/* Mobile / Text field (Select) below 768 px, the desktop field from 768 px */
+.soloTrigger {
+  height: auto;
+  min-height: 48px;
+  padding: 12px var(--solo-space-3);
+  border: 1px solid var(--solo-field-border);
+  border-radius: var(--solo-radius-lg);
+  background-color: var(--solo-field-bg);
+  color: var(--solo-field-fg);
+  font: 400 var(--solo-mobile-body) / 21px var(--solo-font-text);
+  box-shadow: none;
+  text-align: left;
+}
+
+@media (min-width: 768px) {
+  .soloTrigger {
+    min-height: 0;
+    padding: var(--solo-field-pad, 9px var(--solo-space-3));
+    border-width: var(--solo-field-width, 1px);
+    border-radius: var(--solo-field-radius, var(--solo-radius-lg));
+    font: 400 var(--solo-text-field-regular) / var(--solo-field-leading, 20px) var(--solo-font-text);
+  }
+}
+
+.soloTrigger[data-placeholder] {
+  color: var(--solo-fg-muted);
+}
+
+.soloTrigger svg:not([class*="text-"]),
+.soloTrigger .triggerIcon {
+  color: var(--solo-fg);
+  opacity: 1;
+}
+
+.soloTrigger:focus-visible {
+  border-color: var(--solo-field-border);
+  box-shadow: none;
+  outline: 2px solid var(--solo-focus, var(--solo-fg));
+  outline-offset: 2px;
+}
+
+.soloTrigger[aria-invalid="true"],
+:global(.dark) .soloTrigger[aria-invalid="true"] {
+  border-color: var(--solo-late);
+  box-shadow: none;
+}
+
+:global([data-day]) .item {
+  font-size: var(--solo-text-control);
+}
+
+.itemMeta {
+  margin-left: auto;
+}
+
+.soloPillTrigger {
+  width: auto;
+  height: auto;
+  gap: 0.28em;
+  justify-content: flex-start;
+  padding: var(--solo-space-2) var(--solo-space-4);
+  border: var(--solo-outline-width, 1px) solid var(--solo-control-border, var(--solo-field-border));
+  border-radius: var(--solo-button-radius, var(--solo-radius-full));
+  background-color: var(--solo-control-bg, var(--solo-field-bg));
+  color: var(--solo-fg);
+  font: 500 var(--solo-text-control) / normal var(--solo-font-text);
+  box-shadow: none;
+}
+
+.soloPillTrigger:hover {
+  border-color: var(--solo-fg);
+}
+
+.soloPillTrigger:focus-visible {
+  border-color: var(--solo-fg);
+  box-shadow: none;
+  outline: 2px solid var(--solo-focus, var(--solo-fg));
+  outline-offset: 2px;
+}
+
+.pillArrow {
+  flex: none;
+}
+
+.soloMenu .viewport {
+  display: flex;
+  flex-direction: column;
+  gap: var(--solo-space-1);
+  padding: 0;
+}
+
+.soloMenu .label {
+  padding: 0;
+}
+
+.soloMenu .itemIndicator {
+  display: none;
 }

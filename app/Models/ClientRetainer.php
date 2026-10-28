@@ -60,6 +60,45 @@ final class ClientRetainer extends Model
             });
     }
 
+    /** Active positions on a date, the one a report snapshots first: most hours, then the newest. */
+    public function scopeLeadingOn(Builder $query, Carbon $date): Builder
+    {
+        return $query
+            ->activeOn($date)
+            ->where('is_active', true)
+            ->reorder()
+            ->orderByDesc('monthly_hours')
+            ->orderByDesc('effective_from')
+            ->orderByDesc('id');
+    }
+
+    /**
+     * What the abonament dialog edits; the dialog sends every field back, so nothing it does not show is cleared.
+     *
+     * @return array<string, mixed>
+     */
+    public function toPayload(): array
+    {
+        return [
+            'id' => $this->id,
+            'project_id' => $this->project_id,
+            'label' => $this->label,
+            'description' => $this->description,
+            'monthly_hours' => (float) $this->monthly_hours,
+            'monthly_fee' => $this->monthly_fee !== null ? (float) $this->monthly_fee : null,
+            'overage_hourly_rate' => $this->overage_hourly_rate !== null ? (float) $this->overage_hourly_rate : null,
+            'rollover_cap_hours' => $this->rollover_cap_hours !== null ? (float) $this->rollover_cap_hours : null,
+            'invoice_group' => $this->invoice_group,
+            'vat_symbol' => $this->vat_symbol,
+            'is_active' => $this->is_active,
+            'sort_order' => $this->sort_order,
+            'currency' => $this->currency,
+            'effective_from' => $this->effective_from->toDateString(),
+            'effective_to' => $this->effective_to?->toDateString(),
+            'notes' => $this->notes,
+        ];
+    }
+
     protected function casts(): array
     {
         return [

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Casts\HumanizedText;
+use App\Services\Leads\LeadVocabulary;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -65,9 +66,9 @@ final class Lead extends Model
     }
 
     /** @return array<int, string> */
-    public static function sources(): array
+    public static function sources(int $accountId): array
     {
-        return (array) config('leadgen.sources', []);
+        return LeadVocabulary::sources($accountId);
     }
 
     /**
@@ -289,7 +290,7 @@ final class Lead extends Model
                 fn (Builder $query) => $query->where('pipeline', $filters['pipeline'])
             )
             ->when(
-                ($filters['source'] ?? null) && in_array($filters['source'], self::sources(), true),
+                $filters['source'] ?? null,
                 fn (Builder $query) => $query->where('source', $filters['source'])
             )
             ->when(
@@ -375,7 +376,7 @@ final class Lead extends Model
             $lead->source = mb_trim((string) $lead->source);
 
             self::assertPipeline($lead->pipeline);
-            self::assertSource($lead->source);
+            self::assertSource($lead->source, (int) $lead->account_id);
 
             if ($lead->stage === null || $lead->stage === '') {
                 $lead->stage = self::entryStage($lead->pipeline, $lead->source);
@@ -474,9 +475,9 @@ final class Lead extends Model
         }
     }
 
-    private static function assertSource(string $source): void
+    private static function assertSource(string $source, int $accountId): void
     {
-        if (! in_array($source, self::sources(), true)) {
+        if (! in_array($source, self::sources($accountId), true)) {
             throw new InvalidArgumentException("Unknown lead source [{$source}].");
         }
     }

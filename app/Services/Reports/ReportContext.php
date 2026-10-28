@@ -6,6 +6,7 @@ namespace App\Services\Reports;
 
 use App\Models\Client;
 use App\Models\ClientRetainer;
+use App\Services\Clients\HoursBank;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -33,7 +34,37 @@ final readonly class ReportContext
         public string $locale,
         public float $openingBalanceHours = 0.0,
         public ?float $rolloverCapHours = null,
+        public ?ClosureFigures $closure = null,
     ) {}
+
+    /** The same period billed at a rounded figure: rounding lives on the report, never on the entries. */
+    public function withActualHours(float $hours): self
+    {
+        return new self(
+            client: $this->client,
+            periodStart: $this->periodStart,
+            periodEnd: $this->periodEnd,
+            periodType: $this->periodType,
+            retainer: $this->retainer,
+            actualHours: $hours,
+            tasks: $this->tasks,
+            timeEntries: $this->timeEntries,
+            locale: $this->locale,
+            openingBalanceHours: $this->openingBalanceHours,
+            rolloverCapHours: $this->rolloverCapHours,
+            closure: $this->closure,
+        );
+    }
+
+    /**
+     * What the stored figures would be; a write composed outside the lock is refused when this changed meanwhile.
+     *
+     * @return array{?int, ?float, float, ?float, float}
+     */
+    public function figures(): array
+    {
+        return [$this->closure?->closureId, $this->contractedHours(), round($this->openingBalanceHours, 2), $this->rolloverCapHours, round($this->actualHours, 2)];
+    }
 
     /**
      * What the client can draw on this period: the balance carried in plus this
@@ -43,24 +74,22 @@ final readonly class ReportContext
     {
         $contracted = $this->contractedHours();
 
-        if ($contracted === null) {
-            return null;
-        }
-
-        $total = $this->openingBalanceHours + $contracted;
-
-        return $this->rolloverCapHours !== null ? min($total, $this->rolloverCapHours) : $total;
+        return $contracted !== null ? HoursBank::available($this->openingBalanceHours, $contracted, $this->rolloverCapHours) : null;
     }
 
     public function closingBalanceHours(): ?float
     {
         $available = $this->availableHours();
 
-        return $available !== null ? round($available - $this->actualHours, 2) : null;
+        return $available !== null ? HoursBank::closing($available, $this->actualHours) : null;
     }
 
     public function contractedHours(): ?float
     {
+        if ($this->closure !== null) {
+            return $this->closure->contracted;
+        }
+
         return $this->retainer !== null ? (float) $this->retainer->monthly_hours : null;
     }
 

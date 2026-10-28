@@ -51,3 +51,31 @@ locally, updates, verifies and commits.
 The sale date is the last day of the billed month. A retainer position that
 ends that month must be dated to the first of the next month, or it is
 inactive on the sale date and the draft is refused.
+
+## Financial close is separate
+
+"Zamknij miesiąc" (freezing a month in the hours bank) is not a checklist step:
+it is not tickable, agents cannot tick it, and `refreshStatusFromSteps()` does
+not look at it. Its rules live in
+[client-reports.md](client-reports.md#month-settlement-zamknij-miesiąc).
+Przegląd's `report_due` and the checklist's `report` step stay on the previous
+month whatever is closed.
+
+The page still shows it, on each retainer client's card under the checklist
+(`MonthCloseController::settlementRows()`): for the selected period it is
+closable when that period is the client's active month, reads "zamknięty DD.MM"
+once closed, and "najpierw zamknij <miesiąc>" for a later month while an earlier
+one is open. The month in progress and months without a retainer get no row.
+The button opens the same confirm dialog as Przegląd.
+
+**Invoicing is not frozen by a closure.** `infakt:draft-invoice`
+(`InfaktDraftRun`) bills the live month-end fees of the retainer positions;
+a closure freezes hours and reports only.
+
+**Allowed live inputs.** Time entries, tasks, agent logging, timers, the
+Trello sync and `crm:humanize` keep working on a closed month and never
+rewrite its closure; only the month's logged time changes. In the web or
+from an agent (`time:log`, `time-edit`, `time-split`), new entries,
+deletes and changes to an entry's time, task or billable are refused there
+(`period_settled` for agents); its title and description stay editable.
+

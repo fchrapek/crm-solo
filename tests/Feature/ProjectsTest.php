@@ -151,7 +151,7 @@ final class ProjectsTest extends TestCase
             ]);
 
         $client = Client::where('name', 'Acme Co')->firstOrFail();
-        $response->assertRedirect("/clients/{$client->id}/edit");
+        $response->assertRedirect("/clients/{$client->id}/dane");
         $this->assertSame(1, $client->projects()->whereNull('trello_board_id')->where('name', 'General')->count());
     }
 
@@ -627,8 +627,8 @@ final class ProjectsTest extends TestCase
         ]);
 
         $this->actingAs($this->user)
-            ->delete("/tasks/{$task->id}")
-            ->assertRedirect();
+            ->deleteJson("/tasks/{$task->id}")
+            ->assertOk();
 
         $this->assertNull(Task::find($task->id));
     }

@@ -42,3 +42,148 @@
 .item[data-variant="outline"]:first-child {
   border-left-width: 1px;
 }
+
+/* Solo segmented control (Figma Mobile / Segmented control 325:184) */
+.group.segmented {
+  display: flex;
+  /* Figma draws the 1 px stroke inside the 3 px inset, so the control stays 50 px around 44 px segments */
+  padding: 2px;
+  border: 1px solid var(--solo-seg-border, transparent);
+  border-radius: var(--solo-seg-radius, var(--solo-radius-full));
+  background: var(--solo-nav-active, var(--solo-hover));
+}
+
+/* each segment hugs its label (Figma), the spare width shared out evenly */
+.group.segmented .item {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--solo-touch);
+  padding: 0 var(--solo-space-2);
+  border-radius: var(--solo-seg-radius, var(--solo-radius-full));
+  background: none;
+  color: var(--solo-seg-fg, var(--solo-fg-muted));
+  font: 500 var(--solo-text-control) / 1.15 var(--solo-font-text);
+  /* a label wider than its third (320 px phones) wraps inside the 44 px segment instead of running into the next */
+  white-space: normal;
+  text-align: center;
+}
+
+.group.segmented .item[data-state="on"],
+.group.segmented .item[aria-current] {
+  background: var(--solo-seg-on, var(--solo-field-bg));
+  color: var(--solo-seg-on-fg, var(--solo-fg));
+  font-weight: 600;
+  box-shadow: var(--solo-card-shadow, none);
+}
+
+.group.segmented .item:focus-visible {
+  box-shadow: none;
+  outline: 2px solid var(--solo-focus, var(--solo-fg));
+  outline-offset: 2px;
+}
+
+/* a segment that is a link (the phone day trail) */
+.group.segmented a.item {
+  text-decoration: none;
+}
+
+/* Width=Full (the phone day trail): an edged track across the column, the current segment filled in the surface's ink */
+.group.segmented[data-width="full"] {
+  --solo-seg-border: var(--solo-fg);
+  --solo-nav-active: transparent;
+  --solo-seg-on: var(--solo-fg);
+  --solo-seg-on-fg: var(--solo-bg);
+  --solo-seg-radius: var(--solo-radius-full);
+
+  width: 100%;
+}
+
+:global([data-day="timer"]) .group.segmented[data-width="full"],
+:global([data-day="done"]) .group.segmented[data-width="full"] {
+  --solo-seg-fg: var(--solo-fg);
+}
+
+.group.segmented[data-width="full"] .item {
+  flex: 1 1 0;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.group.segmented[data-width="full"] .item[data-hug] {
+  flex: 0 1 auto;
+  padding: 0 var(--solo-space-3);
+}
+
+.group.segmented[data-width="full"] .item > span:not([data-icon]) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* wide="trail" (the day trail): from 768 px the same links read as the caps text trail, an arrow between steps */
+@media (min-width: 768px) {
+  .group.segmented[data-wide="trail"] {
+    --solo-nav-active: inherit;
+
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: calc(28px + 1em);
+    width: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    font-size: var(--solo-text-label);
+  }
+
+  .group.segmented[data-wide="trail"] .item,
+  .group.segmented[data-wide="trail"] .item[data-hug] {
+    position: relative;
+    flex: none;
+    height: auto;
+    padding: var(--solo-nav-pad, 0 0 4px);
+    border-radius: var(--solo-nav-radius, 0);
+    background: none;
+    color: var(--solo-fg-muted);
+    font-family: inherit;
+    font-size: var(--solo-label-size, var(--solo-text-label));
+    font-weight: var(--solo-label-weight, 700);
+    line-height: inherit;
+    letter-spacing: var(--solo-label-tracking, 0.08em);
+    text-transform: var(--solo-label-case, uppercase);
+  }
+
+  .group.segmented[data-wide="trail"] .item + .item::before {
+    content: "→" / "";
+    position: absolute;
+    right: 100%;
+    width: calc(28px + 1em);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-label);
+    font-weight: 400;
+    letter-spacing: 0;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  .group.segmented[data-wide="trail"] .item:hover {
+    color: var(--solo-fg);
+  }
+
+  .group.segmented[data-wide="trail"] .item[aria-current] {
+    background: var(--solo-nav-active, none);
+    color: var(--solo-fg);
+    font-weight: var(--solo-label-weight, 700);
+    box-shadow: inset 0 calc(-1 * var(--solo-nav-line, 2px)) 0 currentColor;
+  }
+
+  .group.segmented[data-wide="trail"] .item:focus-visible {
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-sm);
+  }
+
+  /* the closed day's checkmark follows the label, as the text trail always had it */
+  .group.segmented[data-wide="trail"] .item > [data-icon] {
+    order: 1;
+  }
+}

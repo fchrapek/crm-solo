@@ -1,0 +1,21 @@
+.page {
+    min-height: 100vh;
+}
+
+.frame {
+    max-width: var(--solo-grid-max);
+    margin: 0 auto;
+    padding-inline: var(--solo-grid-margin);
+    padding-bottom: 72px;
+}
+
+/* The header gives way to a pushed phone screen (Dziennik's Relacja z klientem); from 768 px nothing is pushed. */
+.pushedAway {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .pushedAway {
+        display: contents;
+    }
+}

@@ -6,6 +6,7 @@ namespace App\Services\TaskSources;
 
 use App\Models\Integration;
 use App\Models\Project;
+use Carbon\CarbonInterface;
 
 /**
  * A pluggable external task source (Trello today; GitHub Issues / Linear later).
@@ -41,11 +42,12 @@ interface TaskSourceProviderInterface
 
     /**
      * Pull every container visible to the integration's account. Creates
-     * projects for containers not yet linked locally.
+     * projects for containers not yet linked locally. Past $deadline it
+     * stops taking on more work; the rest waits for the next run.
      *
      * @return array<string, int> provider-defined summary counters
      */
-    public function syncAll(Integration $integration): array;
+    public function syncAll(Integration $integration, ?CarbonInterface $deadline = null): array;
 
     /**
      * List remote containers for the connect/link picker, normalized so the

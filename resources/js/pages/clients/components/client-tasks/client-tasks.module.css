@@ -1,0 +1,294 @@
+/* Phone first (Figma 331:2124): one column, the lane picker over touch rows; from 768 px the list and its rail. */
+.body {
+    padding-top: var(--solo-space-4);
+}
+
+.main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.rail {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.main,
+.rail {
+    padding: var(--solo-card-pad, 0);
+    padding-bottom: var(--solo-card-pad-end, 0);
+    border: var(--solo-card-width, 0) solid var(--solo-card-border, transparent);
+    border-radius: var(--solo-card-radius, 0);
+    background: var(--solo-card, none);
+    box-shadow: var(--solo-card-shadow, none);
+}
+
+/* Figma 849:21156: 40 px between the task block and PROJEKT on phones */
+.sideRail {
+    margin-top: 40px;
+}
+
+/* Dla agentów moves into the sheet the ••• menu opens */
+.agentsRail {
+    display: none;
+}
+
+.laneHead {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .body {
+        padding-top: 54px;
+    }
+
+    .agentsRail {
+        display: flex;
+    }
+
+    .sideRail {
+        margin-top: 0;
+    }
+
+    /* Figma: the switch and + Zadanie sit on the bottom edge, 10 px above the rule */
+    .body .laneHead {
+        display: flex;
+        align-items: flex-end;
+        padding-bottom: var(--solo-lane-head-pad, var(--solo-space-6));
+        padding-inline: var(--solo-head-inset, 0);
+    }
+}
+
+.switch {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--solo-space-1) 20px;
+}
+
+.switchTab {
+    padding: 0 0 var(--solo-switch-pad, var(--solo-space-2));
+    border: 0;
+    background: none;
+    color: var(--solo-fg-muted);
+    font: 700 var(--solo-button-sm) / 1.3 var(--solo-font-text);
+    font-size: var(--solo-label-size, var(--solo-text-nav));
+    font-weight: var(--solo-switch-weight, 500);
+    text-transform: var(--solo-label-case, none);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.switchTab[aria-selected='true'] {
+    color: var(--solo-fg);
+    font-weight: var(--solo-switch-on-weight, 600);
+    box-shadow: inset 0 calc(-1 * var(--solo-switch-line, 2px)) 0 var(--solo-fg);
+}
+
+.switchTab:hover {
+    color: var(--solo-fg);
+}
+
+.switchTab:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+/* Figma: Dropdown trigger · lane */
+.lanePhone {
+    display: flex;
+    padding-bottom: var(--solo-space-1);
+}
+
+.laneTrigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--solo-space-2);
+    height: var(--solo-touch);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-fg);
+    font: 600 var(--solo-mobile-body) / 21px var(--solo-font-text);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.laneTrigger:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 2px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.rows,
+.lines,
+.phoneRows,
+.agentLines {
+    margin: 0;
+    padding: var(--solo-block-pad, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    list-style: none;
+}
+
+.rows,
+.more {
+    display: none;
+}
+
+/* Mobile / Divider above the first row */
+.phoneRows {
+    border-top: var(--solo-head-rule, 1px) solid var(--solo-rule);
+}
+
+.orderHead + .rows + .phoneRows {
+    border-top: 0;
+}
+
+@media (min-width: 768px) {
+    .lanePhone,
+    .phoneRows,
+    .phoneAll {
+        display: none;
+    }
+
+    .rows {
+        display: block;
+    }
+
+    .more {
+        display: block;
+        padding-top: 18px;
+    }
+}
+
+.phoneCount {
+    color: var(--solo-fg-muted);
+}
+
+.elapsed {
+    color: var(--solo-accent);
+}
+
+.doneTitle {
+    color: var(--solo-fg-muted);
+    text-decoration: line-through;
+}
+
+/* The agent's row opens the task, where its session shows */
+.rowChevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--solo-touch);
+    height: var(--solo-touch);
+    margin-right: calc(-1 * var(--solo-space-3));
+    color: var(--solo-fg-muted);
+}
+
+.rowChevron:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: -4px;
+    border-radius: var(--solo-radius-md);
+}
+
+/* + Zadanie is the floating button on phones */
+.wideAction {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .wideAction {
+        display: inline-flex;
+    }
+}
+
+.railLabel {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--solo-space-2);
+}
+
+.agentMark {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: var(--solo-radius-xs);
+    background: var(--solo-agent);
+}
+
+/* Figma: Mobile / Icon / Agent mark, the cobalt square in a 20 px slot */
+.agentSlot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+}
+
+.agentMarkSmall {
+    width: 7px;
+    height: 7px;
+    border-radius: 1px;
+    background: var(--solo-agent);
+}
+
+.mono {
+    font: 400 var(--solo-mobile-mono) / 18px var(--solo-font-mono);
+    overflow-wrap: anywhere;
+}
+
+.sheetEmpty {
+    padding-block: var(--solo-space-4);
+    border-bottom: 1px solid var(--solo-rule);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+    line-height: 1.4;
+}
+
+.empty {
+    margin: 0;
+    padding: var(--solo-space-row) var(--solo-head-inset, 0);
+    border-bottom: var(--solo-head-rule, 1px) solid var(--solo-rule);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-row);
+    line-height: 1.35;
+}
+
+.rail .empty {
+    padding-block: var(--solo-space-3);
+    font-size: var(--solo-text-meta);
+    line-height: 1.4;
+}
+
+.groupLabel {
+    margin: 0;
+    padding: 28px var(--solo-head-inset, 0) var(--solo-space-2);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-label-size, var(--solo-text-label));
+    font-weight: var(--solo-label-weight, 700);
+    line-height: 1.3;
+    letter-spacing: var(--solo-label-tracking, 0.08em);
+    text-transform: var(--solo-label-case, uppercase);
+}
+
+.minutes {
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+    white-space: nowrap;
+}
+
+.rowActions {
+    display: inline-flex;
+    gap: var(--solo-space-4);
+    align-items: center;
+}
+
+.picked {
+    color: var(--solo-fg-muted);
+    font: 500 var(--solo-text-control) / normal var(--solo-font-text);
+}

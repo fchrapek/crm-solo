@@ -8,7 +8,7 @@ use App\Console\Attributes\AccountScope;
 use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Console\Commands\Concerns\ResolvesProjectAndClient;
 use App\Models\Task;
-use App\Services\Tasks\TaskCompletion;
+use App\Services\Tasks\TaskWriter;
 use Illuminate\Console\Command;
 use RuntimeException;
 
@@ -30,7 +30,7 @@ final class CreateTasksCommand extends Command
 
     protected $description = 'Mass-create tasks on a project. Use --name multiple times for distinct tasks, or --count for N copies.';
 
-    public function handle(TaskCompletion $completion): int
+    public function handle(TaskWriter $writer): int
     {
         $accountId = $this->actingAccountId();
         if ($accountId === null) {
@@ -90,10 +90,8 @@ final class CreateTasksCommand extends Command
             : $names;
 
         $payload = [
-            'project_id' => $project->id,
             'source' => $source,
             'list_name' => $list,
-            'is_reviewed' => true,
             'priority' => $priority,
             'description' => $description,
         ];
@@ -101,11 +99,7 @@ final class CreateTasksCommand extends Command
         $this->line('Creating '.count($finalNames)." tasks on project #{$project->id} \"{$project->name}\"…");
 
         foreach ($finalNames as $name) {
-            $task = Task::create(['name' => $name] + $payload);
-            // A task born on Done is finished through the same transition as a tick.
-            if ($list === 'Done') {
-                $completion->finish($task);
-            }
+            $task = $writer->create($project, ['name' => $name] + $payload);
             $this->line("  ✓ #{$task->id} {$name}");
         }
 

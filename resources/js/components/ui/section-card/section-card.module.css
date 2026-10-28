@@ -3,7 +3,8 @@
     padding: var(--spacing-4) var(--spacing-5);
     background-color: var(--color-card);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    border-radius: var(--solo-card-radius, var(--radius-lg));
+    box-shadow: var(--solo-card-shadow, none);
 }
 
 .card:last-child {
@@ -22,8 +23,8 @@
 .heading {
     font-size: var(--font-size-sm);
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    text-transform: var(--solo-label-case, uppercase);
+    letter-spacing: var(--solo-label-tracking, 0.05em);
     color: var(--color-muted-foreground);
     margin: 0;
 }

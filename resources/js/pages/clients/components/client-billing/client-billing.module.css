@@ -1,0 +1,477 @@
+.brief {
+    max-width: 1040px;
+    margin: 0;
+    padding-top: 44px;
+    color: var(--solo-fg);
+    font-size: var(--solo-heading-brief);
+    font-weight: 600;
+    line-height: 1.22;
+    letter-spacing: -0.015em;
+    overflow-wrap: anywhere;
+}
+
+.accent {
+    color: var(--solo-accent);
+}
+
+/* Only an order's body shows on phones (Figma 335:3956); the retainer's desktop tree sits in .wide */
+.body {
+    padding-top: var(--solo-space-row);
+}
+
+.main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.main,
+.railSection {
+    padding: var(--solo-card-pad, 0);
+    padding-bottom: var(--solo-card-pad-end, 0);
+    border: var(--solo-card-width, 0) solid var(--solo-card-border, transparent);
+    border-radius: var(--solo-card-radius, 0);
+    background: var(--solo-card, none);
+    box-shadow: var(--solo-card-shadow, none);
+}
+
+.rail {
+    display: flex;
+    flex-direction: column;
+    gap: 36px;
+    min-width: 0;
+    margin-top: 20px;
+}
+
+@media (min-width: 768px) {
+    .body {
+        padding-top: 36px;
+    }
+
+    .rail {
+        margin-top: 0;
+    }
+}
+
+.railSection {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.list,
+.ledger {
+    margin: 0;
+    padding: var(--solo-block-pad, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    list-style: none;
+}
+
+/* the last row ends on the block's edge, not on a cut */
+.list > :last-child,
+.ledger > :last-child {
+    border-bottom-width: var(--solo-head-rule, 1px);
+}
+
+.empty {
+    margin: 0;
+    padding: var(--solo-space-row) var(--solo-head-inset, 0);
+    border-bottom: var(--solo-head-rule, 1px) solid var(--solo-rule);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-row);
+    line-height: 1.35;
+}
+
+.emptyBank {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+}
+
+.emptyBank .empty {
+    align-self: stretch;
+}
+
+/* Figma: Bank row, six columns 200 / 90 / 90 / 90 / 110 / rest */
+.ledgerHead,
+.ledgerRow {
+    display: grid;
+    grid-template-columns: 200px 90px 90px 90px 110px minmax(0, 1fr);
+    align-items: center;
+    padding: var(--solo-space-row) var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+}
+
+.ledgerHead > *,
+.ledgerRow > * {
+    min-width: 0;
+    text-align: right;
+}
+
+.ledgerHead > :first-child,
+.ledgerRow > :first-child {
+    text-align: left;
+}
+
+.ledgerHead {
+    border-bottom-width: var(--solo-head-rule, 1px);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-micro);
+    font-weight: var(--solo-label-weight, 700);
+    line-height: normal;
+    letter-spacing: var(--solo-label-tracking, 0.06em);
+    text-transform: var(--solo-label-case, uppercase);
+}
+
+.ledgerRow {
+    color: var(--solo-fg);
+    font-size: var(--solo-text-field);
+    font-weight: 400;
+    line-height: normal;
+    font-variant-numeric: tabular-nums;
+}
+
+.ledgerRow [data-tone='accent'] {
+    color: var(--solo-accent);
+}
+
+.correction {
+    color: var(--solo-fg-muted);
+}
+
+.month {
+    font-weight: 500;
+}
+
+.report {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.states {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+.reopen {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-fg);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+.reopen:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.reportLink,
+.muted {
+    color: var(--solo-fg-muted);
+    text-decoration: none;
+}
+
+.reportLink:hover {
+    color: var(--solo-fg);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.reportLink:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.footnote {
+    margin: 0;
+    padding: var(--solo-space-2-5) var(--solo-head-inset, 0) 0;
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+    font-weight: 400;
+    line-height: normal;
+}
+
+.more {
+    padding-top: 18px;
+}
+
+/* Figma: Invoice row */
+.invoice {
+    display: flex;
+    flex-direction: column;
+    gap: var(--solo-space-1);
+    padding: var(--solo-space-3) var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+    line-height: normal;
+}
+
+.invoiceTitle {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--solo-space-4);
+    color: var(--solo-fg);
+    font-size: var(--solo-text-control);
+    font-weight: 500;
+}
+
+.invoiceTitle a {
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+
+.invoiceTitle a:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.invoiceTitle a:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.amount {
+    flex: none;
+    white-space: nowrap;
+}
+
+.invoiceState {
+    margin: 0;
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+    font-weight: 400;
+}
+
+.invoiceState[data-tone='accent'] {
+    color: var(--solo-accent);
+}
+
+.hint {
+    margin: 0;
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+    line-height: 1.4;
+}
+
+.dialogActions {
+    flex-direction: row;
+    justify-content: flex-end;
+}
+
+/* Desktop tree from 768 px, the phone tree below it; both render, so nothing waits for hydration */
+.wide {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .wide {
+        display: contents;
+    }
+
+    .phone {
+        display: none;
+    }
+}
+
+.tone[data-tone='accent'] {
+    color: var(--solo-accent);
+}
+
+/* Figma: Mobile / Balance (334:3308) */
+.poster {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding-top: var(--solo-space-5);
+}
+
+.posterValue {
+    margin: 0;
+    color: var(--solo-fg);
+    font-family: var(--solo-font-display);
+    font-size: var(--solo-display-stat);
+    font-stretch: var(--solo-display-stretch, 62%);
+    font-weight: var(--solo-display-weight, 900);
+    line-height: 0.9;
+    letter-spacing: var(--solo-display-tracking, -0.02em);
+    white-space: nowrap;
+}
+
+.posterValue[data-tone='over'] {
+    color: var(--solo-accent);
+}
+
+.posterLink {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--solo-space-2);
+    min-height: var(--solo-touch);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-fg-muted);
+    font: 500 var(--solo-text-field) / normal var(--solo-font-text);
+    cursor: pointer;
+}
+
+.posterLink:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 2px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.posterNote {
+    margin: 0;
+    padding-top: var(--solo-space-1);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+    line-height: 1.4;
+}
+
+.phoneEmpty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+    padding-top: var(--solo-space-5);
+}
+
+.phoneEmpty .empty {
+    align-self: stretch;
+}
+
+/* The rows under the poster, with the Mobile / Divider above the first */
+.phoneRows {
+    margin-top: var(--solo-space-5);
+    padding: var(--solo-block-pad, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+}
+
+.phoneRows::before {
+    content: '';
+    display: block;
+    height: var(--solo-head-rule, 1px);
+    background: var(--solo-rule);
+}
+
+.phoneRows .empty {
+    background: none;
+}
+
+.phoneRows > :last-child {
+    border-bottom-color: var(--solo-block-end, var(--solo-rule));
+}
+
+/* Bank godzin sheet (334:3502): the terms row, Mobile / Ledger row (Month) and the Split entry row */
+.terms > * {
+    align-items: center;
+    min-height: 52px;
+    padding-block: var(--solo-space-2-5);
+}
+
+.monthRow {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--solo-space-3);
+    min-height: 60px;
+    padding: var(--solo-space-2-5) var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+}
+
+.monthText {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.monthTitle,
+.monthValue {
+    color: var(--solo-fg);
+    font: 500 var(--solo-text-cell) / normal var(--solo-font-text);
+}
+
+.monthSub,
+.monthState {
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.monthBalance {
+    --month-balance-gap: 3px;
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--month-balance-gap);
+    max-width: 50%;
+    text-align: right;
+}
+
+.monthValue {
+    white-space: nowrap;
+}
+
+.monthValue[data-tone='accent'] {
+    color: var(--solo-accent);
+}
+
+.monthAction {
+    padding-inline: var(--solo-space-1);
+}
+
+/* Over Otwórz ponownie the report link's hit area grows upward over the state line, ending where the button starts. */
+.reportLink:has(+ .monthAction)::before {
+    top: auto;
+    bottom: calc(-1 * var(--month-balance-gap));
+    transform: translateX(-50%);
+}
+
+.splitRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--solo-space-3);
+    min-height: 52px;
+    padding: var(--solo-space-2-5) var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+    color: var(--solo-fg);
+    font: 500 var(--solo-text-cell) / normal var(--solo-font-text);
+}
+
+.splitRow > :last-child {
+    flex: none;
+    white-space: nowrap;
+}
+
+.sheetNote {
+    margin: 0;
+    padding-top: var(--solo-space-3);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+    line-height: 1.4;
+}
+
+.sheetMore {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--solo-touch);
+    margin-top: var(--solo-space-2);
+}

@@ -4,33 +4,25 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Jobs\RefreshTaskCardDetailsJob;
 use App\Models\Project;
 use App\Models\Task;
-use App\Models\TimeEntry;
-use App\Services\Tasks\TaskCompletion;
+use App\Services\Agent\CardDetailsFetcher;
+use App\Services\Tasks\TaskActivity;
+use App\Services\Tasks\TaskPage;
+use App\Services\Tasks\TaskWriter;
+use App\Services\Time\PeriodSettled;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 final class TasksController extends Controller
 {
-    private const MANUAL_STATUSES = ['Backlog', 'To-Do', 'Doing', 'Testing', 'Done'];
-
-    /**
-     * When a manual task is dragged on the agent kanban, mirror its lane onto
-     * the Trello-style status so the per-project view stays in sync.
-     */
-    private const AGENT_LANE_TO_LIST_NAME = [
-        Task::AGENT_LANE_BACKLOG => 'To-Do',
-        Task::AGENT_LANE_IN_PROGRESS => 'Doing',
-        Task::AGENT_LANE_IN_REVIEW => 'Testing',
-        Task::AGENT_LANE_DONE => 'Done',
-    ];
-
-    public function store(Request $request, Project $project, TaskCompletion $completion): RedirectResponse
+    public function store(Request $request, Project $project, TaskWriter $writer): RedirectResponse
     {
         if ($project->account_id !== Auth::user()->account_id) {
             abort(403);
@@ -39,38 +31,27 @@ final class TasksController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:500',
             'description' => 'nullable|string|max:50000',
-            'list_name' => ['nullable', 'string', 'in:'.implode(',', self::MANUAL_STATUSES)],
+            'list_name' => ['nullable', 'string', Rule::in(TaskWriter::LISTS)],
             'due_date' => 'nullable|date',
             'priority' => 'nullable|in:low,medium,high',
             'parent_task_id' => 'nullable|integer',
-            'cli' => ['nullable', Rule::in(Task::CLIS)],
             'is_reportable' => 'nullable|boolean',
         ]);
-        $parentTaskId = $this->resolveParentTaskId($project, $validated['parent_task_id'] ?? null);
 
-        $task = Task::create([
-            'project_id' => $project->id,
+        $writer->create($project, [
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
-            'list_name' => $validated['list_name'] ?? 'To-Do',
+            'list_name' => $validated['list_name'] ?? null,
             'due_date' => $validated['due_date'] ?? null,
             'priority' => $validated['priority'] ?? null,
-            'parent_task_id' => $parentTaskId,
-            'cli' => $validated['cli'] ?? null,
-            'source' => 'manual',
-            'is_reviewed' => true,
-            'is_reportable' => (bool) ($validated['is_reportable'] ?? false),
+            'parent_task_id' => $this->resolveParentTaskId($project, $validated['parent_task_id'] ?? null),
+            'is_reportable' => $validated['is_reportable'] ?? false,
         ]);
-
-        // A task born on Done is finished through the same transition as a tick.
-        if ($task->list_name === 'Done') {
-            $completion->finish($task);
-        }
 
         return back()->with('success', __('Task created.'));
     }
 
-    public function update(Request $request, Task $task, TaskCompletion $completion): RedirectResponse
+    public function update(Request $request, Task $task, TaskWriter $writer): RedirectResponse
     {
         $this->authorizeTask($task);
 
@@ -81,42 +62,35 @@ final class TasksController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:500',
             'description' => 'nullable|string|max:50000',
-            'list_name' => ['nullable', 'string', 'in:'.implode(',', self::MANUAL_STATUSES)],
+            'list_name' => ['nullable', 'string', Rule::in(TaskWriter::LISTS)],
             'due_date' => 'nullable|date',
             'priority' => 'nullable|in:low,medium,high',
             'parent_task_id' => 'nullable|integer',
-            'cli' => ['nullable', Rule::in(Task::CLIS)],
             'is_reportable' => 'nullable|boolean',
         ]);
 
-        $newListName = $validated['list_name'] ?? $task->list_name;
-        $parentTaskId = array_key_exists('parent_task_id', $validated)
-            ? $this->resolveParentTaskId($task->project, $validated['parent_task_id'] ?? null, $task)
-            : $task->parent_task_id;
-
-        $update = [
+        $changes = [
             'name' => $validated['name'],
             'description' => $validated['description'] ?? null,
             'due_date' => $validated['due_date'] ?? null,
             'priority' => $validated['priority'] ?? null,
-            'parent_task_id' => $parentTaskId,
+            'parent_task_id' => array_key_exists('parent_task_id', $validated)
+                ? $this->resolveParentTaskId($task->project, $validated['parent_task_id'] ?? null, $task)
+                : $task->parent_task_id,
+            'list_name' => $validated['list_name'] ?? $task->list_name,
         ];
-        if (array_key_exists('cli', $validated)) {
-            $update['cli'] = $validated['cli'];
-        }
         if (array_key_exists('is_reportable', $validated)) {
-            $update['is_reportable'] = (bool) $validated['is_reportable'];
+            $changes['is_reportable'] = (bool) $validated['is_reportable'];
         }
-        $task->update($update);
-
-        if ($newListName !== null) {
-            $completion->moveToLane($task, $newListName);
+        if ($changes['list_name'] === null) {
+            unset($changes['list_name']);
         }
+        $writer->update($task, $changes);
 
         return back()->with('success', __('Task updated.'));
     }
 
-    public function destroy(Task $task): RedirectResponse
+    public function destroy(Task $task): JsonResponse
     {
         $this->authorizeTask($task);
 
@@ -124,9 +98,13 @@ final class TasksController extends Controller
             abort(422, 'Trello-source tasks must be deleted on the Trello board.');
         }
 
-        $task->delete();
+        try {
+            $task->delete();
+        } catch (PeriodSettled $settled) {
+            throw ValidationException::withMessages(['archive_instead' => $settled->deleteRefusal()]);
+        }
 
-        return back()->with('success', __('Task deleted.'));
+        return response()->json(['deleted' => $task->id]);
     }
 
     public function updateReportable(Request $request, Task $task): JsonResponse
@@ -142,7 +120,7 @@ final class TasksController extends Controller
         return response()->json(['is_reportable' => $task->is_reportable]);
     }
 
-    public function updateArchived(Request $request, Task $task): JsonResponse
+    public function updateArchived(Request $request, Task $task, TaskWriter $writer): JsonResponse
     {
         $this->authorizeTask($task);
 
@@ -154,16 +132,14 @@ final class TasksController extends Controller
             'archived' => 'required|boolean',
         ]);
 
-        $task->update([
-            'archived_at' => $validated['archived'] ? now() : null,
-        ]);
+        $writer->setArchived($task, (bool) $validated['archived']);
 
         return response()->json([
             'archived_at' => $task->archived_at?->toIso8601String(),
         ]);
     }
 
-    public function updateListName(Request $request, Task $task, TaskCompletion $completion): JsonResponse
+    public function updateListName(Request $request, Task $task, TaskWriter $writer): JsonResponse
     {
         $this->authorizeTask($task);
 
@@ -175,7 +151,7 @@ final class TasksController extends Controller
             'list_name' => 'required|string|max:100',
         ]);
 
-        $completion->moveToLane($task, $validated['list_name']);
+        $writer->moveToList($task, $validated['list_name']);
 
         return response()->json([
             'list_name' => $task->list_name,
@@ -184,228 +160,35 @@ final class TasksController extends Controller
         ]);
     }
 
-    public function updateCli(Request $request, Task $task): JsonResponse
+    /** The task page (Figma: Zadanie). A stale card's details are fetched behind the page, which shows the cache meanwhile. */
+    public function show(Request $request, Task $task, TaskPage $page, CardDetailsFetcher $fetcher)
     {
         $this->authorizeTask($task);
 
-        $validated = $request->validate([
-            'cli' => ['nullable', Rule::in(Task::CLIS)],
-        ]);
+        if ($task->hasTrelloCard() && ! config('app.demo') && $fetcher->isStale($task, $task->cardDetails)) {
+            RefreshTaskCardDetailsJob::dispatch($task->id);
+        }
 
-        $task->update(['cli' => $validated['cli']]);
-
-        return response()->json(['cli' => $task->cli]);
+        return Inertia::render('tasks/show', $page->props($task, $request->user(), $request->has('historia') ? null : TaskActivity::PREVIEW));
     }
 
-    public function updateAgentLane(Request $request, Task $task, TaskCompletion $completion): JsonResponse
+    /** The description of a CRM task; a card's description is Trello's. */
+    public function updateDescription(Request $request, Task $task, TaskWriter $writer): RedirectResponse
     {
         $this->authorizeTask($task);
 
-        if ($task->cli === null) {
-            abort(422, 'Task is not on the agent kanban (no CLI configured).');
+        if ($task->hasTrelloCard()) {
+            abort(422, 'Trello-source tasks must be edited on the Trello board.');
         }
 
         $validated = $request->validate([
-            'agent_lane' => ['required', Rule::in(Task::AGENT_LANES)],
+            'description' => 'nullable|string|max:50000',
         ]);
+        $description = mb_trim((string) ($validated['description'] ?? ''));
 
-        $lane = $validated['agent_lane'];
+        $writer->update($task, ['description' => $description === '' ? null : $description]);
 
-        if ($lane === Task::AGENT_LANE_DONE) {
-            $completion->finish($task);
-        } else {
-            // A Trello card's list belongs to Trello: the drag only moves the agent lane.
-            if ($task->hasTrelloCard()) {
-                if ($task->finished_at !== null) {
-                    $completion->unfinish($task);
-                }
-            } else {
-                $completion->moveToLane($task, self::AGENT_LANE_TO_LIST_NAME[$lane]);
-            }
-            $task->update(['agent_lane' => $lane]);
-        }
-
-        return response()->json([
-            'agent_lane' => $task->agent_lane,
-            'list_name' => $task->list_name,
-            'is_completed' => $task->is_completed,
-            'finished_at' => $task->finished_at?->toIso8601String(),
-        ]);
-    }
-
-    /**
-     * Render the task detail page. Slim payload — the page itself decides
-     * what to display.
-     */
-    public function show(Task $task, \App\Services\TerminalSessionLauncherInterface $launcher)
-    {
-        $task->load([
-            'project.client',
-            'parentTask:id,name',
-            'childTasks:id,parent_task_id,name,is_completed,finished_at,agent_lane,cli',
-            'attachments',
-            'sessions.timeEntry:id,duration_minutes,start_time,end_time',
-        ]);
-
-        if ($task->project?->account_id !== Auth::user()->account_id) {
-            abort(403);
-        }
-
-        // Cumulative minutes across every terminal-session TimeEntry for this
-        // task. Closed entries contribute duration_minutes directly; a running
-        // entry's elapsed time is added live so the chip ticks without an
-        // explicit refresh on stop.
-        $sessionMinutes = (int) TimeEntry::query()
-            ->where('task_id', $task->id)
-            ->where('source', TimeEntry::SOURCE_TERMINAL_SESSION)
-            ->whereNotNull('end_time')
-            ->sum('duration_minutes');
-        $runningEntry = TimeEntry::query()
-            ->where('task_id', $task->id)
-            ->where('source', TimeEntry::SOURCE_TERMINAL_SESSION)
-            ->whereNull('end_time')
-            ->latest('start_time')
-            ->first();
-        if ($runningEntry !== null && $runningEntry->start_time !== null) {
-            $sessionMinutes += (int) ceil($runningEntry->start_time->diffInSeconds(now()) / 60);
-        }
-
-        // Manual stopwatch — separate from session-tracked time, surfaced as
-        // a Start/Stop toggle in the title bar. Returns the open entry so the
-        // UI can show elapsed seconds + the Stop button referring back to it.
-        $manualRunning = TimeEntry::query()
-            ->where('task_id', $task->id)
-            ->where('source', TimeEntry::SOURCE_MANUAL)
-            ->whereNull('end_time')
-            ->latest('start_time')
-            ->first();
-
-        return Inertia::render('tasks/show', [
-            'task' => [
-                'id' => $task->id,
-                'name' => $task->name,
-                'description' => $task->description,
-                'list_name' => $task->list_name,
-                'is_completed' => (bool) $task->is_completed,
-                'finished_at' => $task->finished_at?->toIso8601String(),
-                'due_date' => $task->due_date?->toIso8601String(),
-                'is_overdue' => $task->isOverdue(),
-                'labels' => $task->labels,
-                'priority' => $task->priority,
-                'parent_task_id' => $task->parent_task_id,
-                'parent_task' => $task->parentTask ? [
-                    'id' => $task->parentTask->id,
-                    'name' => $task->parentTask->name,
-                ] : null,
-                'child_tasks' => $task->childTasks->map(fn ($child) => [
-                    'id' => $child->id,
-                    'name' => $child->name,
-                    'is_completed' => (bool) $child->is_completed,
-                    'finished_at' => $child->finished_at?->toIso8601String(),
-                    'is_done' => $child->isDone(),
-                    'agent_lane' => $child->agent_lane,
-                    'cli' => $child->cli,
-                ])->values(),
-                'source' => $task->source,
-                'has_trello_card' => $task->hasTrelloCard(),
-                'trello_url' => $task->trello_url,
-                'created_at' => $task->created_at?->toIso8601String(),
-                'updated_at' => $task->updated_at?->toIso8601String(),
-                'project' => $task->project ? [
-                    'id' => $task->project->id,
-                    'name' => $task->project->name,
-                    'trello_url' => $task->project->trello_url,
-                    // Preview config — drives the Start Preview button on the
-                    // task page. preview_url is optional click-to-open hint.
-                    'preview_command' => $task->project->preview_command,
-                    'preview_working_dir' => $task->project->preview_working_dir,
-                    'preview_url' => $task->project->preview_url,
-                ] : null,
-                'client' => $task->project?->client ? [
-                    'id' => $task->project->client->id,
-                    'name' => $task->project->client->name,
-                ] : null,
-                'agent_lane' => $task->agent_lane,
-                'cli' => $task->cli,
-                'session_port' => $task->session_port,
-                'session_branch_name' => $task->cli !== null ? $task->sessionBranchName() : null,
-                'session_attention_at' => $task->session_attention_at?->toIso8601String(),
-                'session_total_minutes' => $sessionMinutes,
-                // Number of distinct sessions (TaskSession rows) that contributed
-                // to session_total_minutes. Shown alongside the total in the
-                // task pill so the user sees "3 sessions · 19h 15m" instead of
-                // a bare duration that looks suspicious on long-running tasks.
-                'session_count' => $task->sessions->count(),
-                // Whether the tmux session backing this task is still alive on
-                // the host. Drives the Resume affordance: only show it when
-                // reattach would actually succeed (otherwise only Start makes
-                // sense). Cheap check — single `tmux has-session` shell-out.
-                'tmux_alive' => $task->cli !== null ? $launcher->tmuxSessionAlive($task) : false,
-                'running_manual_entry' => $manualRunning ? [
-                    'id' => $manualRunning->id,
-                    'start_time' => $manualRunning->start_time?->toIso8601String(),
-                ] : null,
-                'attachments' => $task->attachments->map(fn ($a) => [
-                    'id' => $a->id,
-                    'url' => route('task-attachments.show', $a->id),
-                    'original_name' => $a->original_name,
-                    'mime' => $a->mime,
-                    'size' => $a->size,
-                    'label' => $a->label,
-                ])->values(),
-                // Newest first via the relation's default order. ended_at
-                // IS NULL marks the currently-live row, which matches
-                // tasks.session_port when that is set.
-                'sessions' => $task->sessions->map(function ($s): array {
-                    $startedAt = $s->started_at;
-                    $endedAt = $s->ended_at;
-                    $durationMinutes = $endedAt !== null && $startedAt !== null
-                        ? (int) ceil($startedAt->diffInSeconds($endedAt) / 60)
-                        : null;
-
-                    return [
-                        'id' => $s->id,
-                        'cli' => $s->cli,
-                        'base_branch' => $s->base_branch,
-                        'branch_name' => $s->branch_name,
-                        'worktree_path' => $s->worktree_path,
-                        'started_at' => $startedAt?->toIso8601String(),
-                        'ended_at' => $endedAt?->toIso8601String(),
-                        'ended_reason' => $s->ended_reason,
-                        'duration_minutes' => $durationMinutes,
-                        'is_running' => $endedAt === null,
-                        'time_entry' => $s->timeEntry ? [
-                            'id' => $s->timeEntry->id,
-                            'title' => $s->timeEntry->title,
-                            'task_id' => $s->timeEntry->task_id,
-                            'duration_minutes' => $s->timeEntry->duration_minutes,
-                            'start_time' => $s->timeEntry->start_time?->toIso8601String(),
-                            'end_time' => $s->timeEntry->end_time?->toIso8601String(),
-                            'description' => $s->timeEntry->description,
-                            'billable' => (bool) $s->timeEntry->billable,
-                        ] : null,
-                    ];
-                })->values(),
-                // Currently-running preview for this task, if any. Drives the
-                // Start/Stop Preview button + the embedded preview ttyd pane.
-                'preview' => (function () use ($task): ?array {
-                    $running = $task->runningPreview();
-                    if ($running === null) {
-                        return null;
-                    }
-
-                    return [
-                        'id' => $running->id,
-                        'port' => $running->port,
-                        'pid' => $running->pid,
-                        'command' => $running->command,
-                        'working_dir' => $running->working_dir,
-                        'url' => $running->url,
-                        'started_at' => $running->started_at?->toIso8601String(),
-                    ];
-                })(),
-            ],
-        ]);
+        return back();
     }
 
     private function authorizeTask(Task $task): void

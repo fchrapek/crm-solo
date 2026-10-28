@@ -32,6 +32,16 @@ final class Integration extends Model
             'secret_fields' => ['api_key', 'trello_api_key'],
             'settings_fields' => [],
         ],
+        'smsapi' => [
+            'name' => 'SMSAPI',
+            'description' => 'Polish SMS gateway for client text messages',
+            'website' => 'https://www.smsapi.pl',
+            'features' => ['sms'],
+            'auth_type' => 'api_key',
+            'secret_fields' => ['api_key'],
+            'settings_fields' => [],
+            'syncs' => false,
+        ],
     ];
 
     /** Keys inside settings that hold credentials, stored encrypted. */

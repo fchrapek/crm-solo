@@ -120,13 +120,6 @@
     --tone-diff-removed-bg: var(--tone-red-bg);
     --tone-diff-removed-fg: var(--tone-red-fg);
 
-    /* Terminal chrome (ttyd wrappers) — always a dark surface, but themable. */
-    --terminal-bg: hsl(0 0% 8%);
-    --terminal-fg: hsl(0 0% 87%);
-    --terminal-muted: hsl(0 0% 73%);
-    --terminal-dim: hsl(0 0% 60%);
-    --terminal-link: var(--tone-blue-solid);
-
     /* ========================================
    * Chips / pills — one contract for every small metadata pill (kanban
    * cards, badges, stage chips). Components pick a TONE token pair; form
@@ -156,6 +149,9 @@
     /* Icon treatment — lucide strokes. Weight plus cap/join geometry is what a
    * theme changes instead of swapping icon packages (see docs theming.md). */
     --icon-stroke: 2;
+    --icon-stroke-16: 2;
+    --icon-stroke-20: 2;
+    --icon-stroke-24: 2.25;
     --icon-linecap: round;
     --icon-linejoin: round;
 
@@ -296,6 +292,9 @@
     --z-30: 30;
     --z-40: 40;
     --z-50: 50;
+    --z-banner: 60;
+    /* every modal layer and portalled popup shares one level above the banner; later portals stack on top by DOM order */
+    --z-modal: 70;
 
     /* ========================================
    * Breakpoints (for reference in JS)

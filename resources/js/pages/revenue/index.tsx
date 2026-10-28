@@ -216,7 +216,7 @@ export default function Index() {
                                 <TableRow
                                     key={c.client_key}
                                     className={c.client_id ? styles.clickableRow : undefined}
-                                    onClick={() => c.client_id && router.visit(clients.edit(c.client_id).url)}
+                                    onClick={() => c.client_id && router.visit(clients.show({ client: c.client_id, tab: 'przeglad' }).url)}
                                 >
                                     <TableCell>{c.name}</TableCell>
                                     <TableCell className={styles.numCol}>{money(value, currency)}</TableCell>

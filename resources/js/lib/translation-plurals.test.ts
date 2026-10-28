@@ -13,24 +13,29 @@ await i18n.init({
 });
 
 describe('count strings', () => {
-    test('the session count on the task page takes the Polish form for each number', () => {
-        const t = i18n.getFixedT('pl');
-        expect(t('session_count_summary', { count: 1, total: '2h' })).toBe('1 sesja · 2h');
-        expect(t('session_count_summary', { count: 3, total: '2h' })).toBe('3 sesje · 2h');
-        expect(t('session_count_summary', { count: 5, total: '2h' })).toBe('5 sesji · 2h');
-        expect(t('session_count_summary', { count: 22, total: '2h' })).toBe('22 sesje · 2h');
-    });
-
-    test('the session count reads singular and plural in English', () => {
-        const t = i18n.getFixedT('en');
-        expect(t('session_count_summary', { count: 1, total: '2h' })).toBe('1 session · 2h');
-        expect(t('session_count_summary', { count: 4, total: '2h' })).toBe('4 sessions · 2h');
-    });
-
     test('the subtask count on a card takes the Polish form for each number', () => {
         const t = i18n.getFixedT('pl');
         expect(t('subtask_count', { count: 1 })).toBe('1 podzadanie');
         expect(t('subtask_count', { count: 2 })).toBe('2 podzadania');
         expect(t('subtask_count', { count: 5 })).toBe('5 podzadań');
+    });
+});
+
+describe('action labels', () => {
+    test('no string opens with a typed plus; actions are a verb or Nowy/Nowa/Nowe', () => {
+        for (const strings of [en, pl] as Record<string, string>[]) {
+            expect(Object.entries(strings).filter(([key, value]) => /^\+\s/.test(key) || /^\+\s/.test(value))).toEqual([]);
+        }
+    });
+
+    test('Pokaż N więcej reads the same in every Polish form', () => {
+        const t = i18n.getFixedT('pl');
+        expect([1, 2, 5, 22].map((count) => t('Show {{count}} more', { count }))).toEqual([
+            'Pokaż 1 więcej',
+            'Pokaż 2 więcej',
+            'Pokaż 5 więcej',
+            'Pokaż 22 więcej',
+        ]);
+        expect(i18n.getFixedT('en')('Show {{count}} more', { count: 3 })).toBe('Show 3 more');
     });
 });

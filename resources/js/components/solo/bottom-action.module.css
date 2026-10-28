@@ -1,0 +1,63 @@
+/* Phone first: the bar over the tab bar; from 768 px the wrappers step aside and the buttons sit in the page. */
+.bar {
+    position: fixed;
+    inset-inline: 0;
+    bottom: calc(var(--solo-tab-bar-height) + env(safe-area-inset-bottom, 0px));
+    z-index: var(--z-banner);
+    display: flex;
+    flex-direction: column-reverse;
+    gap: var(--solo-space-1);
+    padding: var(--solo-space-3) calc(var(--solo-space-4) + env(safe-area-inset-right, 0px)) var(--solo-space-3)
+        calc(var(--solo-space-4) + env(safe-area-inset-left, 0px));
+    background: var(--solo-bg);
+}
+
+/* whatever its desktop look, the main action takes the surface's main one: ink on Paper, paper with the surface colour on timer and done */
+.main {
+    --solo-main-bg: var(--solo-primary, var(--solo-fg));
+    --solo-main-fg: var(--solo-on-primary, var(--solo-bg));
+    --solo-main-edge: transparent;
+
+    display: flex;
+}
+
+.bar .main > * {
+    flex: 1 1 auto;
+    min-height: var(--solo-bottom-action-button);
+}
+
+.secondary {
+    display: flex;
+    justify-content: center;
+}
+
+.bar .secondary > * {
+    min-height: 31px;
+}
+
+@media (min-width: 768px) {
+    .bar,
+    .main,
+    .secondary {
+        display: contents;
+    }
+
+    .main {
+        --solo-main-bg: initial;
+        --solo-main-fg: initial;
+        --solo-main-edge: initial;
+    }
+
+    .bar .main > * {
+        flex: initial;
+        min-height: 0;
+    }
+
+    .bar .secondary > * {
+        min-height: 0;
+    }
+
+    .bar.phoneOnly {
+        display: none;
+    }
+}

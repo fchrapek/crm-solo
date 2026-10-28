@@ -58,12 +58,13 @@ final class InfaktWebSyncConflictsTest extends TestCase
                 && str_contains($message, "Infakt client 303 (NIP 5260000000) matches CRM client #{$linked->id}"))
             ->assertSessionMissing('success');
 
-        $this->actingAs($this->user)->get('/integrations/infakt')
+        $this->actingAs($this->user)->get('/settings/integracje')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->has('integration.client_conflicts', 1)
-                ->where('integration.client_conflicts.0', fn (string $c) => str_contains($c, 'Infakt client 303'))
-                ->where('integration.last_sync_error', null));
+                ->where('integrations.0.provider', 'infakt')
+                ->has('integrations.0.client_conflicts', 1)
+                ->where('integrations.0.client_conflicts.0', fn (string $c) => str_contains($c, 'Infakt client 303'))
+                ->where('integrations.0.last_sync_error', null));
 
         // Saving the form does not drop the list.
         $this->actingAs($this->user)->put('/integrations/infakt', ['is_enabled' => true, 'settings' => ['client_conflicts' => []]]);

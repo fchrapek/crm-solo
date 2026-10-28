@@ -125,10 +125,10 @@ final class DemoIntegrationsOffTest extends TestCase
 
     public function test_the_integrations_page_says_they_are_not_part_of_the_demo_and_lists_nothing(): void
     {
-        $this->actingAs($this->owner)->get('/integrations')
+        $this->actingAs($this->owner)->get('/settings/integracje')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('integrations/index')
+                ->component('settings/index')
                 ->where('demo', true)
                 ->where('integrations', []));
     }
@@ -139,10 +139,10 @@ final class DemoIntegrationsOffTest extends TestCase
             ->withHeaders([
                 'X-Inertia' => 'true',
                 'X-Inertia-Version' => (string) app(HandleInertiaRequests::class)->version(request()),
-                'X-Inertia-Partial-Component' => 'integrations/index',
+                'X-Inertia-Partial-Component' => 'settings/index',
                 'X-Inertia-Partial-Data' => 'integrations',
             ])
-            ->get('/integrations')
+            ->get('/settings/integracje')
             ->assertOk()
             ->assertJsonPath('props.integrations', []);
     }
@@ -201,13 +201,13 @@ final class DemoIntegrationsOffTest extends TestCase
             ->assertOk();
     }
 
-    public function test_the_integration_form_still_opens_outside_the_demo(): void
+    public function test_the_integrations_tab_lists_the_providers_outside_the_demo(): void
     {
         config(['app.demo' => false]);
 
-        $this->actingAs($this->owner)->get('/integrations/trello')
+        $this->actingAs($this->owner)->get('/settings/integracje')
             ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->component('integrations/edit'));
+            ->assertInertia(fn (Assert $page) => $page->component('settings/index')->where('demo', false)->has('integrations', 3));
     }
 
     public function test_a_trello_sync_job_already_queued_does_nothing_on_the_demo(): void

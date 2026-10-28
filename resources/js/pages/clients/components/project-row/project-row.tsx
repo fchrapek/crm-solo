@@ -1,5 +1,5 @@
+import { Icon } from '@/components/ui/icon';
 import { Link, router } from '@inertiajs/react';
-import { Bot, ExternalLink, Lock, MoreVertical, Pencil, RefreshCw, Settings, Trash, Unlink } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,11 +26,7 @@ export interface ProjectRowProject {
     is_private: boolean;
     tasks_count: number;
     completed_tasks_count: number;
-    active_agent_tasks_count?: number;
     repositories?: ProjectRepository[];
-    preview_command?: string | null;
-    preview_working_dir?: string | null;
-    preview_url?: string | null;
     include_in_month_close?: boolean;
     backup_path?: string | null;
 }
@@ -58,16 +54,12 @@ export function ProjectRow({ project, clientId, trelloEnabled = false, trelloAct
 
     const total = project.tasks_count;
     const completed = project.completed_tasks_count;
-    const agentCount = project.active_agent_tasks_count ?? 0;
     const lists = project.trello_lists ?? [];
 
     const editValues: ProjectDialogValues = {
         id: project.id,
         name: project.name,
         description: project.description ?? null,
-        preview_command: project.preview_command ?? null,
-        preview_working_dir: project.preview_working_dir ?? null,
-        preview_url: project.preview_url ?? null,
         include_in_month_close: project.include_in_month_close ?? false,
         backup_path: project.backup_path ?? null,
     };
@@ -97,7 +89,7 @@ export function ProjectRow({ project, clientId, trelloEnabled = false, trelloAct
                 </Link>
                 {project.is_private && (
                     <Badge variant="secondary" className={styles.privateBadge}>
-                        <Lock size={10} />
+                        <Icon name="lock" size={16} />
                         {t('Private')}
                     </Badge>
                 )}
@@ -108,12 +100,6 @@ export function ProjectRow({ project, clientId, trelloEnabled = false, trelloAct
 
                 <div className={styles.actions}>
                     <ProjectRepoChip projectId={project.id} repositories={project.repositories ?? []} />
-                    {agentCount > 0 && (
-                        <Link href={`/clients/${clientId}/projects/${project.id}/agent-board`} className={styles.agentLink}>
-                            <Bot size={14} />
-                            {agentCount}
-                        </Link>
-                    )}
                     {project.trello_url && (
                         <a
                             href={project.trello_url}
@@ -123,31 +109,31 @@ export function ProjectRow({ project, clientId, trelloEnabled = false, trelloAct
                             aria-label={t('View board in Trello')}
                             title={t('View board in Trello')}
                         >
-                            <ExternalLink size={14} />
+                            <Icon name="external-link" size={16} />
                         </a>
                     )}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" aria-label={t('Project actions')} disabled={processing}>
-                                <MoreVertical size={14} />
+                                <Icon name="more-vertical" size={16} />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => setProjectDialogOpen(true)}>
-                                <Pencil size={14} className={styles.dropdownIcon} />
+                                <Icon name="pencil" size={16} className={styles.dropdownIcon} />
                                 {t('Edit project')}
                             </DropdownMenuItem>
                             {project.is_private ? (
                                 <>
                                     {trelloEnabled && (
                                         <DropdownMenuItem onClick={() => setTrelloDialogOpen(true)}>
-                                            <RefreshCw size={14} className={styles.dropdownIcon} />
+                                            <Icon name="refresh" size={16} className={styles.dropdownIcon} />
                                             {t('Connect to Trello')}
                                         </DropdownMenuItem>
                                     )}
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem variant="destructive" onClick={() => setDeleteOpen(true)}>
-                                        <Trash size={14} className={styles.dropdownIcon} />
+                                        <Icon name="trash" size={16} className={styles.dropdownIcon} />
                                         {t('Delete project')}
                                     </DropdownMenuItem>
                                 </>
@@ -156,15 +142,15 @@ export function ProjectRow({ project, clientId, trelloEnabled = false, trelloAct
                                     <>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem onClick={handleSync} disabled={processing}>
-                                            <RefreshCw size={14} className={styles.dropdownIcon} />
+                                            <Icon name="refresh" size={16} className={styles.dropdownIcon} />
                                             {t('Sync Now')}
                                         </DropdownMenuItem>
                                         <DropdownMenuItem onClick={() => setMappingDialogOpen(true)} disabled={processing || lists.length === 0}>
-                                            <Settings size={14} className={styles.dropdownIcon} />
+                                            <Icon name="settings" size={16} className={styles.dropdownIcon} />
                                             {t('Configure list mapping')}
                                         </DropdownMenuItem>
                                         <DropdownMenuItem variant="destructive" onClick={() => setDisconnectOpen(true)} disabled={processing}>
-                                            <Unlink size={14} className={styles.dropdownIcon} />
+                                            <Icon name="unlink" size={16} className={styles.dropdownIcon} />
                                             {t('Disconnect from Trello')}
                                         </DropdownMenuItem>
                                     </>

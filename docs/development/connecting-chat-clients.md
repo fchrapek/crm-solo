@@ -91,10 +91,11 @@ claude mcp add crm-solo -- /opt/homebrew/bin/php /absolute/path/to/crm-solo/arti
 Ask these in a normal chat, in order. You never name a tool — the app picks one from what you asked.
 
 1. **"What needs my attention today?"** — overdue and urgent tasks, open month closes, hot leads, running timers. Reads only, so it is a safe first request.
-2. **"Give me a brief on <a client name>."** — status, retainer, hours this month against the limit, open tasks, latest report.
+2. **"Give me a brief on <a client name>."** — status, retainer, hours logged this month (all of it) and the hours bank (reportable time used against what is available, which is the limit), open tasks, latest report.
 3. **"Brief me on <a fragment matching several clients>."** — should come back asking *which* one, listing the matches. Getting a question instead of a guess is the correct behaviour.
 4. **"What's the month close status for <client>?"** — the checklist. Asking about a month that was never started shows what it *would* create, without creating it.
-5. **"Add a note to <client>: <something>."** — a write. Open that client in the CRM web UI, Activity tab: the entry is there, with your name on it.
+5. **"Where does the month close stand?"** — every client in last month's close: its checklist, its report and whether the month can be closed in the hours bank. Reads only.
+6. **"Add a note to <client>: <something>."** — a write. Open that client in the CRM web UI, Activity tab: the entry is there, with your name on it.
 
 Approve the tool call if the app asks. Approving once per tool is normal.
 
@@ -114,14 +115,16 @@ Approve the tool call if the app asks. Approving once per tool is normal.
 
 ## What it can and cannot do
 
-It can: read the day's attention list, brief a client, read one task with its Trello checklists, comments and files, write a short brief on a task, start and stop timers, log time after the fact, complete tasks, write journal notes, capture and move leads, and drive the month-close checklist.
+It can: read the day's attention list and the plan for today and tomorrow, list and brief clients, add a client with a contact, list tasks, read one task with its Trello checklists, comments and files, create and edit tasks (not Trello cards' own fields), plan a task for any day up to the end of next week, write a short brief on a task, start and stop timers, log time after the fact, list time entries and correct one or split it across tasks (never delete it), complete tasks, write journal notes, capture and move leads, drive the month-close checklist, read the whole month close, a client's reports with the hours the Rozliczenia tab shows, and what closing a month would freeze. That is enough to add a task, a client or a note by talking to the chat app, by voice or dictation: say what you want, the agent shows what it will write, and the app asks you to approve the tool call.
 
-It cannot: issue invoices to Infakt (deliberate — that writes to an external system, so it stays a terminal command), or do anything the CRM itself cannot do. It is the same set of actions the CLI has, reached a different way.
+It cannot: close or reopen a month or change a report (the owner does that in the app for now), issue invoices to Infakt (deliberate — that writes to an external system, so it stays a terminal command), or do anything the CRM itself cannot do. It is the same set of actions the CLI has, reached a different way.
 
-Two behaviours worth knowing, because they look like quirks and are not:
+Four behaviours worth knowing, because they look like quirks and are not:
 
 - **Times are local.** Saying "log 30 minutes ending 15:30" means half past three where you are. The CRM stores UTC internally and converts.
+- **A client with a name close to an existing one is refused.** The agent gets the matches (archived clients too) and should show them to you; it creates the new client only once you confirm it is a different company.
 - **A lead's source cannot be changed later.** It is permanent attribution, so an unrecognised source is rejected with the valid ones listed rather than quietly accepted.
+- **Time in a settled month stays put.** The agent cannot change or split time in a month you closed (Zamknij miesiąc) or under a report you finalized or sent, nor move time into one; it tells you which month to reopen in the app. In the app itself you can still edit that time.
 
 ---
 
@@ -133,7 +136,7 @@ Once the CRM runs on a server (say `https://app.example.test`), the local server
 
 **What you need, once per Mac**
 
-1. The agent token, issued by the owner on the server (`php artisan agent-tokens:issue`), saved as `~/.config/crm-solo/agent.token`. It is shown once when issued. `chmod 600` the file; the tools refuse it otherwise.
+1. The agent token, issued by the owner in Ustawienia · Agenci (or on the server with `php artisan agent-tokens:issue`), saved as `~/.config/crm-solo/agent.token`. It is shown once when issued. `chmod 600` the file; the tools refuse it otherwise.
 2. The Access service token, saved as `~/.config/crm-solo/remote.headers`, also `chmod 600`:
 
    ```
@@ -154,7 +157,7 @@ claude mcp add-json crm-solo '{"type":"http","url":"https://app.example.test/mcp
 
 **What changes once it is hosted**
 
-- **What a token may do is limited.** A token carries abilities: `read`, plus one write group each for notes, tasks, time, leads and the month close. A token without a write group does not even see those tools. A read-only token is the safe default for an experiment.
+- **What a token may do is limited.** A token carries abilities: `read`, plus one write group each for notes, tasks, time, leads, the month close and clients. A token without a write group does not even see those tools. A read-only token is the safe default for an experiment. Adding clients is its own group, `write:clients`; a token issued before 2026-10-07 gets it with `php artisan agent-tokens:grant <id> --ability=write:clients` on the server.
 - **Writes are attributed.** Every record a tool writes leaves an audit row with the token's name, the tool and the MCP session, and journal entries, timers and ticks carry the same marks. A note written from chat shows the token owner's name in the Activity tab.
 - **A revoked or expired token stops at once.** The client then reports an authentication error; ask for a new token rather than retrying.
 - **There is a rate limit** (120 requests a minute per token by default). An agent stuck in a loop hits it and gets HTTP 429.

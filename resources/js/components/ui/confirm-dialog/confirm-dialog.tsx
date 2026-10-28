@@ -1,4 +1,3 @@
-import { AlertTriangle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +11,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Icon } from '@/components/ui/icon';
 
 import styles from './confirm-dialog.module.css';
 
@@ -47,7 +47,7 @@ export function ConfirmDialog({
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle className={styles.title}>
-                        <AlertTriangle size={20} className={styles.icon} />
+                        <Icon name="warning" size={20} className={styles.icon} />
                         {title}
                     </AlertDialogTitle>
                     {description && (
@@ -60,7 +60,7 @@ export function ConfirmDialog({
                     <AlertDialogAction
                         onClick={onConfirm}
                         disabled={confirmDisabled}
-                        className={variant === 'destructive' ? styles.destructiveAction : undefined}
+                        tone={variant === 'destructive' ? 'destructive' : undefined}
                     >
                         {confirmLabel ?? t('Confirm')}
                     </AlertDialogAction>

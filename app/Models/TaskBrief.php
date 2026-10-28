@@ -27,6 +27,8 @@ final class TaskBrief extends Model
 
     public const string VIA_MCP = 'mcp';
 
+    public const string VIA_WEB = 'web';
+
     protected $fillable = [
         'task_id',
         'location',

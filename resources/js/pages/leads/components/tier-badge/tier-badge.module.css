@@ -8,8 +8,8 @@
     border-radius: 999px;
     font-size: 0.6875rem;
     font-weight: 600;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
+    letter-spacing: var(--solo-label-tracking, 0.02em);
+    text-transform: var(--solo-label-case, uppercase);
     border: 1px solid transparent;
     white-space: nowrap;
 }

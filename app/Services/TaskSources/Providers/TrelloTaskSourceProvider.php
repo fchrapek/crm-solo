@@ -9,6 +9,7 @@ use App\Models\Project;
 use App\Services\Integrations\Trello\TrelloOnboardingService;
 use App\Services\Integrations\Trello\TrelloService;
 use App\Services\TaskSources\TaskSourceProviderInterface;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Arr;
 
 /**
@@ -41,9 +42,9 @@ final class TrelloTaskSourceProvider implements TaskSourceProviderInterface
         );
     }
 
-    public function syncAll(Integration $integration): array
+    public function syncAll(Integration $integration, ?CarbonInterface $deadline = null): array
     {
-        return (new TrelloService($integration))->syncAllBoards($integration->account_id);
+        return (new TrelloService($integration))->syncAllBoards($integration->account_id, $deadline);
     }
 
     public function listContainers(Integration $integration): array

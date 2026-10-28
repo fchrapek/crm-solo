@@ -84,6 +84,20 @@ final class Invoice extends Model
             ->whereBetween('paid_date', [$from->toDateString(), $to->toDateString()]);
     }
 
+    /** The invoice in Infakt, when the link template is configured and the row came from there. */
+    public function infaktUrl(): ?string
+    {
+        $url = (string) config('services.infakt.invoice_url');
+
+        return $this->external_id && str_contains($url, '{id}') ? str_replace('{id}', $this->external_id, $url) : null;
+    }
+
+    /** Status is the payment signal: Infakt marks documents paid without settling the amount fields. */
+    public function isOverdueOn(Carbon $today): bool
+    {
+        return $this->status !== 'paid' && $this->status !== 'draft' && $this->payment_date !== null && $this->payment_date->lt($today);
+    }
+
     protected function casts(): array
     {
         return [

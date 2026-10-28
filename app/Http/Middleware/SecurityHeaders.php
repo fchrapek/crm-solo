@@ -9,9 +9,7 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Baseline response headers. Framing is limited to this origin; the ttyd
- * iframes the app embeds are other origins framed BY it, which these headers
- * do not govern. HSTS only over https outside local, where crm-solo.test and
+ * Baseline response headers. Framing is limited to this origin. HSTS only over https outside local, where crm-solo.test and
  * a plain-HTTP start must stay reachable. No full CSP yet: Vite dev and
  * Inertia's inline bootstrap would need nonces first.
  */

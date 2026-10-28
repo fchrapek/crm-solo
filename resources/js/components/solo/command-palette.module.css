@@ -1,0 +1,229 @@
+/*
+ * Figma: ⌘K Szukaj. Phones: a full-screen sheet with the field and Anuluj on top; from 768 px a 640 px box
+ * 128 px from the top. The box, rows and heads are the shared Menu / Actions look (menu.module.css).
+ */
+:global([data-day]) [data-slot='dialog-content'].palette {
+    --dialog-bg: var(--solo-dialog-bg, var(--solo-pop-bg, var(--solo-bg)));
+
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    padding: var(--solo-space-4) calc(var(--solo-space-4) + env(safe-area-inset-right, 0px)) var(--solo-space-4)
+        calc(var(--solo-space-4) + env(safe-area-inset-left, 0px));
+    border: 0;
+    border-radius: 0;
+    transform: none;
+    animation: none;
+}
+
+.palette > div {
+    display: flex;
+    flex-direction: column;
+    gap: var(--solo-space-3);
+    padding: 0;
+}
+
+.field {
+    display: flex;
+    align-items: center;
+    gap: var(--solo-space-3);
+    padding: var(--solo-palette-field-pad, 0 var(--solo-space-3));
+    border: solid var(--solo-search-line-color, var(--solo-field-border));
+    border-width: var(--solo-search-line, 1px);
+    border-radius: var(--solo-search-radius, var(--solo-radius-lg));
+    background: var(--solo-search-bg, var(--solo-field-bg));
+}
+
+/* The same focus line as every dialog field (field.module.css): 2 px inward, no outer ring. */
+.field:focus-within {
+    border-color: var(--solo-search-line-color, var(--solo-fg));
+    box-shadow: var(--solo-search-ring, inset 0 0 0 1px var(--solo-fg));
+}
+
+.input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: var(--solo-palette-input-pad, 7px 0);
+    border: 0;
+    background: none;
+    color: var(--solo-fg);
+    font: 500 var(--solo-text-field) / normal var(--solo-font-text);
+}
+
+.input:focus {
+    outline: none;
+}
+
+.input::-webkit-search-cancel-button {
+    appearance: none;
+}
+
+.input::placeholder {
+    color: var(--solo-fg-muted);
+}
+
+.cancel {
+    flex: none;
+    min-height: var(--solo-touch);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-fg);
+    font: 600 var(--solo-text-action) / normal var(--solo-font-text);
+    cursor: pointer;
+}
+
+.results {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--solo-space-3);
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--solo-block-pad, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+}
+
+/* phones: the results are one block, rows and heads inset like any list */
+:global([data-day]) .palette .results .row {
+    margin-inline: 0;
+    padding-inline: var(--solo-row-inset, 0);
+}
+
+:global([data-day]) .palette .group > p {
+    padding-inline: var(--solo-row-inset, 0);
+}
+
+/* a long title keeps at least part of the row, the caption gives way first */
+.row > :first-child:not(.caption) {
+    flex: 1 1 auto;
+    min-width: 40%;
+    overflow: hidden;
+    font-weight: var(--solo-palette-title-weight, 600);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.row > .caption:last-child {
+    flex: var(--solo-palette-caption-flex, 0 1 auto);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--solo-space-1);
+}
+
+.count,
+.caption {
+    color: var(--solo-fg-muted);
+}
+
+/* the keyboard row wears Menu / Row Selected, as drawn; outranks the shared hover underline */
+:global([data-day]) [data-slot='dialog-content'].palette .row[data-highlighted] {
+    color: var(--solo-pick-fg, var(--solo-link, var(--solo-accent)));
+    text-decoration: none;
+}
+
+.palette .row[data-highlighted] .caption {
+    color: inherit;
+}
+
+.empty {
+    margin: 0;
+    padding: var(--solo-space-3) 0;
+    color: var(--solo-fg-muted);
+    font: 500 var(--solo-text-control) / normal var(--solo-font-text);
+}
+
+.footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--solo-space-4);
+    padding-top: var(--solo-space-2);
+}
+
+.archived {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-fg-muted);
+    font: 500 var(--solo-text-control) / normal var(--solo-font-text);
+    cursor: pointer;
+}
+
+.archived[aria-pressed='true'] {
+    color: var(--solo-fg);
+}
+
+.archived:focus-visible,
+.cancel:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.hints {
+    display: none;
+    gap: var(--solo-space-3);
+    margin: 0;
+    color: var(--solo-fg-muted);
+    font: 500 var(--solo-text-meta) / normal var(--solo-font-text);
+}
+
+.hints b {
+    color: var(--solo-fg);
+    font-weight: 700;
+}
+
+@media (min-width: 768px) {
+    /* the scroll boxes reach past the rows' inset, or they clip the tint */
+    .palette > div {
+        margin-inline: calc(-1 * var(--solo-menu-inset, 0px));
+        padding-inline: var(--solo-menu-inset, 0px);
+    }
+
+    .results {
+        margin-inline: calc(-1 * var(--solo-menu-inset, 0px));
+        padding: 0 var(--solo-menu-inset, 0px);
+        border-radius: 0;
+        background: none;
+    }
+
+    :global([data-day]) .palette .results .row {
+        margin-inline: calc(-1 * var(--solo-menu-inset, 0px));
+        padding-inline: var(--solo-menu-inset, 0px);
+    }
+
+    :global([data-day]) .palette .group > p {
+        padding-inline: 0;
+    }
+
+    :global([data-day]) [data-slot='dialog-content'].palette {
+        --dialog-bg: var(--solo-pop-bg, var(--solo-bg));
+
+        inset: 128px auto auto 50%;
+        width: 640px;
+        height: auto;
+        max-height: calc(100dvh - 256px);
+        border: var(--solo-pop-width, 2px) solid var(--solo-pop-border, var(--solo-fg));
+        border-radius: var(--solo-dialog-radius, var(--solo-radius-xl));
+        transform: translateX(-50%);
+    }
+
+    .cancel {
+        display: none;
+    }
+
+    .hints {
+        display: flex;
+    }
+}

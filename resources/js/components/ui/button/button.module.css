@@ -57,7 +57,7 @@
 
 .destructive {
   background-color: var(--color-destructive);
-  color: var(--color-white);
+  color: var(--color-destructive-foreground);
   box-shadow: var(--shadow-xs);
 }
 

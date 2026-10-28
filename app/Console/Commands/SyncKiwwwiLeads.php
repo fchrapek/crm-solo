@@ -32,12 +32,12 @@ final class SyncKiwwwiLeads extends Command
     private const LOCK_SECONDS = 600;
 
     protected $signature = 'kiwwwi:sync-leads
-                            {--account= : The account ID to sync into (defaults to the only account)}
+                            {--account= : The account ID to sync into (defaults to the operator account, the first one)}
                             {--since= : Override the pull window start for every site (ISO 8601 / YYYY-MM-DD)}
                             {--full : Ignore previous pulls and fetch everything}
                             {--retry-failed : Put submissions that kept failing back in the retry queue}';
 
-    protected $description = 'Pull FluentForm lead submissions from the kiwwwi brand sites into the kiwwwi pipeline (operator: the account named by --account, or the only one)';
+    protected $description = 'Pull FluentForm lead submissions from the kiwwwi brand sites into the kiwwwi pipeline (the account named by --account, or the operator account)';
 
     public function handle(): int
     {
@@ -147,13 +147,8 @@ final class SyncKiwwwiLeads extends Command
             return $account;
         }
 
-        if (Account::count() > 1) {
-            $this->failWithReason('Multiple accounts exist — pass --account=.');
-
-            return null;
-        }
-
-        $account = Account::first();
+        // The forms are server configuration, so they feed the operator's account.
+        $account = Account::query()->find(Account::operatorId());
         if ($account === null) {
             $this->failWithReason('No account exists yet.');
         }

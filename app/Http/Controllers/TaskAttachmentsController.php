@@ -18,8 +18,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * Manages user-uploaded files attached to tasks — QA screenshots, PDF specs,
- * markdown notes, copy payloads, etc. Surfaced into the terminal session as
- * absolute paths via CRM_TASK.md so claude/codex can Read them on demand.
+ * markdown notes, copy payloads, etc. `crm task` lists them for an agent.
  *
  * Files live on the `local` disk at `storage/app/private/task-attachments/{task_id}/`.
  * Account scoping is via the parent task → project chain.

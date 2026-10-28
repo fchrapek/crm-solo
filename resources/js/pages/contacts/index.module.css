@@ -1,16 +1,328 @@
-.actionsCell {
-    position: relative;
-    z-index: 11;
+/* Phone first: Kontakty (Figma 473:13791), rows and the search field above the tab bar; the table from 768 px (177:74). */
+.page {
+    --kontakty-search-band: 100px;
+    min-height: 100vh;
+}
+
+.frame {
+    max-width: var(--solo-grid-max);
+    margin: 0 auto;
+    padding-inline: var(--solo-grid-margin);
+    padding-bottom: calc(var(--kontakty-search-band) - var(--solo-fab-clearance) + var(--solo-space-4));
+}
+
+/* Mobile / Nav bar, root action: + (as on Klienci) */
+.navBar {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-40);
     display: flex;
+    justify-content: flex-end;
+    margin-inline: calc(-1 * var(--solo-grid-margin));
+    padding: env(safe-area-inset-top, 0px) var(--solo-space-4) 0;
+    background: var(--solo-bg);
+}
+
+.head {
+    padding: var(--solo-space-1) 0 var(--solo-space-4);
+}
+
+.actionRow {
+    display: none;
+}
+
+.searchBar {
+    position: fixed;
+    inset-inline: 0;
+    bottom: calc(var(--solo-tab-bar-height) + env(safe-area-inset-bottom, 0px));
+    z-index: var(--z-banner);
+    display: flex;
+    align-items: flex-end;
+    height: var(--kontakty-search-band);
+    padding: 40px calc(var(--solo-space-4) + env(safe-area-inset-right, 0px)) var(--solo-space-3)
+        calc(var(--solo-space-4) + env(safe-area-inset-left, 0px));
+    background: color-mix(in srgb, var(--solo-bg) 94%, transparent);
+}
+
+.searchField {
+    display: flex;
+    flex: 1 1 auto;
     align-items: center;
-    gap: 0;
+    gap: var(--solo-space-2-5);
+    min-width: 0;
+    height: 48px;
+    padding: 0 18px 0 var(--solo-space-4);
+    border: 1px solid var(--solo-control-border, var(--solo-field-border));
+    border-radius: var(--solo-radius-full);
+    background: var(--solo-control-bg, var(--solo-field-bg));
+    color: var(--solo-fg);
 }
 
-.deleteButton {
-    background-color: var(--color-destructive);
-    color: var(--color-white);
+.searchField:focus-within {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 2px;
 }
 
-.deleteButton:hover {
-    background-color: color-mix(in srgb, var(--color-destructive) 80%, var(--color-black));
+.searchIcon {
+    flex: none;
+}
+
+.search {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--solo-fg);
+    font: 400 var(--solo-mobile-body) / 21px var(--solo-font-text);
+    outline: none;
+}
+
+.search::placeholder {
+    color: var(--solo-fg-muted);
+    opacity: 1;
+}
+
+.phoneList {
+    margin: 0;
+    padding: var(--solo-block-pad, 0);
+    border-top: 1px solid var(--solo-rule);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    list-style: none;
+}
+
+.empty {
+    padding-block: var(--solo-space-5);
+    padding-inline: var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-row);
+}
+
+.table {
+    display: none;
+    width: 100%;
+    border: var(--solo-card-width, 0) solid var(--solo-card-border, transparent);
+    border-collapse: var(--solo-table-collapse, separate);
+    border-spacing: 0;
+    border-radius: var(--solo-card-radius, 0);
+    overflow: var(--solo-table-clip, visible);
+    background: var(--solo-card, none);
+    box-shadow: var(--solo-card-shadow, none);
+    table-layout: fixed;
+}
+
+.table th {
+    padding: var(--solo-th-top, 0) var(--solo-space-4) var(--solo-space-2-5) 0;
+    border-bottom: var(--solo-head-rule, 2px) solid var(--solo-rule-strong);
+    background: var(--solo-band, none);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-label-size, var(--solo-text-label));
+    font-weight: var(--solo-label-weight, 700);
+    line-height: 1.3;
+    letter-spacing: var(--solo-label-tracking, 0.08em);
+    text-align: left;
+    text-transform: var(--solo-label-case, uppercase);
+    white-space: nowrap;
+}
+
+.table tbody tr {
+    position: relative;
+}
+
+.table th:first-child,
+.table td:first-child {
+    padding-left: var(--solo-cell-inset, var(--solo-head-inset, 0));
+}
+
+.table th:last-child,
+.table td:last-child {
+    padding-right: var(--solo-cell-inset, var(--solo-head-inset, 0));
+}
+
+.table tbody tr:last-child td {
+    border-bottom-color: var(--solo-rule-end, var(--solo-rule));
+}
+
+.table td {
+    overflow: hidden;
+    padding: var(--solo-space-3) var(--solo-space-4) var(--solo-space-3) 0;
+    border-bottom: 1px solid var(--solo-rule);
+    background: var(--solo-block, none);
+    color: var(--solo-fg);
+    font: 500 var(--solo-text-sub) / 1.35 var(--solo-font-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Figma: Kontakty columns 300 / 360 / the rest, rows 45 px, the person in Medium 15 */
+.colPerson {
+    width: 300px;
+}
+
+.colClient {
+    width: 360px;
+}
+
+.table td:first-child {
+    font-size: var(--solo-text-field);
+}
+
+.table td.muted {
+    color: var(--solo-fg-muted);
+    font-weight: 400;
+}
+
+.table tr[data-deleted] td {
+    color: var(--solo-fg-muted);
+    text-decoration: line-through;
+}
+
+/* the name button covers the row, so any cell opens the contact; the client link sits above it */
+.rowButton {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.rowButton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+}
+
+.table tbody tr:hover .rowButton {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+/* the body rows are the block: its corners on the outer cells, the hover tint across the row */
+.table tbody tr:first-child td:first-child {
+    border-top-left-radius: var(--solo-block-radius, 0);
+}
+
+.table tbody tr:first-child td:last-child {
+    border-top-right-radius: var(--solo-block-radius, 0);
+}
+
+.table tbody tr:last-child td:first-child {
+    border-bottom-left-radius: var(--solo-block-radius, 0);
+}
+
+.table tbody tr:last-child td:last-child {
+    border-bottom-right-radius: var(--solo-block-radius, 0);
+}
+
+.table tbody tr:hover td {
+    background: var(--solo-hover, none);
+}
+
+.table tbody tr:not(:last-child):hover td {
+    border-bottom-color: var(--solo-hover-rule, var(--solo-rule));
+}
+
+.table tbody tr:hover td:first-child {
+    border-radius: var(--solo-row-radius, 0) 0 0 var(--solo-row-radius, 0);
+}
+
+.table tbody tr:hover td:last-child {
+    border-radius: 0 var(--solo-row-radius, 0) var(--solo-row-radius, 0) 0;
+}
+
+.rowButton:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.clientLink {
+    position: relative;
+    z-index: 1;
+    color: var(--solo-agent);
+    font-weight: 400;
+    text-decoration: none;
+}
+
+.clientLink:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.trashed {
+    display: block;
+    margin-top: var(--solo-space-4);
+    color: var(--solo-fg-muted);
+}
+
+@media (min-width: 768px) {
+    .frame {
+        padding-bottom: 72px;
+    }
+
+    .navBar {
+        display: none;
+    }
+
+    /* the poster on the left, the search on the right of it, + Kontakt on the row above as on Klienci */
+    .head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        column-gap: var(--solo-space-6);
+        align-items: end;
+        padding: var(--solo-record-top, 79px) 0 34px;
+    }
+
+    .actionRow {
+        display: flex;
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+        min-height: 28px;
+    }
+
+    .searchBar {
+        position: static;
+        z-index: auto;
+        width: 280px;
+        height: auto;
+        padding: 0;
+        background: none;
+    }
+
+    .searchField {
+        display: contents;
+    }
+
+    .searchIcon,
+    .phoneList {
+        display: none;
+    }
+
+    .search {
+        width: min(280px, 100%);
+        height: auto;
+        padding: var(--solo-search-pad, 9px 12px);
+        border: var(--solo-boxed, 1px solid var(--solo-field-border));
+        border-bottom: var(--solo-boxed, 1px solid var(--solo-field-border));
+        border-radius: var(--solo-field-radius, var(--solo-radius-lg));
+        background: var(--solo-control-bg, var(--solo-field-bg));
+        font: 500 var(--solo-text-field) / normal var(--solo-font-text);
+    }
+
+    .search:focus-visible {
+        border-color: var(--solo-search-focus-border, var(--solo-fg));
+        border-bottom-width: var(--solo-boxed-focus, 1px);
+        margin-bottom: var(--solo-boxed-shift, 0);
+        box-shadow: var(--solo-focus-ring, 0 0 0 1px var(--solo-fg));
+    }
+
+    .table {
+        display: table;
+    }
 }

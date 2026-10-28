@@ -1,22 +1,35 @@
+/* Figma: A2f / Month card. Phones draw no calendar; from 768 px it fills its column. */
 .card {
-    display: grid;
-    gap: var(--solo-space-3);
-    width: calc(7 * var(--solo-tile-size) + 6 * var(--solo-tile-gap));
-    max-width: 100%;
+    display: none;
+    width: 100%;
+    padding: var(--solo-card-pad, 0);
+    padding-bottom: var(--solo-card-pad-end, 0);
+    border: var(--solo-card-width, 0) solid var(--solo-card-border, transparent);
+    border-radius: var(--solo-card-radius, 0);
+    background: var(--solo-card, none);
+    box-shadow: var(--solo-card-shadow, none);
 }
 
+@media (min-width: 768px) {
+    .card {
+        display: grid;
+    }
+}
+
+/* Size=Side: seven equal square tiles across the column, 8 px apart both ways */
 .grid {
     display: grid;
-    grid-template-columns: repeat(7, var(--solo-tile-size));
-    gap: var(--solo-tile-gap);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: var(--solo-space-2);
+    padding-block: var(--solo-space-3);
 }
 
 .weekday {
     text-align: center;
-    font-size: var(--solo-text-label);
+    font-size: var(--solo-text-micro);
     font-weight: 600;
+    line-height: 16px;
     color: var(--solo-fg-muted);
-    padding-bottom: var(--solo-space-1);
 }
 
 .weekend {
@@ -24,41 +37,41 @@
 }
 
 .tile {
-    width: var(--solo-tile-size);
-    height: var(--solo-tile-size);
+    aspect-ratio: 1;
     border-radius: var(--solo-radius-md);
     display: grid;
     place-items: center;
-    color: var(--solo-on-accent);
-    font-weight: 700;
+    color: var(--solo-tile-now);
 }
 
-.closed,
-.stamped {
+.closed {
     background: var(--solo-tile-done);
+    color: var(--solo-tile-tick);
 }
 
 .open {
-    box-shadow: inset 0 0 0 2px var(--solo-fg);
+    box-shadow: inset 0 0 0 2px var(--solo-tile-open, var(--solo-fg));
 }
 
 .rest {
-    box-shadow: inset 0 0 0 2px var(--solo-rule);
+    box-shadow: inset 0 0 0 2px var(--solo-line-quiet, var(--solo-rule));
 }
 
-.today {
+/* today, and today once closed with the filled checkmark-circle inside the ring */
+.today,
+.stamped {
     box-shadow: inset 0 0 0 3px var(--solo-tile-now);
 }
 
 .future {
-    outline: 2px dashed var(--solo-rule);
+    outline: 2px dashed var(--solo-line-quiet, var(--solo-rule));
     outline-offset: -2px;
 }
 
 .legend {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--solo-space-4);
+    gap: var(--solo-space-row);
     margin: var(--solo-space-1) 0 0;
     padding: 0;
     list-style: none;
@@ -84,12 +97,48 @@
 }
 
 .swatch.open {
-    box-shadow: inset 0 0 0 1.5px var(--solo-fg);
+    box-shadow: inset 0 0 0 1px var(--solo-tile-open, var(--solo-fg));
 }
 
-@media (max-width: 640px) {
-    .card {
-        --solo-tile-size: 32px;
-        --solo-tile-gap: 4px;
-    }
+/* Figma: "Cały miesiąc ↓", a typed arrow in Semi Bold 13 with the underline, on the tiles' left edge */
+.whole {
+    justify-self: start;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-fg);
+    font: 600 var(--solo-text-meta) / normal var(--solo-font-text);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+.whole:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.card [data-other-week] {
+    display: none;
+}
+
+/* Figma: Popover / Cały miesiąc (Size=Compact): the whole month at the 36 px tile, with its legend */
+:global([data-day]) .popover {
+    display: grid;
+    width: auto;
+    padding: var(--solo-space-4);
+}
+
+.popover .grid {
+    grid-template-columns: repeat(7, var(--solo-tile-size));
+    gap: var(--solo-tile-gap);
+}
+
+.monthLabel {
+    display: var(--solo-month-label, none);
+}
+
+.dayLabel {
+    display: var(--solo-day-label, inline);
 }

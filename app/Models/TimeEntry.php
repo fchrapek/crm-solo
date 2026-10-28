@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Casts\HumanizedText;
 use App\Services\Agent\AgentWriteRecorder;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -15,6 +16,7 @@ final class TimeEntry extends Model
     /** Historical: entries imported from Clockify before the integration was removed; nothing creates them now. */
     public const string SOURCE_CLOCKIFY = 'clockify';
 
+    /** Historical: entries the retired in-app terminal sessions tracked; nothing creates them now. */
     public const string SOURCE_TERMINAL_SESSION = 'terminal_session';
 
     public const string SOURCE_MANUAL = 'manual';
@@ -42,7 +44,7 @@ final class TimeEntry extends Model
     }
 
     /**
-     * Opens a running timer on a task; every start path (web, agent verbs, terminal sessions) goes through here.
+     * Opens a running timer on a task; every start path (web, agent verbs, MCP) goes through here.
      * A $requestId names one start intent: sending it again returns the timer it opened instead of a second one.
      */
     public static function startFor(Task $task, string $source = self::SOURCE_MANUAL, ?string $description = null, bool $billable = true, ?string $requestId = null): self
@@ -105,6 +107,12 @@ final class TimeEntry extends Model
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class);
+    }
+
+    /** Time a client report counts: logged on a task flagged reportable. Task-less time never is. */
+    public function scopeReportable(Builder $query): void
+    {
+        $query->whereNotNull('task_id')->whereHas('task', fn (Builder $task) => $task->where('is_reportable', true));
     }
 
     public function account(): BelongsTo

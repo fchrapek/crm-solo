@@ -227,7 +227,7 @@ export default function Edit({ lead, pipelines, source_labels, events, tier_thre
                                 {multiBrand && <span className={styles.chip}>{label('pipeline', lead.pipeline, pipeline?.label)}</span>}
                                 <span className={styles.chipMuted}>{label('source', lead.source, source_labels?.[lead.source])}</span>
                                 {lead.client && (
-                                    <Link className={styles.chipLink} href={clients.edit(lead.client.id).url}>
+                                    <Link className={styles.chipLink} href={clients.show({ client: lead.client.id, tab: 'przeglad' }).url}>
                                         <Building2 size={12} /> {lead.client.name}
                                     </Link>
                                 )}

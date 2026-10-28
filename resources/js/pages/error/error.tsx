@@ -1,6 +1,9 @@
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 
+import { Masthead } from '@/components/solo/masthead';
+import { Poster } from '@/components/solo/primitives';
+import { SoloSurface } from '@/components/solo/surface';
 import { dashboard, login } from '@/routes';
 import { SharedData } from '@/types';
 
@@ -10,37 +13,34 @@ interface ErrorPageProps extends Partial<SharedData> {
     status: number;
 }
 
+const LINE: Record<number, string> = {
+    503: 'We are doing some maintenance. Try again in a moment.',
+    500: 'Something went wrong on our side. Try again in a moment.',
+    429: 'Too many requests at once. Try again in a moment.',
+    404: 'This page does not exist or has moved.',
+    403: 'This page does not belong to your account.',
+};
+
+/** Figma: Błąd 404 / 403 / 500 (581:17161, 581:17188, 581:17215; phones 581:17242 on). A guest gets no masthead and a link to log in. */
 export default function ErrorPage({ status, auth }: ErrorPageProps) {
     const { t } = useTranslation();
     // Shared props are absent when the error fires before the Inertia middleware, so treat that as a guest.
     const signedIn = Boolean(auth?.user);
-
-    const title = {
-        503: t('503: Service Unavailable'),
-        500: t('500: Server Error'),
-        429: t('429: Too Many Requests'),
-        404: t('404: Page Not Found'),
-        403: t('403: Forbidden'),
-    }[status];
-
-    const description = {
-        503: t('Sorry, we are doing some maintenance. Please check back soon.'),
-        500: t('Whoops, something went wrong on our servers.'),
-        429: t('Sorry, you are making too many requests to our servers.'),
-        404: t('Sorry, the page you are looking for could not be found.'),
-        403: t('Sorry, you are forbidden from accessing this page.'),
-    }[status];
+    const line = t(LINE[status] ?? LINE[500]);
 
     return (
-        <div className={styles.container}>
-            <Head title={title} />
-            <div className={styles.content}>
-                <h1 className={styles.title}>{title}</h1>
-                <p className={styles.description}>{description}</p>
-                <a className={styles.link} href={signedIn ? dashboard().url : login().url}>
-                    {signedIn ? t('Back to today') : t('Log in')}
-                </a>
+        <SoloSurface className={styles.page} day="paper">
+            <Head title={`${status}`} />
+            <div className={styles.frame}>
+                {signedIn && <Masthead current={null} />}
+                <main className={styles.main}>
+                    <Poster size="display">{status}</Poster>
+                    <p className={styles.line}>{line}</p>
+                    <Link className={styles.link} href={signedIn ? dashboard() : login()}>
+                        {signedIn ? t('Back to Today') : t('Log in')} →
+                    </Link>
+                </main>
             </div>
-        </div>
+        </SoloSurface>
     );
 }

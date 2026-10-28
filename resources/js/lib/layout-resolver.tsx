@@ -16,7 +16,20 @@ export function applyLayoutToPage(module: unknown, pageName: string): void {
         pageName.toLowerCase().includes('verification');
 
     // Solo pages draw their own masthead and colour, and the error page is shown to guests while the app shell needs a signed-in user.
-    const isBarePage = pageName.startsWith('today/') || pageName === 'auth/login' || pageName === 'auth/czesc' || pageName === 'error';
+    const isBarePage =
+        pageName.startsWith('today/') ||
+        pageName === 'clients/index' ||
+        pageName === 'clients/show' ||
+        pageName === 'tasks/show' ||
+        pageName === 'project-board/show' ||
+        pageName === 'clients/reports/edit' ||
+        pageName === 'month-close/index' ||
+        pageName === 'settings/index' ||
+        pageName === 'contacts/index' ||
+        pageName === 'messages/index' ||
+        pageName === 'auth/login' ||
+        pageName === 'auth/czesc' ||
+        pageName === 'error';
 
     (module as PageModule).default.layout = (page: React.ReactNode) => {
         if (isBarePage) {

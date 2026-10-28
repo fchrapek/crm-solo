@@ -64,17 +64,15 @@ final class TaskCardOwnershipTest extends TestCase
         $this->assertSame('Renamed', $task->fresh()->name);
     }
 
-    public function test_pages_tell_the_frontend_which_tasks_are_cards(): void
+    public function test_the_task_page_tells_the_frontend_a_task_is_a_card_by_its_card_id_not_its_source(): void
     {
         $card = Task::create(['project_id' => $this->project->id, 'name' => 'Card', 'source' => 'manual', 'trello_card_id' => 'c1']);
-        Task::create(['project_id' => $this->project->id, 'name' => 'Local', 'source' => 'trello']);
+        $local = Task::create(['project_id' => $this->project->id, 'name' => 'Local', 'source' => 'trello']);
 
-        $this->actingAs($this->user)->get("/clients/{$this->client->id}/projects/{$this->project->id}")
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('tasks', fn ($tasks) => collect($tasks)->pluck('has_trello_card', 'name')->all() === ['Card' => true, 'Local' => false])
-            );
         $this->actingAs($this->user)->get("/tasks/{$card->id}")
             ->assertInertia(fn (Assert $page) => $page->where('task.has_trello_card', true));
+        $this->actingAs($this->user)->get("/tasks/{$local->id}")
+            ->assertInertia(fn (Assert $page) => $page->where('task.has_trello_card', false));
     }
 
     public function test_a_finished_card_reads_done_in_its_parents_child_list(): void

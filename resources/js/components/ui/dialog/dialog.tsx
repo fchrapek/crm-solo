@@ -1,7 +1,9 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { XIcon } from 'lucide-react';
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 
+import { useSoloPortalSurface } from '@/components/solo/surface';
+import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/utils';
 import styles from './dialog.module.css';
 
@@ -37,28 +39,47 @@ function DialogOverlay({
 function DialogContent({
     className,
     children,
+    closeButton = true,
     ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+}: React.ComponentProps<typeof DialogPrimitive.Content> & {
+    /** false: no × in the corner, for a dialog that closes another way (the ⌘K palette's Esc and Anuluj). */
+    closeButton?: boolean;
+}) {
+    const { t } = useTranslation();
+    const container = useSoloPortalSurface();
+
     return (
-        <DialogPortal data-slot="dialog-portal">
+        <DialogPortal data-slot="dialog-portal" container={container}>
             <DialogOverlay />
             <DialogPrimitive.Content
                 data-slot="dialog-content"
                 className={cn(styles.content, className)}
                 {...props}
             >
-                {children}
-                <DialogPrimitive.Close className={styles.closeButton}>
-                    <XIcon />
-                    <span className="sr-only">Close</span>
-                </DialogPrimitive.Close>
+                <div className={styles.scroll}>{children}</div>
+                {closeButton && (
+                    <DialogPrimitive.Close className={styles.closeButton}>
+                        <Icon name="close" size={16} />
+                        <span className="sr-only">{t('Close')}</span>
+                    </DialogPrimitive.Close>
+                )}
             </DialogPrimitive.Content>
         </DialogPortal>
     );
 }
 
+/** Must be the first child of DialogContent: the close button is pinned beside the title, and the header's right padding keeps the title clear of it. */
 function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
     return <div data-slot="dialog-header" className={cn(styles.header, className)} {...props} />;
+}
+
+/** A form spanning the body and the footer; it stays inside the dialog's height so only DialogBody scrolls. */
+function DialogForm({ className, ...props }: React.ComponentProps<'form'>) {
+    return <form data-slot="dialog-form" className={cn(styles.form, className)} {...props} />;
+}
+
+function DialogBody({ className, ...props }: React.ComponentProps<'div'>) {
+    return <div data-slot="dialog-body" className={cn(styles.body, className)} {...props} />;
 }
 
 function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
@@ -90,10 +111,12 @@ function DialogDescription({
 
 export {
     Dialog,
+    DialogBody,
     DialogClose,
     DialogContent,
     DialogDescription,
     DialogFooter,
+    DialogForm,
     DialogHeader,
     DialogOverlay,
     DialogPortal,

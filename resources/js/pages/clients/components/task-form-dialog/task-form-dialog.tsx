@@ -1,13 +1,13 @@
 import { router } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { FormInput, FormLabel, FormMessage } from '@/components/form';
-import { Button } from '@/components/ui/button';
+import { fieldControl, SoloField, SoloFieldRow, SoloInput } from '@/components/solo/field';
+import { SoloButton } from '@/components/solo/primitives';
+import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
+import { ResponsiveSelect } from '@/components/solo/responsive-select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MarkdownTextarea } from '@/components/ui/markdown-textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { listLaneLabel } from '@/lib/list-lane-label';
 
 import styles from './task-form-dialog.module.css';
@@ -15,6 +15,7 @@ import styles from './task-form-dialog.module.css';
 const STATUSES = ['Backlog', 'To-Do', 'Doing', 'Testing', 'Done'] as const;
 type Status = (typeof STATUSES)[number];
 type Priority = '' | 'low' | 'medium' | 'high';
+const NONE = 'none';
 
 /**
  * Values the dialog edits. Agent-side fields (prompt, repo, base branch,
@@ -40,6 +41,21 @@ export interface TaskDialogValues {
     is_reportable?: boolean;
 }
 
+function valuesFrom(initial?: Partial<TaskDialogValues>): TaskDialogValues {
+    return {
+        id: initial?.id,
+        name: initial?.name ?? '',
+        description: initial?.description ?? '',
+        list_name: initial?.list_name ?? 'To-Do',
+        due_date: initial?.due_date ? initial.due_date.slice(0, 10) : '',
+        priority: initial?.priority ?? '',
+        parent_task_id: initial?.parent_task_id ?? null,
+        is_agent_ready: initial?.is_agent_ready ?? false,
+        source: initial?.source ?? null,
+        is_reportable: initial?.is_reportable ?? false,
+    };
+}
+
 export interface TaskParentOption {
     id: number;
     name: string;
@@ -52,43 +68,34 @@ interface Props {
     initial?: Partial<TaskDialogValues>;
     parentOptions?: TaskParentOption[];
     mode: 'create' | 'edit';
+    /** A create from a page that spans projects picks one; with a single project there is nothing to pick. */
+    projects?: { id: number; name: string }[];
+    /** Below 768 px the same form opens in a Solo bottom sheet (Solo pages only). */
+    sheet?: boolean;
 }
 
-export function TaskFormDialog({ open, onOpenChange, projectId, initial, parentOptions = [], mode }: Props) {
+/** Figma: Nowe zadanie, dialog 770:56871, sheet 747:18916. */
+
+export function TaskFormDialog({ open, onOpenChange, projectId, initial, parentOptions = [], mode, projects = [], sheet = false }: Props) {
     const { t } = useTranslation();
-    const [values, setValues] = useState<TaskDialogValues>({
-        name: '',
-        description: '',
-        list_name: 'To-Do',
-        due_date: '',
-        priority: '',
-        parent_task_id: null,
-        is_agent_ready: false,
-        source: null,
-        is_reportable: false,
-    });
+    const [values, setValues] = useState(() => valuesFrom(initial));
     const [errors, setErrors] = useState<Partial<Record<keyof TaskDialogValues, string>>>({});
+    const [pickedProjectId, setPickedProjectId] = useState<number | undefined>();
     const [processing, setProcessing] = useState(false);
+    const targetProjectId = projectId ?? pickedProjectId ?? projects[0]?.id;
 
-    useEffect(() => {
+    // The draft resets when the dialog opens; fresh props while it is open, a validation response included, keep it.
+    const [wasOpen, setWasOpen] = useState(open);
+    if (open !== wasOpen) {
+        setWasOpen(open);
         if (open) {
-            setValues({
-                id: initial?.id,
-                name: initial?.name ?? '',
-                description: initial?.description ?? '',
-                list_name: (initial?.list_name as Status) ?? 'To-Do',
-                due_date: initial?.due_date ? initial.due_date.slice(0, 10) : '',
-                priority: (initial?.priority as Priority) ?? '',
-                parent_task_id: initial?.parent_task_id ?? null,
-                is_agent_ready: initial?.is_agent_ready ?? false,
-                source: initial?.source ?? null,
-                is_reportable: initial?.is_reportable ?? false,
-            });
+            setValues(valuesFrom(initial));
             setErrors({});
+            setPickedProjectId(undefined);
         }
-    }, [open, initial]);
+    }
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = (e: FormEvent) => {
         e.preventDefault();
         setProcessing(true);
 
@@ -112,8 +119,8 @@ export function TaskFormDialog({ open, onOpenChange, projectId, initial, parentO
             onOpenChange(false);
         };
 
-        if (mode === 'create' && projectId !== undefined) {
-            router.post(`/projects/${projectId}/tasks`, payload, {
+        if (mode === 'create' && targetProjectId !== undefined) {
+            router.post(`/projects/${targetProjectId}/tasks`, payload, {
                 preserveScroll: true,
                 onSuccess,
                 onError,
@@ -127,150 +134,144 @@ export function TaskFormDialog({ open, onOpenChange, projectId, initial, parentO
         }
     };
 
+    const title = mode === 'create' ? t('New task') : t('Edit task');
+
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>{mode === 'create' ? t('New task') : t('Edit task')}</DialogTitle>
-                </DialogHeader>
+        <ResponsiveDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title={title}
+            onSubmit={handleSubmit}
+            sheet={sheet}
+            sheetAction="save"
+            saving={processing}
+            fields
+            footerClassName={styles.actions}
+            actions={(size) => (
+                <>
+                    <SoloButton variant="pill" onClick={() => onOpenChange(false)} disabled={processing}>
+                        {t('Cancel')}
+                    </SoloButton>
+                    <SoloButton type="submit" variant="ink" size={size} disabled={processing}>
+                        {processing ? t('Saving…') : t('Save')}
+                    </SoloButton>
+                </>
+            )}
+        >
+            {mode === 'create' && projectId === undefined && projects.length > 1 && (
+                <SoloField label={t('Project')} htmlFor="task-project">
+                    <ResponsiveSelect
+                        label={t('Project')}
+                        value={String(targetProjectId)}
+                        onValueChange={(v) => setPickedProjectId(Number(v))}
+                        disabled={processing}
+                        sheet={sheet}
+                        control={fieldControl('task-project')}
+                        options={projects.map((project) => ({ value: String(project.id), label: project.name }))}
+                    />
+                </SoloField>
+            )}
 
-                <form onSubmit={handleSubmit} className={styles.form}>
-                    <div>
-                        <FormLabel htmlFor="task-name" error={errors.name}>
-                            {t('Name')}
-                        </FormLabel>
-                        <FormInput
-                            id="task-name"
-                            type="text"
-                            value={values.name}
-                            onChange={(e) => setValues({ ...values, name: e.target.value })}
-                            required
-                            autoFocus
-                            maxLength={500}
-                            disabled={processing}
-                            error={errors.name}
-                        />
-                        <FormMessage error={errors.name} />
-                    </div>
+            <SoloField label={t('Name')} htmlFor="task-name" error={errors.name}>
+                <SoloInput
+                    {...fieldControl('task-name', errors.name)}
+                    type="text"
+                    value={values.name}
+                    onChange={(e) => setValues({ ...values, name: e.target.value })}
+                    required
+                    autoFocus
+                    maxLength={500}
+                    disabled={processing}
+                />
+            </SoloField>
 
-                    <div>
-                        <FormLabel htmlFor="task-description">{t('Description')}</FormLabel>
-                        <MarkdownTextarea
-                            id="task-description"
-                            value={values.description}
-                            onChange={(value) => setValues({ ...values, description: value })}
-                            rows={4}
-                            disabled={processing}
-                        />
-                        <FormMessage error={errors.description} />
-                    </div>
+            <SoloField label={t('Description')} htmlFor="task-description" error={errors.description}>
+                <MarkdownTextarea
+                    {...fieldControl('task-description', errors.description)}
+                    look="solo"
+                    value={values.description}
+                    onChange={(value) => setValues({ ...values, description: value })}
+                    rows={4}
+                    disabled={processing}
+                />
+            </SoloField>
 
-                    <div className={styles.metaGrid}>
-                        <div>
-                            <FormLabel htmlFor="task-parent">{t('Parent task')}</FormLabel>
-                            <Select
-                                value={values.parent_task_id ? String(values.parent_task_id) : 'none'}
-                                onValueChange={(v) => setValues({ ...values, parent_task_id: v === 'none' ? null : Number(v) })}
-                                disabled={processing}
-                            >
-                                <SelectTrigger id="task-parent">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">{t('No parent')}</SelectItem>
-                                    {parentOptions
-                                        .filter((option) => option.id !== values.id)
-                                        .map((option) => (
-                                            <SelectItem key={option.id} value={String(option.id)}>
-                                                {option.name}
-                                            </SelectItem>
-                                        ))}
-                                </SelectContent>
-                            </Select>
-                            <FormMessage error={errors.parent_task_id} />
-                        </div>
+            <SoloFieldRow>
+                <SoloField label={t('Parent task')} htmlFor="task-parent" error={errors.parent_task_id}>
+                    <ResponsiveSelect
+                        label={t('Parent task')}
+                        value={values.parent_task_id ? String(values.parent_task_id) : NONE}
+                        onValueChange={(v) => setValues({ ...values, parent_task_id: v === NONE ? null : Number(v) })}
+                        disabled={processing}
+                        sheet={sheet}
+                        control={fieldControl('task-parent', errors.parent_task_id)}
+                        options={[
+                            { value: NONE, label: t('No parent') },
+                            ...parentOptions
+                                .filter((option) => option.id !== values.id)
+                                .map((option) => ({ value: String(option.id), label: option.name })),
+                        ]}
+                    />
+                </SoloField>
 
-                        <div>
-                            <FormLabel htmlFor="task-status">{t('Status')}</FormLabel>
-                            <Select
-                                value={values.list_name}
-                                onValueChange={(v) => setValues({ ...values, list_name: v as Status })}
-                                disabled={processing}
-                            >
-                                <SelectTrigger id="task-status">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {STATUSES.map((s) => (
-                                        <SelectItem key={s} value={s}>
-                                            {listLaneLabel(t, s)}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <FormMessage error={errors.list_name} />
-                        </div>
+                <SoloField label={t('Status')} htmlFor="task-status" error={errors.list_name}>
+                    <ResponsiveSelect
+                        label={t('Status')}
+                        value={values.list_name}
+                        onValueChange={(v) => setValues({ ...values, list_name: v as Status })}
+                        disabled={processing}
+                        sheet={sheet}
+                        control={fieldControl('task-status', errors.list_name)}
+                        options={STATUSES.map((status) => ({ value: status, label: listLaneLabel(t, status) }))}
+                    />
+                </SoloField>
+            </SoloFieldRow>
 
-                        <div>
-                            <FormLabel htmlFor="task-priority">{t('Priority')}</FormLabel>
-                            <Select
-                                value={values.priority || 'none'}
-                                onValueChange={(v) => setValues({ ...values, priority: v === 'none' ? '' : (v as Priority) })}
-                                disabled={processing}
-                            >
-                                <SelectTrigger id="task-priority">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">{t('None')}</SelectItem>
-                                    <SelectItem value="low">{t('Low')}</SelectItem>
-                                    <SelectItem value="medium">{t('Medium')}</SelectItem>
-                                    <SelectItem value="high">{t('High')}</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <FormMessage error={errors.priority} />
-                        </div>
+            <SoloFieldRow>
+                <SoloField label={t('Priority')} htmlFor="task-priority" error={errors.priority}>
+                    <ResponsiveSelect
+                        label={t('Priority')}
+                        value={values.priority || NONE}
+                        onValueChange={(v) => setValues({ ...values, priority: v === NONE ? '' : (v as Priority) })}
+                        disabled={processing}
+                        sheet={sheet}
+                        control={fieldControl('task-priority', errors.priority)}
+                        options={[
+                            { value: NONE, label: t('No priority set') },
+                            { value: 'low', label: t('Low') },
+                            { value: 'medium', label: t('Medium') },
+                            { value: 'high', label: t('High') },
+                        ]}
+                    />
+                </SoloField>
 
-                        <div>
-                            <FormLabel htmlFor="task-due">{t('Due date')}</FormLabel>
-                            <FormInput
-                                id="task-due"
-                                type="date"
-                                value={values.due_date}
-                                onChange={(e) => setValues({ ...values, due_date: e.target.value })}
-                                disabled={processing}
-                                error={errors.due_date}
-                            />
-                            <FormMessage error={errors.due_date} />
-                        </div>
-                    </div>
+                <SoloField label={t('Due date')} htmlFor="task-due" error={errors.due_date}>
+                    <SoloInput
+                        {...fieldControl('task-due', errors.due_date)}
+                        type="date"
+                        value={values.due_date}
+                        onChange={(e) => setValues({ ...values, due_date: e.target.value })}
+                        disabled={processing}
+                    />
+                </SoloField>
+            </SoloFieldRow>
 
-                    <label className={styles.reportableRow}>
-                        <Checkbox
-                            checked={values.is_reportable ?? false}
-                            onCheckedChange={(checked) => setValues({ ...values, is_reportable: checked === true })}
-                            disabled={processing}
-                        />
-                        <span className={styles.reportableLabel}>
-                            <strong>{t('Include in client report')}</strong>
-                            <span className={styles.reportableHint}>
-                                {t(
-                                    'Off by default. Baseline retainer activities (monitoring, backups, updates) are covered by the baseline scope and stay off.',
-                                )}
-                            </span>
-                        </span>
-                    </label>
-
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={processing}>
-                            {t('Cancel')}
-                        </Button>
-                        <Button type="submit" disabled={processing}>
-                            {processing ? t('Saving...') : t('Save')}
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
+            <label className={styles.reportableRow}>
+                <Checkbox
+                    className={styles.reportableCheck}
+                    checked={values.is_reportable ?? false}
+                    onCheckedChange={(checked) => setValues({ ...values, is_reportable: checked === true })}
+                    disabled={processing}
+                />
+                <span className={styles.reportableLabel}>
+                    <span className={styles.reportableTitle}>{t('Include in client report')}</span>
+                    <span className={styles.reportableHint}>
+                        {t(
+                            'Off by default. Baseline retainer activities (monitoring, backups, updates) are covered by the baseline scope and stay off.',
+                        )}
+                    </span>
+                </span>
+            </label>
+        </ResponsiveDialog>
     );
 }

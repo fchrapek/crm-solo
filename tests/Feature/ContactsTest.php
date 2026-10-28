@@ -68,8 +68,9 @@ final class ContactsTest extends TestCase
                     ->where('phone', '555-111-2222')
                     ->where('city', 'Murphyland')
                     ->where('deleted_at', null)
+                    ->etc()
                     ->has('client', fn (Assert $assert) => $assert
-                        ->where('name', 'Example Client Inc.')
+                        ->where('name', 'Example Client')
                         ->etc()
                     )
                 )
@@ -79,8 +80,9 @@ final class ContactsTest extends TestCase
                     ->where('phone', '555-333-4444')
                     ->where('city', 'Woodstock')
                     ->where('deleted_at', null)
+                    ->etc()
                     ->has('client', fn (Assert $assert) => $assert
-                        ->where('name', 'Example Client Inc.')
+                        ->where('name', 'Example Client')
                         ->etc()
                     )
                 )
@@ -101,8 +103,9 @@ final class ContactsTest extends TestCase
                     ->where('phone', '555-111-2222')
                     ->where('city', 'Murphyland')
                     ->where('deleted_at', null)
+                    ->etc()
                     ->has('client', fn (Assert $assert) => $assert
-                        ->where('name', 'Example Client Inc.')
+                        ->where('name', 'Example Client')
                         ->etc()
                     )
                 )
@@ -200,5 +203,84 @@ final class ContactsTest extends TestCase
                 ->where('contacts.data.0.name', 'Martin Abbott')
                 ->where('contacts.data.1.name', 'Lynn Kub')
             );
+    }
+
+    public function test_the_deleted_contacts_filter_is_echoed_so_a_search_keeps_it_and_takes_no_other_value(): void
+    {
+        $this->user->account->contacts()->firstWhere('first_name', 'Martin')->delete();
+
+        $this->actingAs($this->user)->get('/contacts?trashed=with&search=abbott')
+            ->assertInertia(fn (Assert $assert) => $assert->where('filters', ['search' => 'abbott', 'trashed' => 'with'])->has('contacts.data', 1));
+        $this->actingAs($this->user)->get('/contacts?trashed=only')
+            ->assertInertia(fn (Assert $assert) => $assert->where('filters.trashed', null)->has('contacts.data', 1));
+    }
+
+    public function test_search_matches_every_word_against_the_person_the_email_or_the_client(): void
+    {
+        $other = $this->user->account->clients()->create(['name' => 'Piekarnia Przykładowa']);
+        $this->user->account->contacts()->create(['client_id' => $other->id, 'first_name' => 'Anna', 'last_name' => 'Abbott', 'emails' => ['anna@piekarnia.test']]);
+
+        $names = fn (string $search) => collect($this->actingAs($this->user)->get('/contacts?search='.urlencode($search))->viewData('page')['props']['contacts']['data'])->pluck('name')->all();
+
+        $this->assertSame(['Anna Abbott'], $names('piekarnia'));
+        $this->assertSame(['Anna Abbott', 'Martin Abbott'], $names('abbott'));
+        $this->assertSame(['Martin Abbott'], $names('martin abbott'));
+        $this->assertSame(['Lynn Kub'], $names('lynn.kub@'));
+        $this->assertSame(['Martin Abbott', 'Lynn Kub'], $names('example client'));
+    }
+
+    public function test_the_client_list_for_the_form_holds_only_the_accounts_clients(): void
+    {
+        Account::create(['name' => 'Other'])->clients()->create(['name' => 'Foreign Ltd']);
+
+        $this->actingAs($this->user)->get('/contacts')
+            ->assertInertia(fn (Assert $assert) => $assert->where('clients', [['id' => $this->user->account->clients()->first()->id, 'name' => 'Example Client']])->where('opened', null));
+    }
+
+    public function test_kontakt_opens_the_form_for_a_new_or_an_existing_contact_of_the_account(): void
+    {
+        $contact = $this->user->account->contacts()->firstWhere('first_name', 'Lynn');
+        $contact->delete();
+
+        $this->actingAs($this->user)->get('/contacts?kontakt=new')->assertInertia(fn (Assert $assert) => $assert->where('opened', 'new'));
+        $this->actingAs($this->user)->get("/contacts?kontakt={$contact->id}")
+            ->assertInertia(fn (Assert $assert) => $assert
+                ->where('opened.id', $contact->id)
+                ->where('opened.address', '199 Connelly Turnpike')
+                ->whereNot('opened.deleted_at', null));
+
+        $foreign = Account::create(['name' => 'Other'])->contacts()->create(['first_name' => 'Not', 'last_name' => 'Yours']);
+        $this->actingAs($this->user)->get("/contacts?kontakt={$foreign->id}")->assertNotFound();
+    }
+
+    public function test_the_old_create_and_edit_urls_open_the_form_on_the_list(): void
+    {
+        $contact = $this->user->account->contacts()->firstWhere('first_name', 'Martin');
+        $foreign = Account::create(['name' => 'Other'])->contacts()->create(['first_name' => 'Not', 'last_name' => 'Yours']);
+
+        $this->actingAs($this->user)->get('/contacts/create')->assertRedirect('/contacts?kontakt=new');
+        $this->actingAs($this->user)->get("/contacts/{$contact->id}/edit")->assertRedirect("/contacts?kontakt={$contact->id}");
+        $this->actingAs($this->user)->get("/contacts/{$foreign->id}/edit")->assertNotFound();
+    }
+
+    public function test_the_edit_form_saves_the_address_and_notes_and_a_deleted_contact_comes_back(): void
+    {
+        $contact = $this->user->account->contacts()->firstWhere('first_name', 'Martin');
+
+        $this->actingAs($this->user)->from('/contacts')
+            ->put("/contacts/{$contact->id}", [
+                'first_name' => 'Martin', 'last_name' => 'Abbott', 'client_id' => null, 'emails' => ['martin.abbott@example.com'],
+                'city' => 'Łódź', 'postal_code' => '90-001', 'phone_secondary' => '+48 100 000 104', 'notes' => 'Prefers calls',
+            ])
+            ->assertRedirect('/contacts');
+
+        $fresh = $contact->fresh();
+        $this->assertNull($fresh->client_id);
+        $this->assertSame(['Łódź', '90-001', '+48 100 000 104', 'Prefers calls'], [$fresh->city, $fresh->postal_code, $fresh->phone_secondary, $fresh->notes]);
+
+        $this->actingAs($this->user)->from('/contacts')->delete("/contacts/{$contact->id}")->assertRedirect('/contacts');
+        $this->assertSoftDeleted($contact);
+        $this->actingAs($this->user)->from('/contacts')->put("/contacts/{$contact->id}/restore")->assertRedirect('/contacts');
+        $this->assertNotSoftDeleted($contact);
     }
 }

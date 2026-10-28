@@ -74,6 +74,17 @@ final class KiwwwiLeadSyncTest extends TestCase
         $this->assertSame('ads', $lead->source);
     }
 
+    public function test_with_a_second_account_the_pull_still_lands_in_the_operator_account(): void
+    {
+        $second = Account::create(['name' => 'Second']);
+        $this->fakeEndpoint([$this->form3Submission()]);
+
+        $this->artisan('kiwwwi:sync-leads')->assertSuccessful();
+
+        $this->assertSame(1, Lead::query()->where('account_id', $this->account->id)->count());
+        $this->assertSame(0, Lead::query()->where('account_id', $second->id)->count());
+    }
+
     public function test_happy_path_maps_both_forms_into_kiwwwi_leads(): void
     {
         $this->fakeEndpoint([$this->form3Submission(), $this->form6Submission()]);

@@ -9,6 +9,7 @@ use App\Http\Resources\LeadCollection;
 use App\Models\Client;
 use App\Models\Lead;
 use App\Models\LeadStageEvent;
+use App\Services\Leads\LeadVocabulary;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator as LengthAwarePaginatorContract;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -80,7 +81,7 @@ final class LeadsController extends Controller
             // only diverge for non-canonical custom stages anyway).
             'stages' => Lead::unifiedRowStages(),
             'stage_labels' => (object) $this->mergedStageLabels(),
-            'sources' => Lead::sources(),
+            'sources' => Lead::sources(Auth::user()->account_id),
             'source_labels' => $this->sourceLabels(),
             'tiers' => Lead::TIERS,
             'leads' => new LeadCollection($leads),
@@ -91,7 +92,7 @@ final class LeadsController extends Controller
     {
         return Inertia::render('leads/create', [
             'pipelines' => $this->pipelineMeta(),
-            'sources' => Lead::sources(),
+            'sources' => Lead::sources(Auth::user()->account_id),
             'source_labels' => $this->sourceLabels(),
             'pipeline' => Request::input('pipeline', Lead::pipelines()[0] ?? ''),
         ]);
@@ -252,7 +253,7 @@ final class LeadsController extends Controller
         }
 
         if ($lead->client_id !== null) {
-            return Redirect::route('clients.edit', $lead->client_id);
+            return Redirect::route('clients.show', [$lead->client_id, 'przeglad']);
         }
 
         $client = DB::transaction(function () use ($lead): Client {
@@ -270,7 +271,7 @@ final class LeadsController extends Controller
             return $client;
         });
 
-        return Redirect::route('clients.edit', $client->id)
+        return Redirect::route('clients.show', [$client->id, 'dane'])
             ->with('success', __('Lead converted to client'));
     }
 
@@ -311,7 +312,7 @@ final class LeadsController extends Controller
 
             return [
                 'key' => $key,
-                'label' => $config['label'] ?? null,
+                'label' => LeadVocabulary::pipelineLabel(Auth::user()->account_id, $key),
                 'stages' => Lead::rowStages($key),
                 'won_stage' => Lead::wonStage($key),
                 // The scoring map travels with the pipeline so the checkbox group
@@ -337,7 +338,7 @@ final class LeadsController extends Controller
      */
     private function sourceLabels(): object
     {
-        return (object) config('leadgen.source_labels', []);
+        return (object) LeadVocabulary::sourceLabels(Auth::user()->account_id);
     }
 
     /** @return array<string, string> */

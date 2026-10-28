@@ -14,7 +14,9 @@ use App\Models\User;
 use App\Services\Reports\Composers\AiNarrativeComposer;
 use App\Services\Reports\Composers\StructuredListComposer;
 use App\Services\Reports\NarrativePromptResolver;
+use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -127,6 +129,68 @@ final class ClientReportsControllerTest extends TestCase
             ->assertSessionHasErrors('period_type');
 
         $this->assertSame(0, $this->client->reports()->count());
+    }
+
+    public function test_a_report_must_cover_one_whole_month(): void
+    {
+        $post = fn (string $start, string $end) => $this->actingAs($this->user)
+            ->post("/clients/{$this->client->id}/reports", ['period_type' => 'month', 'period_start' => $start, 'period_end' => $end]);
+
+        $post('2026-09-02', '2026-09-30')->assertSessionHasErrors('period_start');
+        $post('2026-09-01', '2026-09-29')->assertSessionHasErrors('period_end');
+        $post('2026-09-01', '2026-10-31')->assertSessionHasErrors('period_end');
+        $post('2026-09-01', 'next week')->assertSessionHasErrors('period_end');
+        $this->assertSame(0, ClientReport::count());
+
+        $post('2026-02-01', '2026-02-28')->assertSessionHasNoErrors();
+        $this->assertSame(1, ClientReport::count());
+    }
+
+    public function test_malformed_report_periods_are_validation_errors_not_crashes(): void
+    {
+        $post = fn (mixed $start, mixed $end) => $this->actingAs($this->user)
+            ->post("/clients/{$this->client->id}/reports", ['period_type' => 'month', 'period_start' => $start, 'period_end' => $end]);
+
+        $post(['2026-09-01'], '2026-09-30')->assertSessionHasErrors('period_start');
+        $post('2026-09-01', ['2026-09-30'])->assertSessionHasErrors('period_end');
+        $post(['2026-09-01'], ['2026-09-30'])->assertSessionHasErrors(['period_start', 'period_end']);
+        $post('2026-02-29', '2026-02-28')->assertSessionHasErrors('period_start');
+        $post("2026-09\u{0}-01", '2026-09-30')->assertSessionHasErrors('period_start');
+        $post('2026-09-01', "2026-09\u{0}-30")->assertSessionHasErrors('period_end');
+        $this->assertSame(0, ClientReport::count());
+    }
+
+    public function test_a_leap_february_ends_on_the_twenty_ninth(): void
+    {
+        $post = fn (string $end) => $this->actingAs($this->user)
+            ->post("/clients/{$this->client->id}/reports", ['period_type' => 'month', 'period_start' => '2028-02-01', 'period_end' => $end]);
+
+        $post('2028-02-28')->assertSessionHasErrors('period_end');
+        $post('2028-02-29')->assertSessionHasNoErrors();
+        $this->assertSame(1, ClientReport::count());
+    }
+
+    public function test_generating_a_month_that_has_a_report_opens_that_report_instead_of_a_second(): void
+    {
+        $existing = $this->makeReport(ClientReport::STATUS_FINALIZED);
+
+        $this->actingAs($this->user)
+            ->post("/clients/{$this->client->id}/reports", ['period_type' => 'month', 'period_start' => '2026-03-01', 'period_end' => '2026-03-31'])
+            ->assertRedirect("/clients/{$this->client->id}/reports/{$existing->id}")
+            ->assertSessionHas('error');
+
+        $this->assertSame(1, ClientReport::count());
+        $this->assertSame(3.0, (float) $existing->fresh()->actual_hours);
+    }
+
+    public function test_the_duplicate_guard_opens_the_report_the_bank_reads_not_the_newest_draft(): void
+    {
+        $sent = $this->makeReport(ClientReport::STATUS_SENT);
+        $this->makeReport(ClientReport::STATUS_DRAFT);
+
+        $this->actingAs($this->user)
+            ->post("/clients/{$this->client->id}/reports", ['period_type' => 'month', 'period_start' => '2026-03-01', 'period_end' => '2026-03-31'])
+            ->assertRedirect("/clients/{$this->client->id}/reports/{$sent->id}");
     }
 
     public function test_update_saves_the_edited_body_when_status_is_draft(): void
@@ -545,6 +609,50 @@ final class ClientReportsControllerTest extends TestCase
         $this->assertCount(0, $fresh->revisions);
     }
 
+    public function test_regenerate_refuses_when_the_report_was_sent_while_composing(): void
+    {
+        $report = $this->makeReport(ClientReport::STATUS_FINALIZED);
+        $this->composeWith(function () use ($report): void {
+            ClientReport::query()->whereKey($report->id)->update(['status' => ClientReport::STATUS_SENT, 'sent_at' => now()]);
+        });
+
+        $this->actingAs($this->user)
+            ->post("/clients/{$this->client->id}/reports/{$report->id}/regenerate")
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $fresh = $report->fresh();
+        $this->assertSame("# March 2026\n\nseed body", $fresh->body_markdown);
+        $this->assertCount(0, $fresh->revisions);
+    }
+
+    public function test_every_report_write_locks_the_client_row_before_the_report_row(): void
+    {
+        $made = $this->makeReport();
+        $tables = [];
+        // The lock reads by the qualified key; route binding reads by a bare id.
+        DB::listen(function ($query) use (&$tables): void {
+            if (preg_match('/^select \* from "(clients|client_reports)" where "\1"\."id" = \?/', $query->sql, $match) === 1) {
+                $tables[] = $match[1];
+            }
+        });
+        $this->actingAs($this->user);
+        $writes = [
+            'update' => fn () => $this->put("/clients/{$this->client->id}/reports/{$made->id}", ['body_markdown' => 'edited body', 'version' => $made->fresh()->version()]),
+            'opening' => fn () => $this->patch("/clients/{$this->client->id}/reports/{$made->id}/opening-balance", ['opening_balance_hours' => 4]),
+            'regenerate' => fn () => $this->post("/clients/{$this->client->id}/reports/{$made->id}/regenerate"),
+            'destroy' => fn () => $this->delete("/clients/{$this->client->id}/reports/{$made->id}"),
+        ];
+
+        foreach ($writes as $name => $write) {
+            $tables = [];
+            $write()->assertRedirect();
+            $report = array_search('client_reports', $tables, true);
+            $this->assertIsInt($report, "{$name}: the report row is read under the lock");
+            $this->assertSame('clients', $tables[$report - 1] ?? null, "{$name}: client row first, then the report");
+        }
+    }
+
     public function test_finalize_and_reopen_snapshot_what_is_stored_when_they_run(): void
     {
         $report = $this->makeReport();
@@ -563,13 +671,13 @@ final class ClientReportsControllerTest extends TestCase
         $this->assertCount(1, $report->fresh()->revisions);
     }
 
-    public function test_destroy_removes_the_report(): void
+    public function test_destroy_removes_the_report_and_returns_to_the_billing_tab(): void
     {
         $report = $this->makeReport();
 
         $this->actingAs($this->user)
             ->delete("/clients/{$this->client->id}/reports/{$report->id}")
-            ->assertRedirect();
+            ->assertRedirect("/clients/{$this->client->id}/rozliczenia");
 
         $this->assertDatabaseMissing('client_reports', ['id' => $report->id]);
     }
@@ -595,7 +703,7 @@ final class ClientReportsControllerTest extends TestCase
             }
         };
 
-        $composer = new AiNarrativeComposer($throwing, $fallback, $this->promptResolver());
+        $composer = new AiNarrativeComposer($throwing, $fallback, new NarrativePromptResolver);
 
         $context = app(\App\Services\Reports\ReportDataAggregator::class)->aggregate(
             $this->client,
@@ -671,7 +779,7 @@ final class ClientReportsControllerTest extends TestCase
         (new AiNarrativeComposer(
             $capturing,
             $this->app->make(StructuredListComposer::class),
-            $this->promptResolver(),
+            new NarrativePromptResolver,
         ))->compose($context);
 
         $sent = json_decode((string) $capturing->payload, true);
@@ -682,26 +790,6 @@ final class ClientReportsControllerTest extends TestCase
         $this->assertSame(20.0, (float) $sent['rollover_cap_hours']);
         // The whole point: over the pool, but nothing to bill.
         $this->assertSame(0.0, (float) $sent['overage_hours']);
-    }
-
-    /**
-     * A fixed prompt, so these tests exercise the composer rather than
-     * whatever wording the instance happens to carry.
-     */
-    private function promptResolver(): NarrativePromptResolver
-    {
-        return new class implements NarrativePromptResolver
-        {
-            public function resolve(int $accountId): string
-            {
-                return 'Write the report.';
-            }
-
-            public function source(int $accountId): ?string
-            {
-                return 'file';
-            }
-        };
     }
 
     /**
@@ -716,6 +804,39 @@ final class ClientReportsControllerTest extends TestCase
                 ClientReport::query()->whereKey($report->id)->update($changes);
             }
         });
+    }
+
+    private function composeWith(Closure $meanwhile): void
+    {
+        $this->app->bind(
+            \App\Services\Reports\ReportComposerRegistry::class,
+            function () use ($meanwhile): \App\Services\Reports\ReportComposerRegistry {
+                $registry = new \App\Services\Reports\ReportComposerRegistry;
+                $registry->register(new class($meanwhile) implements \App\Services\Reports\ReportComposerInterface
+                {
+                    public function __construct(private Closure $meanwhile) {}
+
+                    public function key(): string
+                    {
+                        return 'structured_list';
+                    }
+
+                    public function label(): string
+                    {
+                        return 'slow';
+                    }
+
+                    public function compose(\App\Services\Reports\ReportContext $context): string
+                    {
+                        ($this->meanwhile)();
+
+                        return 'regenerated';
+                    }
+                }, default: true);
+
+                return $registry;
+            },
+        );
     }
 
     private function makeReport(string $status = ClientReport::STATUS_DRAFT): ClientReport

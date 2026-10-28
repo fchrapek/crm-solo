@@ -9,8 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Files attached to tasks: uploaded in the CRM, or pulled from the task's
- * Trello card (trello_attachment_id set). Surfaced into the terminal session
- * via CRM_TASK.md absolute-path listings so the CLI agent can Read them.
+ * Trello card (trello_attachment_id set). `crm task` lists them for an agent.
  *
  * Files live under storage/app/private/task-attachments/{task_id}/.
  *

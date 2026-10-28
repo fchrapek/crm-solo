@@ -60,8 +60,6 @@ interface Props {
      */
     badge?: React.ReactNode;
 
-    /** Visible primary action button (e.g. Run agent). Stops drag propagation. */
-    primaryAction?: { label: string; icon?: React.ReactNode; onClick: () => void };
 
     /**
      * Action items rendered in the ⋮ dropdown menu. Optional - omit (or pass
@@ -85,7 +83,6 @@ export function KanbanCard({
     recurrencePeriodDays,
     labels,
     chips,
-    primaryAction,
     actions,
 }: Props) {
     const { t } = useTranslation();
@@ -188,19 +185,6 @@ export function KanbanCard({
                     {subtitle && <p className={styles.subtitle}>{subtitle}</p>}
                 </div>
                 <div className={styles.actions}>
-                    {primaryAction && (
-                        <button
-                            type="button"
-                            onClick={(e) => { stopDrag(e); primaryAction.onClick(); }}
-                            onPointerDown={stopDragNative}
-                            className={styles.primaryAction}
-                            aria-label={primaryAction.label}
-                            title={primaryAction.label}
-                        >
-                            {primaryAction.icon}
-                            {primaryAction.label}
-                        </button>
-                    )}
                     {actions && actions.length > 0 && (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -215,7 +199,8 @@ export function KanbanCard({
                                 <MoreVertical size={14} />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        {/* The menu renders in a portal, but React still bubbles its clicks to the card, which would navigate. */}
+                        <DropdownMenuContent align="end" onClick={stopDrag}>
                             {actions.map((action, i) => {
                                 if (action.href) {
                                     return (

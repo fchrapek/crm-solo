@@ -54,20 +54,6 @@
     margin-left: auto;
 }
 
-.agentLink {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: var(--font-size-xs);
-    color: var(--color-muted-foreground);
-    text-decoration: none;
-    white-space: nowrap;
-}
-
-.agentLink:hover {
-    color: var(--color-brand);
-}
-
 .boardLink {
     display: inline-flex;
     align-items: center;

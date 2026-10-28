@@ -10,6 +10,7 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { offSystemWidthQueries } from './solo-breakpoints.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const VARIABLES = join(ROOT, 'resources/css/variables.css');
@@ -170,4 +171,106 @@ if (accentFails > 0) {
     process.exit(1);
 }
 
-console.log(`Token contract OK — ${files.length} CSS files checked, no hardcoded colours, ink achromatic, accents readable.`);
+/*
+ * Sixth contract: a theme that pins its own surfaces (--theme-bg-light and kin, read by the derived
+ * blocks) keeps its text readable on them: body and muted text on the page, the card and the muted
+ * band, attention red on the card and the label on a red fill, in both appearances, and the brand's
+ * text on its fill.
+ */
+const hslOf = (value) => {
+    const m = value?.match(/hsl\(\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%\s*\)/);
+
+    return m ? hslToRgb(Number(m[1]), Number(m[2]), Number(m[3])) : null;
+};
+
+let surfaceFails = 0;
+for (const [, name, body] of themesCss.matchAll(/:root\[data-theme='([\w-]+)'\]\s*\{([^}]*)\}/g)) {
+    if (!body.includes('--theme-bg-light')) continue;
+    const decl = Object.fromEntries([...body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+    const destructive = decl['--theme-destructive']?.match(/^([\d.]+)\s+([\d.]+)%$/);
+    const pairs = [];
+    for (const [mode, redL] of [
+        ['light', 48],
+        ['dark', 56],
+    ]) {
+        const surfaces = ['bg', 'card', 'muted'].map((s) => [s, hslOf(decl[`--theme-${s}-${mode}`])]);
+        for (const [s, rgb] of surfaces) {
+            pairs.push([`fg-${mode} on ${s}`, hslOf(decl[`--theme-fg-${mode}`]), rgb]);
+            pairs.push([`muted-fg-${mode} on ${s}`, hslOf(decl[`--theme-muted-fg-${mode}`]), rgb]);
+        }
+        const red = hslOf(decl[`--theme-destructive-${mode}`]) ?? (destructive && hslToRgb(Number(destructive[1]), Number(destructive[2]), redL));
+        pairs.push([`destructive on card-${mode}`, red, surfaces[1][1]]);
+        pairs.push([`destructive-fg-${mode} on destructive`, hslOf(decl[`--theme-destructive-fg-${mode}`]) ?? [255, 255, 255], red]);
+    }
+    pairs.push(['brand-foreground on brand', hslOf(decl['--color-brand-foreground']), hslOf(decl['--color-brand'])]);
+
+    for (const [label, fg, bg] of pairs) {
+        if (!fg || !bg) {
+            console.error(`themes.css: theme '${name}' pins its surfaces but ${label} is not an hsl() pair the check can read.`);
+            surfaceFails++;
+            continue;
+        }
+        const ratio = contrast(fg, bg);
+        if (ratio < 4.5) {
+            console.error(`themes.css: theme '${name}' ${label} is ${ratio.toFixed(2)}:1 — needs 4.5:1.`);
+            surfaceFails++;
+        }
+    }
+}
+
+if (surfaceFails > 0) {
+    console.error(`\n${surfaceFails} surface contrast failure${surfaceFails === 1 ? '' : 's'}.`);
+    process.exit(1);
+}
+
+/*
+ * Seventh contract: a token only Boring SaaS sets is always read with Paper's own value as its
+ * fallback, var(--solo-label-case, uppercase). Read bare, it is unset under Paper, the declaration
+ * drops, and Paper quietly changes.
+ */
+const soloCss = readFileSync(SOLO, 'utf8');
+const saasNames = new Set();
+const paperNames = new Set(readFileSync(VARIABLES, 'utf8').matchAll(/(--[\w-]+)\s*:/g).map((m) => m[1]));
+for (const [, selector, body] of soloCss.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+    const target = selector.includes("data-theme='boring-saas'") ? saasNames : paperNames;
+    for (const [, name] of body.matchAll(/(--[\w-]+)\s*:/g)) target.add(name);
+}
+const saasOnly = [...saasNames].filter((name) => !paperNames.has(name));
+
+let bareReads = 0;
+for (const file of files) {
+    if (file === SOLO || file === THEMES_FILE || !file.endsWith('.css')) continue;
+    const content = readFileSync(file, 'utf8');
+    for (const name of saasOnly) {
+        if (new RegExp(`var\\(\\s*${name}\\s*\\)`).test(content)) {
+            console.error(`${file.replace(ROOT, '')}: var(${name}) has no fallback; only Boring SaaS sets it, so Paper needs its own value after the comma.`);
+            bareReads++;
+        }
+    }
+}
+
+if (bareReads > 0) {
+    console.error(`\n${bareReads} Boring SaaS token${bareReads === 1 ? '' : 's'} read without Paper's fallback.`);
+    process.exit(1);
+}
+
+/*
+ * Fifth contract: the Solo layer is mobile first (scripts/solo-breakpoints.mjs). A max-width query or a
+ * third breakpoint is how one layout per screen size quietly comes back.
+ */
+const soloFiles = [SOLO, ...files.filter((file) => file.includes('/resources/js/components/solo/') && file.endsWith('.css'))];
+
+let breakpointFails = 0;
+for (const file of soloFiles) {
+    for (const failure of offSystemWidthQueries(readFileSync(file, 'utf8'))) {
+        console.error(`${file.replace(ROOT, '')}: ${failure} — Solo CSS is mobile first: use (min-width: 768px) or (min-width: 1100px)`);
+        breakpointFails++;
+    }
+}
+
+if (breakpointFails > 0) {
+    console.error(`\n${breakpointFails} off-system media quer${breakpointFails === 1 ? 'y' : 'ies'} in the Solo layer.`);
+    process.exit(1);
+}
+
+console.log(`Token contract OK — ${files.length} CSS files checked, no hardcoded colours, ink achromatic, accents and pinned surfaces readable, Boring SaaS tokens fall back to Paper, Solo breakpoints mobile first.`);

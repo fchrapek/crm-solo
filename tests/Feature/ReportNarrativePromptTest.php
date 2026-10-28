@@ -11,9 +11,7 @@ use App\Services\AI\AIProviderInterface;
 use App\Services\Reports\Composers\AiNarrativeComposer;
 use App\Services\Reports\Composers\StructuredListComposer;
 use App\Services\Reports\NarrativePromptResolver;
-use App\Services\Reports\NarrativePromptUnavailable;
 use App\Services\Reports\ReportDataAggregator;
-use App\Services\Reports\SettingsNarrativePromptResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -46,7 +44,7 @@ final class ReportNarrativePromptTest extends TestCase
 
     public function test_the_shipped_prompt_resolves_when_no_override_is_stored(): void
     {
-        $resolver = new SettingsNarrativePromptResolver;
+        $resolver = new NarrativePromptResolver;
 
         $this->assertSame('file', $resolver->source($this->account->id));
 
@@ -62,7 +60,7 @@ final class ReportNarrativePromptTest extends TestCase
 
     public function test_the_shipped_prompt_carries_no_worked_example(): void
     {
-        $prompt = (new SettingsNarrativePromptResolver)->resolve($this->account->id);
+        $prompt = (new NarrativePromptResolver)->resolve($this->account->id);
 
         // The few-shot example and the hours-bank rationale are the parts
         // that stay on the instance; the contract is what ships. A bare
@@ -78,11 +76,11 @@ final class ReportNarrativePromptTest extends TestCase
     {
         Setting::create([
             'account_id' => $this->account->id,
-            'scope' => SettingsNarrativePromptResolver::SETTING_SCOPE,
-            'data' => [SettingsNarrativePromptResolver::SETTING_KEY => 'Instance wording.'],
+            'scope' => NarrativePromptResolver::SETTING_SCOPE,
+            'data' => [NarrativePromptResolver::SETTING_KEY => 'Instance wording.'],
         ]);
 
-        $resolver = new SettingsNarrativePromptResolver;
+        $resolver = new NarrativePromptResolver;
 
         $this->assertSame('settings', $resolver->source($this->account->id));
         $this->assertSame('Instance wording.', $resolver->resolve($this->account->id));
@@ -92,11 +90,11 @@ final class ReportNarrativePromptTest extends TestCase
     {
         Setting::create([
             'account_id' => $this->account->id,
-            'scope' => SettingsNarrativePromptResolver::SETTING_SCOPE,
-            'data' => [SettingsNarrativePromptResolver::SETTING_KEY => "   \n "],
+            'scope' => NarrativePromptResolver::SETTING_SCOPE,
+            'data' => [NarrativePromptResolver::SETTING_KEY => "   \n "],
         ]);
 
-        $this->assertSame('file', (new SettingsNarrativePromptResolver)->source($this->account->id));
+        $this->assertSame('file', (new NarrativePromptResolver)->source($this->account->id));
     }
 
     public function test_an_override_is_scoped_to_its_own_account(): void
@@ -105,11 +103,11 @@ final class ReportNarrativePromptTest extends TestCase
 
         Setting::create([
             'account_id' => $other->id,
-            'scope' => SettingsNarrativePromptResolver::SETTING_SCOPE,
-            'data' => [SettingsNarrativePromptResolver::SETTING_KEY => 'Not yours.'],
+            'scope' => NarrativePromptResolver::SETTING_SCOPE,
+            'data' => [NarrativePromptResolver::SETTING_KEY => 'Not yours.'],
         ]);
 
-        $this->assertSame('file', (new SettingsNarrativePromptResolver)->source($this->account->id));
+        $this->assertSame('file', (new NarrativePromptResolver)->source($this->account->id));
     }
 
     public function test_an_unresolvable_prompt_degrades_to_the_structured_composer_and_logs(): void
@@ -129,7 +127,7 @@ final class ReportNarrativePromptTest extends TestCase
 
     public function test_a_missing_shipped_prompt_still_generates_a_report(): void
     {
-        $this->app->bind(NarrativePromptResolver::class, fn () => $this->failingResolver());
+        $this->app->instance(NarrativePromptResolver::class, $this->failingResolver());
         $this->app->bind(AIProviderInterface::class, fn () => $this->neverCalledProvider());
         $user = \App\Models\User::factory()->create(['account_id' => $this->account->id, 'owner' => true]);
 
@@ -151,12 +149,12 @@ final class ReportNarrativePromptTest extends TestCase
         file_put_contents($path, 'Imported wording.');
 
         $this->artisan('reports:prompt-import', ['path' => $path])->assertSuccessful();
-        $this->assertSame('Imported wording.', (new SettingsNarrativePromptResolver)->resolve($this->account->id));
+        $this->assertSame('Imported wording.', (new NarrativePromptResolver)->resolve($this->account->id));
 
         $this->artisan('reports:prompt-show')->assertSuccessful();
 
         $this->artisan('reports:prompt-import', ['path' => $path, '--clear' => true])->assertSuccessful();
-        $this->assertSame('file', (new SettingsNarrativePromptResolver)->source($this->account->id));
+        $this->assertSame('file', (new NarrativePromptResolver)->source($this->account->id));
 
         @unlink($path);
     }
@@ -178,18 +176,7 @@ final class ReportNarrativePromptTest extends TestCase
 
     private function failingResolver(): NarrativePromptResolver
     {
-        return new class implements NarrativePromptResolver
-        {
-            public function resolve(int $accountId): string
-            {
-                throw NarrativePromptUnavailable::forPath('/gone/report-narrative.md');
-            }
-
-            public function source(int $accountId): ?string
-            {
-                return null;
-            }
-        };
+        return new NarrativePromptResolver('/gone/report-narrative.md');
     }
 
     private function neverCalledProvider(): AIProviderInterface

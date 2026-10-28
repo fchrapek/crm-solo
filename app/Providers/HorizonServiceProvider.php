@@ -17,13 +17,13 @@ final class HorizonServiceProvider extends HorizonApplicationServiceProvider
     }
 
     /**
-     * Who may open Horizon outside the local environment: the owner of the
-     * operator account (the first one), since job payloads span every account.
+     * Only the operator account's owner may open Horizon, never on the demo, where that owner is the shared visitor login.
      */
     protected function gate(): void
     {
         Gate::define('viewHorizon', fn (?User $user): bool => $user !== null
+            && ! config('app.demo')
             && (bool) $user->owner
-            && (int) $user->account_id === (int) Account::query()->orderBy('id')->value('id'));
+            && (int) $user->account_id === Account::operatorId());
     }
 }

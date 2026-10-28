@@ -60,6 +60,77 @@
 }
 
 /* ============================================================
+ * BORING SAAS · a calm panel
+ * Cool slate greys, white cards on a light grey page, Inter for everything,
+ * one quiet cobalt. Exact surfaces come through the optional --theme-*
+ * primitives the derived blocks read; the Solo layer aliases the result
+ * (solo.css), so the day screens and the older pages share one palette.
+ * ============================================================ */
+:root[data-theme='boring-saas'] {
+    --theme-hue: 220;
+    --theme-sat-strong: 23%;
+    --theme-sat-soft: 20%;
+
+    --theme-fg-light: hsl(221 43% 11%);
+    --theme-fg-dark: hsl(240 5% 96%);
+    --theme-bg-light: hsl(210 20% 98%);
+    --theme-bg-dark: hsl(222 41% 8%);
+    --theme-card-light: hsl(0 0% 100%);
+    --theme-card-dark: hsl(221 27% 12%);
+    --theme-muted-light: hsl(216 24% 96%);
+    --theme-muted-dark: hsl(221 21% 15%);
+    --theme-muted-fg-light: hsl(221 13% 46%);
+    --theme-muted-fg-dark: hsl(225 4% 60%);
+    --theme-border-light: hsl(218 17% 91%);
+    --theme-border-dark: hsl(221 18% 19%);
+    --theme-input-light: hsl(217 15% 84%);
+    --theme-input-dark: hsl(230 12% 25%);
+
+    --color-brand: hsl(229 63% 51%);
+    --color-brand-hover: hsl(229 63% 44%);
+    --color-brand-foreground: hsl(0 0% 100%);
+
+    /* the default button is the accent fill in both appearances, not ink */
+    --color-primary: var(--color-brand);
+    --color-primary-hover: var(--color-brand-hover);
+    --color-primary-foreground: var(--color-brand-foreground);
+
+    --theme-success: 152 76%;
+    --theme-warning: 28 90%;
+    --theme-info: 221 63%;
+    --theme-destructive: 4 74%;
+    --theme-destructive-dark: hsl(4 92% 69%);
+    --theme-destructive-fg-dark: hsl(222 41% 8%);
+    --tone-violet-solid: hsl(262 56% 52%);
+
+    --tint-strength: 10%;
+
+    --chip-radius: var(--radius-default);
+    --chip-padding: 1px 7px;
+    --chip-border-width: 1px;
+    --chip-border-color: var(--color-border);
+    --chip-bg: var(--color-card);
+    --chip-fg: var(--color-muted-foreground);
+    --chip-category-bg: var(--color-muted);
+    --chip-category-fg: var(--color-secondary-foreground);
+
+    --card-shadow: 0 1px 3px hsl(220 43% 11% / 0.06), 0 1px 2px hsl(220 43% 11% / 0.04);
+    --card-shadow-hover: 0 4px 12px hsl(220 43% 11% / 0.08);
+    --card-border-hover: var(--color-input);
+
+    --font-family-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-family-display: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --display-weight: var(--font-weight-semibold);
+    --display-transform: none;
+    --display-tracking: -0.02em;
+
+    --icon-stroke: 1.75;
+    --icon-stroke-16: 1.5;
+    --icon-stroke-20: 1.5;
+    --icon-stroke-24: 1.75;
+}
+
+/* ============================================================
  * INK · monochrome
  * Truly achromatic: every tone, status and accent is a grey. Meaning is
  * carried by LIGHTNESS and position instead of hue, so the tone palette still
@@ -219,19 +290,20 @@
  * One lightness ladder; hue and saturation come from the active theme.
  * ============================================================ */
 :root[data-theme]:not(.dark) {
-    --color-background: hsl(var(--theme-hue) var(--theme-sat-strong) 96%);
+    --color-background: var(--theme-bg-light, hsl(var(--theme-hue) var(--theme-sat-strong) 96%));
     --color-card: var(--theme-card-light, var(--color-white));
     --color-popover: var(--theme-card-light, var(--color-white));
     --color-foreground: var(--theme-fg-light, var(--color-gray-950));
     --color-card-foreground: var(--color-foreground);
     --color-popover-foreground: var(--color-foreground);
+    --color-muted-foreground: var(--theme-muted-fg-light, var(--color-gray-500));
 
-    --color-muted: hsl(var(--theme-hue) var(--theme-sat-soft) 93%);
-    --color-secondary: hsl(var(--theme-hue) var(--theme-sat-soft) 93%);
-    --color-accent: hsl(var(--theme-hue) var(--theme-sat-soft) 93%);
+    --color-muted: var(--theme-muted-light, hsl(var(--theme-hue) var(--theme-sat-soft) 93%));
+    --color-secondary: var(--theme-muted-light, hsl(var(--theme-hue) var(--theme-sat-soft) 93%));
+    --color-accent: var(--theme-muted-light, hsl(var(--theme-hue) var(--theme-sat-soft) 93%));
     --color-secondary-hover: hsl(var(--theme-hue) var(--theme-sat-soft) 86%);
-    --color-border: hsl(var(--theme-hue) var(--theme-sat-soft) 88%);
-    --color-input: hsl(var(--theme-hue) var(--theme-sat-soft) 88%);
+    --color-border: var(--theme-border-light, hsl(var(--theme-hue) var(--theme-sat-soft) 88%));
+    --color-input: var(--theme-input-light, hsl(var(--theme-hue) var(--theme-sat-soft) 88%));
 
     --color-sidebar: hsl(var(--theme-hue) var(--theme-sat-strong) 92%);
     --color-sidebar-foreground: var(--color-foreground);
@@ -249,19 +321,20 @@
  * Same primitives, inverted ladder, brighter statuses.
  * ============================================================ */
 :root[data-theme].dark {
-    --color-background: hsl(var(--theme-hue) var(--theme-sat-soft) 7%);
-    --color-card: hsl(var(--theme-hue) var(--theme-sat-soft) 10%);
-    --color-popover: hsl(var(--theme-hue) var(--theme-sat-soft) 10%);
+    --color-background: var(--theme-bg-dark, hsl(var(--theme-hue) var(--theme-sat-soft) 7%));
+    --color-card: var(--theme-card-dark, hsl(var(--theme-hue) var(--theme-sat-soft) 10%));
+    --color-popover: var(--theme-card-dark, hsl(var(--theme-hue) var(--theme-sat-soft) 10%));
     --color-foreground: var(--theme-fg-dark, var(--color-gray-50));
     --color-card-foreground: var(--color-foreground);
     --color-popover-foreground: var(--color-foreground);
+    --color-muted-foreground: var(--theme-muted-fg-dark, var(--color-gray-400));
 
-    --color-muted: hsl(var(--theme-hue) var(--theme-sat-soft) 17%);
-    --color-secondary: hsl(var(--theme-hue) var(--theme-sat-soft) 17%);
-    --color-accent: hsl(var(--theme-hue) var(--theme-sat-soft) 17%);
+    --color-muted: var(--theme-muted-dark, hsl(var(--theme-hue) var(--theme-sat-soft) 17%));
+    --color-secondary: var(--theme-muted-dark, hsl(var(--theme-hue) var(--theme-sat-soft) 17%));
+    --color-accent: var(--theme-muted-dark, hsl(var(--theme-hue) var(--theme-sat-soft) 17%));
     --color-secondary-hover: hsl(var(--theme-hue) var(--theme-sat-soft) 22%);
-    --color-border: hsl(var(--theme-hue) var(--theme-sat-soft) 19%);
-    --color-input: hsl(var(--theme-hue) var(--theme-sat-soft) 19%);
+    --color-border: var(--theme-border-dark, hsl(var(--theme-hue) var(--theme-sat-soft) 19%));
+    --color-input: var(--theme-input-dark, hsl(var(--theme-hue) var(--theme-sat-soft) 19%));
 
     --color-sidebar: hsl(var(--theme-hue) var(--theme-sat-soft) 11%);
     --color-sidebar-foreground: var(--color-foreground);
@@ -271,8 +344,8 @@
     --color-success: hsl(var(--theme-success) 54%);
     --color-warning: hsl(var(--theme-warning) 56%);
     --color-info: hsl(var(--theme-info) 64%);
-    --color-destructive: hsl(var(--theme-destructive) 56%);
-    --color-destructive-foreground: var(--color-white);
+    --color-destructive: var(--theme-destructive-dark, hsl(var(--theme-destructive) 56%));
+    --color-destructive-foreground: var(--theme-destructive-fg-dark, var(--color-white));
 }
 
 /* ------------------------------------------------------------
@@ -311,9 +384,8 @@
     --color-brand-foreground: hsl(0 0% 8%);
 }
 
-/* Ink keeps its terminal chrome hueless as well. */
+/* Ink keeps its lead tiers hueless as well. */
 :root[data-theme='ink'] {
-    --terminal-link: hsl(0 0% 82%);
     --tone-tier-hot: hsl(0 0% 22%);
     --tone-tier-warm: hsl(0 0% 46%);
     --tone-tier-cold: hsl(0 0% 64%);

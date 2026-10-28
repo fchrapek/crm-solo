@@ -18,15 +18,17 @@ const ToggleGroupContext = React.createContext<ToggleGroupContextValue>({
 type ToggleGroupProps = React.ComponentProps<typeof ToggleGroupPrimitive.Root> & {
     variant?: ToggleVariant;
     size?: ToggleSize;
+    /** segmented: the Solo segmented control (Figma Mobile / Segmented control), 44 px pill segments. */
+    look?: 'default' | 'segmented';
 };
 
-function ToggleGroup({ className, variant, size, children, ...props }: ToggleGroupProps) {
+function ToggleGroup({ className, variant, size, look = 'default', children, ...props }: ToggleGroupProps) {
     return (
         <ToggleGroupPrimitive.Root
             data-slot="toggle-group"
             data-variant={variant}
             data-size={size}
-            className={cn(styles.group, className)}
+            className={cn(styles.group, look === 'segmented' && styles.segmented, className)}
             {...props}
         >
             <ToggleGroupContext.Provider value={{ variant, size }}>
@@ -63,4 +65,10 @@ function ToggleGroupItem({ className, children, variant, size, ...props }: Toggl
     );
 }
 
-export { ToggleGroup, ToggleGroupItem };
+/** The segmented look for a group of links (a nav with aria-current), which Radix's toggle state does not fit. */
+const segmentedLinkClasses = {
+    group: cn(styles.group, styles.segmented),
+    item: cn(getToggleStyles(), styles.item),
+};
+
+export { ToggleGroup, ToggleGroupItem, segmentedLinkClasses };
