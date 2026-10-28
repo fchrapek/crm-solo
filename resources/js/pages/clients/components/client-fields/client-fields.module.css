@@ -1,0 +1,244 @@
+/* Client fields, their history and text messages on the client record and the SMS queue. Phone first. */
+
+.grid {
+    display: grid;
+    gap: var(--solo-space-4);
+}
+
+.error {
+    margin: 0;
+    color: var(--solo-error);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.empty {
+    margin: 0;
+    padding: var(--solo-space-3) var(--solo-head-inset, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-sub) / 1.45 var(--solo-font-text);
+}
+
+.checks {
+    display: flex;
+    flex-direction: column;
+    gap: var(--solo-space-2);
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.checks legend {
+    margin-bottom: var(--solo-space-2);
+    padding: 0;
+    color: var(--solo-fg-muted);
+    font: var(--solo-label-weight, 700) var(--solo-label-size, var(--solo-text-label)) / 1.3 var(--solo-font-text);
+    letter-spacing: var(--solo-label-tracking, 0.08em);
+    text-transform: var(--solo-label-case, uppercase);
+}
+
+.checkRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--solo-space-1) var(--solo-space-5);
+}
+
+.check {
+    display: flex;
+    align-items: center;
+    gap: var(--solo-space-2);
+    min-height: var(--solo-touch);
+    color: var(--solo-fg);
+    font: 400 var(--solo-text-field) / normal var(--solo-font-text);
+}
+
+.check input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--solo-fg);
+}
+
+/* field history */
+.history,
+.messages {
+    margin: 0;
+    padding: var(--solo-block-pad, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    list-style: none;
+}
+
+.historyRow {
+    display: flex;
+    gap: var(--solo-space-3);
+    padding: var(--solo-space-3) var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+    color: var(--solo-fg);
+    font: 400 var(--solo-text-sub) / 1.4 var(--solo-font-text);
+    overflow-wrap: anywhere;
+}
+
+.historyRow:last-child {
+    border-bottom-color: var(--solo-rule-end, var(--solo-rule));
+}
+
+/* messages */
+.message {
+    display: grid;
+    grid-template-columns: 10px auto minmax(0, 1fr) auto;
+    grid-template-areas:
+        'mark when status cancel'
+        'body body body body';
+    align-items: center;
+    gap: var(--solo-space-1) var(--solo-space-3);
+    padding: var(--solo-space-3) var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+}
+
+.message:has(.client) {
+    grid-template-areas:
+        'mark when client status'
+        'body body body body'
+        'cancel cancel cancel cancel';
+}
+
+.message:last-child {
+    border-bottom-color: var(--solo-rule-end, var(--solo-rule));
+}
+
+.mark {
+    grid-area: mark;
+    width: 8px;
+    height: 8px;
+    border: 1px solid var(--solo-fg-muted);
+    border-radius: 50%;
+}
+
+.message:is([data-status='sent'], [data-status='simulated']) .mark {
+    border-color: var(--solo-fg);
+    background: var(--solo-fg);
+}
+
+.message[data-status='failed'] .mark {
+    border-color: var(--solo-error);
+}
+
+.when {
+    grid-area: when;
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-mono-micro) / 1.4 var(--solo-font-mono);
+    white-space: nowrap;
+}
+
+.client {
+    grid-area: client;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--solo-fg);
+    font: 600 var(--solo-text-sub) / 1.35 var(--solo-font-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.body {
+    grid-area: body;
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    background: none;
+    color: var(--solo-fg);
+    font: 400 var(--solo-text-sub) / 1.4 var(--solo-font-text);
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.body:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.body:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.message:is([data-status='cancelled'], [data-status='skipped'], [data-status='superseded']) .body {
+    color: var(--solo-fg-muted);
+}
+
+.status {
+    grid-area: status;
+    justify-self: end;
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-meta) / 1.3 var(--solo-font-text);
+    white-space: nowrap;
+}
+
+.message[data-status='pending'] .status {
+    color: var(--solo-fg);
+}
+
+.message[data-status='held'] .body {
+    color: var(--solo-fg-muted);
+}
+
+.message[data-status='failed'] .status {
+    color: var(--solo-error);
+}
+
+.cancel {
+    grid-area: cancel;
+    justify-self: end;
+}
+
+/* A phone row across clients has no room for a text action: a failed one is sent again from its sheet. */
+.message:has(.client) .resend {
+    display: none;
+}
+
+.details {
+    margin: 0;
+}
+
+.fullBody {
+    margin: var(--solo-space-4) 0 0;
+    color: var(--solo-fg);
+    font: 400 var(--solo-text-sub) / 1.5 var(--solo-font-text);
+    overflow-wrap: anywhere;
+}
+
+@media (min-width: 768px) {
+    .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .span {
+        grid-column: 1 / -1;
+    }
+
+    .check {
+        min-height: 28px;
+    }
+
+    .messages:not([data-stacked]) .message,
+    .messages:not([data-stacked]) .message:has(.client) {
+        grid-template-columns: 10px 96px minmax(0, 1fr) auto auto;
+        grid-template-areas: 'mark when body status cancel';
+        gap: var(--solo-space-4);
+    }
+
+    .messages:not([data-stacked]) .message:has(.client) {
+        grid-template-columns: 10px 96px 180px minmax(0, 1fr) auto auto;
+        grid-template-areas: 'mark when client body status cancel';
+    }
+
+    .messages:not([data-stacked]) .message:has(.client) .resend {
+        display: block;
+    }
+}

@@ -24,7 +24,22 @@ describe('applyLayoutToPage', () => {
     });
 
     test('an app page gets the app shell', () => {
-        expect(renderWithLayout('clients/index')).toBe('<div data-shell="app"><main></main></div>');
+        expect(renderWithLayout('revenue/index')).toBe('<div data-shell="app"><main></main></div>');
+    });
+
+    test('Ustawienia and Kontakty draw their own Solo shell', () => {
+        expect(renderWithLayout('settings/index')).toBe('<main></main>');
+        expect(renderWithLayout('contacts/index')).toBe('<main></main>');
+        expect(renderWithLayout('messages/index')).toBe('<main></main>');
+    });
+
+    test('the client record draws its own Solo shell', () => {
+        expect(renderWithLayout('clients/show')).toBe('<main></main>');
+    });
+
+    test('the client list draws its own Solo shell while the leads list keeps the app shell', () => {
+        expect(renderWithLayout('clients/index')).toBe('<main></main>');
+        expect(renderWithLayout('leads/index')).toBe('<div data-shell="app"><main></main></div>');
     });
 
     test('the solo login and splash pages draw their own shell', () => {

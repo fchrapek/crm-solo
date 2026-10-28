@@ -78,7 +78,7 @@ final class Contact extends Model
     public function filter(Builder $query, array $filters, int $accountId): void
     {
         $query
-            ->when($filters['search'] ?? null, fn ($query, $search) => $this->applySearchFilter($query, $search, $accountId, $filters['trashed'] ?? null))
+            ->when($filters['search'] ?? null, fn ($query, $search) => $this->matchEveryWord($query, $search))
             ->when($filters['trashed'] ?? null, fn ($query, $trashed) => $this->applyTrashedFilter($query, $trashed));
     }
 
@@ -96,5 +96,19 @@ final class Contact extends Model
     protected function searchableLikeColumns(): array
     {
         return ['first_name', 'last_name', 'city', 'phone', 'emails'];
+    }
+
+    /** "ewa dąbek" or "dąbek meble": each word must match the contact or its client's name. */
+    private function matchEveryWord(Builder $query, string $search): void
+    {
+        foreach (preg_split('/\s+/u', mb_trim($search), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $word) {
+            $like = '%'.$word.'%';
+            $query->where(function (Builder $inner) use ($like): void {
+                foreach ($this->searchableLikeColumns() as $column) {
+                    $inner->orWhere($column, 'like', $like);
+                }
+                $inner->orWhereHas('client', fn (Builder $client) => $client->where('name', 'like', $like));
+            });
+        }
     }
 }

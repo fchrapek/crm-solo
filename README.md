@@ -5,10 +5,10 @@ tasks, time and leads, and it runs the monthly close: pull each maintained
 site's database, update it, verify it, write the client's report, draft the
 invoice.
 
-It is local-first. The real instance runs on a laptop next to the work it
-describes, which is why it can do things a hosted CRM cannot: read the git
-repositories it has on disk, open a terminal session inside a task's worktree,
-and start the project's dev server to look at the change.
+It does not run agents itself. Your own agents (Claude Code, Codex, a chat
+client) connect to it through the MCP server and the `crm` CLI: they read a
+client's state and a task's brief, start and stop timers, log time, tick tasks
+and write notes, and every write lands in the web UI at once.
 
 A public demo with fictional data runs at
 [demo.crm-solo.com](https://demo.crm-solo.com). It reseeds every night, so
@@ -72,11 +72,6 @@ business rather than the software:
   factors, tiers and routing. Nothing in the code hardcodes that vocabulary,
   and the shipped numbers are illustrative defaults meant to be replaced.
 
-**Terminal sessions need `ttyd` and `tmux`** (`brew install ttyd tmux`). A
-task can open a CLI session in its own git worktree and a dev server beside
-it, both served into the page. `docs/development/terminal-sessions.md` has the
-details.
-
 **Language.** The interface is English and Polish; new user-facing strings go
 into both `lang/en.json` and `lang/pl.json`. Some domain vocabulary stays
 Polish where the Polish word is the term of art, "abonament" for a retainer
@@ -90,8 +85,7 @@ app/Mcp/               MCP server exposing the CRM verbs to an agent
 bin/crm                CLI shim; see docs/development/agent-crm-interface.md
 resources/js/pages/    Inertia pages, route-matched
 resources/prompts/     shipped prompt files
-scripts/prod/          per-site production maintenance, gated and idempotent
-docs/development/      setup, theming, terminal sessions, database recipes
+docs/development/      setup, theming, agent interface, database recipes
 ```
 
 ## Status and scope

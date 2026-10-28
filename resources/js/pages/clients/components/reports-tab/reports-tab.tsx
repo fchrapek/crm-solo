@@ -1,10 +1,10 @@
+import { Icon } from '@/components/ui/icon';
 import { Link, router } from '@inertiajs/react';
-import { Pencil, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import Markdown from 'react-markdown';
 import { toast } from 'sonner';
 
+import { MarkdownView } from '@/components/markdown-view';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MarkdownTextarea } from '@/components/ui/markdown-textarea';
@@ -54,7 +54,7 @@ export function ReportsTab({ clientId, reports, composers, reportBaselineMarkdow
                     title={t('Reports')}
                     actions={
                         <Button onClick={() => setDialogOpen(true)}>
-                            <Plus size={14} /> {t('Generate report')}
+                            <Icon name="plus" size={16} /> {t('Generate report')}
                         </Button>
                     }
                 >
@@ -88,14 +88,12 @@ export function ReportsTab({ clientId, reports, composers, reportBaselineMarkdow
                     title={t('Baseline scope')}
                     actions={
                         <Button type="button" variant="ghost" size="sm" onClick={() => setBaselineOpen(true)}>
-                            <Pencil size={14} /> {hasBaseline ? t('Edit') : t('Add baseline')}
+                            <Icon name="pencil" size={16} /> {hasBaseline ? t('Edit') : t('Add baseline')}
                         </Button>
                     }
                 >
                     {hasBaseline ? (
-                        <div className={styles.baselinePreview}>
-                            <Markdown>{reportBaselineMarkdown ?? ''}</Markdown>
-                        </div>
+                        <MarkdownView className={styles.baselinePreview}>{reportBaselineMarkdown ?? ''}</MarkdownView>
                     ) : (
                         <p className={styles.baselineEmpty}>
                             {t('No baseline scope. Add one to inject standard monthly coverage into every report.')}

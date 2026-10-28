@@ -1,9 +1,9 @@
 import '../css/app.css';
 
 import { LayoutProvider } from '@/contexts/page-context';
-import { ProcessingProvider } from '@/contexts/processing-context';
 import { initializeTheme } from '@/hooks/use-appearance';
 import { initializeTheme as initializeVisualTheme } from '@/hooks/use-theme';
+import { loadAccessLoginOnRefusal } from '@/lib/access-login';
 import { applyLayoutToPage } from '@/lib/layout-resolver';
 import { createInertiaApp } from '@inertiajs/react';
 import { configureEcho } from '@laravel/echo-react';
@@ -31,8 +31,23 @@ const appName = import.meta.env.VITE_APP_NAME || 'CRM Solo';
 
 void createInertiaApp({
     title: (title) => `${title} - ${appName}`,
+    defaults: {
+        // Only page-to-page navigation cross-fades; polls, filters, partial reloads and reduced motion swap in place.
+        visitOptions: (_href, options) => ({
+            ...options,
+            // Link always sends viewTransition: false by default, so only an explicit opt-in overrides the rule.
+            viewTransition:
+                options.viewTransition ||
+                ((options.method ?? 'get') === 'get' &&
+                    !options.only?.length &&
+                    !options.except?.length &&
+                    !options.reset?.length &&
+                    !options.preserveState &&
+                    !window.matchMedia('(prefers-reduced-motion: reduce)').matches),
+        }),
+    },
     resolve: (name) => {
-        const pages = import.meta.glob('./pages/**/*.{tsx,ts}');
+        const pages = import.meta.glob(['./pages/**/*.{tsx,ts}', '!./pages/**/*.test.{tsx,ts}']);
 
         // Try folder structure first (e.g., ./pages/dashboard/index.ts)
         let pagePath = `./pages/${name}/index.ts`;
@@ -56,11 +71,9 @@ void createInertiaApp({
 
         const AppWithProviders = (
             <LayoutProvider>
-                <ProcessingProvider>
-                    <I18nextProvider i18n={i18nInstance}>
-                        <App {...props} />
-                    </I18nextProvider>
-                </ProcessingProvider>
+                <I18nextProvider i18n={i18nInstance}>
+                    <App {...props} />
+                </I18nextProvider>
             </LayoutProvider>
         );
 
@@ -80,3 +93,4 @@ void createInertiaApp({
 // first paint, rather than flashing the default and correcting after mount.
 initializeTheme();
 initializeVisualTheme();
+loadAccessLoginOnRefusal();

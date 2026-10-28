@@ -15,6 +15,17 @@ export interface NavItem {
     isActive?: boolean;
 }
 
+export interface Account {
+    id: number;
+    name: string;
+    is_test: boolean;
+    features: { billing: boolean };
+}
+
+export interface Auth {
+    user: User;
+}
+
 export interface User {
     id: number;
     name: string;
@@ -169,21 +180,10 @@ interface TranslationStore {
     };
 }
 
-export interface LiveSession {
-    task_id: number;
-    task_name: string;
-    project_id: number;
-    client_id: number | null;
-    session_attention_at: string | null;
-}
-
 export interface SharedData {
     name: string;
     auth: Auth;
     locale: string;
     translations: TranslationStore | null;
-    live_sessions?: LiveSession[];
-    terminal_session_host: string;
-    host_exec: boolean;
     [key: string]: unknown;
 }

@@ -16,7 +16,7 @@ use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[IsReadOnly]
-#[Description('Full context for one client: relationship status, retainer positions, hours this month against the contracted limit, open tasks, latest report and recent journal.')]
+#[Description('Full context for one client: relationship status, retainer positions, hours, open tasks, latest report and recent journal. hours.month is all time logged this calendar month, reportable or not. hours.bank is the month being settled (hours.bank.active_period, the oldest elapsed month not yet closed, else the current month; open_period_behind is true when that month has ended), counted on reportable time: the retainer limit applies to hours.bank.used against hours.bank.available. hours.bank.closed_period and closed_at name the latest closed month. billing_mode is retainer or order; an order client (no retainer evidence) has hours.bank and hours.contracted null. Closing a month is done by the owner in the app; there is no tool for it.')]
 final class ClientBriefTool extends Tool
 {
     use HandlesReferenceErrors;

@@ -1,18 +1,31 @@
 .row {
     /* everything hangs off the title's first line, whatever the meta wraps to */
     --title-line: calc(var(--solo-text-row) * 1.35);
+    --row-pad: 15px;
 
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
-    gap: var(--solo-space-4);
-    padding-block: 15px;
+    gap: var(--solo-space-2) var(--solo-space-4);
+    padding-block: var(--row-pad);
+    padding-inline: var(--solo-row-inset, 0);
     border-bottom: 1px solid var(--solo-rule);
     list-style: none;
 }
 
-.compact {
-    padding-block: 12px;
+.row:has(.titleLink:hover) {
+    border-radius: var(--solo-row-radius, 0);
+    background: var(--solo-hover, none);
 }
+
+.row:not(:last-child):has(.titleLink:hover) {
+    border-bottom-color: var(--solo-hover-rule, var(--solo-rule));
+}
+
+.row:last-child {
+    border-bottom-color: var(--solo-rule-end, var(--solo-rule));
+}
+
 
 .check {
     flex: none;
@@ -22,10 +35,10 @@
     width: 18px;
     height: 18px;
     padding: 0;
-    border: 2px solid var(--solo-fg);
+    border: var(--solo-check-width, 2px) solid var(--solo-check-border, var(--solo-fg));
     border-radius: var(--solo-radius-sm);
-    background: none;
-    color: var(--solo-on-accent);
+    background: var(--solo-control-bg, none);
+    color: var(--solo-on-primary, var(--solo-bg));
     font-size: 12px;
     font-weight: 700;
     line-height: 1;
@@ -33,12 +46,13 @@
 }
 
 .check:focus-visible {
-    outline: 2px solid var(--solo-fg);
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
     outline-offset: 3px;
 }
 
 .done .check {
-    background: var(--solo-fg);
+    border-color: var(--solo-primary, var(--solo-fg));
+    background: var(--solo-primary, var(--solo-fg));
     cursor: default;
 }
 
@@ -50,8 +64,18 @@
     opacity: 0.6;
 }
 
+/* the one-line title keeps at least 8rem; actions that leave less move under it */
 .text {
-    flex: 1;
+    position: relative;
+    display: var(--solo-task-text, flex);
+    flex: 1 1 8rem;
+    align-items: baseline;
+    gap: var(--solo-space-3);
+    min-width: 0;
+}
+
+.text > .title {
+    flex: 1 1 auto;
     min-width: 0;
 }
 
@@ -60,20 +84,21 @@
     margin: 0;
 }
 
+/* one line on every width; the full name is the row's tooltip and the task page's title */
 .title {
     font-size: var(--solo-text-row);
     font-weight: 600;
     line-height: 1.35;
+    white-space: nowrap;
 }
 
-.compact {
-    --title-line: calc(var(--solo-text-action) * 1.35);
+/* the cut sits inside the link, so the title never clips the link's enlarged hit area */
+.titleText {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.compact .title {
-    font-weight: 500;
-    font-size: var(--solo-text-action);
-}
 
 .done .title {
     color: var(--solo-fg-muted);
@@ -82,8 +107,12 @@
 
 .meta {
     display: flex;
+    flex: 0 0 auto;
     gap: 0.4em;
-    margin-top: 3px;
+    /* the title gets most of a phone row */
+    max-width: var(--solo-task-meta-max, 30%);
+    min-width: 0;
+    margin-top: var(--solo-task-meta-top, 0);
     font-size: var(--solo-text-meta);
     color: var(--solo-fg-muted);
     white-space: nowrap;
@@ -102,13 +131,16 @@
 }
 
 .project {
-    max-width: 60%;
+    flex: var(--solo-task-project-flex, 0 1 auto);
+    min-width: 0;
+    max-width: var(--solo-task-project-max, none);
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .trailing {
     flex: none;
+    margin-left: auto;
     height: var(--title-line);
     display: flex;
     align-items: center;
@@ -118,10 +150,18 @@
 }
 
 .titleLink {
+    display: block;
     color: inherit;
     text-decoration: none;
     text-decoration-thickness: 1.5px;
     text-underline-offset: 4px;
+}
+
+/* the title's hit area is the whole text column, row padding included; the checkbox and the actions beside it stay their own */
+.titleLink::after {
+    content: '';
+    position: absolute;
+    inset: calc(-1 * var(--row-pad)) calc(-1 * var(--solo-space-2));
 }
 
 .titleLink:hover {
@@ -130,6 +170,240 @@
 
 .titleLink:focus-visible {
     text-decoration: underline;
-    outline: 2px solid var(--solo-fg);
-    outline-offset: 3px;
+    outline: none;
+}
+
+.titleLink:focus-visible::after {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: -2px;
+}
+
+.due {
+    flex: none;
+    min-width: 60px;
+    height: var(--title-line);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    font-size: var(--solo-text-meta);
+    line-height: 1.4;
+    color: var(--solo-fg-muted);
+    white-space: nowrap;
+}
+
+/*
+ * Figma Task row Size=Phone: the title fills the row and the end column holds the meta above the actions.
+ * From 768 px the meta sits after the title and the actions after it, on one line.
+ */
+.day {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+        'check title meta'
+        'check title end';
+    align-items: center;
+    gap: var(--solo-space-1) var(--solo-space-3);
+    --row-pad: var(--solo-space-3);
+}
+
+.day:not(:has(> .check)) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+        'title meta'
+        'title end';
+}
+
+.day .text {
+    display: contents;
+}
+
+.day .check {
+    grid-area: check;
+    margin-top: 0;
+}
+
+.day .title {
+    grid-area: title;
+    position: relative;
+}
+
+.day .meta {
+    grid-area: meta;
+    justify-self: end;
+    max-width: 112px;
+    margin-top: 0;
+}
+
+.day .trailing {
+    grid-area: end;
+    justify-self: end;
+    height: auto;
+    margin-left: 0;
+}
+
+/* the end column names the client; the project shows from 768 px */
+.day .sep,
+.day .project {
+    display: none;
+}
+
+/* a running row shows its clock where the meta goes */
+.day:has([data-running]) .meta {
+    display: none;
+}
+
+.day:not(:has(.meta)) .trailing,
+.day:has([data-running]) .trailing {
+    grid-row: 1 / span 2;
+}
+
+@media (min-width: 768px) {
+    .day {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--solo-space-2) var(--solo-space-4);
+        --row-pad: 15px;
+    }
+
+    .day .text {
+        display: var(--solo-task-text, flex);
+    }
+
+    .day .check {
+        margin-top: calc((var(--title-line) - 18px) / 2);
+    }
+
+    .day .title {
+        position: static;
+    }
+
+    .day .meta {
+        max-width: var(--solo-task-meta-max, 45%);
+        margin-top: var(--solo-task-meta-top, 0);
+    }
+
+    .day:has([data-running]) .meta {
+        display: flex;
+    }
+
+    .day .sep,
+    .day .project {
+        display: inline;
+    }
+
+    .day .trailing {
+        height: var(--title-line);
+        margin-left: auto;
+    }
+}
+
+/* Figma A2f / List row (Wszystkie zadania, Propozycje): 44 px, the title wins, the meta capped on phones, one action */
+.compact {
+    --row-pad: 11px;
+    --title-line: calc(var(--solo-mobile-body) * 1.235);
+
+    position: relative;
+    flex-wrap: nowrap;
+    align-items: center;
+}
+
+.compact .title {
+    font: 500 var(--solo-mobile-body) / 1.235 var(--solo-font-text);
+}
+
+.compact .meta {
+    max-width: 112px;
+    font-size: var(--solo-text-sub);
+}
+
+.compact .trailing {
+    height: auto;
+}
+
+@media (min-width: 768px) {
+    .compact {
+        --row-pad: 12px;
+        --title-line: calc(var(--solo-text-action) * 1.35);
+    }
+
+    .compact .title {
+        font: 500 var(--solo-text-action) / 1.35 var(--solo-font-text);
+    }
+
+    .compact .meta {
+        max-width: var(--solo-task-meta-max, 45%);
+        font-size: var(--solo-text-meta);
+    }
+}
+
+/* Figma Done row and Queue row: 40 px, the title and one status, no client or project, no cut between rows */
+.doneRow,
+.queueRow {
+    --row-pad: 10px;
+    --title-line: calc(var(--solo-text-action) * 1.35);
+
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: var(--solo-space-3);
+    border-bottom: 0;
+}
+
+.doneRow .check,
+.queueRow .check {
+    margin-top: 0;
+}
+
+.doneRow .text,
+.queueRow .text {
+    flex: 1 1 auto;
+}
+
+.doneRow .title,
+.queueRow .title {
+    font-size: var(--solo-text-action);
+}
+
+.doneRow.done .title,
+.queueRow.done .title {
+    color: var(--solo-fg);
+    text-decoration: none;
+}
+
+.doneRow .trailing,
+.queueRow .trailing {
+    height: auto;
+    white-space: nowrap;
+}
+
+.current {
+    border-radius: var(--solo-row-radius, 0);
+    background: var(--solo-hover, none);
+}
+
+/* Done row Size=Desktop: the duration right after the title */
+@media (min-width: 768px) {
+    .doneRow .text {
+        flex: 0 1 auto;
+    }
+
+    .doneRow .trailing {
+        margin-left: 0;
+    }
+}
+
+.clientRow {
+    --row-pad: var(--solo-space-row);
+
+    gap: var(--solo-space-row);
+}
+
+.clientRow .trailing {
+    min-width: 70px;
+    justify-content: flex-end;
+}
+
+@media (min-width: 768px) {
+    .meta {
+        max-width: var(--solo-task-meta-max, 45%);
+    }
 }

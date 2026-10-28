@@ -1,7 +1,8 @@
 import * as React from 'react';
-import Markdown from 'react-markdown';
 import { useTranslation } from 'react-i18next';
 
+import { MarkdownView } from '@/components/markdown-view';
+import { fieldBoxClass, SoloTextarea } from '@/components/solo/field';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
@@ -18,19 +19,23 @@ interface Props extends Omit<React.ComponentProps<'textarea'>, 'value' | 'onChan
      * sizing.
      */
     trailing?: React.ReactNode;
+    /** solo: the white field box and quiet tabs of the Solo dialogs (Figma A2f / Input). */
+    look?: 'default' | 'solo';
 }
 
 /**
  * Textarea with a top-right Markdown / Preview tab switcher. Renders the
- * textarea while in Write mode and a react-markdown preview while in Preview.
+ * textarea while in Write mode and a MarkdownView preview while in Preview.
  * The control surface stays the same height in both modes.
  */
-export function MarkdownTextarea({ value, onChange, trailing, className, rows = 6, disabled, ...rest }: Props) {
+export function MarkdownTextarea({ value, onChange, trailing, className, rows = 6, disabled, look = 'default', ...rest }: Props) {
     const { t } = useTranslation();
     const [tab, setTab] = React.useState<Tab>('write');
+    const solo = look === 'solo';
+    const Field = solo ? SoloTextarea : Textarea;
 
     return (
-        <div className={styles.root}>
+        <div className={cn(styles.root, solo && styles.solo)}>
             <div className={styles.toolbar}>
                 <div className={styles.tabs} role="tablist" aria-label="markdown view">
                     <button
@@ -58,23 +63,23 @@ export function MarkdownTextarea({ value, onChange, trailing, className, rows = 
             </div>
 
             {tab === 'write' ? (
-                <Textarea
+                <Field
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     rows={rows}
                     disabled={disabled}
-                    className={cn(styles.textarea, className)}
+                    className={cn(!solo && styles.textarea, className)}
                     {...rest}
                 />
             ) : (
                 <div
-                    className={cn(styles.preview, className)}
+                    className={cn(styles.markdown, solo ? [fieldBoxClass, styles.soloPreview] : styles.preview, className)}
                     style={{ minHeight: `${(rows ?? 6) * 1.5}rem` }}
                 >
                     {value.trim() === '' ? (
                         <span className={styles.placeholder}>{t('Nothing to preview yet.')}</span>
                     ) : (
-                        <Markdown>{value}</Markdown>
+                        <MarkdownView>{value}</MarkdownView>
                     )}
                 </div>
             )}

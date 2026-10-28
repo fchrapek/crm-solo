@@ -7,12 +7,3 @@
 .icon {
     color: var(--color-warning);
 }
-
-.destructiveAction {
-    background-color: var(--color-destructive);
-    color: var(--color-white, white);
-}
-
-.destructiveAction:hover {
-    background-color: color-mix(in srgb, var(--color-destructive) 88%, var(--color-black));
-}

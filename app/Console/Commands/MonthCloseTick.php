@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Console\Attributes\AccountScope;
 use App\Console\Commands\Concerns\AgentConsoleOutput;
+use App\Services\Agent\AgentRefusal;
 use App\Services\Agent\CrmEntityResolver;
 use App\Services\Agent\MonthCloseTicker;
 use App\Services\Agent\ReferenceException;
@@ -52,6 +53,8 @@ final class MonthCloseTick extends Command
                     $this->option('project') !== null ? (string) $this->option('project') : null,
                     $this->option('note') !== null ? (string) $this->option('note') : null,
                 );
+        } catch (AgentRefusal $e) {
+            return $this->refusal($e);
         } catch (InvalidArgumentException $e) {
             $this->error($e->getMessage());
 

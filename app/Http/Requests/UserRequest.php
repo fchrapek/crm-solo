@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -35,6 +36,7 @@ final class UserRequest extends FormRequest
                 Rule::unique('users')->ignore($userId),
             ],
             'password' => ['sometimes', 'required', Password::defaults()],
+            'current_password' => $this->changesOwnPassword() ? ['required', 'current_password'] : ['exclude'],
             'owner' => ['required', 'boolean'],
             'photo' => [
                 'nullable',
@@ -44,5 +46,12 @@ final class UserRequest extends FormRequest
                 'dimensions:min_width=100,min_height=100,max_width=2000,max_height=2000',
             ],
         ];
+    }
+
+    public function changesOwnPassword(): bool
+    {
+        $target = $this->route('user');
+
+        return $this->filled('password') && $target instanceof User && $target->is($this->user());
     }
 }

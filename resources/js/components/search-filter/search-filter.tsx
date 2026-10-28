@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LIFECYCLE_STAGES, lifecycleStageLabelKey } from '@/lib/lifecycle-stage';
 import { SharedData } from '@/types';
 
 import styles from './search-filter.module.css';
@@ -17,18 +16,12 @@ interface Values {
     role: string;
     search: string;
     trashed: string;
-    stage: string;
 }
 
 const ANY_VALUE = 'any'; // Instead of empty string
-// Lifecycle stages have their own "show everything" sentinel ('all') because,
-// unlike the other filters, the list defaults to a concrete stage server-side
-// (active). Dropping the param on "any" would re-trigger that default, so the
-// stage field never uses ANY_VALUE - 'all' is sent explicitly to widen.
-const ALL_STAGES = 'all';
 
 function pickBy(object: Values): Partial<Values> {
-    const keys: Array<keyof Values> = ['role', 'search', 'trashed', 'stage'];
+    const keys: Array<keyof Values> = ['role', 'search', 'trashed'];
     return keys.reduce<Partial<Values>>((acc, key) => {
         const value = object[key];
         // If the value is ANY_VALUE, don't include it in the query
@@ -44,7 +37,6 @@ interface SearchFilterPageProps extends SharedData {
         role?: string;
         search?: string;
         trashed?: string;
-        stage?: string;
     };
 }
 
@@ -53,16 +45,11 @@ export default function SearchFilter() {
     const { filters } = usePage<SearchFilterPageProps>().props;
     const [open, setOpen] = React.useState(false);
 
-    const hasStageFilter = Object.prototype.hasOwnProperty.call(filters, 'stage');
-
     const [values, setValues] = React.useState<Values>({
         // Convert empty strings in filters to ANY_VALUE
         role: filters.role || ANY_VALUE,
         search: filters.search || '',
         trashed: filters.trashed || ANY_VALUE,
-        // Pages without a stage filter keep ANY_VALUE so pickBy drops it; pages
-        // that do (clients) get the server-resolved stage (defaults to active).
-        stage: hasStageFilter ? filters.stage || 'active' : ANY_VALUE,
     });
 
     function handleChange(key: keyof Values, value: string) {
@@ -105,24 +92,6 @@ export default function SearchFilter() {
                                                 <SelectItem value={ANY_VALUE}>{t('Any')}</SelectItem>
                                                 <SelectItem value="user">{t('User')}</SelectItem>
                                                 <SelectItem value="owner">{t('Owner')}</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                )}
-                                {hasStageFilter && (
-                                    <div className={styles.fieldGrid}>
-                                        <Label htmlFor="stage">{t('Stage')}</Label>
-                                        <Select value={values.stage} onValueChange={(value) => handleChange('stage', value)}>
-                                            <SelectTrigger id="stage">
-                                                <SelectValue placeholder={t('Select stage')} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value={ALL_STAGES}>{t('All statuses')}</SelectItem>
-                                                {LIFECYCLE_STAGES.map((stage) => (
-                                                    <SelectItem key={stage} value={stage}>
-                                                        {t(lifecycleStageLabelKey(stage))}
-                                                    </SelectItem>
-                                                ))}
                                             </SelectContent>
                                         </Select>
                                     </div>

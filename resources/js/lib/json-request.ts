@@ -1,13 +1,29 @@
-function readXsrfToken(): string {
+export function readXsrfToken(): string {
     const match = document.cookie.split(';').find((c) => c.trim().startsWith('XSRF-TOKEN='));
 
     return match ? decodeURIComponent(match.split('=')[1]) : '';
 }
 
+/** A non-2xx answer: the server's message, and its validation errors by field when it sent any. */
+export class JsonRequestError extends Error {
+    constructor(
+        message: string,
+        readonly errors: Record<string, string[]> = {},
+    ) {
+        super(message);
+    }
+}
+
 /** Sends a JSON request to a Laravel endpoint with the session's XSRF token; throws on a non-2xx status. */
-export async function jsonRequest<T = unknown>(url: string, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', body?: unknown): Promise<T> {
+export async function jsonRequest<T = unknown>(
+    url: string,
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+    body?: unknown,
+    signal?: AbortSignal,
+): Promise<T> {
     const response = await fetch(url, {
         method,
+        signal,
         credentials: 'same-origin',
         headers: {
             Accept: 'application/json',
@@ -20,7 +36,7 @@ export async function jsonRequest<T = unknown>(url: string, method: 'POST' | 'PU
 
     if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(data.message ?? `Request failed with ${response.status}`);
+        throw new JsonRequestError(data.message ?? `Request failed with ${response.status}`, data.errors);
     }
 
     return response.json() as Promise<T>;

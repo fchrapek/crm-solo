@@ -66,11 +66,12 @@ final class IntegrationAppKeyChangeTest extends TestCase
         $this->assertFalse($underB->isConfigured());
 
         $this->actingAs($this->user)
-            ->get('/integrations/trello')
+            ->get('/settings/integracje')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('integration.has_unreadable_credentials', true)
-                ->where('integration.has_trello_api_key', false));
+                ->where('integrations.1.provider', 'trello')
+                ->where('integrations.1.has_unreadable_credentials', true)
+                ->where('integrations.1.has_trello_api_key', false));
 
         $this->actingAs($this->user)
             ->put('/integrations/trello', ['is_enabled' => false, 'settings' => ['other' => 'changed']])

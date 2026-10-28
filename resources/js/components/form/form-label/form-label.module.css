@@ -15,3 +15,26 @@
 .error {
     color: var(--color-destructive);
 }
+
+/* Solo: the shared field label (components/solo/field.module.css), so every dialog on a Solo page labels its fields alike */
+:global([data-day]) .label {
+    margin-bottom: 6px;
+    color: var(--solo-fg-muted);
+    font-family: var(--solo-font-text);
+    font-size: var(--solo-text-meta);
+    font-weight: 500;
+    line-height: normal;
+}
+
+@media (min-width: 768px) {
+    :global([data-day]) .label {
+        font-size: var(--solo-label-size, var(--solo-text-meta));
+        font-weight: var(--solo-label-weight, 400);
+        letter-spacing: var(--solo-label-tracking, 0);
+        text-transform: var(--solo-label-case, none);
+    }
+}
+
+:global([data-day]) .error {
+    color: var(--solo-error);
+}

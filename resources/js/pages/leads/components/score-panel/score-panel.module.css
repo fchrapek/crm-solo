@@ -62,8 +62,8 @@
 .legend {
     font-size: 0.6875rem;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    text-transform: var(--solo-label-case, uppercase);
+    letter-spacing: var(--solo-label-tracking, 0.04em);
     color: var(--color-muted-foreground);
     padding: 0 0.25rem;
 }

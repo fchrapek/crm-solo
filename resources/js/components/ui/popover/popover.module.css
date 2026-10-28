@@ -1,7 +1,7 @@
 /* Popover Component Styles */
 
 .content {
-  z-index: var(--z-50);
+  z-index: var(--z-modal);
   width: 18rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
@@ -74,4 +74,19 @@
 @keyframes slideFromRight {
   from { transform: translateX(0.5rem); }
   to { transform: translateX(0); }
+}
+
+/* Solo: under a Solo page the portal container is a [data-day] surface (components/solo/surface.tsx) */
+:global([data-day]) .content {
+  border: var(--solo-pop-width, 2px) solid var(--solo-pop-border, var(--solo-fg));
+  border-radius: var(--solo-pop-radius, var(--solo-radius-xl));
+  background-color: var(--solo-pop-bg, var(--solo-bg));
+  color: var(--solo-fg);
+  box-shadow: var(--solo-pop-shadow, none);
+}
+
+/* Same size as the select's Menu / Filter, but it scrolls: the panel can outgrow the space under the trigger. */
+.soloMenu {
+  max-height: var(--radix-popover-content-available-height);
+  overflow-y: auto;
 }

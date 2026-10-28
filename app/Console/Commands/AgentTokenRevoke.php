@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Console\Attributes\AccountScope;
 use App\Models\AgentToken;
+use App\Services\Agent\AgentTokens;
 use Illuminate\Console\Command;
 
 /**
@@ -19,7 +20,7 @@ final class AgentTokenRevoke extends Command
 
     protected $description = 'Revoke an agent token (operator: any account\'s token, by id)';
 
-    public function handle(): int
+    public function handle(AgentTokens $tokens): int
     {
         $token = AgentToken::query()->find((int) $this->argument('id'));
         if ($token === null) {
@@ -28,13 +29,12 @@ final class AgentTokenRevoke extends Command
             return self::FAILURE;
         }
 
-        if ($token->isRevoked()) {
+        if (! $tokens->revoke($token)) {
             $this->line("Token #{$token->id} \"{$token->name}\" was already revoked.");
 
             return self::SUCCESS;
         }
 
-        $token->forceFill(['revoked_at' => now()])->save();
         $this->line("Revoked token #{$token->id} \"{$token->name}\".");
 
         return self::SUCCESS;

@@ -13,7 +13,7 @@ use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[IsReadOnly]
-#[Description('The cross-client attention list: urgent and overdue tasks, open month-close runs, hot leads in play, and any running timer. Start here.')]
+#[Description('The cross-client attention list: urgent and overdue tasks, open month-close runs, hot leads in play, text messages that failed, any running timer, and the plan for today and tomorrow. Start here.')]
 final class TodayTool extends Tool
 {
     use HandlesReferenceErrors;

@@ -1,0 +1,531 @@
+/* Phone first (Figma 333:2817): the summary, two disclosure rows and the Praca list; from 768 px the list and its rail. */
+.brief {
+    max-width: 1040px;
+    margin: 0;
+    padding-top: var(--solo-space-5);
+    color: var(--solo-fg);
+    font-size: var(--solo-mobile-summary);
+    font-weight: 600;
+    line-height: 30px;
+    letter-spacing: -0.3px;
+    overflow-wrap: anywhere;
+}
+
+.accent {
+    color: var(--solo-accent);
+}
+
+.muted {
+    color: var(--solo-fg-muted);
+}
+
+.phoneRows {
+    margin-top: 20px;
+    padding: var(--solo-block-pad, 0);
+    border-top: var(--solo-head-rule, 1px) solid var(--solo-rule);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+}
+
+.phoneRows > :last-child {
+    border-bottom-color: var(--solo-block-end, var(--solo-rule));
+}
+
+.body {
+    padding-top: 28px;
+}
+
+.main {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+}
+
+.main > * {
+    align-self: stretch;
+}
+
+.main,
+.railSection {
+    padding: var(--solo-card-pad, 0);
+    padding-bottom: var(--solo-card-pad-end, 0);
+    border: var(--solo-card-width, 0) solid var(--solo-card-border, transparent);
+    border-radius: var(--solo-card-radius, 0);
+    background: var(--solo-card, none);
+    box-shadow: var(--solo-card-shadow, none);
+}
+
+.rail {
+    display: none;
+}
+
+.workList {
+    display: none;
+}
+
+.list,
+.workList,
+.phoneList,
+.sheetList,
+.relationBlock {
+    margin: 0;
+    padding: var(--solo-block-pad, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    list-style: none;
+}
+
+.relationBlock .list,
+.relationBlock .empty {
+    padding: 0;
+    background: none;
+}
+
+.relationBlock .empty {
+    padding: var(--solo-space-row) var(--solo-row-inset, 0);
+}
+
+/* the last row ends on the block's edge, not on a cut */
+.list > :last-child,
+.workList > :last-child,
+.phoneList > :last-child,
+.sheetList > :last-child,
+.relationBlock > .stage:last-child {
+    border-bottom-width: var(--solo-head-rule, 1px);
+}
+
+@media (min-width: 768px) {
+    .brief {
+        padding-top: 44px;
+        font-size: var(--solo-heading-brief);
+        line-height: 1.22;
+        letter-spacing: -0.015em;
+    }
+
+    .phoneRows,
+    .phoneList {
+        display: none;
+    }
+
+    .body {
+        padding-top: 36px;
+    }
+
+    .rail {
+        display: flex;
+        flex-direction: column;
+        gap: 36px;
+        min-width: 0;
+    }
+
+    .workList {
+        display: block;
+    }
+
+    .workHead > :first-child {
+        color: var(--solo-work-head, var(--solo-fg));
+    }
+}
+
+.railSection {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+}
+
+.railSection > * {
+    align-self: stretch;
+}
+
+.phoneMeta[data-actor='agent'] {
+    color: var(--solo-agent);
+}
+
+.empty {
+    margin: 0;
+    padding: var(--solo-space-row) var(--solo-head-inset, 0);
+    border-bottom: var(--solo-head-rule, 1px) solid var(--solo-rule);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-row);
+    line-height: 1.35;
+}
+
+.workRow {
+    display: flex;
+    align-items: center;
+    gap: var(--solo-space-row);
+    padding: var(--solo-space-row) var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+}
+
+.workTitle {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: var(--solo-space-1);
+    min-width: 0;
+}
+
+.workName,
+.workSub {
+    margin: 0;
+    line-height: normal;
+    overflow-wrap: anywhere;
+}
+
+.workName {
+    color: var(--solo-fg);
+    font-size: var(--solo-text-cell);
+    font-weight: 500;
+}
+
+.workSub {
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-sub);
+}
+
+.workMeta,
+.workDate {
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+    line-height: 1.4;
+    text-align: right;
+}
+
+.workMeta {
+    flex: 0 1 150px;
+    min-width: 0;
+}
+
+.workMeta[data-actor='agent'] {
+    color: var(--solo-agent);
+}
+
+.workDate {
+    flex: 0 0 52px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.newMark,
+.entryKind {
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-micro);
+    font-weight: var(--solo-label-weight, 700);
+    line-height: normal;
+    letter-spacing: var(--solo-label-tracking, 0.08em);
+    text-transform: var(--solo-label-case, uppercase);
+    white-space: nowrap;
+}
+
+.newMark {
+    margin-left: var(--solo-space-2);
+    color: var(--solo-accent);
+}
+
+/* Starsze keeps a 44 px target on phones */
+.olderWork,
+.olderNotes {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    min-height: var(--solo-touch);
+}
+
+.olderWork {
+    margin-top: var(--solo-space-1);
+}
+
+@media (min-width: 768px) {
+    .olderWork,
+    .olderNotes {
+        display: inline;
+        min-height: auto;
+    }
+
+    .olderWork {
+        margin-top: var(--solo-space-4);
+    }
+}
+
+.projectRow {
+    display: flex;
+    flex-direction: var(--solo-list-flow, row);
+    align-items: var(--solo-project-align, baseline);
+    gap: var(--solo-project-gap, var(--solo-space-3));
+    padding: var(--solo-space-3) var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+    line-height: normal;
+}
+
+.projectTitle {
+    display: var(--solo-project-title, contents);
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--solo-space-3);
+}
+
+.projectName {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--solo-fg);
+    text-overflow: ellipsis;
+    white-space: var(--solo-list-wrap, nowrap);
+    font-size: var(--solo-text-field);
+    font-weight: 600;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+
+.projectLink {
+    flex: none;
+    order: 2;
+    color: var(--solo-fg);
+    font-size: var(--solo-text-meta-strong);
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.projectName:hover,
+.projectLink:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.projectName:focus-visible,
+.projectLink:focus-visible,
+.entryMore:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.projectMeta {
+    order: 1;
+    margin: 0;
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+    white-space: nowrap;
+}
+
+.stage {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--solo-space-3);
+    padding: var(--solo-space-4) var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+}
+
+.stageLine {
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+    line-height: normal;
+}
+
+.entry {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--solo-space-2);
+    padding: var(--solo-space-4) var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+}
+
+.entryMeta {
+    display: flex;
+    align-items: center;
+    gap: var(--solo-space-2-5);
+}
+
+.entryDate {
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+    line-height: normal;
+}
+
+.entryHeadline,
+.entryText {
+    margin: 0;
+    color: var(--solo-fg);
+    font-size: var(--solo-text-field);
+    line-height: 22px;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
+.entryHeadline {
+    font-weight: 600;
+}
+
+.entryText[data-folded] {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+}
+
+.entryMore {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-fg-muted);
+    font: 500 var(--solo-text-meta-strong) / normal var(--solo-font-text);
+    cursor: pointer;
+}
+
+.entryMore:hover {
+    color: var(--solo-fg);
+}
+
+.dialogActions {
+    flex-direction: row;
+    justify-content: flex-end;
+}
+
+/* Figma: Relacja z klientem, the pushed phone screen (333:3134) */
+.pushed {
+    display: flex;
+    flex-direction: column;
+}
+
+.pushedTitle {
+    display: flex;
+    flex-direction: column;
+    gap: var(--solo-space-1);
+    padding-block: var(--solo-space-2);
+}
+
+.pushedName {
+    margin: 0;
+    color: var(--solo-fg);
+    font: 700 var(--solo-mobile-title) / 34px var(--solo-font-text);
+    letter-spacing: -0.5px;
+    overflow-wrap: anywhere;
+}
+
+.pushedClient {
+    margin: 0;
+    color: var(--solo-fg-muted);
+    font: 500 var(--solo-text-field) / normal var(--solo-font-text);
+}
+
+.pushedBody {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding-top: var(--solo-space-2);
+}
+
+.pushedBody > * {
+    align-self: stretch;
+}
+
+.pushedBody .stage {
+    gap: var(--solo-space-2-5);
+    padding-block: var(--solo-space-3);
+    border-top: var(--solo-head-rule, 1px) solid var(--solo-rule);
+}
+
+.pushedBody .entryHeadline {
+    font-size: var(--solo-text-cell);
+    line-height: 1.35;
+}
+
+.pushedBody .entryText {
+    font-size: var(--solo-text-cell);
+    line-height: 23px;
+}
+
+.pushedBody .entryMore {
+    min-width: var(--solo-touch);
+    min-height: var(--solo-touch);
+    text-align: left;
+}
+
+.pushedBody .olderNotes {
+    margin-top: var(--solo-space-1);
+}
+
+.pushedAway {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .pushed {
+        display: none;
+    }
+
+    .pushedAway {
+        display: contents;
+    }
+}
+
+/* Figma: Projekty sheet (333:3265) */
+/* the project name's link covers its whole row, Trello stays its own target above it */
+.sheetItem {
+    position: relative;
+}
+
+.sheetProject {
+    color: inherit;
+    text-decoration: none;
+}
+
+.sheetProject::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+}
+
+.sheetProject:focus-visible {
+    outline: none;
+}
+
+.sheetProject:focus-visible::after {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: -2px;
+}
+
+.sheetTrello:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 2px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.sheetTrello {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--solo-touch);
+    padding: 0 var(--solo-space-1);
+    color: var(--solo-fg);
+    font: 600 var(--solo-text-action) / 1.35 var(--solo-font-text);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.sheetAdd {
+    padding-top: var(--solo-space-4);
+}
+
+.sheetEmpty {
+    margin: 0;
+    padding-block: var(--solo-space-4);
+    border-bottom: 1px solid var(--solo-rule);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+    line-height: 1.4;
+}
+
+/* the work list below the SMS list in the main column */
+.nextSection {
+    margin-top: var(--solo-space-6);
+}

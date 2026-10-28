@@ -14,21 +14,6 @@ interface Props {
     currentStage: LifecycleStage;
 }
 
-/**
- * Inert stage display for the client header - the pill informs, the actual
- * stage control (<StageChip>) lives in the Etap relacji card on Aktywność.
- */
-export function StagePill({ stage }: { stage: LifecycleStage }) {
-    const { t } = useTranslation();
-
-    return (
-        <span className={styles.pill}>
-            <span className={styles.dot} data-tone={lifecycleStageTone(stage)} />
-            {t(lifecycleStageLabelKey(stage))}
-        </span>
-    );
-}
-
 export function StageChip({ clientId, currentStage }: Props) {
     const { t } = useTranslation();
     const [open, setOpen] = useState(false);

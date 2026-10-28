@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { usePageActions } from '@/contexts/page-context';
 import leads from '@/routes/leads';
+import settings from '@/routes/settings';
 import { BreadcrumbItem, SharedData } from '@/types';
 
 import { LeadKanban, type LeadCard } from './components/lead-kanban';
@@ -87,7 +88,7 @@ export default function Index({ filters, pipelines, stages, stage_labels, source
 
                     <div className={styles.headerActions}>
                         <Button asChild variant="ghost" size="icon" aria-label={t('Lead settings')}>
-                            <Link href="/settings#leads" prefetch>
+                            <Link href={settings.show('leady')} prefetch>
                                 <Settings size={16} />
                             </Link>
                         </Button>

@@ -9,6 +9,18 @@ use Tests\TestCase;
 
 final class BillingSummaryTest extends TestCase
 {
+    public function test_the_summary_prints_the_hours_bank_figures_with_a_cap_and_with_debt(): void
+    {
+        $capped = BillingSummary::lines(8, 10, 5, 15, 'en');
+        $this->assertContains('Opening balance for next month: +10h', $capped);
+        $this->assertContains('Hours above the agreed carry-over cap, not carried forward: 3h', $capped);
+
+        $debt = BillingSummary::lines(-4, 10, 9, null, 'en');
+        $this->assertContains('Opening balance for the month: −4h', $debt);
+        $this->assertContains('Opening balance for next month: −3h', $debt);
+        $this->assertSame([], preg_grep('/carry-over cap/', $debt));
+    }
+
     public function test_a_summary_heading_inside_fenced_code_is_not_the_section(): void
     {
         $body = "# March\n\n```md\n## Billing summary\nOpening balance: 0h\n```\n\nThe end.\n";

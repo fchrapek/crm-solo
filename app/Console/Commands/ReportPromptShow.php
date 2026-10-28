@@ -9,7 +9,6 @@ use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\Account;
 use App\Services\Reports\NarrativePromptResolver;
 use App\Services\Reports\NarrativePromptUnavailable;
-use App\Services\Reports\SettingsNarrativePromptResolver;
 use Illuminate\Console\Command;
 
 /**
@@ -50,7 +49,7 @@ final class ReportPromptShow extends Command
             $accountId,
             $source ?? 'none',
             mb_strlen($prompt),
-            $source === 'file' && $resolver instanceof SettingsNarrativePromptResolver
+            $source === 'file'
                 ? ' path='.$resolver->path()
                 : '',
         ));

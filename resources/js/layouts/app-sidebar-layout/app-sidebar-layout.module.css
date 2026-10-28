@@ -1,3 +1,16 @@
 .content {
     padding: var(--spacing-4);
+    /* phones: the bottom tab bar covers the page end */
+    padding-bottom: var(--solo-tab-bar-clearance);
+}
+
+/* the tab bar's Solo surface carries tokens only, no box of its own */
+.tabBar {
+    display: contents;
+}
+
+@media (min-width: 768px) {
+    .content {
+        padding-bottom: var(--spacing-4);
+    }
 }

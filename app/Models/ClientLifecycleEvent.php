@@ -19,12 +19,18 @@ final class ClientLifecycleEvent extends Model
         'from_stage',
         'to_stage',
         'note',
+        'task_id',
         'created_at',
     ];
 
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(Task::class);
     }
 
     public function user(): BelongsTo

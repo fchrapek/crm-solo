@@ -4,6 +4,8 @@ Copy-paste recipes for the ad-hoc DB work done from a side terminal — logging 
 
 ## How to run
 
+**Since 2026-10-04 the real data lives on the hosted instance.** The local `.env` names a frozen database, so every recipe below that runs `php artisan` on the Mac fails by design. Log time with `crm time:log <minutes> --task=...` (same options, through the agent bridge). Anything else (tinker, raw `DB::`) runs on the server, by hand, in an interactive tinker (the command is under Operations in `hosting.md`, which stays with the private repository) with the code pasted there. Never add a throwaway command inside the running container (that is an untracked code change on production); the recipes below still describe what to paste.
+
 - **Hands-on:** `php artisan tinker` (interactive) — fine for manual work.
 - **Scripted / agent:** `php artisan tinker --execute "..."` **hangs intermittently here** (see the tinker memory). For a repeatable or agent-run op, write a throwaway `php artisan make:command OneOff` and put the code in `handle()`, or use `DB::` in a tiny command — don't rely on `--execute`.
 
@@ -49,7 +51,7 @@ Target with **exactly one** of `--task` / `--client` / `--project`. Ambiguous na
 
 ## Model cheat-sheet — `App\Models\TimeEntry`
 
-- `source`: `'manual'` (hand-logged) · `'terminal_session'` (agent sessions) · `'clockify'` (historical imports; the integration was removed 2026-10-01, nothing creates them now). Constants: `TimeEntry::SOURCE_MANUAL` etc.
+- `source`: `'manual'` (hand-logged) · `'terminal_session'` (the retired in-app agent sessions; nothing creates them now) · `'clockify'` (historical imports; the integration was removed 2026-10-01, nothing creates them now). Constants: `TimeEntry::SOURCE_MANUAL` etc.
 - Fillable: `account_id, project_id, client_id, task_id, source, title, description, start_time, end_time, duration_minutes, billable, tags`.
 - `title` = short label (shown in the list) · `description` = detail (defaults to the task name). `tags` is an array-cast JSON column.
 - **Closed entries carry BOTH `end_time` and `duration_minutes`, kept consistent:** `duration_minutes = TimeEntry::minutesBetween(start, end)` (seconds rounded up to whole minutes; every stop path uses it). Aggregation/reports read `duration_minutes`. A **running** entry has `end_time = null`, `duration_minutes = 0`.
@@ -88,20 +90,16 @@ App\Models\TimeEntry::create([
 ```
 
 ### Fix / adjust hours on an existing entry
-Keep `end_time` and `duration_minutes` consistent:
+First choice, no tinker: `crm time-entries --day=yesterday` to find it, then `crm time-edit <id> --minutes=120` (or `--start=`/`--end=` local, `--task=`), or `crm time-split <id> --part=<task>:<minutes> --part=...` to move hours onto other tasks. Both refuse a closed or reported month (`period_settled`). By hand, keep `end_time` and `duration_minutes` consistent:
 ```php
 $e = App\Models\TimeEntry::find(456);
 $mins = 120;
 $e->update(['duration_minutes' => $mins, 'end_time' => (clone $e->start_time)->addMinutes($mins)]);
 ```
-⚠️ If `$e->source === 'terminal_session'`, also fix the linked `TaskSession` (the Time list shows *its* times):
-```php
-App\Models\TaskSession::where('time_entry_id',$e->id)->update(['started_at'=>$e->start_time,'ended_at'=>$e->end_time]);
-```
 
 ### Start / stop a running timer
 ```php
-// start (running stopwatch) - the same call the web, the agent verbs and terminal sessions use
+// start (running stopwatch) - the same call the web, the agent verbs and MCP use
 $e = App\Models\TimeEntry::startFor($task);
 // stop
 $e->stopNow();
@@ -126,6 +124,5 @@ $c->projects()->with('tasks:id,project_id,name')->get();
 ## Gotchas
 - **`tinker --execute` hangs** here — use interactive tinker or a throwaway command for anything scripted/agent-run.
 - **Account scoping** — always set `account_id`; derive from task/project/client.
-- **TaskSession sync** — only `terminal_session` entries have a `TaskSession`; edit both when changing times. Manual entries have none.
 - **Report hours ≠ raw time.** Client-report `actual_hours` counts only time entries whose task has `is_reportable = true` (see `ReportDataAggregator`). Recurring/baseline tasks are usually `is_reportable=false`. So a client's raw time total can exceed report hours by design.
 - **Finances source of truth** is the Infakt RZiS (`finances:import-rzis`), not these entries — see the finances memory.

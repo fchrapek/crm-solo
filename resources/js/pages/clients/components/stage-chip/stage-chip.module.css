@@ -19,20 +19,6 @@
     border-color: var(--color-foreground);
 }
 
-/* The trigger's inert sibling: same anatomy, no affordance. */
-.pill {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-1);
-    padding: 4px 10px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    background: var(--color-background);
-    color: var(--color-foreground);
-}
-
 .dot {
     width: 8px;
     height: 8px;
@@ -53,8 +39,8 @@
     background: var(--tone-amber-solid);
 }
 
-.dot[data-tone='grey'] {
-    background: var(--tone-grey-solid);
+.dot[data-tone='red'] {
+    background: var(--tone-red-solid);
 }
 
 .dot[data-tone='neutral'] {
@@ -73,8 +59,8 @@
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--color-muted-foreground);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    text-transform: var(--solo-label-case, uppercase);
+    letter-spacing: var(--solo-label-tracking, 0.05em);
     margin: 0;
 }
 
@@ -118,8 +104,8 @@
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--color-muted-foreground);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    text-transform: var(--solo-label-case, uppercase);
+    letter-spacing: var(--solo-label-tracking, 0.05em);
 }
 
 .noteWrap textarea {

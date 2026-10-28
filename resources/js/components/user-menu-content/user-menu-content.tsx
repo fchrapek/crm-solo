@@ -1,4 +1,4 @@
-import { Link, router, usePage } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import { LogOut, Settings } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -7,8 +7,8 @@ import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSep
 import { UserInfo } from '@/components/user-info';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { logout } from '@/routes';
-import users from '@/routes/users';
-import { type SharedData, type User } from '@/types';
+import settings from '@/routes/settings';
+import { type User } from '@/types';
 
 import styles from './user-menu-content.module.css';
 
@@ -19,7 +19,6 @@ interface UserMenuContentProps {
 export function UserMenuContent({ user }: UserMenuContentProps) {
     const { t } = useTranslation();
     const cleanup = useMobileNavigation();
-    const { auth } = usePage<SharedData>().props;
 
     const handleLogout = () => {
         cleanup();
@@ -36,7 +35,7 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
                 <DropdownMenuItem asChild>
-                    <MobileAwareLink className={styles.menuLink} href={users.edit(auth.user.id)} as="button" prefetch onClick={cleanup}>
+                    <MobileAwareLink className={styles.menuLink} href={settings.show('konto')} as="button" prefetch onClick={cleanup}>
                         <Settings className={styles.icon} />
                         {t('My Profile')}
                     </MobileAwareLink>

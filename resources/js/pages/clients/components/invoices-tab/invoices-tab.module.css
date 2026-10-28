@@ -55,7 +55,7 @@
 
 /* The SelectTrigger inside is width: 100%; this wrapper is the actual size. */
 .filterSelect {
-    width: 10.5rem;
+    width: 12.5rem;
 }
 
 /* One quiet sentence so no table column needs a per-cell VAT caveat. */

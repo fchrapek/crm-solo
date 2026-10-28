@@ -1,0 +1,344 @@
+/* Phone first: Mobile / Nav bar + Record header; from 768 px the desktop Client header. */
+
+.header {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.navBar {
+    position: sticky;
+    top: 0;
+    z-index: var(--z-40);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    column-gap: var(--solo-space-2);
+    align-items: center;
+    min-height: var(--solo-touch);
+    margin-inline: calc(-1 * var(--solo-grid-margin));
+    padding: env(safe-area-inset-top, 0px) var(--solo-space-4) 0 var(--solo-space-2);
+    background: var(--solo-header-bg, var(--solo-bg));
+    box-shadow: var(--solo-navbar-rule, none);
+}
+
+.back {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    justify-self: start;
+    max-width: 100%;
+    min-width: 0;
+    height: var(--solo-touch);
+    padding-inline: var(--solo-space-2);
+    color: var(--solo-fg);
+    font: 500 var(--solo-mobile-body) / 21px var(--solo-font-text);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+/* with no chip in the centre, a long label runs on until the menu */
+.navBar:not(:has(.agentChip)) {
+    grid-template-columns: minmax(0, 1fr) 0 auto;
+}
+
+/* the same thin arrow as the trail's → and Cała historia →, in the label's own font */
+.backIcon {
+    flex: none;
+}
+
+.backLabel {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.agentChip {
+    grid-column: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 var(--solo-space-3) 0 var(--solo-space-2-5);
+    border: 1px solid var(--solo-agent);
+    border-radius: var(--solo-radius-full);
+    color: var(--solo-agent);
+    font: 600 var(--solo-mobile-chip) / 16px var(--solo-font-text);
+    white-space: nowrap;
+}
+
+.agentMark {
+    width: 7px;
+    height: 7px;
+    border-radius: 1px;
+    background: currentColor;
+}
+
+.menu {
+    grid-column: 3;
+    justify-self: end;
+    display: flex;
+}
+
+.trailRow {
+    display: none;
+}
+
+.trail {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--solo-space-row);
+    min-width: 0;
+}
+
+.crumb,
+.current {
+    font-size: var(--solo-label-size, var(--solo-text-label));
+    font-weight: var(--solo-label-weight, 700);
+    line-height: 1.3;
+    letter-spacing: var(--solo-label-tracking, 0.08em);
+    text-transform: var(--solo-label-case, uppercase);
+    white-space: nowrap;
+}
+
+.crumb {
+    color: var(--solo-fg-muted);
+    text-decoration: none;
+}
+
+a.crumb:hover {
+    color: var(--solo-fg);
+}
+
+.current {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-bottom: var(--solo-space-1);
+    border-bottom: var(--solo-nav-line, 2px) solid var(--solo-fg);
+    color: var(--solo-fg);
+}
+
+/* Figma: the task crumb stops at about twenty capitals */
+.current[data-clip] {
+    max-width: 180px;
+}
+
+.live {
+    display: flex;
+    min-width: 0;
+    margin-left: auto;
+}
+
+/* the title wraps to two lines, then ends with an ellipsis; the space under it is margin, as padding would show the clamped third line */
+.name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    margin: 0 0 var(--solo-space-2-5);
+    padding: var(--solo-space-1) 0 0;
+    font: var(--solo-title-weight, 700) var(--solo-mobile-title) / 34px var(--solo-font-text);
+    letter-spacing: -0.5px;
+    overflow-wrap: anywhere;
+    color: var(--solo-fg);
+    --record-title-chars: 1;
+}
+
+.wideTitle {
+    display: none;
+}
+
+.archivedPhone {
+    margin: 0 0 var(--solo-space-2-5);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-label-size, var(--solo-text-label));
+    font-weight: var(--solo-label-weight, 700);
+    letter-spacing: var(--solo-label-tracking, 0.08em);
+    text-transform: var(--solo-label-case, uppercase);
+}
+
+.tabsRow {
+    position: relative;
+    margin-inline: calc(-1 * var(--solo-grid-margin));
+    padding-inline: var(--solo-space-4);
+    scroll-padding-inline: var(--solo-space-4);
+    border-bottom: 1px solid var(--solo-rule);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+}
+
+.tabsRow::-webkit-scrollbar {
+    display: none;
+}
+
+.tabs {
+    display: flex;
+    gap: var(--solo-space-row);
+    width: max-content;
+}
+
+.tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--solo-space-1);
+    min-width: var(--solo-touch);
+    height: var(--solo-touch);
+    border-bottom: 2px solid transparent;
+    color: var(--solo-fg-muted);
+    font: 500 var(--solo-mobile-tab) / 16px var(--solo-font-text);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.tab:hover,
+.tab[aria-current='page'] {
+    color: var(--solo-fg);
+}
+
+.tab[aria-current='page'] {
+    border-bottom-color: var(--solo-rule-strong);
+    font-weight: 600;
+}
+
+.count {
+    color: var(--solo-fg-muted);
+    font: 500 var(--solo-mobile-tab-count) / 14px var(--solo-font-text);
+}
+
+.countSep {
+    display: none;
+}
+
+.archived {
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-label-size, var(--solo-text-label));
+    font-weight: var(--solo-label-weight, 700);
+    letter-spacing: var(--solo-label-tracking, 0.08em);
+    text-transform: var(--solo-label-case, uppercase);
+    white-space: nowrap;
+}
+
+.back:focus-visible,
+.crumb:focus-visible,
+.tab:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: -2px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.actions {
+    display: none;
+}
+
+/* the mono command in the header actions; doubled to outrank the pill's own type */
+.chip.chip {
+    padding: var(--solo-space-1) var(--solo-space-2-5);
+    font: 400 var(--solo-mono-row) / 1.4 var(--solo-font-mono);
+}
+
+@media (min-width: 768px) {
+    .header {
+        padding-top: var(--solo-record-top, 79px);
+    }
+
+    .navBar,
+    .archivedPhone,
+    .phoneTitle {
+        display: none;
+    }
+
+    .wideTitle {
+        display: inline;
+    }
+
+    .trailRow {
+        display: flex;
+        align-items: center;
+        gap: var(--solo-space-4);
+        min-width: 0;
+    }
+
+    .titleBox {
+        container-type: inline-size;
+    }
+
+    .name {
+        display: block;
+        -webkit-line-clamp: none;
+        line-clamp: none;
+        overflow: visible;
+        margin: 0;
+        padding: var(--solo-space-3) 0 0;
+        font-family: var(--solo-font-display);
+        font-stretch: var(--solo-display-stretch, 62%);
+        font-weight: var(--solo-display-weight, 900);
+        /* the Heading poster; a display capital averages 0.43 em, so a long name steps down and keeps to about two lines */
+        font-size: clamp(var(--solo-poster-heading-min), 372cqi / var(--record-title-chars), var(--solo-poster-heading));
+        line-height: var(--solo-caps-leading);
+        letter-spacing: var(--solo-display-tracking, -0.02em);
+        text-transform: var(--solo-display-case, uppercase);
+    }
+
+    .tabsRow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--solo-space-3) var(--solo-space-4);
+        min-height: 28px;
+        margin-inline: 0;
+        padding: var(--solo-space-4) 0 0;
+        border-bottom: 0;
+        overflow: visible;
+    }
+
+    .header[data-size='poster'] .tabsRow {
+        padding-top: 27px;
+    }
+
+    .tabs {
+        flex-wrap: wrap;
+        gap: var(--solo-space-3) var(--solo-space-6);
+        width: auto;
+    }
+
+    .tab {
+        display: inline;
+        min-width: 0;
+        height: auto;
+        padding-bottom: var(--solo-space-1);
+        font-size: var(--solo-label-size, var(--solo-text-nav));
+        font-weight: var(--solo-label-weight, 500);
+        line-height: 1.3;
+        letter-spacing: var(--solo-label-tracking, 0);
+        text-transform: var(--solo-label-case, none);
+    }
+
+    .tab[aria-current='page'] {
+        border-bottom-color: var(--solo-fg);
+        font-weight: 700;
+    }
+
+    .crumb:focus-visible,
+    .tab:focus-visible {
+        outline-offset: 3px;
+    }
+
+    .count {
+        color: inherit;
+        font: inherit;
+    }
+
+    .countSep {
+        display: inline;
+    }
+
+    .actions {
+        display: flex;
+        align-items: center;
+        gap: var(--solo-space-3);
+        margin-left: auto;
+    }
+}

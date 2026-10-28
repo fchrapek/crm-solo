@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" @class(['dark' => ($appearance ?? 'system') == 'dark'])>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-theme="{{ $theme ?? 'paper' }}" @class(['dark' => ($appearance ?? 'system') == 'dark'])>
     <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>
@@ -33,9 +33,27 @@
         <title inertia>{{ config('app.name', 'Laravel') }}</title>
 
         <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
-        {{-- Switzer is Fontshare-licensed, so it loads from their CDN instead of shipping in the repo. --}}
-        <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
-        <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700&display=swap">
+        <link rel="manifest" href="/pwa/manifest.webmanifest">
+        <link rel="apple-touch-icon" href="/pwa/icon-180.png">
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F0EEE9">
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#151412">
+        <meta name="apple-mobile-web-app-title" content="CRM Solo">
+        @if (\App\Support\SwitzerFont::selfHosted())
+            <link rel="preload" href="{{ asset(\App\Support\SwitzerFont::FILE) }}" as="font" type="font/woff2" crossorigin>
+            <style>
+                @font-face {
+                    font-family: 'Switzer';
+                    font-style: normal;
+                    font-weight: 100 900;
+                    font-display: swap;
+                    src: url('{{ asset(\App\Support\SwitzerFont::FILE) }}') format('woff2');
+                }
+            </style>
+        @else
+            <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+            <link rel="preconnect" href="https://cdn.fontshare.com" crossorigin>
+            <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700&display=swap">
+        @endif
 
         @viteReactRefresh
         @vite(['resources/js/app.tsx'])

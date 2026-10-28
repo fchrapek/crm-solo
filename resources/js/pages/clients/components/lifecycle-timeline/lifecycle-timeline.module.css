@@ -71,8 +71,8 @@
     background: var(--tone-amber-solid);
 }
 
-.dot[data-tone='grey'] {
-    background: var(--tone-grey-solid);
+.dot[data-tone='red'] {
+    background: var(--tone-red-solid);
 }
 
 .dot[data-tone='neutral'] {
@@ -128,9 +128,9 @@
     color: var(--tone-amber-fg);
 }
 
-.stagePill[data-tone='grey'] {
-    background: var(--tone-grey-bg);
-    color: var(--tone-grey-fg);
+.stagePill[data-tone='red'] {
+    background: var(--tone-red-bg);
+    color: var(--tone-red-fg);
 }
 
 .arrow {

@@ -16,7 +16,7 @@ createServer((page: Page) =>
         render: ReactDOMServer.renderToString,
         title: (title) => `${title} - ${appName}`,
         resolve: (name) => {
-            const pages = import.meta.glob('./pages/**/*.{tsx,ts}');
+            const pages = import.meta.glob(['./pages/**/*.{tsx,ts}', '!./pages/**/*.test.{tsx,ts}']);
 
             // Try folder structure first (e.g., ./pages/dashboard/index.ts)
             let pagePath = `./pages/${name}/index.ts`;

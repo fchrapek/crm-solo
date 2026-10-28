@@ -7,6 +7,7 @@ namespace App\Services\Agent;
 use App\Models\Task;
 use App\Models\TaskAttachment;
 use App\Models\TaskBrief;
+use App\Models\TaskLink;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\Integrations\Trello\TrelloListMapper;
@@ -78,6 +79,32 @@ final class TaskRecord
         ];
     }
 
+    /**
+     * One task in a list, and what the task writes return. Eager-load
+     * `project.client` on a list.
+     *
+     * @return array<string, mixed>
+     */
+    public static function listItem(Task $task): array
+    {
+        return [
+            'id' => (int) $task->id,
+            'name' => (string) $task->name,
+            'client' => $task->project?->client?->name,
+            'client_id' => $task->project?->client_id,
+            'project' => $task->project?->name,
+            'project_id' => (int) $task->project_id,
+            'list' => $task->list_name,
+            'due' => $task->dueDay(),
+            'is_overdue' => $task->isOverdue(),
+            'done' => $task->isDone(),
+            'archived' => $task->isArchived(),
+            'trello' => $task->hasTrelloCard(),
+            'card_url' => $task->hasTrelloCard() ? $task->trello_url : null,
+            'untrusted' => self::untrustedListKeys($task, ['name', 'project', 'list', 'card_url']),
+        ];
+    }
+
     /** Text that reached the CRM from a card or a historical email, not typed into it. */
     public static function isExternal(Task $task): bool
     {
@@ -92,7 +119,12 @@ final class TaskRecord
      */
     public static function untrustedListKeys(Task $task, array $keys): array
     {
-        return self::isExternal($task) ? $keys : [];
+        if (self::isExternal($task)) {
+            return $keys;
+        }
+
+        // A manual task on a board project still carries the board's name.
+        return in_array('project', $keys, true) && $task->project?->trello_board_id !== null ? ['project'] : [];
     }
 
     /**
@@ -119,11 +151,11 @@ final class TaskRecord
      */
     public function build(Task $task, ?string $fetchError = null): array
     {
-        $task->loadMissing('project.client', 'attachments', 'cardDetails', 'brief');
+        $task->loadMissing('project.client', 'attachments', 'links', 'cardDetails', 'brief');
         $details = $task->cardDetails;
         $description = CardDescription::normalize($task->description);
         $manifest = $details !== null ? array_values($details->card_attachments ?? []) : [];
-        $links = $this->links($description, $manifest);
+        $links = $this->links($task, $description, $manifest);
         $checklists = $details !== null ? array_values($details->checklists ?? []) : [];
 
         return [
@@ -228,16 +260,17 @@ final class TaskRecord
             return self::CARD_PATHS;
         }
 
-        return $task->project?->trello_board_id !== null ? ['attachments', 'project.name'] : ['attachments'];
+        return $task->project?->trello_board_id !== null ? ['attachments', 'links', 'project.name'] : ['attachments', 'links'];
     }
 
     /**
-     * The description's links, then the card's attachments that point elsewhere.
+     * The description's links, the card's attachments that point elsewhere,
+     * then the links added in the CRM.
      *
      * @param  list<array<string, mixed>>  $manifest
      * @return list<array{url: string, text: string|null, from: string}>
      */
-    private function links(string $description, array $manifest): array
+    private function links(Task $task, string $description, array $manifest): array
     {
         $links = [
             ...array_map(
@@ -245,6 +278,7 @@ final class TaskRecord
                 CardDescription::links($description),
             ),
             ...self::cardLinks($manifest),
+            ...$task->links->map(fn (TaskLink $link): array => ['url' => $link->url, 'text' => $link->label, 'from' => 'crm'])->all(),
         ];
 
         return array_values(collect($links)->unique('url')->all());

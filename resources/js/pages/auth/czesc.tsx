@@ -9,8 +9,8 @@ import { login } from '@/routes';
 import czesc from '@/routes/czesc';
 import type { SharedData } from '@/types';
 
-import styles from './login.module.css';
 import own from './czesc.module.css';
+import styles from './login.module.css';
 
 type WaitlistForm = {
     email: string;

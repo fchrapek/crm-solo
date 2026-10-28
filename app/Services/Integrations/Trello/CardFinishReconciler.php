@@ -8,8 +8,7 @@ use App\Models\Task;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Keeps the owner's `finished_at` (and the agent-board Done that goes with
- * it) consistent with what Trello says about the card. Callers hold the
+ * Keeps the owner's `finished_at` consistent with what Trello says about the card. Callers hold the
  * task's row lock and pass the row as it is under that lock, then write the
  * returned attributes in the same statement as the card's own fields.
  */
@@ -103,9 +102,6 @@ final class CardFinishReconciler
         $changes = ['trello_move_pending_at' => null];
         if ($move->at !== null && $move->at->gt($current->finished_at->copy()->addSeconds(self::MOVE_SKEW_SECONDS))) {
             $changes['finished_at'] = null;
-            if ($current->agent_lane === Task::AGENT_LANE_DONE) {
-                $changes['agent_lane'] = Task::AGENT_LANE_BACKLOG;
-            }
         }
 
         return $changes;

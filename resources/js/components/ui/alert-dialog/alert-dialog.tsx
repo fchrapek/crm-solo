@@ -2,6 +2,8 @@ import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import * as React from 'react';
 
 import { getButtonStyles } from '@/components/ui/button';
+import { soloButtonClass } from '@/components/solo/primitives';
+import { useInSoloSurface, useSoloPortalSurface } from '@/components/solo/surface';
 import { cn } from '@/lib/utils';
 import styles from './alert-dialog.module.css';
 
@@ -34,8 +36,10 @@ function AlertDialogContent({
     className,
     ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content>) {
+    const container = useSoloPortalSurface();
+
     return (
-        <AlertDialogPortal>
+        <AlertDialogPortal container={container}>
             <AlertDialogOverlay />
             <AlertDialogPrimitive.Content
                 data-slot="alert-dialog-content"
@@ -82,11 +86,19 @@ function AlertDialogDescription({
 
 function AlertDialogAction({
     className,
+    tone,
     ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Action>) {
+}: React.ComponentProps<typeof AlertDialogPrimitive.Action> & { tone?: 'destructive' }) {
+    const solo = useInSoloSurface();
+    const destructive = tone === 'destructive';
+
     return (
         <AlertDialogPrimitive.Action
-            className={getButtonStyles({ className })}
+            className={
+                solo
+                    ? cn(soloButtonClass({ variant: 'ink', size: 'md' }), destructive && styles.soloDestructive, className)
+                    : getButtonStyles({ variant: destructive ? 'destructive' : 'default', className })
+            }
             {...props}
         />
     );
@@ -96,9 +108,11 @@ function AlertDialogCancel({
     className,
     ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Cancel>) {
+    const solo = useInSoloSurface();
+
     return (
         <AlertDialogPrimitive.Cancel
-            className={getButtonStyles({ variant: 'outline', className })}
+            className={solo ? cn(soloButtonClass({ variant: 'pill' }), className) : getButtonStyles({ variant: 'outline', className })}
             {...props}
         />
     );

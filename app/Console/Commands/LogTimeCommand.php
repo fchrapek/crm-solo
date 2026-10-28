@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Console\Attributes\AccountScope;
 use App\Console\Commands\Concerns\AgentConsoleOutput;
+use App\Services\Agent\AgentRefusal;
 use App\Services\Agent\ReferenceException;
 use App\Services\Agent\ReferenceNotFoundException;
 use App\Services\Agent\TimeLogger;
@@ -58,6 +59,8 @@ final class LogTimeCommand extends Command
             );
         } catch (ReferenceException $e) {
             return $this->referenceFailure($e);
+        } catch (AgentRefusal $e) {
+            return $this->refusal($e);
         } catch (InvalidArgumentException $e) {
             $this->error($e->getMessage());
 

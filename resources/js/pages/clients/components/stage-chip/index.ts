@@ -1,1 +1,1 @@
-export { StageChip, StagePill } from './stage-chip';
+export { StageChip } from './stage-chip';

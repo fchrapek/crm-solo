@@ -1,0 +1,52 @@
+.ledger {
+    margin: 0;
+    padding: var(--solo-block-pad, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+}
+
+.total {
+    font-weight: 700;
+}
+
+.info {
+    margin: 0;
+    padding-top: var(--solo-space-3);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+    line-height: 1.4;
+}
+
+.refusal {
+    margin: 0;
+    padding-top: var(--solo-space-3);
+    color: var(--solo-accent);
+    font-size: var(--solo-text-meta);
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+.actions {
+    flex-direction: row;
+    justify-content: flex-end;
+}
+
+/* Mobile / Note line with its dot: the refusal on the phone's blocked reopen sheet */
+.blockedRefusal {
+    display: flex;
+    gap: var(--solo-space-2);
+    margin: 0;
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+    line-height: 1.4;
+}
+
+.blockedRefusal::before {
+    content: '';
+    flex: none;
+    width: 6px;
+    height: 6px;
+    margin-top: 5px;
+    border-radius: 50%;
+    background: var(--solo-accent);
+}

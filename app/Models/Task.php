@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Casts\TaskDescription;
 use App\Services\Integrations\Trello\TrelloListMapper;
+use App\Services\Time\TimeEntryWriter;
 use App\Support\LocalCalendar;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -14,25 +15,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 final class Task extends Model
 {
-    public const string AGENT_LANE_BACKLOG = 'backlog';
-
-    public const string AGENT_LANE_IN_PROGRESS = 'in_progress';
-
-    public const string AGENT_LANE_IN_REVIEW = 'in_review';
-
-    public const string AGENT_LANE_DONE = 'done';
-
-    public const array AGENT_LANES = [
-        self::AGENT_LANE_BACKLOG,
-        self::AGENT_LANE_IN_PROGRESS,
-        self::AGENT_LANE_IN_REVIEW,
-        self::AGENT_LANE_DONE,
-    ];
-
     public const string SOURCE_MANUAL = 'manual';
 
     public const string SOURCE_EMAIL = 'email';
@@ -51,25 +38,7 @@ final class Task extends Model
         self::TYPE_BUG,
     ];
 
-    public const string CLI_CLAUDE = 'claude';
-
-    public const string CLI_CODEX = 'codex';
-
-    public const array CLIS = [
-        self::CLI_CLAUDE,
-        self::CLI_CODEX,
-    ];
-
-    public const string SESSION_MODE_WORKTREE = 'worktree';
-
-    public const string SESSION_MODE_IN_REPO = 'in_repo';
-
-    public const array SESSION_MODES = [
-        self::SESSION_MODE_WORKTREE,
-        self::SESSION_MODE_IN_REPO,
-    ];
-
-    /** The terminal session's bearer credential for the session-events endpoint. */
+    /** A retired session credential column, kept out of serialisation until it is dropped. */
     protected $hidden = [
         'session_token',
     ];
@@ -105,13 +74,6 @@ final class Task extends Model
         'recurrence_period_days',
         'parent_task_id',
         'recurrence_predecessor_id',
-        'agent_lane',
-        'cli',
-        'session_port',
-        'session_pid',
-        'session_token',
-        'session_attention_at',
-        'session_mode',
         'archived_at',
         'issue_url',
     ];
@@ -158,6 +120,12 @@ final class Task extends Model
         return $this->hasMany(TaskAttachment::class)->orderBy('id');
     }
 
+    /** Links added in the CRM, shown with the files under Zasoby. */
+    public function links(): HasMany
+    {
+        return $this->hasMany(TaskLink::class)->orderBy('id');
+    }
+
     /** The CRM's own brief on the task: where, done when, constraints, notes. */
     public function brief(): HasOne
     {
@@ -168,46 +136,6 @@ final class Task extends Model
     public function cardDetails(): HasOne
     {
         return $this->hasOne(TaskCardDetails::class);
-    }
-
-    public function sessions(): HasMany
-    {
-        return $this->hasMany(TaskSession::class)->orderBy('started_at', 'desc');
-    }
-
-    public function previews(): HasMany
-    {
-        return $this->hasMany(TaskPreview::class)->orderBy('started_at', 'desc');
-    }
-
-    /**
-     * Currently-running preview for this task, if any. At most one row per
-     * task has stopped_at IS NULL — enforced in ProjectPreviewLauncher.
-     */
-    public function runningPreview(): ?TaskPreview
-    {
-        return $this->previews()->whereNull('stopped_at')->latest('started_at')->first();
-    }
-
-    /**
-     * Tasks visible on an agent kanban — anything with a CLI configured that
-     * isn't archived. Drag-from-regular-kanban tasks (cli null) are excluded.
-     *
-     * @param  Builder<self>  $query
-     */
-    public function scopeOnAgentBoard(Builder $query): void
-    {
-        $query->whereNotNull('cli')->whereNull('archived_at');
-    }
-
-    public function sessionBranchName(): string
-    {
-        return "session/task-{$this->id}";
-    }
-
-    public function sessionWorktreePath(string $repoLocalPath): string
-    {
-        return mb_rtrim($repoLocalPath, '/').'/.worktrees/task-'.$this->id;
     }
 
     /** @param Builder<self> $query */
@@ -366,7 +294,6 @@ final class Task extends Model
                 'is_reportable' => (bool) $this->is_reportable,
                 'parent_task_id' => $this->id,
                 'recurrence_predecessor_id' => $this->id,
-                'cli' => $this->cli,
             ]);
         } catch (UniqueConstraintViolationException) {
             // Another finish of this task spawned it first.
@@ -383,6 +310,9 @@ final class Task extends Model
     protected static function booted(): void
     {
         self::deleting(function (Task $task): void {
+            // Logged time outlives the task, still billed to its project and client; time in a settled period refuses the delete.
+            app(TimeEntryWriter::class)->detachTask($task);
+
             self::query()
                 ->where('parent_task_id', $task->id)
                 ->update(['parent_task_id' => null]);
@@ -390,15 +320,8 @@ final class Task extends Model
                 ->where('recurrence_predecessor_id', $task->id)
                 ->update(['recurrence_predecessor_id' => null]);
 
-            // Logged time outlives the task: it keeps its project and client, so it is still billed.
-            TimeEntry::query()
-                ->where('task_id', $task->id)
-                ->update(['task_id' => null]);
-
-            // Attachment files live outside the DB — without this, deleting a
-            // task (or its project, which deletes tasks through Eloquent)
-            // leaves orphaned uploads on disk forever.
-            Storage::disk('local')->deleteDirectory('task-attachments/'.$task->id);
+            // Attachment files live outside the DB, so they go only once the delete commits: a refused project delete rolls back.
+            DB::afterCommit(fn () => Storage::disk('local')->deleteDirectory('task-attachments/'.$task->id));
         });
     }
 
@@ -419,7 +342,6 @@ final class Task extends Model
             'rejected_at' => 'datetime',
             'reviewed_at' => 'datetime',
             'archived_at' => 'datetime',
-            'session_attention_at' => 'datetime',
         ];
     }
 }

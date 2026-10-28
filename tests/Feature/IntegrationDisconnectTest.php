@@ -43,8 +43,8 @@ final class IntegrationDisconnectTest extends TestCase
         $integration = $this->trello($this->account);
 
         $this->actingAs($this->user)
-            ->delete('/integrations/trello')
-            ->assertRedirect('/integrations/trello')
+            ->from('/settings/integracje')->delete('/integrations/trello')
+            ->assertRedirect('/settings/integracje')
             ->assertSessionHas('success');
 
         $fresh = $integration->fresh();
@@ -67,7 +67,7 @@ final class IntegrationDisconnectTest extends TestCase
         ]);
         $this->assertSame(['api_key', 'trello_api_key'], $integration->fresh()->unreadableSecrets());
 
-        $this->actingAs($this->user)->delete('/integrations/trello')->assertRedirect();
+        $this->actingAs($this->user)->from('/settings/integracje')->delete('/integrations/trello')->assertRedirect();
 
         $stored = json_decode((string) DB::table('integrations')->where('id', $integration->id)->value('settings'), true);
         $this->assertArrayNotHasKey('trello_api_key', $stored);
@@ -80,7 +80,7 @@ final class IntegrationDisconnectTest extends TestCase
         $theirs = $this->trello($other);
         $this->trello($this->account);
 
-        $this->actingAs($this->user)->delete('/integrations/trello')->assertRedirect();
+        $this->actingAs($this->user)->from('/settings/integracje')->delete('/integrations/trello')->assertRedirect();
 
         $this->assertSame('token', $theirs->fresh()->api_key);
         $this->assertTrue($theirs->fresh()->isConfigured());
@@ -95,7 +95,7 @@ final class IntegrationDisconnectTest extends TestCase
     {
         $integration = $this->trello($this->account);
 
-        $this->delete('/integrations/trello')->assertRedirect('/login');
+        $this->from('/settings/integracje')->delete('/integrations/trello')->assertRedirect('/login');
 
         $this->assertTrue($integration->fresh()->isConfigured());
     }

@@ -1,0 +1,20 @@
+.mark {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    overflow: hidden;
+    border-radius: var(--solo-radius-full);
+    background: var(--solo-fg);
+    color: var(--solo-bg);
+    font: 700 var(--solo-text-initials) / 1 var(--solo-font-text);
+}
+
+.mark[data-actor='agent'] {
+    border-radius: var(--solo-radius-sm);
+    background: var(--solo-agent);
+    color: var(--solo-on-agent);
+    font: 500 var(--solo-mono-micro) / 1.3 var(--solo-font-mono);
+    letter-spacing: 0.02em;
+}

@@ -56,7 +56,7 @@ final class TaskRecordSchemaTest extends TestCase
         $this->assertNull($record['card_lane']);
         $this->assertNull($record['description']['markdown']);
         $this->assertTrue($record['description']['is_empty']);
-        $this->assertSame(['attachments'], $record['untrusted']);
+        $this->assertSame(['attachments', 'links'], $record['untrusted']);
         $this->assertSame('/tmp/site', $record['project']['repository_path']);
         $this->assertSame(['description', 'target', 'done_condition'], $record['readiness']['missing']);
     }

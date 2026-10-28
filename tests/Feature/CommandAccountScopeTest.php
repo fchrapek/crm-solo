@@ -45,6 +45,7 @@ final class CommandAccountScopeTest extends TestCase
         Http::preventStrayRequests();
 
         $this->mine = Account::factory()->create();
+        config(['agent.local_account' => $this->mine->id]);
         User::factory()->create(['account_id' => $this->mine->id, 'owner' => true]);
         Client::factory()->create(['account_id' => $this->mine->id, 'name' => 'Mine Co']);
 
@@ -72,7 +73,6 @@ final class CommandAccountScopeTest extends TestCase
             'projects:delete' => ['projects:delete', ['project' => '__PROJECT__', '--force' => true]],
             'tasks:create' => ['tasks:create', ['--project' => '__PROJECT__', '--name' => ['Sneaky']]],
             'tasks:delete' => ['tasks:delete', ['--project' => '__PROJECT__', '--force' => true]],
-            'tasks:cli' => ['tasks:cli', ['task' => '__TASK__', 'cli' => 'claude']],
             'reports:generate' => ['reports:generate', ['client' => '__CLIENT__', '--composer' => 'structured_list']],
             'infakt:invoices' => ['infakt:invoices', ['client' => '__CLIENT__']],
             'infakt:draft-invoice' => ['infakt:draft-invoice', ['client' => '__CLIENT__', '--dry-run' => true]],
@@ -146,7 +146,7 @@ final class CommandAccountScopeTest extends TestCase
 
     public function test_dummy_lead_removal_stays_in_the_acting_account(): void
     {
-        $theirs = Lead::create(['account_id' => $this->otherClient->account_id, 'pipeline' => Lead::pipelines()[0], 'name' => 'Theirs', 'source' => Lead::sources()[0], 'external_ref' => 'dummy-look-test-99']);
+        $theirs = Lead::create(['account_id' => $this->otherClient->account_id, 'pipeline' => Lead::pipelines()[0], 'name' => 'Theirs', 'source' => config('leadgen.sources')[0], 'external_ref' => 'dummy-look-test-99']);
 
         Artisan::call('leads:seed-dummy', ['--remove' => true]);
 

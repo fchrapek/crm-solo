@@ -260,6 +260,22 @@ final class CrmShimRemoteModeTest extends TestCase
         $this->assertFileDoesNotExist($this->dir.'/curl.args');
     }
 
+    public function test_every_crm_verb_runs_locally_as_its_crm_command(): void
+    {
+        File::put($this->dir.'/bin/php', "#!/bin/sh\nprintf '%s\\n' \"\$@\" > \"\$STUB_DIR/php.args\"\n");
+        chmod($this->dir.'/bin/php', 0755);
+
+        foreach (AgentAbilities::VERBS as $verb => [$command]) {
+            if ($command !== 'crm:'.$verb) {
+                continue;
+            }
+            $run = $this->crm([$verb, '--json'], env: ['CRM_REMOTE_URL' => false]);
+
+            $this->assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+            $this->assertSame([base_path('artisan'), $command, '--json'], explode("\n", mb_rtrim(File::get($this->dir.'/php.args'), "\n")), $verb);
+        }
+    }
+
     /**
      * @param  list<string>  $args
      * @param  array<string, string|false>  $env

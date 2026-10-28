@@ -5,53 +5,23 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Requests\UserRequest;
-use App\Http\Resources\UserCollection;
-use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Redirect;
-use Illuminate\Support\Facades\Request;
-use Inertia\Inertia;
+use Illuminate\Support\Str;
 
+/** The writes behind Ustawienia · Konto (profile and Użytkownicy). */
 final class UsersController extends Controller
 {
-    public function index()
-    {
-        return Inertia::render('users/index', [
-            'filters' => Request::all(['search', 'role', 'trashed']),
-            'users' => new UserCollection(
-                Auth::user()->account->users()
-                    ->orderByName()
-                    ->filter(Request::only(['search', 'role', 'trashed']), Auth::user()->account_id)
-                    ->paginate()
-                    ->withQueryString()
-            ),
-        ]);
-    }
-
-    public function create()
-    {
-        Gate::authorize('create', User::class);
-
-        return Inertia::render('users/create');
-    }
-
     public function store(UserRequest $request): RedirectResponse
     {
         Gate::authorize('create', User::class);
 
         Auth::user()->account->users()->create($request->validated());
 
-        return Redirect::route('users.index')->with('success', translate_with_gender('created', 'User'));
-    }
-
-    public function edit(User $user)
-    {
-        return Inertia::render('users/edit', [
-            'user' => new UserResource($user),
-        ]);
+        return Redirect::back()->with('success', translate_with_gender('created', 'User'));
     }
 
     public function update(User $user, UserRequest $request): RedirectResponse
@@ -62,9 +32,19 @@ final class UsersController extends Controller
             return Redirect::back()->with('error', __('The demo login cannot be changed or deleted.'));
         }
 
-        $data = $request->validated();
+        $data = $request->safe()->except('current_password');
+        $user->fill($data);
 
-        $user->update($data);
+        if (isset($data['password'])) {
+            $user->setRememberToken(Str::random(60));
+        }
+
+        $user->save();
+
+        // Re-login puts this session on the new password hash, so auth.session keeps it and ends the others.
+        if ($request->changesOwnPassword()) {
+            Auth::login($user, $request->hasCookie(Auth::guard()->getRecallerName()));
+        }
 
         return Redirect::back()->with('success', translate_with_gender('updated', 'User'));
     }

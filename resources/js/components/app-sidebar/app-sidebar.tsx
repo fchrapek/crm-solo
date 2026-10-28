@@ -1,4 +1,5 @@
 import { Building, CalendarCheck, ChartColumn, Contact, Filter, LayoutGrid, Plug, Settings, Users } from 'lucide-react';
+import { usePage } from '@inertiajs/react';
 import React from 'react';
 
 import AppLogo from '@/components/app-logo';
@@ -10,14 +11,14 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import { dashboard } from '@/routes';
 import clients from '@/routes/clients';
 import contacts from '@/routes/contacts';
-import integrations from '@/routes/integrations';
 import leads from '@/routes/leads';
 import monthClose from '@/routes/month-close';
 import revenue from '@/routes/revenue';
-import users from '@/routes/users';
-import { type NavItem } from '@/types';
+import settings from '@/routes/settings';
+import { type NavItem, type SharedData } from '@/types';
 
 export function AppSidebar() {
+    const billing = usePage<SharedData>().props.auth.user.account.features.billing;
     // Three groups: the daily funnel (unlabeled - it IS the product), money
     // things, and admin/config at the bottom (the convention users know from
     // Linear/Stripe/Slack). See the sidebar rework notes.
@@ -41,9 +42,9 @@ export function AppSidebar() {
 
     const systemNavItems: NavItem[] = React.useMemo(
         () => [
-            { title: 'Users', href: users.index(), icon: Users },
-            { title: 'Integrations', href: integrations.index(), icon: Plug },
-            { title: 'Settings', href: '/settings', icon: Settings },
+            { title: 'Users', href: settings.show('konto'), icon: Users },
+            { title: 'Integrations', href: settings.show('integracje'), icon: Plug },
+            { title: 'Settings', href: settings.index(), icon: Settings },
         ],
         [],
     );
@@ -64,7 +65,7 @@ export function AppSidebar() {
 
             <SidebarContent>
                 <NavMain items={funnelNavItems} />
-                <NavMain items={financeNavItems} label="Finance" />
+                {billing && <NavMain items={financeNavItems} label="Finance" />}
                 <NavMain items={systemNavItems} label="System" />
             </SidebarContent>
 

@@ -7,12 +7,18 @@ namespace App\Console\Commands;
 use App\Console\Attributes\AccountScope;
 use App\Jobs\SyncTrelloProjectsJob;
 use App\Models\Integration;
+use App\Services\Integrations\Trello\TrelloService;
 use App\Services\TaskSources\TaskSourceRegistry;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 #[AccountScope(AccountScope::OPERATOR)]
 final class SyncTrelloProjects extends Command
 {
+    private const int SLOW_RUN_SECONDS = 60;
+
+    private const int HEAVY_RUN_MB = 150;
+
     protected $signature = 'trello:sync
                             {--account= : The account ID to sync (syncs all if not specified)}
                             {--force : Skip the confirmation prompt}
@@ -51,11 +57,20 @@ final class SyncTrelloProjects extends Command
             }
         }
 
+        $started = now();
+        // One deadline for the whole run, every account and board, so it ends inside the scheduler's overlap lock.
+        $deadline = TrelloService::deadline();
+
         foreach ($integrations as $integration) {
+            if ($sync && TrelloService::outOfTime($deadline)) {
+                $this->warn("Out of time: account {$integration->account_id} and the rest wait for the next run.");
+
+                break;
+            }
             $this->info("Processing account ID: {$integration->account_id}");
 
             if ($sync) {
-                $stats = $taskSources->get('trello')->syncAll($integration);
+                $stats = $taskSources->get('trello')->syncAll($integration, $deadline);
 
                 $this->table(
                     ['Metric', 'Count'],
@@ -71,6 +86,13 @@ final class SyncTrelloProjects extends Command
                 SyncTrelloProjectsJob::dispatch($integration);
                 $this->info('  → Job dispatched to queue.');
             }
+        }
+
+        if ($sync) {
+            $run = ['seconds' => round($started->diffInMilliseconds(now()) / 1000, 1), 'peak_memory_mb' => (int) round(memory_get_peak_usage(true) / 1048576)];
+            // The hosted stack logs warnings and up, so only a run worth looking at reaches the file.
+            $worthALook = $run['seconds'] > self::SLOW_RUN_SECONDS || $run['peak_memory_mb'] > self::HEAVY_RUN_MB;
+            Log::log($worthALook ? 'warning' : 'info', 'Trello sync run finished', $run);
         }
 
         return self::SUCCESS;

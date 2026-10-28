@@ -9,9 +9,8 @@ use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Models\ClientReport;
 use App\Services\Agent\CrmEntityResolver;
 use App\Services\Agent\ReferenceException;
-use App\Services\Reports\ReportComposerRegistry;
-use App\Services\Reports\ReportContext;
-use App\Services\Reports\ReportDataAggregator;
+use App\Services\Reports\ReportWriter;
+use App\Services\Reports\ReportWriteResult;
 use App\Support\LocalCalendar;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -19,8 +18,8 @@ use Illuminate\Support\Facades\App;
 use InvalidArgumentException;
 
 /**
- * Headless twin of ClientReportsController::store, for closing a month from the
- * CLI. The --hours override exists because billing rounding lives on the report
+ * The CLI way into ReportWriter::generate, the same write the web's Generate
+ * makes. The --hours override exists because billing rounding lives on the report
  * snapshot, never on the time entries: pass the rounded figure and the body and
  * the stored actual_hours agree.
  */
@@ -38,7 +37,7 @@ final class GenerateMonthReport extends Command
 
     protected $description = 'Generate a draft client report for a period.';
 
-    public function handle(ReportDataAggregator $aggregator, ReportComposerRegistry $composers): int
+    public function handle(ReportWriter $writer): int
     {
         $accountId = $this->actingAccountId();
         if ($accountId === null) {
@@ -62,53 +61,56 @@ final class GenerateMonthReport extends Command
         $period = $start->format('Y-m');
         $end = $start->copy()->endOfMonth();
 
-        App::setLocale($this->option('locale'));
-
-        $composer = $this->option('composer')
-            ? $composers->get($this->option('composer'))
-            : $composers->default();
-
-        $ctx = $aggregator->aggregate($client, $start, $end, 'month', App::getLocale());
-
-        if ($this->option('hours') !== null) {
-            $ctx = new ReportContext(
-                client: $ctx->client,
-                periodStart: $ctx->periodStart,
-                periodEnd: $ctx->periodEnd,
-                periodType: $ctx->periodType,
-                retainer: $ctx->retainer,
-                actualHours: (float) $this->option('hours'),
-                tasks: $ctx->tasks,
-                timeEntries: $ctx->timeEntries,
-                locale: $ctx->locale,
-                openingBalanceHours: $ctx->openingBalanceHours,
-                rolloverCapHours: $ctx->rolloverCapHours,
-            );
+        if ($this->refuseExisting($client->id, $start, $end, $period)) {
+            return self::FAILURE;
         }
 
-        $report = $client->reports()->create([
-            'account_id' => $client->account_id,
-            'period_type' => 'month',
-            'period_start' => $start->toDateString(),
-            'period_end' => $end->toDateString(),
-            'contracted_hours' => $ctx->contractedHours(),
-            'actual_hours' => $ctx->actualHours,
-            'opening_balance_hours' => $ctx->openingBalanceHours,
-            'rollover_cap_hours' => $ctx->rolloverCapHours,
-            'currency' => $ctx->currency(),
-            'composer_key' => $composer->key(),
-            'body_markdown' => $composer->compose($ctx),
-            'status' => ClientReport::STATUS_DRAFT,
-            'generated_at' => now(),
-        ]);
+        App::setLocale($this->option('locale'));
 
+        $result = $writer->generate(
+            $client,
+            $start,
+            $end,
+            App::getLocale(),
+            $this->option('composer') ?: null,
+            $this->option('hours') !== null ? (float) $this->option('hours') : null,
+        );
+
+        if ($result->outcome === ReportWriteResult::EXISTS) {
+            $this->refuseExisting($client->id, $start, $end, $period);
+
+            return self::FAILURE;
+        }
+        if ($result->isRefused()) {
+            $this->error($result->message);
+
+            return self::FAILURE;
+        }
+
+        $report = $result->report;
         $this->line(sprintf(
             '#%d %s [%s] | opening %.2f + contracted %.2f - actual %.2f = closing %.2f | %s',
             $report->id, $client->name, $period,
-            $ctx->openingBalanceHours, (float) $ctx->contractedHours(),
-            $ctx->actualHours, (float) $ctx->closingBalanceHours(), $composer->key()
+            (float) $report->opening_balance_hours, (float) $report->contracted_hours,
+            (float) $report->actual_hours, $report->closingBalanceHours(), $report->composer_key
         ));
 
         return self::SUCCESS;
+    }
+
+    /** A second report for the month would split its hours bank; the existing one is regenerated in the app instead. */
+    private function refuseExisting(int $clientId, Carbon $start, Carbon $end, string $period): bool
+    {
+        $existing = ClientReport::coveringPeriod($clientId, $start->toDateString(), $end->toDateString());
+        if ($existing === null) {
+            return false;
+        }
+
+        $this->error(sprintf(
+            'Report #%d for [%s] already exists (%s); nothing was generated. Regenerate it in the app if its figures are out of date.',
+            $existing->id, $period, $existing->status,
+        ));
+
+        return true;
     }
 }

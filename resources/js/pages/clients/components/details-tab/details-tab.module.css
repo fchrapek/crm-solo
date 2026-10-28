@@ -1,0 +1,207 @@
+.body {
+    padding-top: var(--solo-space-row);
+}
+
+.main {
+    display: flex;
+    flex-direction: column;
+}
+
+.side {
+    margin-top: 36px;
+}
+
+.baseline {
+    padding: var(--solo-space-3) var(--solo-head-inset, 0);
+    border-bottom: var(--solo-head-rule, 1px) solid var(--solo-rule);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    font-size: var(--solo-text-sub);
+}
+
+/* the baseline is report text: its headings read as row labels here, not as page headings */
+.baseline :is(h1, h2, h3, h4) {
+    margin: 0 0 var(--solo-space-1);
+    font: 600 var(--solo-text-sub) / 1.4 var(--solo-font-text);
+}
+
+/* its own row under both columns, as wide as the main one */
+.end {
+    flex: 1 0 100%;
+    max-width: var(--solo-split-main);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--solo-space-4);
+    margin-top: 28px;
+}
+
+.archive {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-fg);
+    font: 600 var(--solo-text-sub) / normal var(--solo-font-text);
+    cursor: pointer;
+}
+
+.archive:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.archive:focus-visible,
+.documentLink:focus-visible,
+.documentRemove:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+/* Figma: Dokumenty rows, the name over its category and date, Otwórz on the right */
+.documents,
+.list {
+    margin: 0;
+    padding: var(--solo-block-pad, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    list-style: none;
+}
+
+/* the last row ends on the block's edge, not on a cut */
+.documents > :last-child {
+    border-bottom-width: var(--solo-head-rule, 1px);
+}
+
+.document {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--solo-space-4);
+    padding: var(--solo-space-3) var(--solo-row-inset, 0);
+    border-bottom: 1px solid var(--solo-rule);
+}
+
+.documentText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.documentName {
+    overflow-wrap: anywhere;
+    color: var(--solo-fg);
+    font: 500 var(--solo-text-field) / normal var(--solo-font-text);
+}
+
+.documentSub {
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-meta) / normal var(--solo-font-text);
+}
+
+.documentActions {
+    display: flex;
+    flex: none;
+    gap: var(--solo-space-3);
+    font: 500 var(--solo-text-sub) / normal var(--solo-font-text);
+}
+
+.documentLink {
+    color: var(--solo-fg);
+    text-decoration: none;
+}
+
+.documentRemove {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-fg-muted);
+    font: inherit;
+    cursor: pointer;
+}
+
+.file {
+    color: var(--solo-fg);
+    font: 400 var(--solo-text-sub) / normal var(--solo-font-text);
+}
+
+.main > section {
+    padding: var(--solo-card-pad, 0);
+    padding-bottom: var(--solo-card-pad-end, 0);
+    border: var(--solo-card-width, 0) solid var(--solo-card-border, transparent);
+    border-radius: var(--solo-card-radius, 0);
+    background: var(--solo-card, none);
+    box-shadow: var(--solo-card-shadow, none);
+}
+
+.next {
+    margin-top: 20px;
+}
+
+.empty {
+    margin: 0;
+    padding: var(--solo-space-3) var(--solo-head-inset, 0);
+    border-bottom: var(--solo-head-rule, 1px) solid var(--solo-rule);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-sub);
+}
+
+.muted {
+    color: var(--solo-fg-muted);
+}
+
+.more {
+    align-self: flex-start;
+    display: inline-block;
+    margin-top: 18px;
+}
+
+/* One box even when an address wraps, so the phone hit area centres on the whole link. */
+.contactLink {
+    display: inline-block;
+    max-width: 100%;
+}
+
+.contents {
+    display: contents;
+}
+
+/* What only one breakpoint shows: Figma 335:4147 moves the section Edytuj into the ••• menu and lists contacts as rows */
+.wideOnly {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .body {
+        padding-top: 52px;
+    }
+
+    .side {
+        margin-top: 0;
+    }
+
+    .documentRemove {
+        opacity: 0;
+    }
+
+    .document:hover .documentRemove,
+    .documentRemove:focus-visible {
+        opacity: 1;
+    }
+
+    .next {
+        margin-top: 36px;
+    }
+
+    .wideOnly {
+        display: revert;
+    }
+
+    .phoneOnly {
+        display: none;
+    }
+}

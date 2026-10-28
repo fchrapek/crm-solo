@@ -43,10 +43,6 @@ final class TaskCompletion
                 $update['list_name'] = TrelloListMapper::LANE_DONE;
                 $update['is_completed'] = true;
             }
-            // On the agent board (a CLI set) the card lands in Done even if it never had a lane.
-            if ($task->agent_lane !== null || $task->cli !== null) {
-                $update['agent_lane'] = Task::AGENT_LANE_DONE;
-            }
             $task->update($update);
 
             if (! $wasDone) {
@@ -80,9 +76,6 @@ final class TaskCompletion
             if (! $task->hasTrelloCard()) {
                 $update['is_completed'] = false;
                 $update['list_name'] = $lane ?? ($task->list_name === TrelloListMapper::LANE_DONE ? TrelloListMapper::LANE_TODO : $task->list_name);
-            }
-            if ($task->agent_lane === Task::AGENT_LANE_DONE) {
-                $update['agent_lane'] = Task::AGENT_LANE_BACKLOG;
             }
 
             $task->update($update);

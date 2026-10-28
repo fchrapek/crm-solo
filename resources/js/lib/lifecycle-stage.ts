@@ -17,14 +17,16 @@ export function lifecycleStageLabelKey(stage: LifecycleStage): string {
     return STAGE_LABEL_KEY[stage];
 }
 
-const STAGE_TONE: Record<LifecycleStage, 'neutral' | 'blue' | 'green' | 'amber' | 'grey'> = {
+export type StageTone = 'neutral' | 'blue' | 'green' | 'amber' | 'red';
+
+const STAGE_TONE: Record<LifecycleStage, StageTone> = {
     prospect: 'neutral',
     offer_sent: 'blue',
     active: 'green',
     paused: 'amber',
-    churned: 'grey',
+    churned: 'red',
 };
 
-export function lifecycleStageTone(stage: LifecycleStage): 'neutral' | 'blue' | 'green' | 'amber' | 'grey' {
+export function lifecycleStageTone(stage: LifecycleStage): StageTone {
     return STAGE_TONE[stage];
 }

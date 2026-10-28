@@ -1,15 +1,15 @@
+import { Icon } from '@/components/ui/icon';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { ChevronRight, Link2, Plus, Settings, Trash } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { destroy, restore, update } from '@/actions/App/Http/Controllers/ClientsController';
-import { AgentKanban, type AgentKanbanTask } from '@/components/agent-kanban';
 import { Form, FormInput, FormLabel, FormMessage } from '@/components/form';
 import InertiaPagination from '@/components/inertia-pagination';
-import { SessionTimeEditDialog, type SessionTimeEntry, type TaskOption } from '@/components/session-time-edit-dialog';
+import { StagePill } from '@/components/solo/stage-pill';
 import { SubmitButton } from '@/components/submit-button';
 import { TableContainer } from '@/components/table-container';
+import { type EditableTimeEntry, type TaskOption, TimeEntryEditDialog } from '@/components/time-entry-edit-dialog';
 import { Button } from '@/components/ui/button';
 import { InfoHint } from '@/components/ui/info-hint';
 import { SectionCard } from '@/components/ui/section-card';
@@ -19,7 +19,6 @@ import { Tabs } from '@/components/ui/tabs/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { usePageActions } from '@/contexts/page-context';
 import { useDeletionControls } from '@/hooks/use-deletion-controls';
-import { useFormProcessing } from '@/hooks/use-form-processing';
 import clients from '@/routes/clients';
 import contacts from '@/routes/contacts';
 import { BreadcrumbItem, Client, ClientFormData, LifecycleStage, SharedData } from '@/types';
@@ -29,10 +28,9 @@ import { type ComposerOption } from './components/generate-report-dialog';
 import { type ClientInvoices, type ClientRevenueSummary, type InvoiceFilters, InvoicesTab } from './components/invoices-tab';
 import { LifecycleTimeline } from './components/lifecycle-timeline';
 import { MonthClosePill, MonthCloseSettings } from './components/month-close-type-chip';
-import { type OverviewData, OverviewTab } from './components/overview-tab';
 import { ReportsTab, type ReportSummary } from './components/reports-tab';
 import { type Retainer, RetainerChip, RetainerPill } from './components/retainer-chip';
-import { StageChip, StagePill } from './components/stage-chip';
+import { StageChip } from './components/stage-chip';
 
 import { ProjectFormDialog } from './components/project-form-dialog';
 import { ProjectRow } from './components/project-row';
@@ -54,7 +52,6 @@ interface TaskItem {
     recurrence_period_days?: number | null;
     executor_type?: string | null;
     is_agent_ready?: boolean;
-    agent_lane?: string | null;
     latest_run?: {
         id: number;
         status: string;
@@ -87,7 +84,6 @@ interface ProjectSummary {
     trello_list_mapping?: Record<string, string>;
     tasks_count: number;
     completed_tasks_count: number;
-    active_agent_tasks_count?: number;
     repositories?: ProjectRepository[];
     tasks: TaskItem[];
 }
@@ -126,10 +122,7 @@ interface LifecycleEvent {
 
 interface EditPageProps extends SharedData {
     client: Client;
-    overview: OverviewData;
     projects: ProjectSummary[];
-    agentTasks: AgentKanbanTask[];
-    agentLanes: string[];
     timeEntries: PaginatedTimeEntries;
     clientTasks: TaskOption[];
     lifecycleEvents: LifecycleEvent[];
@@ -167,7 +160,7 @@ function ProjectsTabContent({
                 title={t('Projects')}
                 actions={
                     <Button size="sm" variant="outline" onClick={() => setNewProjectOpen(true)}>
-                        <Plus size={14} className={styles.iconLeading} />
+                        <Icon name="plus" size={16} className={styles.iconLeading} />
                         {t('New project')}
                     </Button>
                 }
@@ -200,10 +193,7 @@ export default function Edit() {
 
     const {
         client,
-        overview,
         projects,
-        agentTasks,
-        agentLanes,
         timeEntries,
         clientTasks,
         lifecycleEvents,
@@ -220,7 +210,7 @@ export default function Edit() {
     } = usePage<EditPageProps>().props;
 
     // Click a time-entry row to open the edit dialog (title / detail / times / task).
-    const [editTimeEntry, setEditTimeEntry] = useState<SessionTimeEntry | null>(null);
+    const [editTimeEntry, setEditTimeEntry] = useState<EditableTimeEntry | null>(null);
     const openTimeEntry = (entry: ClientTimeEntry) =>
         setEditTimeEntry({
             id: entry.id,
@@ -241,6 +231,10 @@ export default function Edit() {
             },
             {
                 title: client.name,
+                href: clients.show({ client: client.id, tab: 'przeglad' }).url,
+            },
+            {
+                title: 'Documents and settings',
                 href: clients.edit(client.id).url,
             },
         ],
@@ -250,6 +244,16 @@ export default function Edit() {
     useEffect(() => {
         setBreadcrumbs(breadcrumbs);
     }, [breadcrumbs, setBreadcrumbs]);
+
+    useEffect(() => {
+        // The old overview section is the record's Przegląd tab now, so its links still land.
+        const follow = () => {
+            if (window.location.hash === '#overview') router.visit(clients.show({ client: client.id, tab: 'przeglad' }).url, { replace: true });
+        };
+        follow();
+        window.addEventListener('hashchange', follow);
+        return () => window.removeEventListener('hashchange', follow);
+    }, [client.id]);
 
     const form = useForm<Required<ClientFormData>>({
         type: client.type || 'business',
@@ -273,7 +277,7 @@ export default function Edit() {
         notes: client.notes || '',
     });
 
-    const isProcessing = useFormProcessing(form.processing);
+    const isProcessing = form.processing;
 
     function onSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -282,11 +286,14 @@ export default function Edit() {
         });
     }
 
+    const contactCount = client.contacts.length;
     const { showDeleteControls } = useDeletionControls({
         isDeleted: !!client.deleted_at,
         resourceType: 'client',
         deleteAction: destroy(client),
         restoreAction: restore(client),
+        deleteOption:
+            contactCount > 0 ? { field: 'delete_contacts', label: t('Also delete {{count}} connected contact', { count: contactCount }) } : undefined,
     });
 
     const isBusinessType = form.data.type === 'business';
@@ -696,7 +703,7 @@ export default function Edit() {
                             </div>
                             <div className="cellContent">
                                 {name}
-                                {deleted_at && <Trash className="trashIcon" />}
+                                {deleted_at && <Icon name="trash" size={16} className="trashIcon" />}
                             </div>
                         </TableCell>
                         <TableCell className="cellRelative">
@@ -718,7 +725,7 @@ export default function Edit() {
                         <TableCell style={{ width: '1px' }}>
                             <Button asChild variant="ghost" size="icon">
                                 <Link tabIndex={-1} href={contacts.edit(id)} prefetch>
-                                    <ChevronRight className="cellIcon" style={{ color: 'var(--color-muted-foreground)' }} />
+                                    <Icon name="chevron-right" size={16} className="cellIcon" style={{ color: 'var(--color-muted-foreground)' }} />
                                 </Link>
                             </Button>
                         </TableCell>
@@ -778,7 +785,7 @@ export default function Edit() {
                                             title={entry.task.name}
                                             onClick={(e) => e.stopPropagation()}
                                         >
-                                            <Link2 size={11} /> #{entry.task.id}
+                                            <Icon name="link" size={16} /> #{entry.task.id}
                                         </Link>
                                     )}
                                 </div>
@@ -805,7 +812,7 @@ export default function Edit() {
             {/* The shared pagination component, in partial-visit mode so a
                 page flip reloads only timeEntries and the tab stays put. */}
             <InertiaPagination links={timeEntries.links} className={styles.pager} only={['timeEntries']} preserveState preserveScroll replace />
-            <SessionTimeEditDialog
+            <TimeEntryEditDialog
                 open={editTimeEntry !== null}
                 entry={editTimeEntry}
                 tasks={clientTasks}
@@ -815,20 +822,9 @@ export default function Edit() {
         </>
     );
 
-    // Praca: the agent board leads when agents are working this client, the
-    // projects card lists everything else. No switchers - the per-project
-    // board (and its board/list toggle) lives on the project's own page.
-    const workContent = (
-        <>
-            {agentTasks.length > 0 && (
-                <section className={styles.boardSection}>
-                    <h3 className={styles.boardHeading}>{t('Agent board')}</h3>
-                    <AgentKanban tasks={agentTasks} lanes={agentLanes} showProjectChip reloadOnly={['projects', 'agentTasks']} />
-                </section>
-            )}
-            <div className={styles.tabColumn}>{projectsTab}</div>
-        </>
-    );
+    // Praca: the projects card. No switchers - the per-project board (and
+    // its board/list toggle) lives on the project's own page.
+    const workContent = <div className={styles.tabColumn}>{projectsTab}</div>;
 
     // Aktywność: the time table wide, the relationship stage + its timeline
     // in the rail. Stage changes happen here now - the header pill is inert.
@@ -893,14 +889,7 @@ export default function Edit() {
         </div>
     );
 
-    const overviewContent = (
-        <div className={styles.tabColumn}>
-            <OverviewTab clientId={client.id} overview={overview} lifecycleEvents={lifecycleEvents} projects={projects} />
-        </div>
-    );
-
     const tabs = [
-        { id: 'overview', label: t('Overview'), content: overviewContent },
         { id: 'work', label: t('Work'), content: workContent },
         { id: 'reports', label: t('Reports'), content: reportsContent },
         // Invoices sits next to Reports: both are read together at month close.
@@ -913,7 +902,7 @@ export default function Edit() {
 
     return (
         <>
-            <Head title={form.data.name} />
+            <Head title={`${form.data.name} · ${t('Documents and settings')}`} />
             {/* Name alone on top; status pills on their own row below - same
                 header anatomy as the lead record view. Hours live on the
                 Przegląd card, not here; the gear opens Ustawienia. */}
@@ -932,11 +921,11 @@ export default function Edit() {
                             window.location.hash = 'settings';
                         }}
                     >
-                        <Settings size={15} />
+                        <Icon name="settings" size={16} />
                     </button>
                 </div>
             </div>
-            <Tabs tabs={tabs} defaultTab="overview" />
+            <Tabs tabs={tabs} />
         </>
     );
 }

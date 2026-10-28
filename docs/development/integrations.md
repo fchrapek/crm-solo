@@ -1,6 +1,6 @@
 # Integrations
 
-Two providers, configured per account on `/integrations`: Infakt and Trello
+Three providers, configured per account in Ustawienia · Integracje (`/settings/integracje`; the old `/integrations` URLs redirect there): Infakt, Trello and SMSAPI
 (`Integration::PROVIDERS`). Credentials are encrypted
 ([data-models.md](data-models.md#integration)). Setting up the Trello app
 itself: [../integrations/trello-setup.md](../integrations/trello-setup.md).
@@ -41,8 +41,8 @@ a board's work is bounded inside that lease.
 **What the CRM owns**: Trello owns a card's title, description (stored exactly
 as the card holds it), list and completion; a synced card is read-only in the
 CRM. The CRM owns `finished_at` (the owner's tick, see
-[day-screens.md](day-screens.md) for the reconciliation rules), the brief and
-the agent lane. A card closed on Trello archives its task; a card deleted on
+[day-screens.md](day-screens.md) for the reconciliation rules) and the brief.
+A card closed on Trello archives its task; a card deleted on
 the board archives its task after a complete fetch. A card moved to another
 synced board of the same client takes its task along; moved to another
 client's board (or between a client and a client-less board) it gets a new
@@ -75,6 +75,10 @@ existing tasks at once from their stored list ids, each under its row lock,
 without calling Trello. Lanes are validated against the five canonical ones
 plus `settings.custom_lanes`, which the dialog can extend.
 
+## SMSAPI (text messages)
+
+The account's SMSAPI.pl OAuth token (scope SMS only) is the integration's API token. Saving it sends nothing: the account switches in Ustawienia · Wiadomości SMS · Wysyłka ("Wysyłka przez", with a confirm) or with `crm message-sending --provider=smsapi`, both refused until the integration is connected and on, and `SmsapiProvider` then posts each due message to `sms.do` with the message id as `idx`. A refusal is recorded as `SMSAPI <code>: <message>` on the message; no answer is recorded as failed because the text may have gone out. Nothing is resent on its own: "Wyślij ponownie" (Przegląd, Dziennik, /sms, `crm message-resend`) puts the same row back to pending and keeps the failure as `previous_error`; after no answer it asks first. A failed message waits in the client's Czeka na ciebie and in `crm today` until it is sent again or cancelled. `SMSAPI_TEST=1` sends `test=1`: SMSAPI checks token, number, text and the account limit and sends nothing, and the message is stored as `simulated` with SMSAPI's id. A new SMSAPI account sends only to its registration number until it is activated (error 98). Delivery callbacks and a sender name come with the hosted account. No `check_idx`: message ids repeat between installs sharing one SMSAPI account, and the dispatcher's claim already sends a message once.
+
 ## Project board
 
 Each project's board lives at `GET /clients/{client}/projects/{project}`
@@ -85,6 +89,12 @@ projects as `<ProjectRow>`s. `<ProjectKanban>` wraps the shared
 `<KanbanBoard>`, which also powers `<AgentKanban>`. Dragging a manual task
 calls `PATCH /tasks/{task}/list-name`; synced cards do not drag. "Show
 archived" reveals archived tasks, struck through and not draggable.
+
+Since the Solo redesign the page (Figma 770:56830, phones 849:21156) is the Zadania lanes narrowed to the
+project beside a 380 px Projekt column: Synchronizuj and Edytuj in its head, Trello, Synchronizacja (dziś
+10:42) and this month's hours. While an agent's timer (started with a token) runs on one of the project's
+tasks, `project.live_agent` puts the agent line at the end of the trail and the agent chip in the phone nav
+bar.
 
 `<KanbanBoard>` lays lanes out as horizontally scrolling grid columns
 (`minmax(220px, 280px)`), so extra lanes scroll instead of squeezing. That

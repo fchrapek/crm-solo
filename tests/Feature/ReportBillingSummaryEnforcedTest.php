@@ -138,19 +138,6 @@ final class ReportBillingSummaryEnforcedTest extends TestCase
             }
         };
 
-        $prompts = new class implements NarrativePromptResolver
-        {
-            public function resolve(int $accountId): string
-            {
-                return 'prompt';
-            }
-
-            public function source(int $accountId): ?string
-            {
-                return 'file';
-            }
-        };
-
-        return new AiNarrativeComposer($provider, app(StructuredListComposer::class), $prompts);
+        return new AiNarrativeComposer($provider, app(StructuredListComposer::class), new NarrativePromptResolver);
     }
 }

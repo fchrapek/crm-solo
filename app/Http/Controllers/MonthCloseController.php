@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Models\Client;
 use App\Models\MonthCloseRun;
 use App\Models\MonthCloseStep;
+use App\Services\Clients\MonthCloseWorklist;
 use App\Support\LocalCalendar;
 use Closure;
 use Illuminate\Http\RedirectResponse;
@@ -26,36 +26,23 @@ final class MonthCloseController extends Controller
      * for the selected period. The CRM only tracks checklist state — the work
      * itself is done live with the agent.
      */
-    public function index(Request $request): Response
+    public function index(Request $request, MonthCloseWorklist $worklist): Response
     {
         $period = $this->resolvePeriod((string) $request->input('period', ''));
 
-        $clients = Auth::user()->account->clients()
-            ->whereNotNull('month_close_type')
-            ->where('include_in_month_close', true)
-            ->orderBy('name')
-            ->with([
-                'monthCloseSites:id,client_id,name',
-                'monthCloseRuns' => fn ($query) => $query->where('period', $period)->with('steps.project:id,name'),
-            ])
-            ->get();
-
-        $rows = $clients->map(function (Client $client): array {
-            $run = $client->monthCloseRuns->first();
-
-            return [
-                'client' => [
-                    'id' => $client->id,
-                    'name' => $client->name,
-                    'type' => $client->month_close_type,
-                    'site_count' => $client->monthCloseSites->count(),
-                ],
-                // What starting the close would seed, so the button can show a
-                // count before any row exists.
-                'template_total' => count(MonthCloseRun::stepTemplateFor($client)),
-                'run' => $run ? $this->serializeRun($run) : null,
-            ];
-        })->values();
+        $rows = collect($worklist->rows(Auth::user()->account, $period))->map(fn (array $row): array => [
+            'client' => [
+                'id' => $row['client']->id,
+                'name' => $row['client']->name,
+                'type' => $row['client']->month_close_type ?? $row['run']?->close_type,
+                'site_count' => $row['client']->monthCloseSites->count(),
+            ],
+            // What starting the close would seed, so the button can show a count before any row exists.
+            'template_total' => $row['template_total'],
+            'can_start_checklist' => $row['can_start_checklist'],
+            'run' => $row['run'] ? $this->serializeRun($row['run']) : null,
+            'settlement' => $row['settlement'],
+        ]);
 
         return Inertia::render('month-close/index', [
             'period' => $period,

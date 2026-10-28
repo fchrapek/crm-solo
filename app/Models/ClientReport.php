@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Casts\HumanizedText;
+use App\Services\Clients\HoursBank;
+use App\Support\LocalCalendar;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -35,10 +37,72 @@ final class ClientReport extends Model
         'composer_key',
         'body_markdown',
         'status',
+        'needs_recalculation',
         'generated_at',
         'finalized_at',
         'sent_at',
     ];
+
+    /**
+     * Of reports ending on the same day, the one the hours bank reads: sent, then finalized, then a draft; a whole month before a partial period; then the newest row.
+     *
+     * @param  iterable<self>  $reports
+     */
+    public static function governing(iterable $reports): ?self
+    {
+        return collect($reports)
+            ->sortBy([
+                fn (self $a, self $b): int => self::statusRank($b->status) <=> self::statusRank($a->status),
+                fn (self $a, self $b): int => (int) $b->coversWholeMonth() <=> (int) $a->coversWholeMonth(),
+                fn (self $a, self $b): int => $b->id <=> $a->id,
+            ])
+            ->first();
+    }
+
+    /**
+     * Of reports ending on the same day, the one that settles that day: from the account's baseline month on only a
+     * whole month counts, older partial periods still do; then governing().
+     *
+     * @param  iterable<self>  $reports
+     */
+    public static function settling(iterable $reports, string $baseline): ?self
+    {
+        $baselineDay = LocalCalendar::monthFrom($baseline)->toDateString();
+
+        return self::governing(collect($reports)->filter(fn (self $report): bool => $report->settlesFrom($baselineDay)));
+    }
+
+    public static function statusRank(?string $status): int
+    {
+        return match ($status) {
+            self::STATUS_SENT => 3,
+            self::STATUS_FINALIZED => 2,
+            default => 1,
+        };
+    }
+
+    /** The report already covering exactly this period: generating it again refuses rather than duplicating. */
+    public static function coveringPeriod(int $clientId, string $start, string $end): ?self
+    {
+        return self::governing(self::query()
+            ->where('client_id', $clientId)
+            ->whereDate('period_start', $start)
+            ->whereDate('period_end', $end)
+            ->get());
+    }
+
+    /** Whether this report can be a settled point for an account whose baseline month starts on $baselineDay. */
+    public function settlesFrom(string $baselineDay): bool
+    {
+        return $this->period_end->toDateString() < $baselineDay || $this->coversWholeMonth();
+    }
+
+    public function coversWholeMonth(): bool
+    {
+        return $this->period_type === self::PERIOD_MONTH
+            && $this->period_start->day === 1
+            && $this->period_end->toDateString() === $this->period_start->copy()->endOfMonth()->toDateString();
+    }
 
     /**
      * Hours the client can actually draw on this period: last period's balance
@@ -50,10 +114,11 @@ final class ClientReport extends Model
      */
     public function availableHours(): float
     {
-        $total = (float) $this->opening_balance_hours + (float) $this->contracted_hours;
-        $cap = $this->rollover_cap_hours !== null ? (float) $this->rollover_cap_hours : null;
-
-        return $cap !== null ? min($total, $cap) : $total;
+        return HoursBank::available(
+            (float) $this->opening_balance_hours,
+            (float) $this->contracted_hours,
+            $this->rollover_cap_hours !== null ? (float) $this->rollover_cap_hours : null,
+        );
     }
 
     /**
@@ -62,7 +127,12 @@ final class ClientReport extends Model
      */
     public function closingBalanceHours(): float
     {
-        return round($this->availableHours() - (float) $this->actual_hours, 2);
+        // Without contracted hours the period was billed outside a retainer, so its hours never draw on the bank.
+        if ($this->contracted_hours === null) {
+            return round((float) $this->opening_balance_hours, 2);
+        }
+
+        return HoursBank::closing($this->availableHours(), (float) $this->actual_hours);
     }
 
     /**
@@ -71,9 +141,11 @@ final class ClientReport extends Model
      */
     public function forfeitedHours(): float
     {
-        $total = (float) $this->opening_balance_hours + (float) $this->contracted_hours;
-
-        return round(max(0.0, $total - $this->availableHours()), 2);
+        return HoursBank::forfeited(
+            (float) $this->opening_balance_hours,
+            (float) $this->contracted_hours,
+            $this->rollover_cap_hours !== null ? (float) $this->rollover_cap_hours : null,
+        );
     }
 
     /**
@@ -83,6 +155,12 @@ final class ClientReport extends Model
     public function version(): string
     {
         return sha1($this->body_markdown."\0".$this->opening_balance_hours);
+    }
+
+    /** The local calendar day the report was marked as sent. */
+    public function sentOn(): ?string
+    {
+        return $this->sent_at?->copy()->setTimezone(LocalCalendar::timezone())->toDateString();
     }
 
     public function client(): BelongsTo
@@ -108,6 +186,8 @@ final class ClientReport extends Model
             'reason' => $reason,
             'body_markdown_before' => $this->body_markdown,
             'status_before' => $this->status,
+            'finalized_at_before' => $this->finalized_at,
+            'sent_at_before' => $this->sent_at,
             'contracted_hours_before' => $this->contracted_hours,
             'actual_hours_before' => $this->actual_hours,
             'opening_balance_hours_before' => $this->opening_balance_hours,
@@ -131,6 +211,7 @@ final class ClientReport extends Model
             'generated_at' => 'datetime',
             'finalized_at' => 'datetime',
             'sent_at' => 'datetime',
+            'needs_recalculation' => 'boolean',
         ];
     }
 }

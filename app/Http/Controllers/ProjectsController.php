@@ -12,12 +12,14 @@ use App\Services\Integrations\Trello\CardFinishReconciler;
 use App\Services\Integrations\Trello\TrelloBoardSyncRunning;
 use App\Services\Integrations\Trello\TrelloListMapper;
 use App\Services\Integrations\Trello\TrelloService;
+use App\Services\Projects\ProjectCreator;
 use App\Services\TaskSources\TaskSourceRegistry;
+use App\Services\Time\PeriodSettled;
+use App\Services\Time\TimeEntryWriter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Throwable;
 
@@ -27,19 +29,11 @@ final class ProjectsController extends Controller
         private readonly TaskSourceRegistry $taskSources,
     ) {}
 
-    public function store(Request $request, Client $client): RedirectResponse
+    public function store(Request $request, Client $client, ProjectCreator $creator): RedirectResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string|max:5000',
-        ]);
+        $validated = $request->validate(ProjectCreator::RULES);
 
-        Project::create([
-            'account_id' => $client->account_id,
-            'client_id' => $client->id,
-            'name' => $validated['name'],
-            'description' => $validated['description'] ?? null,
-        ]);
+        $creator->create($client, $validated['name'], $validated['description'] ?? null);
 
         return back()->with('success', __('Project created.'));
     }
@@ -51,11 +45,6 @@ final class ProjectsController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string|max:5000',
-            // Preview = the command that serves the project locally (ddev,
-            // vite, rails, …). Stack-agnostic — we just spawn it via ttyd.
-            'preview_command' => 'nullable|string|max:500',
-            'preview_working_dir' => 'nullable|string|max:255',
-            'preview_url' => 'nullable|string|max:500',
             // Whether this project is a site in the monthly close — it gets its
             // own set of site steps on the client's checklist.
             'include_in_month_close' => 'sometimes|boolean',
@@ -68,7 +57,7 @@ final class ProjectsController extends Controller
         return back()->with('success', __('Project updated.'));
     }
 
-    public function destroy(Project $project): RedirectResponse
+    public function destroy(Project $project, TimeEntryWriter $writer): RedirectResponse
     {
         $this->authorizeProject($project);
 
@@ -76,8 +65,11 @@ final class ProjectsController extends Controller
             abort(422, 'Trello-backed projects must be unlinked first.');
         }
 
-        // Project::deleting removes its tasks one by one, so each task's own hook runs.
-        DB::transaction(fn () => $project->delete());
+        try {
+            $writer->deleteProjects(collect([$project]));
+        } catch (PeriodSettled $settled) {
+            return back()->with('error', $settled->deleteRefusal(project: true));
+        }
 
         return back()->with('success', __('Project deleted.'));
     }

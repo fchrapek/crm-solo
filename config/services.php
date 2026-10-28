@@ -16,6 +16,10 @@ return [
     |
     */
 
+    'smsapi' => [
+        'test' => (bool) env('SMSAPI_TEST', false),
+    ],
+
     'postmark' => [
         'token' => env('POSTMARK_TOKEN'),
     ],

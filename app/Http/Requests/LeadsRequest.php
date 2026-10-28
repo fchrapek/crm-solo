@@ -41,7 +41,7 @@ final class LeadsRequest extends FormRequest
             // plan's measured rates are grouped by.
             'source' => [
                 $isCreate ? 'required' : 'prohibited',
-                Rule::in(Lead::sources()),
+                Rule::in(Lead::sources((int) $this->user()->account_id)),
             ],
             'name' => ['required', 'string', 'max:255'],
             'company' => ['nullable', 'string', 'max:255'],

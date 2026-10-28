@@ -435,11 +435,14 @@ final class AgentRemoteBridgeTest extends TestCase
 
     public function test_an_audit_snapshot_never_holds_a_tasks_session_token(): void
     {
-        $task = Task::create(['project_id' => $this->project->id, 'name' => 'Running session', 'source' => 'manual', 'session_token' => 'live-session-secret']);
+        $task = Task::create(['project_id' => $this->project->id, 'name' => 'Former session', 'source' => 'manual']);
+        Task::whereKey($task->id)->update(['session_token' => 'live-session-secret']);
+        $task->refresh();
+        $this->assertSame('live-session-secret', $task->getAttributes()['session_token']);
         $this->assertArrayNotHasKey('session_token', $task->toArray(), 'the token stays out of serialized tasks');
 
         app(AgentCallContext::class)->run(new AgentCall(AgentCall::VIA_CLI, 'crm:task-done'), function () use ($task): void {
-            $task->update(['session_token' => 'rotated-secret', 'priority' => 'high']);
+            $task->forceFill(['session_token' => 'rotated-secret', 'priority' => 'high'])->save();
             $task->delete();
         });
 

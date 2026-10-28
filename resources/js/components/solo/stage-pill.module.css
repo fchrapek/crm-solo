@@ -1,0 +1,41 @@
+/* The fallbacks keep the pill legible on the old client page, which has no Solo surface around it. */
+.pill {
+    --stage-tone: var(--solo-fg-muted, var(--color-muted-foreground));
+
+    display: inline-flex;
+    align-items: center;
+    gap: var(--solo-space-2);
+    padding: 6px var(--solo-space-row) 6px var(--solo-space-3);
+    border: var(--solo-outline-width, 1px) solid var(--solo-control-border, var(--solo-field-border, var(--color-foreground)));
+    border-radius: var(--solo-radius-full);
+    background: var(--solo-control-bg, var(--solo-field-bg, none));
+    color: var(--solo-fg, var(--color-foreground));
+    font-size: var(--solo-text-control-strong);
+    font-weight: 600;
+    line-height: normal;
+    white-space: nowrap;
+}
+
+.pill[data-tone='green'] {
+    --stage-tone: var(--solo-ok, var(--color-success));
+}
+
+.pill[data-tone='amber'] {
+    --stage-tone: var(--solo-warn, var(--color-warning));
+}
+
+.pill[data-tone='red'] {
+    --stage-tone: var(--solo-error, var(--color-destructive));
+}
+
+.pill[data-tone='blue'] {
+    --stage-tone: var(--color-info);
+}
+
+.dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--stage-tone);
+}

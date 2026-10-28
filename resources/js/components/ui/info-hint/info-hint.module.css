@@ -29,3 +29,29 @@
     line-height: 1.5;
     color: var(--color-muted-foreground);
 }
+
+/* Solo: the ⓘ in ink and the hint as an ink tooltip; the doubled class outranks the popover's own Solo surface */
+:global([data-day]) .trigger {
+    color: var(--solo-tip-icon, var(--solo-fg));
+}
+
+:global([data-day]) .trigger svg {
+    width: var(--solo-tip-icon-size, 16px);
+    height: var(--solo-tip-icon-size, 16px);
+}
+
+:global([data-day]) .trigger:hover {
+    background: var(--solo-tip-hover, transparent);
+    color: var(--solo-fg);
+}
+
+:global([data-day]) .content.content {
+    width: var(--solo-tip-width, max-content);
+    max-width: min(22rem, calc(100vw - 2 * var(--solo-space-4)));
+    padding: var(--solo-tip-pad, 10px 14px);
+    border-color: var(--solo-tip-border, transparent);
+    border-radius: var(--solo-tip-radius, var(--solo-radius-md));
+    background-color: var(--solo-tip-bg, var(--solo-fg));
+    color: var(--solo-tip-fg, var(--solo-bg));
+    font-size: var(--solo-tip-size, var(--solo-text-meta));
+}

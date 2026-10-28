@@ -9,8 +9,9 @@ use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Console\Commands\Concerns\ResolvesProjectAndClient;
 use App\Models\Project;
 use App\Models\Task;
+use App\Services\Time\PeriodSettled;
+use App\Services\Time\TimeEntryWriter;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 #[AccountScope(AccountScope::ACTING)]
@@ -21,8 +22,8 @@ final class DeleteProjectsCommand extends Command
 
     protected $signature = 'projects:delete
                             {project? : Project ID or name (single-project mode)}
-                            {--client= : Client ID or name — wipe ALL projects for this client (except General)}
-                            {--include-general : When using --client, also delete the "General" project}
+                            {--client= : Client ID or name — wipe ALL projects for this client (except its catch-all General project)}
+                            {--include-general : When using --client, also delete the catch-all General project}
                             {--force : Skip confirmation}
                             {--account= : Account ID; must be the acting account}';
 
@@ -95,7 +96,13 @@ final class DeleteProjectsCommand extends Command
         }
 
         // Project::deleting deletes each task through its model, which detaches time entries and removes attachment files.
-        DB::transaction(fn () => $projects->each(fn (Project $p) => $p->delete()));
+        try {
+            app(TimeEntryWriter::class)->deleteProjects($projects);
+        } catch (PeriodSettled $settled) {
+            $this->error($settled->deleteRefusal(project: true).' Nothing was deleted.');
+
+            return self::FAILURE;
+        }
 
         $this->info("Deleted {$projects->count()} project(s) and {$taskTotal} task(s). Their logged time stays, billed to the client without a task.");
 
@@ -107,8 +114,9 @@ final class DeleteProjectsCommand extends Command
         $client = $this->resolveClient($needle, $accountId);
 
         $query = Project::where('client_id', $client->id);
-        if (! $includeGeneral) {
-            $query->where('name', '!=', 'General');
+        $general = $includeGeneral ? null : $client->generalProject();
+        if ($general !== null) {
+            $query->whereKeyNot($general->id);
         }
 
         return $query->get();

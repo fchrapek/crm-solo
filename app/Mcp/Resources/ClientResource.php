@@ -18,7 +18,7 @@ use Laravel\Mcp\Server\Resource;
 use Laravel\Mcp\Support\UriTemplate;
 
 #[MimeType('application/json')]
-#[Description('One client\'s context, the same JSON the client_brief tool returns: status, retainer positions, hours this month, open tasks with their readiness, latest report and journal.')]
+#[Description('One client\'s context, the same JSON the client_brief tool returns: status, retainer positions, hours (hours.month is all logged time this calendar month; hours.bank is the month being settled, hours.bank.active_period, and the limit applies to hours.bank.used against hours.bank.available; billing_mode order means no retainer and hours.bank null), open tasks with their readiness, latest report and journal.')]
 final class ClientResource extends Resource implements HasUriTemplate
 {
     use HandlesReferenceErrors;

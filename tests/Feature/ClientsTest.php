@@ -7,7 +7,6 @@ namespace Tests\Feature;
 use App\Models\Account;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 final class ClientsTest extends TestCase
@@ -49,154 +48,81 @@ final class ClientsTest extends TestCase
         ]);
     }
 
-    public function test_can_view_clients(): void
-    {
-        // stage=all neutralizes the active-by-default stage filter; the seeded
-        // clients are prospects.
-        $this->actingAs($this->user)
-            ->get('/clients?stage=all')
-            ->assertInertia(fn (Assert $assert) => $assert
-                ->component('clients/index')
-                ->has('clients.data', 2)
-                ->has('clients.data.0', fn (Assert $assert) => $assert
-                    ->has('id')
-                    ->has('type')
-                    ->where('name', 'Apple')
-                    ->where('phone', '647-943-4400')
-                    ->where('city', 'Toronto')
-                    ->where('is_pinned', false)
-                    ->where('deleted_at', null)
-                    ->where('lifecycle_stage', 'active')
-                    ->has('contacts_count')
-                )
-                ->has('clients.data.1', fn (Assert $assert) => $assert
-                    ->has('id')
-                    ->has('type')
-                    ->where('name', 'Microsoft')
-                    ->where('phone', '877-568-2495')
-                    ->where('city', 'Redmond')
-                    ->where('is_pinned', false)
-                    ->where('deleted_at', null)
-                    ->where('lifecycle_stage', 'active')
-                    ->has('contacts_count')
-                )
-            );
-    }
-
-    public function test_can_search_for_clients(): void
-    {
-        $this->actingAs($this->user)
-            ->get('/clients?search=Apple&stage=all')
-            ->assertInertia(fn (Assert $assert) => $assert
-                ->component('clients/index')
-                ->where('filters.search', 'Apple')
-                ->has('clients.data', 1)
-                ->has('clients.data.0', fn (Assert $assert) => $assert
-                    ->has('id')
-                    ->has('type')
-                    ->where('name', 'Apple')
-                    ->where('phone', '647-943-4400')
-                    ->where('city', 'Toronto')
-                    ->where('is_pinned', false)
-                    ->where('deleted_at', null)
-                    ->where('lifecycle_stage', 'active')
-                    ->has('contacts_count')
-                )
-            );
-    }
-
-    public function test_cannot_view_deleted_clients(): void
-    {
-        $this->user->account->clients()->firstWhere('name', 'Microsoft')->delete();
-
-        $this->actingAs($this->user)
-            ->get('/clients?stage=all')
-            ->assertInertia(fn (Assert $assert) => $assert
-                ->component('clients/index')
-                ->has('clients.data', 1)
-                ->where('clients.data.0.name', 'Apple')
-            );
-    }
-
-    public function test_can_filter_to_view_deleted_clients(): void
-    {
-        $this->user->account->clients()->firstWhere('name', 'Microsoft')->delete();
-
-        $this->actingAs($this->user)
-            ->get('/clients?trashed=with&stage=all')
-            ->assertInertia(fn (Assert $assert) => $assert
-                ->component('clients/index')
-                ->has('clients.data', 2)
-                ->where('clients.data.0.name', 'Apple')
-                ->where('clients.data.1.name', 'Microsoft')
-            );
-    }
-
-    public function test_can_pin_client(): void
+    public function test_pinning_sets_the_requested_state_and_repeating_it_changes_nothing(): void
     {
         $client = $this->user->account->clients()->firstWhere('name', 'Microsoft');
 
-        $this->actingAs($this->user)
-            ->put("/clients/{$client->id}/pin")
-            ->assertRedirect();
+        foreach ([true, true] as $pinned) {
+            $this->actingAs($this->user)
+                ->from('/clients')
+                ->put("/clients/{$client->id}/pin", ['pinned' => $pinned])
+                ->assertRedirect('/clients');
 
-        $this->assertTrue($client->fresh()->is_pinned);
+            $this->assertTrue($client->fresh()->is_pinned);
+        }
     }
 
-    public function test_can_unpin_client(): void
+    public function test_unpinning_sets_the_requested_state_and_repeating_it_changes_nothing(): void
     {
         $client = $this->user->account->clients()->firstWhere('name', 'Microsoft');
         $client->update(['is_pinned' => true]);
 
-        $this->actingAs($this->user)
-            ->put("/clients/{$client->id}/pin")
-            ->assertRedirect();
+        foreach ([false, false] as $pinned) {
+            $this->actingAs($this->user)
+                ->from("/clients/{$client->id}/przeglad")
+                ->put("/clients/{$client->id}/pin", ['pinned' => $pinned])
+                ->assertRedirect("/clients/{$client->id}/przeglad");
+
+            $this->assertFalse($client->fresh()->is_pinned);
+        }
+    }
+
+    public function test_pinning_without_an_explicit_state_is_refused_and_changes_nothing(): void
+    {
+        $client = $this->user->account->clients()->firstWhere('name', 'Microsoft');
+
+        foreach ([[], ['pinned' => null], ['pinned' => 'maybe']] as $payload) {
+            $this->actingAs($this->user)
+                ->from('/clients')
+                ->put("/clients/{$client->id}/pin", $payload)
+                ->assertSessionHasErrors('pinned');
+        }
 
         $this->assertFalse($client->fresh()->is_pinned);
     }
 
-    public function test_pinned_clients_appear_first(): void
+    public function test_another_accounts_client_cannot_be_pinned(): void
     {
-        $this->user->account->clients()->firstWhere('name', 'Microsoft')->update(['is_pinned' => true]);
+        $other = Account::create(['name' => 'Other']);
+        $stranger = $other->clients()->create(['name' => 'Obcy Przykładowy', 'currency' => 'PLN']);
 
         $this->actingAs($this->user)
-            ->get('/clients?stage=all')
-            ->assertInertia(fn (Assert $assert) => $assert
-                ->component('clients/index')
-                ->where('clients.data.0.name', 'Microsoft')
-                ->where('clients.data.0.is_pinned', true)
-                ->where('clients.data.1.name', 'Apple')
-                ->where('clients.data.1.is_pinned', false)
-            );
+            ->put("/clients/{$stranger->id}/pin", ['pinned' => true])
+            ->assertNotFound();
+
+        $this->assertFalse($stranger->fresh()->is_pinned);
     }
 
-    public function test_index_defaults_to_active_stage(): void
+    public function test_deleting_a_client_keeps_its_contacts_unless_asked(): void
     {
-        // Clients default to active now — park one so the filter has work to do.
-        $this->user->account->clients()->firstWhere('name', 'Microsoft')->update(['lifecycle_stage' => 'paused']);
+        $client = $this->user->account->clients()->firstWhere('name', 'Apple');
+        $contact = $this->user->account->contacts()->create(['client_id' => $client->id, 'first_name' => 'Ada', 'last_name' => 'Testowa']);
 
-        $this->actingAs($this->user)
-            ->get('/clients')
-            ->assertInertia(fn (Assert $assert) => $assert
-                ->component('clients/index')
-                ->where('filters.stage', 'active')
-                ->has('clients.data', 1)
-                ->where('clients.data.0.name', 'Apple')
-            );
+        $this->actingAs($this->user)->delete("/clients/{$client->id}", ['delete_contacts' => false])->assertRedirect('/clients');
+
+        $this->assertSoftDeleted($client);
+        $this->assertNotSoftDeleted($contact);
     }
 
-    public function test_can_filter_by_stage(): void
+    public function test_deleting_a_client_can_take_its_contacts_along(): void
     {
-        $this->user->account->clients()->firstWhere('name', 'Microsoft')->update(['lifecycle_stage' => 'churned']);
+        $client = $this->user->account->clients()->firstWhere('name', 'Apple');
+        $contact = $this->user->account->contacts()->create(['client_id' => $client->id, 'first_name' => 'Ada', 'last_name' => 'Testowa']);
 
-        $this->actingAs($this->user)
-            ->get('/clients?stage=churned')
-            ->assertInertia(fn (Assert $assert) => $assert
-                ->component('clients/index')
-                ->where('filters.stage', 'churned')
-                ->has('clients.data', 1)
-                ->where('clients.data.0.name', 'Microsoft')
-            );
+        $this->actingAs($this->user)->delete("/clients/{$client->id}", ['delete_contacts' => true])->assertRedirect('/clients');
+
+        $this->assertSoftDeleted($client);
+        $this->assertSoftDeleted($contact);
     }
 
     public function test_new_client_defaults_to_active_stage(): void
@@ -207,9 +133,7 @@ final class ClientsTest extends TestCase
         ]);
 
         $client = $this->user->account->clients()->firstWhere('name', 'New Lead Ltd');
-        // Store still lands on the edit page — the natural next step after
-        // creating is filling in the record.
-        $response->assertRedirect("/clients/{$client->id}/edit");
+        $response->assertRedirect("/clients/{$client->id}/dane");
         $this->assertSame('active', $client->lifecycle_stage);
         $this->assertCount(1, $client->lifecycleEvents);
         $this->assertSame('active', $client->lifecycleEvents->first()->to_stage);

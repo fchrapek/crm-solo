@@ -1,5 +1,5 @@
+import { Icon } from '@/components/ui/icon';
 import { router } from '@inertiajs/react';
-import { Download, FileText, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -110,7 +110,7 @@ export function DocumentsTab({ clientId, documents }: Props) {
                     accept=".pdf,.doc,.docx,.odt,.rtf,.png,.jpg,.jpeg,.webp,.txt,.md,.csv,.xls,.xlsx"
                 />
                 <Button type="button" variant="outline" disabled={uploading} onClick={() => fileRef.current?.click()}>
-                    <Upload size={15} />
+                    <Icon name="upload" size={16} />
                     {uploading ? t('Uploading…') : t('Upload document')}
                 </Button>
                 <span className={styles.hint}>{t('Stored locally, max 50 MB.')}</span>
@@ -143,7 +143,7 @@ export function DocumentsTab({ clientId, documents }: Props) {
                 <ul className={styles.list}>
                     {visible.map((doc) => (
                         <li key={doc.id} className={styles.row}>
-                            <FileText size={18} className={styles.fileIcon} />
+                            <Icon name="file" size={16} className={styles.fileIcon} />
                             <div className={styles.meta}>
                                 <a href={doc.url} target="_blank" rel="noreferrer" className={styles.name}>
                                     {doc.original_name}
@@ -154,10 +154,10 @@ export function DocumentsTab({ clientId, documents }: Props) {
                                 </span>
                             </div>
                             <a href={doc.url} target="_blank" rel="noreferrer" className={styles.iconBtn} aria-label={t('Open')}>
-                                <Download size={16} />
+                                <Icon name="download" size={16} />
                             </a>
                             <button type="button" className={styles.iconBtn} onClick={() => setPendingDelete(doc)} aria-label={t('Delete document')}>
-                                <Trash2 size={16} />
+                                <Icon name="trash" size={16} />
                             </button>
                         </li>
                     ))}

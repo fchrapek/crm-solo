@@ -19,9 +19,6 @@ final readonly class AgentCall
 
     public const string VIA_MCP_WEB = 'mcp-web';
 
-    /** The demo instance's in-page crm prompt. */
-    public const string VIA_WEB_DEMO = 'web-demo';
-
     public function __construct(
         public string $via,
         public string $verb,

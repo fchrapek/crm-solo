@@ -23,9 +23,6 @@ final class Project extends Model
         'include_in_month_close',
         'archived_at',
         'backup_path',
-        'preview_command',
-        'preview_working_dir',
-        'preview_url',
     ];
 
     /**
@@ -62,20 +59,6 @@ final class Project extends Model
     public function repositories(): HasMany
     {
         return $this->hasMany(Repository::class);
-    }
-
-    public function previews(): HasMany
-    {
-        return $this->hasMany(TaskPreview::class);
-    }
-
-    /**
-     * Currently-running preview on this project, if any. At most one row per
-     * project has stopped_at IS NULL — the per-project mutex on TaskPreviewsController.
-     */
-    public function runningPreview(): ?TaskPreview
-    {
-        return $this->previews()->whereNull('stopped_at')->latest('started_at')->first();
     }
 
     public function isArchived(): bool

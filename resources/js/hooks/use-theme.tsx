@@ -9,32 +9,13 @@ import { useCallback, useEffect, useState } from 'react';
  *
  * Persisted the same way as appearance: localStorage for the client, a cookie
  * so a server-rendered first paint can match and avoid a flash.
+ *
+ * Paper and Boring SaaS are offered; a value saved from a retired theme (ink,
+ * brutal, bauhaus) reads as Paper and is applied as Paper.
  */
 export const THEMES = [
-    {
-        id: 'paper',
-        label: 'Paper',
-        blurb: 'Warm editorial. Ink-brown text, terracotta accent, off-white cards.',
-        swatches: ['hsl(38 22% 96%)', 'hsl(38 16% 93%)', 'hsl(14 72% 50%)'],
-    },
-    {
-        id: 'ink',
-        label: 'Ink',
-        blurb: 'Monochrome. Every tone is a grey; meaning comes from weight, not hue.',
-        swatches: ['hsl(0 0% 96%)', 'hsl(0 0% 90%)', 'hsl(0 0% 16%)'],
-    },
-    {
-        id: 'brutal',
-        label: 'Brutal',
-        blurb: 'Slab borders, hard shadows, square corners, uppercase chips.',
-        swatches: ['hsl(50 30% 96%)', 'hsl(50 18% 93%)', 'hsl(52 100% 52%)'],
-    },
-    {
-        id: 'bauhaus',
-        label: 'Bauhaus',
-        blurb: 'Primaries and geometry: red accent, hairline rules, tight corners.',
-        swatches: ['hsl(40 16% 96%)', 'hsl(40 10% 93%)', 'hsl(4 78% 50%)'],
-    },
+    { id: 'paper', label: 'Paper' },
+    { id: 'boring-saas', label: 'Boring SaaS' },
 ] as const;
 
 export type Theme = (typeof THEMES)[number]['id'];
@@ -84,11 +65,11 @@ const setCookie = (name: string, value: string, days = 365) => {
     document.cookie = `${name}=${value};path=/;max-age=${days * 24 * 60 * 60};SameSite=Lax`;
 };
 
-const applyTheme = (theme: Theme) => {
+export const applyTheme = (theme: Theme) => {
     document.documentElement.setAttribute('data-theme', theme);
 };
 
-const applyAccent = (accent: Accent) => {
+export const applyAccent = (accent: Accent) => {
     if (accent === 'default') {
         document.documentElement.removeAttribute('data-accent');
 

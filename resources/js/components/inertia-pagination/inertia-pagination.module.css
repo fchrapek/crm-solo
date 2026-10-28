@@ -48,3 +48,66 @@
         display: flex;
     }
 }
+
+/* Solo look (Figma Pagination): needs a [data-day] surface around it */
+.solo {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--solo-space-3) var(--solo-space-5);
+    padding-top: 22px;
+    font: 500 var(--solo-text-control) / normal var(--solo-font-text);
+}
+
+.soloSummary {
+    color: var(--solo-fg-muted);
+}
+
+.soloPages {
+    --solo-pages-gap: 22px;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--solo-pages-gap);
+}
+
+/* The links' phone hit areas (touchTargetClass) meet halfway across the gap instead of overlapping. */
+.soloPages > a::before {
+    width: calc(100% + var(--solo-pages-gap));
+}
+
+.soloStep,
+.soloPage {
+    padding-bottom: 3px;
+    color: var(--solo-fg);
+    text-decoration: none;
+}
+
+.soloPage {
+    color: var(--solo-fg-muted);
+}
+
+.soloStepDisabled {
+    color: var(--solo-fg-muted);
+    pointer-events: none;
+}
+
+.soloPage[aria-current='page'] {
+    color: var(--solo-fg);
+    font-weight: 600;
+    border-bottom: 2px solid currentColor;
+}
+
+a.soloStep:hover,
+a.soloPage:hover {
+    color: var(--solo-fg);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+
+.soloStep:focus-visible,
+.soloPage:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}

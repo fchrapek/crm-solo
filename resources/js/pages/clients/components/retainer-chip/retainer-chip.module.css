@@ -36,3 +36,7 @@
 .placeholder {
     color: var(--color-muted-foreground);
 }
+
+.portalScope {
+    display: contents;
+}

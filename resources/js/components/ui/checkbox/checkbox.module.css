@@ -47,3 +47,41 @@
   width: 0.875rem;
   height: 0.875rem;
 }
+
+/* Solo: Figma A2f / Checkbox, 18 px with a 2 px ink edge, ink fill and a 14 px check when on */
+:global([data-day]) .checkbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 2px solid var(--solo-fg);
+  border-radius: var(--solo-radius-sm);
+  background: none;
+  box-shadow: none;
+  color: var(--solo-bg);
+  cursor: pointer;
+}
+
+:global([data-day]) .checkbox[data-state="checked"] {
+  border-color: var(--solo-fg);
+  background-color: var(--solo-fg);
+  color: var(--solo-bg);
+}
+
+:global([data-day]) .checkbox:focus-visible {
+  box-shadow: none;
+  outline: 2px solid var(--solo-focus, var(--solo-fg));
+  outline-offset: 2px;
+}
+
+:global([data-day]) .icon {
+  width: 14px;
+  height: 14px;
+}
+
+:global([data-day]) .icon svg {
+  width: 14px;
+  height: 14px;
+}

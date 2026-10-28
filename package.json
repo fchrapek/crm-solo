@@ -10,12 +10,17 @@
         "lint": "eslint . --fix",
         "types": "tsc --noEmit",
         "test": "bun test",
-        "lint:tokens": "node scripts/check-css-tokens.mjs"
+        "lint:tokens": "node scripts/check-css-tokens.mjs",
+        "icons:fluent": "bun scripts/fluent-icons.mjs",
+        "storybook": "storybook dev -p 6006 --no-open",
+        "build:storybook": "storybook build -o storybook-static"
     },
     "devDependencies": {
         "@eslint/js": "^9.39.5",
+        "@fluentui/svg-icons": "1.1.344",
         "@laravel/echo-react": "^2.5.0",
         "@laravel/vite-plugin-wayfinder": "^0.1.10",
+        "@storybook/react-vite": "10.6.2",
         "@types/bun": "^1.4.2",
         "@types/diff": "^8.0.0",
         "@types/markdown-it": "^14.2.0",
@@ -28,6 +33,7 @@
         "lefthook": "^2.1.16",
         "prettier": "^3.9.9",
         "prettier-plugin-organize-imports": "^4.3.0",
+        "storybook": "10.6.2",
         "typescript-eslint": "^8.71.0"
     },
     "dependencies": {
@@ -56,14 +62,14 @@
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",
         "diff": "^9.0.0",
-        "dompurify": "^3.4.16",
+        "dompurify": "^3.4.17",
         "i18next": "^25.10.10",
         "i18next-browser-languagedetector": "^8.2.1",
-        "i18next-http-backend": "^3.0.6",
+        "i18next-http-backend": "^4.0.5",
         "laravel-echo": "^2.5.0",
         "laravel-vite-plugin": "^2.1.0",
         "lucide-react": "^0.562.0",
-        "markdown-it": "^14.3.2",
+        "markdown-it": "^14.3.3",
         "next-themes": "^0.4.6",
         "pusher-js": "^8.6.0",
         "react": "^19.3.0",
@@ -72,13 +78,18 @@
         "react-markdown": "^10.1.0",
         "react-use": "^17.6.1",
         "recharts": "^2.15.4",
+        "remark-gfm": "^4.0.1",
         "sonner": "^2.0.8",
         "typescript": "^5.9.3",
         "uuid": "^13.0.2",
-        "vite": "^7.3.6"
+        "vite": "^7.3.7"
+    },
+    "overrides": {
+        "shell-quote": "1.11.0",
+        "follow-redirects": "1.16.1",
+        "zod": "4.6.6"
     },
     "trustedDependencies": [
-        "@tailwindcss/oxide",
         "lefthook"
     ]
 }

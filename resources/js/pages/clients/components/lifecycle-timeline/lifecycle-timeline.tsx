@@ -1,5 +1,5 @@
+import { Icon } from '@/components/ui/icon';
 import { router } from '@inertiajs/react';
-import { StickyNote } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -38,7 +38,7 @@ function formatDate(iso: string, locale: string): string {
 
 /**
  * Note text lives in a dialog, not inline - the timeline stays a compact
- * sequence of dated rows in the rail; one dialog serves both the "+ Add log
+ * sequence of dated rows in the rail; one dialog serves both the "Add log
  * entry" composer and per-event note viewing/editing.
  */
 function NoteDialog({
@@ -131,7 +131,7 @@ export function LifecycleTimeline({ events, clientId }: Props) {
     return (
         <div className={styles.wrap}>
             <button type="button" className={styles.addEntryButton} onClick={() => setComposerOpen(true)}>
-                + {t('Add log entry')}
+                {t('Add log entry')}
             </button>
 
             {events.length === 0 ? (
@@ -146,7 +146,7 @@ export function LifecycleTimeline({ events, clientId }: Props) {
                                     <span className={styles.timestamp}>{formatDate(event.created_at, i18n.language)}</span>
                                     {isLogNote(event) ? (
                                         <span className={styles.noteBadge}>
-                                            <StickyNote size={12} /> {t('Log entry')}
+                                            <Icon name="note" size={16} /> {t('Log entry')}
                                         </span>
                                     ) : (
                                         <>
@@ -171,7 +171,7 @@ export function LifecycleTimeline({ events, clientId }: Props) {
                                             aria-label={t('Add note')}
                                             title={t('Add note')}
                                         >
-                                            <StickyNote size={12} />
+                                            <Icon name="note" size={16} />
                                         </button>
                                     )}
                                 </div>

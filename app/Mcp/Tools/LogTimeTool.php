@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Mcp\Tools;
 
 use App\Mcp\Tools\Concerns\HandlesReferenceErrors;
+use App\Services\Agent\AgentRefusal;
 use App\Services\Agent\ReferenceException;
 use App\Services\Agent\TimeLogger;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -51,6 +52,8 @@ final class LogTimeTool extends Tool
             ));
         } catch (ReferenceException $e) {
             return $this->referenceError($e);
+        } catch (AgentRefusal $e) {
+            return $this->refusalError($e);
         } catch (InvalidArgumentException $e) {
             return $this->invalidArgument($e->getMessage());
         }

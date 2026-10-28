@@ -9,4 +9,6 @@ export {
     SelectSeparator,
     SelectTrigger,
     SelectValue,
+    soloPillArrowClass,
+    soloPillTriggerClass,
 } from './select';

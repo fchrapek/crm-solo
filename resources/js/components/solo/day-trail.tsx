@@ -1,46 +1,46 @@
-import { Link } from '@inertiajs/react';
-import { Fragment, type ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Icon } from '@/components/ui/icon';
 import { dashboard } from '@/routes';
 import today from '@/routes/today';
-import styles from './day-trail.module.css';
+import { useTranslation } from 'react-i18next';
+import { SegmentedControl } from './segmented-control';
 
-export type DayStep = 'today' | 'done' | 'tomorrow';
+export type DayStep = 'today' | 'done' | 'tomorrow' | 'week';
 
-/** Figma: Day trail. The day's three stages; every step is a link, and only the close button on the summary writes. `current` is omitted off the stages (the task list). */
+/**
+ * Figma: A2f / Day trail. The day's stages and the week ahead; every step is a link, and only the close button on the summary writes.
+ * `current` is omitted off the stages. One set of links: the Width=Full segmented control below 768 px, the caps text
+ * trail from 768 px.
+ */
 export function DayTrail({ current, closed = false }: { current?: DayStep; closed?: boolean }) {
     const { t } = useTranslation();
     const steps = [
         { key: 'today', label: t('Today'), href: dashboard({ query: { widok: 'dzis' } }) },
         { key: 'done', label: t('Summary'), href: dashboard({ query: { widok: 'gotowe' } }) },
         { key: 'tomorrow', label: t('Tomorrow'), href: today.plan() },
+        { key: 'week', label: t('Week'), href: today.week() },
     ] as const;
 
     return (
-        <nav className={styles.trail} aria-label={t('The day')}>
-            {steps.map((step, i) => (
-                <Fragment key={step.key}>
-                    {i > 0 && (
-                        <span className={styles.sep} aria-hidden="true">
-                            →
-                        </span>
-                    )}
-                    <Link href={step.href} className={styles.step} aria-current={current === step.key ? 'step' : undefined}>
-                        {step.label}
-                        {step.key === 'done' && closed && <span aria-label={t('Day closed')}> ✓</span>}
-                    </Link>
-                </Fragment>
-            ))}
-        </nav>
-    );
-}
-
-/** Figma: Day row. The trail on the left and the date (or the live timer line) on the right, one shared baseline. */
-export function DayRow({ current, closed, children }: { current?: DayStep; closed?: boolean; children: ReactNode }) {
-    return (
-        <div className={styles.row}>
-            <DayTrail current={current} closed={closed} />
-            <div className={styles.aside}>{children}</div>
-        </div>
+        <SegmentedControl
+            label={t('The day')}
+            width="full"
+            wide="trail"
+            current="step"
+            value={current}
+            options={steps.map((step) => ({
+                value: step.key,
+                href: step.href,
+                hug: step.key === 'done',
+                label:
+                    step.key === 'done' && closed ? (
+                        <>
+                            <Icon name="done" size={16} filled aria-label={t('Day closed')} />
+                            <span>{step.label}</span>
+                        </>
+                    ) : (
+                        <span>{step.label}</span>
+                    ),
+            }))}
+        />
     );
 }

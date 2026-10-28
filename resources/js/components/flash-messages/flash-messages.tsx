@@ -1,15 +1,17 @@
 import { router, usePage } from '@inertiajs/react';
-import { useEffect, useRef } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { Toaster } from '@/components/ui/sonner';
-import { useProcessingContext } from '@/contexts/processing-context';
 import { SharedData } from '@/types';
+import { type SettlementFlash, settlementToast } from '@/lib/settlement-toast';
+import { createFlashGate, formErrorText, isDialogOpen, summarisesFormErrors } from './flash-gate';
 
 interface FlashMessage {
     success?: string;
     error?: string;
+    settlement?: SettlementFlash | null;
 }
 
 interface FlashPageProps extends SharedData {
@@ -18,75 +20,40 @@ interface FlashPageProps extends SharedData {
     [key: string]: unknown;
 }
 
-export default function FlashMessages() {
-    const { t } = useTranslation();
+const gate = createFlashGate();
+let listening = false;
+
+function listenForVisits() {
+    if (listening || typeof window === 'undefined') return;
+    listening = true;
+    window.addEventListener('popstate', () => gate.historyRestored());
+    router.on('before', () => gate.visitStarted());
+}
+
+/** A Solo page passes its own toaster so the toasts wear its surface. */
+export default function FlashMessages({ toaster }: { toaster?: ReactNode }) {
+    const { t, i18n } = useTranslation();
     const { flash, errors } = usePage<FlashPageProps>().props;
-    const { isProcessing, setShowSuccess } = useProcessingContext();
     const numOfErrors = Object.keys(errors).length;
 
-    const hasPendingVisitRef = useRef(false);
-    const isPopstateRef = useRef(false);
-    const wasProcessingRef = useRef(false);
-    const pendingFlashRef = useRef<{ flash: FlashMessage; numOfErrors: number; wasFormSubmit: boolean } | null>(null);
-
-    // Capture when processing starts (persists even if isProcessing becomes false before flash is stored)
-    useEffect(() => {
-        if (isProcessing) {
-            wasProcessingRef.current = true;
-        }
-    }, [isProcessing]);
+    useEffect(listenForVisits, []);
 
     useEffect(() => {
-        const handlePopstate = () => {
-            isPopstateRef.current = true;
-        };
-        window.addEventListener('popstate', handlePopstate);
+        if (!gate.take(Boolean(flash.success || flash.error || numOfErrors > 0))) return;
 
-        const unregister = router.on('before', () => {
-            if (!isPopstateRef.current) {
-                hasPendingVisitRef.current = true;
-            }
-            isPopstateRef.current = false;
-        });
-
-        return () => {
-            window.removeEventListener('popstate', handlePopstate);
-            unregister();
-        };
-    }, []);
-
-    // Store and show flash messages
-    useEffect(() => {
-        const isPending = hasPendingVisitRef.current;
-        const isPopstate = isPopstateRef.current;
-        const hasFlash = flash.success || flash.error || numOfErrors > 0;
-
-        if (isPending && !isPopstate && hasFlash) {
-            hasPendingVisitRef.current = false;
-            isPopstateRef.current = false;
-            pendingFlashRef.current = { flash: { ...flash }, numOfErrors, wasFormSubmit: wasProcessingRef.current };
+        if (flash.settlement) {
+            const { title, description } = settlementToast(flash.settlement, i18n.language, t);
+            toast.success(title, { description });
+        } else if (flash.success) {
+            toast.success(flash.success);
         }
 
-        if (!isProcessing && pendingFlashRef.current) {
-            const { flash: pendingFlash, numOfErrors: pendingNumOfErrors, wasFormSubmit } = pendingFlashRef.current;
-            pendingFlashRef.current = null;
-            wasProcessingRef.current = false;
-
-            if (pendingFlash.success) {
-                if (wasFormSubmit) {
-                    setShowSuccess(true);
-                } else {
-                    toast.success(pendingFlash.success);
-                }
-            }
-
-            if (pendingFlash.error) {
-                toast.error(pendingFlash.error);
-            } else if (pendingNumOfErrors > 0) {
-                toast.error(t('form_errors', { count: pendingNumOfErrors }));
-            }
+        if (flash.error) {
+            toast.error(flash.error);
+        } else if (summarisesFormErrors(numOfErrors, isDialogOpen())) {
+            toast.error(formErrorText(errors, t('form_errors', { count: numOfErrors })));
         }
-    }, [flash, errors, numOfErrors, isProcessing, t, setShowSuccess]);
+    }, [flash, errors, numOfErrors, t, i18n.language]);
 
-    return <Toaster />;
+    return toaster ?? <Toaster />;
 }

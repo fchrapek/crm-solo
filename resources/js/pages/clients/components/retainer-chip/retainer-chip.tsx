@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { SoloSurface } from '@/components/solo/surface';
 import { useFormatters } from '@/lib/format';
 import { ClientCurrency } from '@/types';
 
@@ -41,7 +42,10 @@ function useRetainerSummary(retainers: Retainer[], clientCurrency: ClientCurrenc
 
     const active = useMemo(() => {
         const today = new Date().toISOString().slice(0, 10);
-        return retainers.filter((r) => r.is_active && r.effective_from <= today && (r.effective_to === null || r.effective_to > today));
+        // Leading first, as a report snapshots it: most hours, then the newest.
+        return retainers
+            .filter((r) => r.is_active && r.effective_from <= today && (r.effective_to === null || r.effective_to > today))
+            .sort((a, b) => b.monthly_hours - a.monthly_hours || b.effective_from.localeCompare(a.effective_from) || b.id - a.id);
     }, [retainers]);
 
     // One position → show it inline; several → show the monthly total + count.
@@ -95,16 +99,19 @@ export function RetainerChip({ clientId, clientCurrency, retainers }: Props) {
     return (
         <>
             <button type="button" className={styles.trigger} onClick={() => setOpen(true)} aria-label={t('Manage abonament')}>
-                <span className={active.length > 0 ? undefined : styles.placeholder}>{label ?? t('+ Retainer')}</span>
+                <span className={active.length > 0 ? undefined : styles.placeholder}>{label ?? t('Add retainer')}</span>
             </button>
-            <RetainerDialog
-                open={open}
-                onOpenChange={setOpen}
-                clientId={clientId}
-                clientCurrency={clientCurrency}
-                retainers={retainers}
-                activeIds={active.map((r) => r.id)}
-            />
+            {/* The dialog is a Solo dialog; the surface only routes its portal into the Solo tokens. */}
+            <SoloSurface day="paper" className={styles.portalScope}>
+                <RetainerDialog
+                    open={open}
+                    onOpenChange={setOpen}
+                    clientId={clientId}
+                    clientCurrency={clientCurrency}
+                    retainers={retainers}
+                    activeIds={active.map((r) => r.id)}
+                />
+            </SoloSurface>
         </>
     );
 }

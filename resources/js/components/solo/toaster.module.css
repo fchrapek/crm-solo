@@ -1,0 +1,84 @@
+.surface {
+    display: contents;
+}
+
+.toasts [data-sonner-toast] {
+    background-color: var(--solo-pop-bg, var(--solo-bg));
+    color: var(--solo-fg);
+    border: var(--solo-pop-width, 2px) solid var(--solo-pop-border, var(--solo-fg));
+    border-radius: var(--solo-field-radius, var(--solo-radius-lg));
+    box-shadow: var(--solo-pop-shadow, none);
+    font-family: var(--solo-font-text);
+    font-size: var(--solo-text-action);
+}
+
+.toasts [data-sonner-toast] [data-title] {
+    font-weight: 600;
+}
+
+.toasts [data-sonner-toast] [data-description] {
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-text-meta);
+}
+
+.toasts [data-sonner-toast] [data-icon] {
+    color: var(--solo-link, var(--solo-accent));
+}
+
+.toasts [data-sonner-toast][data-type='success'] [data-icon] {
+    color: var(--solo-ok);
+}
+
+.toasts [data-sonner-toast][data-type='warning'] [data-icon] {
+    color: var(--solo-warn);
+}
+
+.toasts [data-sonner-toast][data-type='error'] [data-icon] {
+    color: var(--solo-error);
+}
+
+.toasts [data-sonner-toast] [data-button] {
+    background-color: var(--solo-primary, var(--solo-fg));
+    color: var(--solo-on-primary, var(--solo-bg));
+    border-radius: var(--solo-button-radius, var(--solo-radius-full));
+    font-weight: var(--solo-button-weight, 700);
+}
+
+.toasts [data-sonner-toast] [data-close-button] {
+    background-color: var(--solo-pop-bg, var(--solo-bg));
+    color: var(--solo-fg);
+    border-color: var(--solo-pop-border, var(--solo-fg));
+}
+
+/* While a bottom sheet is open on a phone the toasts drop in from the top, so they never cover it. */
+:global(:root:has([data-slot='sheet-content'][data-side='bottom'][data-state='open'])) .toasts[data-y-position='bottom'] {
+    top: calc(env(safe-area-inset-top, 0px) + var(--solo-space-4));
+    bottom: auto;
+}
+
+:global(:root:has([data-slot='sheet-content'][data-side='bottom'][data-state='open'])) .toasts [data-sonner-toast][data-y-position='bottom'] {
+    top: 0;
+    bottom: auto;
+    --lift: 1;
+}
+
+:global(:root:has([data-slot='sheet-content'][data-side='bottom'][data-state='open'])) .toasts [data-sonner-toast][data-y-position='bottom']:not([data-mounted='true']) {
+    --y: translateY(-100%);
+}
+
+@media (min-width: 768px) {
+    :global(:root:has([data-slot='sheet-content'][data-side='bottom'][data-state='open'])) .toasts[data-y-position='bottom'] {
+        top: auto;
+        bottom: var(--solo-toast-offset);
+    }
+
+    :global(:root:has([data-slot='sheet-content'][data-side='bottom'][data-state='open'])) .toasts [data-sonner-toast][data-y-position='bottom'] {
+        top: auto;
+        bottom: 0;
+        --lift: -1;
+    }
+
+    :global(:root:has([data-slot='sheet-content'][data-side='bottom'][data-state='open'])) .toasts [data-sonner-toast][data-y-position='bottom']:not([data-mounted='true']) {
+        --y: translateY(100%);
+    }
+}

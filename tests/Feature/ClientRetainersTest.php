@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\Account;
 use App\Models\Client;
 use App\Models\ClientRetainer;
+use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -174,6 +175,65 @@ final class ClientRetainersTest extends TestCase
         $this->assertSame(900.0, (float) $retainer->monthly_fee);
         $this->assertSame(165.0, (float) $retainer->overage_hourly_rate);
         $this->assertSame('bumped after Q1 review', $retainer->notes);
+    }
+
+    public function test_a_fee_only_save_keeps_the_fields_it_did_not_send(): void
+    {
+        $project = Project::create(['account_id' => $this->client->account_id, 'client_id' => $this->client->id, 'name' => 'Site']);
+        $retainer = $this->client->retainers()->create([
+            'account_id' => $this->client->account_id,
+            'project_id' => $project->id,
+            'monthly_hours' => 12,
+            'monthly_fee' => 800,
+            'overage_hourly_rate' => 150,
+            'rollover_cap_hours' => 24,
+            'invoice_group' => 2,
+            'vat_symbol' => 'zw',
+            'is_active' => false,
+            'sort_order' => 3,
+            'currency' => 'EUR',
+            'label' => 'Care',
+            'notes' => 'keep me',
+            'effective_from' => '2026-03-01',
+        ]);
+        $retainer->update(['overage_hourly_rate' => 175]);
+
+        $this->actingAs($this->user)
+            ->put("/clients/{$this->client->id}/retainers/{$retainer->id}", ['monthly_hours' => 12, 'monthly_fee' => 900])
+            ->assertRedirect();
+
+        $retainer->refresh();
+        $this->assertSame(900.0, (float) $retainer->monthly_fee);
+        $this->assertSame(175.0, (float) $retainer->overage_hourly_rate);
+        $this->assertSame($project->id, $retainer->project_id);
+        $this->assertSame(24.0, (float) $retainer->rollover_cap_hours);
+        $this->assertSame(2, $retainer->invoice_group);
+        $this->assertSame('zw', $retainer->vat_symbol);
+        $this->assertFalse($retainer->is_active);
+        $this->assertSame(3, $retainer->sort_order);
+        $this->assertSame('EUR', $retainer->currency);
+        $this->assertSame('Care', $retainer->label);
+        $this->assertSame('keep me', $retainer->notes);
+        $this->assertSame('2026-03-01', $retainer->effective_from->toDateString());
+    }
+
+    public function test_a_field_sent_empty_is_cleared(): void
+    {
+        $retainer = $this->client->retainers()->create([
+            'account_id' => $this->client->account_id,
+            'monthly_hours' => 12,
+            'rollover_cap_hours' => 24,
+            'notes' => 'old',
+            'effective_from' => '2026-03-01',
+        ]);
+
+        $this->actingAs($this->user)
+            ->put("/clients/{$this->client->id}/retainers/{$retainer->id}", ['monthly_hours' => 12, 'rollover_cap_hours' => null, 'notes' => null])
+            ->assertRedirect();
+
+        $retainer->refresh();
+        $this->assertNull($retainer->rollover_cap_hours);
+        $this->assertNull($retainer->notes);
     }
 
     public function test_destroy_removes_only_the_targeted_position(): void

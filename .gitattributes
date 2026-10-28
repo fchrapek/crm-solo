@@ -10,10 +10,11 @@
 # Excluded from `git archive`, which is how the public snapshot is cut.
 #
 # Two kinds of thing. Private material: the work journal, personal notes,
-# per-client production scripts, the server runbook, and the agent skill
-# copies that deploy from a separate repository. And internal planning:
-# roadmap, audit, demo and bug notes are a running account of one person's
-# quarters, not reference documentation for a reader of the code.
+# the production and maintenance scripts for client sites, the server
+# runbook, and the agent skill copies that deploy from a separate
+# repository. And internal planning: roadmap, audit, demo and bug notes are
+# a running account of one person's quarters, not reference documentation
+# for a reader of the code.
 #
 # What stays public under docs/ is docs/development and docs/integrations.
 # Anything public that links into an excluded path becomes a dead link, so
@@ -29,9 +30,9 @@ docs/bugs/             export-ignore
 docs/audit/            export-ignore
 docs/demo/             export-ignore
 docs/roadmap/          export-ignore
-scripts/prod/sites/    export-ignore
-# Per-client maintenance targets (real repo names); the scripts read it only if present.
-scripts/maint/targets.conf export-ignore
+# Workstation tools for client sites: they run over ssh aliases and name real clients.
+scripts/prod/          export-ignore
+scripts/maint/         export-ignore
 # The export script carries the blocklist of real client names it hunts for,
 # so publishing it would publish exactly what it exists to keep out.
 scripts/public-export.sh export-ignore
@@ -40,6 +41,8 @@ scripts/public-export/  export-ignore
 .agents/               export-ignore
 # The real app's private hosting; the demo's compose.demo.yaml and Dockerfile.prod stay public.
 docs/development/hosting.md export-ignore
+# How the public snapshot is cut and published stays with the private repo.
+docs/development/public-release.md export-ignore
 compose.hosting.yaml   export-ignore
 .env.app.example       export-ignore
 .env.dev.example       export-ignore
@@ -53,3 +56,5 @@ tests/Feature/PullBackupScriptTest.php export-ignore
 .github/workflows/deploy.yml     export-ignore
 .github/workflows/main-guard.yml export-ignore
 .github/workflows/public-release.yml export-ignore
+# Switzer's licence allows self-hosting but not publishing the files; the snapshot loads it from Fontshare instead.
+public/fonts/switzer/  export-ignore

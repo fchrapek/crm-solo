@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Mcp\Tools;
 
 use App\Mcp\Tools\Concerns\HandlesReferenceErrors;
+use App\Services\Agent\AgentRefusal;
 use App\Services\Agent\CrmEntityResolver;
 use App\Services\Agent\MonthCloseTicker;
 use App\Services\Agent\ReferenceException;
@@ -41,6 +42,8 @@ final class MonthCloseStatusTool extends Tool
 
         try {
             return $this->payload($ticker->status($client, $validated['period'] ?? $ticker->defaultPeriod()));
+        } catch (AgentRefusal $e) {
+            return $this->refusalError($e);
         } catch (InvalidArgumentException $e) {
             return $this->invalidArgument($e->getMessage());
         }

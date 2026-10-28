@@ -1,3 +1,4 @@
+import { touchTargetClass } from '@/components/solo/primitives';
 import { getButtonStyles } from '@/components/ui/button';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem } from '@/components/ui/pagination';
 import { cn } from '@/lib/utils';
@@ -25,9 +26,20 @@ interface InertiaPaginationProps {
     preserveState?: boolean;
     preserveScroll?: boolean;
     replace?: boolean;
+    look?: 'default' | 'solo';
+    summary?: React.ReactNode;
 }
 
-export default function InertiaPagination({ links, className, only, preserveState, preserveScroll, replace }: InertiaPaginationProps) {
+export default function InertiaPagination({
+    links,
+    className,
+    only,
+    preserveState,
+    preserveScroll,
+    replace,
+    look = 'default',
+    summary,
+}: InertiaPaginationProps) {
     const { t } = useTranslation();
     const visitProps = { only, preserveState, preserveScroll, replace };
 
@@ -42,6 +54,7 @@ export default function InertiaPagination({ links, className, only, preserveStat
 
     // Helper to clean HTML entities in labels
     const cleanLabel = (label: string) => {
+        if (typeof document === 'undefined') return label;
         const temp = document.createElement('div');
         temp.innerHTML = label;
         return temp.textContent || temp.innerText || label;
@@ -60,7 +73,7 @@ export default function InertiaPagination({ links, className, only, preserveStat
     // Shows: 1, 2, ..., current-1, current, current+1, ..., last-1, last
     const getVisiblePageLinks = () => {
         if (totalPages <= 7) {
-            return allPageLinks.map((link, index) => ({ ...link, showEllipsisBefore: false, index }));
+            return allPageLinks.map((link, index) => ({ link, showEllipsisBefore: false, index }));
         }
 
         const currentPage = activeIndex + 1; // 1-based
@@ -101,6 +114,55 @@ export default function InertiaPagination({ links, className, only, preserveStat
     };
 
     const pageLinks = getVisiblePageLinks();
+
+    if (look === 'solo') {
+        const step = (link: InertiaLinkType, label: string, aria: string) =>
+            link.url ? (
+                <Link href={link.url} {...visitProps} className={cn(styles.soloStep, touchTargetClass)} aria-label={aria}>
+                    {label}
+                </Link>
+            ) : (
+                <span className={cn(styles.soloStep, styles.soloStepDisabled)} aria-disabled="true">
+                    {label}
+                </span>
+            );
+
+        return (
+            <nav className={cn(styles.solo, className)} aria-label={t('Pagination')}>
+                <span className={styles.soloSummary}>{summary}</span>
+                <div className={styles.soloPages}>
+                    {step(prevLink, `← ${t('Previous page')}`, t('Go to previous page'))}
+                    {pageLinks.map(({ link, showEllipsisBefore, index }) => (
+                        <React.Fragment key={index}>
+                            {showEllipsisBefore && (
+                                <span className={cn(styles.soloPage, styles.ellipsisItem)} aria-hidden="true">
+                                    …
+                                </span>
+                            )}
+                            {link.url && !link.active ? (
+                                <Link
+                                    href={link.url}
+                                    {...visitProps}
+                                    className={cn(styles.soloPage, touchTargetClass, !getMobileVisibility(index) && styles.pageItemHidden)}
+                                    aria-label={`${t('Page')} ${cleanLabel(link.label)}`}
+                                >
+                                    {cleanLabel(link.label)}
+                                </Link>
+                            ) : (
+                                <span
+                                    className={cn(styles.soloPage, !getMobileVisibility(index) && styles.pageItemHidden)}
+                                    aria-current={link.active ? 'page' : undefined}
+                                >
+                                    {cleanLabel(link.label)}
+                                </span>
+                            )}
+                        </React.Fragment>
+                    ))}
+                    {step(nextLink, `${t('Next page')} →`, t('Go to next page'))}
+                </div>
+            </nav>
+        );
+    }
 
     return (
         <Pagination className={className}>

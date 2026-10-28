@@ -68,7 +68,7 @@ the same credentials in both.
 | Reverb       | 8081      | WebSocket server, loopback only |
 | Vite         | 5180      | Asset dev server       |
 
-**Reverb** binds `127.0.0.1` (`REVERB_SERVER_HOST`, default in `config/reverb.php`), so nothing else on the network can subscribe to its channels, which are public by design (`useEchoPublic`). `.env.example` ships `REVERB_APP_KEY` and `REVERB_APP_SECRET` blank; `php artisan setup:reverb-keys` fills them with random values and leaves values you chose alone (`--force` rotates them, then restart Reverb and Vite). An install still carrying the old published `laravel-reverb-key` / `secret` pair is treated as blank, so running the command once replaces it.
+**Reverb** binds `127.0.0.1` (`REVERB_SERVER_HOST`, default in `config/reverb.php`), so nothing else on the network can subscribe to its channels, which are public by design (`useEchoPublic`). `.env.example` ships `REVERB_APP_KEY` and `REVERB_APP_SECRET` blank; `php artisan setup:reverb-keys` fills them with random values and leaves values you chose alone (`--force` rotates them, then restart Reverb and Vite). An install still carrying the old published `laravel-reverb-key` / `secret` pair is treated as blank, so running the command once replaces it. A socket opens only from a page on `APP_URL`'s host; `REVERB_ALLOWED_ORIGINS` (comma-separated hostnames) replaces that list, for example when the app is opened as `http://127.0.0.1:8101` while `APP_URL` names `crm-solo.test`. A socket without an `Origin` header is refused too, so a shell probe such as `wscat` needs `--origin https://<that host>`.
 
 ## Runtime pieces
 
@@ -81,18 +81,16 @@ the same credentials in both.
   its own 300 s timeout. Worker processes preload code: restart
   `composer run dev` after changing anything a job runs.
 - **WebSockets**: Reverb on 8081, loopback only. Events broadcast on public
-  channels (`SyncCompleted` as `.reverb.completed`, `SessionAttention` as
-  `.reverb.session.attention` on `reverb.session.{taskId}`), so the frontend
+  channels (`SyncCompleted` as `.reverb.completed`), so the frontend
   subscribes with `useEchoPublic`; the default `useEcho` is private and
   silently receives nothing.
 - **Vite** on 5180, not 5173, so a client site's own Vite (WordPress themes
-  default to 5173) can run beside it during a task preview.
+  default to 5173) can run beside it.
 - **Logs**: the `stack` channel writes `storage/logs/laravel.log` and, for
   warnings and up, `storage/logs/errors-YYYY-MM-DD.log` (kept 30 days).
-  Terminal sessions log to `storage/logs/ttyd-task-{id}.log`.
 - **Search** boxes use plain `LIKE`.
 - **Scheduler** (`routes/console.php`): Trello sync every 5 minutes, the lead
-  pull every 15, Infakt invoices daily, `sessions:reap` every 5 minutes, the
+  pull every 15, Infakt invoices daily, the
   local `db:backup` at 02:00 (local only), `demo:reset` at 03:30 (demo only).
 
 ## Optional Integrations (env vars)
@@ -101,6 +99,7 @@ These features degrade gracefully when the env var is unset — local dev works 
 
 - `OPENAI_API_KEY` (and `OPENAI_REPORT_MODEL`, default `gpt-4o`): the AI report composer. Without it reports use the deterministic composer.
 - `KIWWWI_LEADS_BASE_URL`, `KIWWWI_LEADS_EN_BASE_URL`, `KIWWWI_LEADS_USERNAME`, `KIWWWI_LEADS_APP_PASSWORD`: the scheduled lead pull (`kiwwwi:sync-leads`), one URL per site of the multisite (blog 1, blog 2). Unset, the scheduled pull is skipped; a blank site URL leaves only that site out.
+- `SMSAPI_TEST=1`: an account sending through SMSAPI has each message checked by SMSAPI (token, number, text) without sending it or spending credit; the message is stored as `simulated` ([integrations.md](integrations.md)).
 - `TRELLO_ATTACHMENT_MAX_KB`, `TRELLO_ATTACHMENTS_TASK_MAX_KB`: caps on files pulled from Trello cards (25 MB per file, 100 MB per task by default).
 - `APP_DISPLAY_TIMEZONE` — human-facing timezone for server-side surfaces that read or print a bare wall-clock time (currently `php artisan time:log --end`). Storage stays UTC (`app.timezone`); this only shifts input parsing and console output. Defaults to `UTC`, which keeps behaviour identical when unset — set it to `Europe/Warsaw` locally so `--end="11:00"` means 11:00 local. The browser is unaffected (it sends absolute ISO instants).
 
@@ -175,6 +174,27 @@ local pass means the same commands passed:
   `bun run build`.
 - **audit**: `composer audit` and `bun audit` against the lock files.
 
+**What runs when** (GitHub Actions minutes are billed past the free 2,000 a
+month on a private repository, so the private repository skips work that a
+check on the same tree already did; the release path repeats it on purpose):
+
+- A PR into develop, private repository only: `pr.yml` lists the changed
+  files first (both sides of a rename). Only `docs/` and root Markdown
+  changed: php, js and audit are skipped. The export self-test runs only
+  when `scripts/public-export*`, `.github/`, `resources/fonts/` or a
+  `.gitattributes` changed. The export scan always runs. A file list it
+  cannot read runs everything and blocks the bot merge. Public PRs run the
+  full gate.
+- After the bot merges, it sets a "Verified merge" commit status when the
+  squash has the tested tree on the tested base, then dispatches
+  `deploy.yml`. Develop skips the gate only when that status from the bot
+  is on the exact sha; a push to develop by hand runs the full gate.
+- A PR into main and a push to main run the full gate. `public-release.yml`
+  runs the export self-test, the export scan and the exported tree's PHP and
+  JS checks, and relies on the green main build for the dependency audits.
+- Images build for main only. Set the repository variable
+  `BUILD_DEVELOP_IMAGE` to `true` when the dev environment deploys develop.
+
 The script expects an installed tree (`vendor/`, `node_modules/`, a `.env`
 with `APP_KEY`). In CI the app boots against an empty in-memory SQLite and
 the tests pin their own environment in `phpunit.xml`, so no service runs.
@@ -219,13 +239,16 @@ both pass, the PR merges itself, squashed, unless develop moved since the
 checks ran (then push again to re-check). The `hold` label or draft state
 keeps it open; removing the label, marking it ready or fixing the title
 checks and merges again. A PR that changes the gate itself (`.github/`, `scripts/check.sh`,
-`scripts/hooks/`, the public export policy, `lefthook.yml`) is never merged by
-the bot. Docs-only and
+`scripts/hooks/`, the public export policy, `lefthook.yml`, any `.gitattributes`)
+is never merged by the bot. Docs-only and
 roadmap-only changes may still go straight to develop.
 
-**Releases.** After every green develop build, `deploy.yml` keeps one open
+**Releases.** After every green develop run, `deploy.yml` keeps one open
 pull request from develop to main, its body the subjects since the last
 release. Merging it (a merge commit, not a squash) is the release.
+Checks on that pull request started by the bot's own merges wait for
+"Approve workflows to run" (GitHub holds runs a bot triggered); approve
+them and merge only when they are green.
 `main-guard.yml` fails loudly on any push to main that is not exactly that
 merge.
 
@@ -255,21 +278,6 @@ php artisan db:restore [file] [--force]
 - The nightly `02:00` `db:backup` is scheduled when `APP_ENV=local`; a hosted install opts in with `BACKUP_SCHEDULE_AT=HH:MM` and needs `mariadb-dump` and bash in its image (`Dockerfile.prod` has neither). With no dump client and no running compose `mariadb` service, the command stops and says so instead of trying docker. `db:restore` refuses to run outside `local`, `--force` included.
 - `DEMO_RESET_ALLOWED=true` lets `demo:reset` run by hand on a staging install with fictional data, without the rest of `DEMO_MODE` and without its nightly schedule. A production install with neither flag refuses `db:wipe` and `migrate:fresh`/`refresh`/`reset`.
 - `BackupCommandsTest` never touches this folder or a real database: it uses a temp directory and fakes every process, with stray processes refused. The rest of the suite runs on in-memory SQLite because `phpunit.xml` pins `DB_CONNECTION`, `DB_DATABASE` and an empty `DB_URL` in both `$_SERVER` and the forced env, and points `APP_CONFIG_CACHE` at a file that never exists so a cached config cannot skip the pins. A test that builds its own connection is not covered by this.
-
-## Agent Tasks — Terminal Sessions
-
-The agent kanban launches a per-task terminal session backed by a git worktree + tmux + ttyd-served browser iframe. No executor pipeline; the CLI (claude or codex) runs interactively. The full contract is [terminal-sessions.md](terminal-sessions.md).
-
-```bash
-# One-time host install
-brew install ttyd tmux
-
-# claude or codex CLI on PATH:
-npm i -g @anthropic-ai/claude-code  # or brew
-claude login                         # so ~/.claude has a valid session
-```
-
-Each managed client repo should have `.worktrees/` in its `.gitignore` (the launcher appends it automatically on first session).
 
 ## Troubleshooting
 

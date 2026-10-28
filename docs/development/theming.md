@@ -5,23 +5,50 @@ Three independent axes, all persisted per browser:
 | Axis | Values | Storage | Applied as |
 |---|---|---|---|
 | **appearance** | `light` / `dark` / `system` | `localStorage.appearance` + cookie | `.dark` class on `<html>` |
-| **theme** | `paper` (default) / `ink` / `brutal` / `bauhaus` | `localStorage.theme` + cookie | `data-theme` on `<html>` |
+| **theme** | `paper`, `boring-saas` (`ink` / `brutal` / `bauhaus` are retired) | `localStorage.theme` + cookie | `data-theme` on `<html>` |
 | **accent** | `default` (the theme's own) + 10 named | `localStorage.accent` + cookie | `data-accent` on `<html>` |
 
-They compose: every theme works in both appearances. `initializeTheme()` in
-`hooks/use-theme.tsx` applies `data-theme` before first paint, so there is no
-unthemed state — the default is `DEFAULT_THEME` (`paper`), changed by editing
-that one constant. Users switch themes from the sidebar footer, next to the
-language and light/dark controls.
+They compose: every theme works in both appearances. The server stamps
+`data-theme` on `<html>` from the `theme` cookie (`HandleAppearanceMiddleware`,
+validated, unencrypted like `appearance`) and `initializeTheme()` in
+`hooks/use-theme.tsx` applies it again on load, so there is no unthemed state — the default is `DEFAULT_THEME` (`paper`), changed by editing
+that one constant. Ustawienia · Wygląd (`/settings/wyglad`) sets the language, the mode, the
+theme and the accent. It offers Paper and Boring SaaS; a browser that saved a retired theme reads
+it as Paper, because `THEMES` does not list it. The CSS of the retired themes is still in
+`themes.css`.
 
 ## The themes
 
 | Theme | Identity |
 |---|---|
 | **Paper** (default) | Warm editorial. Ink-brown text rather than black, terracotta accent, off-white cards. |
+| **Boring SaaS** | A calm panel: slate greys, white cards on a light grey page, Inter, one quiet cobalt. |
 | **Ink** | Monochrome. Every colour is a grey; meaning is carried by lightness and position, never hue. |
 | **Brutal** | Neo-brutalist slab: 2px borders, hard offset shadows, zero radius, uppercase chips, one high-voltage yellow. |
 | **Bauhaus** | Primaries and geometry: red accent, hairline rules, tight corners, blue category chips. |
+
+## Boring SaaS
+
+One component, two token sets. `themes.css` gives the theme its primitives, and pins exact surfaces
+through optional primitives the derived blocks read with today's expression as the fallback
+(`--theme-bg-light`, `--theme-card-dark`, `--theme-muted-light`, `--theme-muted-fg-dark`,
+`--theme-border-light`, `--theme-input-light`, `--theme-destructive-dark`, `--theme-destructive-fg-dark`
+and kin). Paper sets none,
+so it resolves exactly as before.
+
+The Solo screens carry their own `--solo-*` tokens. In `solo.css` the `:root[data-theme='boring-saas']`
+blocks alias them to the themed `--color-*` tokens, so dark mode and the accent axis follow, and
+`:root[data-theme='boring-saas'] [data-day]` outranks `[data-day='timer']`, so a running timer keeps
+the calm surface. What Paper hard-codes in a component is a token only this theme sets, read with
+Paper's literal as the fallback: `text-transform: var(--solo-label-case, uppercase)`,
+`border-bottom: var(--solo-head-rule, 2px) solid ...`, the card set on existing section containers
+(`--solo-card`, `--solo-card-pad`, `--solo-card-radius`, `--solo-card-shadow`, `--solo-rule-end` for
+the last row), the nav pill (`--solo-nav-pad`, `--solo-nav-active`, `--solo-nav-line`), the header
+bar (`--solo-header-bar`), boxed fields (`--solo-boxed`, `--solo-field-width`), buttons
+(`--solo-primary`, `--solo-link`, `--solo-control-border`) and popups (`--solo-pop-*`). A new rule
+that Paper styles with a literal and SaaS needs to change takes the same form, so Paper never moves.
+`--solo-accent` stays the attention colour (red in SaaS); the accent axis drives `--solo-primary`
+and `--solo-link`, whose lightness is clamped in oklch so any accent reads as link text.
 
 ## Typography and icons
 
@@ -32,6 +59,7 @@ Self-hosted faces, latin-ext for Polish:
 | Theme | Body | Display |
 |---|---|---|
 | paper, ink | Spline Sans | Spline Sans |
+| boring-saas | Inter | Inter, sentence case; clocks tabular |
 | brutal | Space Grotesk | Archivo Black, uppercase |
 | bauhaus | Outfit | Outfit 800, uppercase, wide tracking |
 
@@ -91,7 +119,7 @@ invisible to theming — they stayed green while the theme went monochrome.
 
 ## Guards (`bun run lint:tokens`)
 
-Four contracts, all failing the build:
+Seven contracts, all failing the build:
 
 1. Every `var(--x)` in the CSS layer resolves to a property defined in
    `variables.css` (catches invented token names).
@@ -103,6 +131,14 @@ Four contracts, all failing the build:
 4. **Accent text is readable on its accent** (4.5:1). This caught a real bug on
    its first run: a duplicated accent section left stale white-text values
    later in the cascade, so the solved values were being overridden.
+5. **The Solo layer is mobile first.** In `solo.css` and `components/solo/`,
+   width queries are `min-width` at 768px or 1100px only (see `day-screens.md`,
+   Phones).
+6. **Pinned surfaces stay readable.** A theme that sets `--theme-bg-light` has its text, muted
+   text and attention red checked at 4.5:1 on its page, card and muted band, and the labels on its
+   red and brand fills, in both appearances.
+7. **Boring SaaS tokens fall back to Paper.** A token only the SaaS blocks of `solo.css` set is
+   never read bare outside them, so Paper keeps its own value.
 
 ## Verifying contrast (read before writing a probe)
 
@@ -131,3 +167,7 @@ one rule produced anywhere from 1.4:1 to 5.7:1. Marking the badge rather than
 the text is readable in every combination and does not rely on colour alone.
 
 Priority dots follow the same rule: only `high` and `medium` carry hue.
+
+## Icons
+
+One component, `components/ui/icon` (`<Icon name size filled>`), sizes 16, 20 and 24 only: 16 beside text and in rows, 20 for icon-only buttons and list items, 24 for navigation and the tab bar. Every name has two glyphs, Fluent UI System Icons on Paper and Lucide on Boring SaaS; both render and the theme's CSS shows one. Paper draws Fluent's outline (regular) glyph at the asked size, and the filled one only for state: the active tab bar item, a timer's play and stop, a pinned pin. Lucide's stroke is set in pixels per size (`--icon-stroke-16/20/24`); Fluent draws its own weight per size. Paper's glyphs come from the `@fluentui/svg-icons` dev dependency through `bun run icons:fluent`, which writes only the used paths into `fluent.ts`; add a name to `GLYPHS` in `scripts/fluent-icons.mjs` (and `FILLED` if it needs a state) and its Lucide glyph to `icon.tsx` to bring in another.

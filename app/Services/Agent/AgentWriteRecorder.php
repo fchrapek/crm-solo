@@ -10,12 +10,14 @@ use App\Models\Task;
 use App\Models\TimeEntry;
 use Illuminate\Container\Container;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * Model observer for every record an agent can write. While an agent call is
  * open (AgentCallContext) it stamps the actor on the record where the table
  * has room for it, and appends one audit row per created, updated or deleted
- * record. Outside an agent call (the web UI, syncs) it does nothing.
+ * record. Outside an agent call (the web UI, syncs) it only moves a task's
+ * finish attribution to the signed-in person.
  */
 final readonly class AgentWriteRecorder
 {
@@ -45,8 +47,18 @@ final readonly class AgentWriteRecorder
 
     public function saving(Model $model): void
     {
+        if (! $model instanceof Task || ! $model->isDirty('finished_at')) {
+            return;
+        }
+
         $call = $this->context()->current();
-        if ($call === null || ! $model instanceof Task || ! $model->isDirty('finished_at')) {
+        if ($call === null) {
+            // A finish from the web is the signed-in person's, never the agent that finished it last time.
+            $model->finished_by_user_id = $model->finished_at !== null ? Auth::id() : null;
+            $model->finished_by_token_id = null;
+            $model->finished_via = null;
+            $model->finished_session_id = null;
+
             return;
         }
 

@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Services\Agent;
 
 use App\Models\Client;
+use App\Models\DayPick;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -35,6 +37,32 @@ final class CrmEntityResolver
             $needle,
             $query->where('name', 'like', "%{$needle}%")->orderBy('name')->orderBy('id'),
             fn (Client $client): ?string => null,
+        );
+    }
+
+    /** An active user of the account: id, exact email, or a fragment of the first or last name. */
+    public function user(string $needle, int $accountId): User
+    {
+        $query = User::query()->where('account_id', $accountId);
+
+        if (ctype_digit($needle)) {
+            return $query->find((int) $needle) ?? throw new ReferenceNotFoundException('user', $needle);
+        }
+
+        if (str_contains($needle, '@')) {
+            return $query->whereRaw('lower(email) = ?', [mb_strtolower(mb_trim($needle))])->first() ?? throw new ReferenceNotFoundException('user', $needle);
+        }
+
+        // Every word must match the first or the last name, so "Jan Nowak" picks one of two Jans.
+        foreach (preg_split('/\s+/', mb_trim($needle)) ?: [] as $word) {
+            $query->where(fn (Builder $q) => $q->where('first_name', 'like', "%{$word}%")->orWhere('last_name', 'like', "%{$word}%"));
+        }
+
+        return $this->single(
+            'user',
+            $needle,
+            $query->orderBy('first_name')->orderBy('id'),
+            fn (User $user): ?string => $user->email,
         );
     }
 
@@ -102,6 +130,18 @@ final class CrmEntityResolver
         return $this->single('task', $needle, [$open, $closed], $context);
     }
 
+    /** A time entry has no name: it is named by its id, and only inside the account. */
+    public function timeEntry(string $needle, int $accountId): TimeEntry
+    {
+        $needle = mb_trim($needle);
+        if (! ctype_digit($needle)) {
+            throw new ReferenceNotFoundException('time entry', $needle, 'A time entry is named by its id: list them with time-entries.');
+        }
+
+        return TimeEntry::query()->where('account_id', $accountId)->find((int) $needle)
+            ?? throw new ReferenceNotFoundException('time entry', $needle);
+    }
+
     /**
      * Running timers only. A null needle means "the one that is open" and is
      * ambiguous the moment a second timer runs — overlapping timers are legal
@@ -143,6 +183,37 @@ final class CrmEntityResolver
         return $matches->count() === 1
             ? $matches->first()
             : throw new AmbiguousReferenceException('running timer', $needle, $this->timerCandidates($matches));
+    }
+
+    /**
+     * One of a day's picks: a numeric needle is the task id, a fragment matches
+     * the names of the tasks picked for that date only.
+     */
+    public function dayPick(int $accountId, string $date, string $needle): DayPick
+    {
+        $picks = DayPick::query()
+            ->where('account_id', $accountId)
+            ->whereDate('date', $date)
+            ->with('task.project:id,name')
+            ->orderBy('position')
+            ->get()
+            ->filter(fn (DayPick $pick): bool => $pick->task !== null);
+
+        $matches = ctype_digit($needle)
+            ? $picks->where('task_id', (int) $needle)
+            : $picks->filter(fn (DayPick $pick): bool => str_contains(mb_strtolower((string) $pick->task->name), mb_strtolower($needle)));
+
+        if ($matches->isEmpty()) {
+            throw new ReferenceNotFoundException('picked task', $needle, "Nothing picked for {$date} matches it.");
+        }
+        if ($matches->count() > 1) {
+            throw new AmbiguousReferenceException('picked task', $needle, $this->candidates(
+                $matches->map(fn (DayPick $pick): Task => $pick->task)->take(self::CANDIDATE_LIMIT)->values(),
+                fn (Task $task): ?string => $task->project?->name,
+            ), $matches->count());
+        }
+
+        return $matches->first();
     }
 
     /**

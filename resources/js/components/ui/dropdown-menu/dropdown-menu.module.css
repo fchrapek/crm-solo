@@ -1,7 +1,7 @@
 /* Dropdown Menu Component Styles */
 
 .content {
-  z-index: var(--z-50);
+  z-index: var(--z-modal);
   min-width: 8rem;
   overflow: hidden;
   border-radius: var(--radius-md);
@@ -63,7 +63,8 @@
   padding-left: var(--spacing-8);
 }
 
-.item svg:not([class*="text-"]) {
+/* an icon marked data-own-icon keeps its own size and colour */
+.item svg:not([class*="text-"], [data-own-icon], [data-own-icon] *) {
   color: var(--color-muted-foreground);
 }
 
@@ -72,7 +73,7 @@
   flex-shrink: 0;
 }
 
-.item svg:not([class*="size-"]) {
+.item svg:not([class*="size-"], [data-own-icon], [data-own-icon] *) {
   width: 1rem;
   height: 1rem;
 }
@@ -237,7 +238,7 @@
 }
 
 .subContent {
-  z-index: var(--z-50);
+  z-index: var(--z-modal);
   min-width: 8rem;
   overflow: hidden;
   border-radius: var(--radius-md);
@@ -310,4 +311,32 @@
 @keyframes slideFromRight {
   from { transform: translateX(0.5rem); }
   to { transform: translateX(0); }
+}
+
+/* Solo: under a Solo page the portal container is a [data-day] surface (components/solo/surface.tsx) */
+:global([data-day]) .content,
+:global([data-day]) .subContent {
+  border: var(--solo-pop-width, 2px) solid var(--solo-pop-border, var(--solo-fg));
+  border-radius: var(--solo-pop-radius, var(--solo-radius-xl));
+  background-color: var(--solo-pop-bg, var(--solo-bg));
+  color: var(--solo-fg);
+  box-shadow: var(--solo-pop-shadow, none);
+}
+
+:global([data-day]) .item:focus,
+:global([data-day]) .checkboxItem:focus,
+:global([data-day]) .radioItem:focus,
+:global([data-day]) .subTrigger:focus,
+:global([data-day]) .subTrigger[data-state="open"] {
+  background-color: var(--solo-pop-rule, var(--solo-rule));
+  color: var(--solo-fg);
+}
+
+:global([data-day]) .item svg:not([class*="text-"], [data-own-icon], [data-own-icon] *),
+:global([data-day]) .shortcut {
+  color: var(--solo-fg-muted);
+}
+
+:global([data-day]) .separator {
+  background-color: var(--solo-pop-rule, var(--solo-rule));
 }

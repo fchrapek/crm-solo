@@ -41,13 +41,15 @@ final class TaskReadiness
         return [
             $prefix.'brief:id,task_id,location,done_when',
             $prefix.'cardDetails:'.implode(',', TaskCardDetails::READINESS_COLUMNS),
+            $prefix.'links:id,task_id',
         ];
     }
 
     /**
      * Reads only the task's columns and already loaded data, so a list can
      * call it per row without a query or a Trello fetch. A list eager-loads
-     * the brief and TaskCardDetails::READINESS_COLUMNS, never the JSON.
+     * listRelations(): the brief, TaskCardDetails::READINESS_COLUMNS and the
+     * CRM links' ids, never the JSON.
      *
      * @return array{ready: bool, missing: list<string>}
      */
@@ -59,7 +61,8 @@ final class TaskReadiness
             $description,
             $task->brief?->value('where') !== null
                 || (bool) $task->cardDetails?->has_link_attachment
-                || CardDescription::links($description) !== [],
+                || CardDescription::links($description) !== []
+                || $task->links->isNotEmpty(),
             $task->brief?->value('done_when') !== null
                 || (int) $task->cardDetails?->checklist_items > 0,
         );

@@ -3,25 +3,10 @@
      switching tabs never makes the content jump width;
    - every logical block inside the column is a <SectionCard> (white card,
      uppercase small heading — the Kontakty / Dokumenty anatomy);
-   - kanban boards are the only full-bleed surfaces: they own horizontal
-     scrolling and render outside the column (.boardSection);
    - .recordColumns (main + narrow rail) is reserved for tabs with a natural
      narrow companion — today only Dane (contacts + documents). */
 .tabColumn {
     max-width: 80rem;
-}
-
-.boardSection {
-    margin-bottom: var(--spacing-5);
-}
-
-.boardHeading {
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-muted-foreground);
-    margin: 0 0 var(--spacing-3) 0;
 }
 
 /* Name on its own line, status pills on a row below — the record-view

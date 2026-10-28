@@ -1,0 +1,103 @@
+/* SMS / Kolejka: the Klienci list's page frame, its own search and status pill under the poster. Phone first. */
+
+.tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--solo-space-3) var(--solo-space-6);
+    padding-top: var(--solo-space-3);
+}
+
+.search {
+    display: flex;
+    flex: 1 1 220px;
+    align-items: center;
+    gap: var(--solo-space-2);
+    min-width: 0;
+    padding: var(--solo-search-inner, 9px 12px);
+    border: solid var(--solo-search-line-color, var(--solo-field-border));
+    border-width: var(--solo-search-line, 1px);
+    border-radius: var(--solo-search-radius, var(--solo-radius-lg));
+    background: var(--solo-search-bg, var(--solo-field-bg));
+    color: var(--solo-fg-muted);
+}
+
+.search:focus-within {
+    border-color: var(--solo-search-line-color, var(--solo-fg));
+    border-bottom-width: var(--solo-search-focus-width, 1px);
+    margin-bottom: var(--solo-search-focus-shift, 0);
+    box-shadow: var(--solo-search-ring, 0 0 0 1px var(--solo-fg));
+}
+
+.search input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--solo-fg);
+    font: 500 var(--solo-text-field) / normal var(--solo-font-text);
+    outline: none;
+}
+
+.search input::placeholder {
+    color: var(--solo-fg-muted);
+    opacity: 1;
+}
+
+.note {
+    margin: var(--solo-space-4) 0 0;
+    color: var(--solo-fg);
+    font: 500 var(--solo-text-meta) / 1.5 var(--solo-font-text);
+}
+
+.note:first-of-type::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: var(--solo-space-2);
+    border-radius: 50%;
+    background: var(--solo-accent);
+    vertical-align: middle;
+}
+
+.note a {
+    color: inherit;
+}
+
+.clear {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-fg);
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+.group {
+    margin-top: var(--solo-space-6);
+}
+
+.empty {
+    margin: var(--solo-space-6) 0 0;
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-sub) / 1.45 var(--solo-font-text);
+}
+
+@media (min-width: 768px) {
+    .tools {
+        flex-wrap: nowrap;
+        justify-content: flex-end;
+    }
+
+    .search {
+        flex: 0 1 280px;
+    }
+
+    .search svg {
+        display: none;
+    }
+}

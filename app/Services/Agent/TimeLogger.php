@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Services\Agent;
 
 use App\Models\TimeEntry;
+use App\Services\Time\PeriodSettled;
+use App\Services\Time\TimeEntryWriter;
 use Carbon\Carbon;
 use InvalidArgumentException;
 use Throwable;
@@ -18,12 +20,15 @@ final class TimeLogger
 {
     public function __construct(
         private readonly CrmEntityResolver $resolver,
+        private readonly TimeEntryWriter $writer,
     ) {}
 
     /**
      * Exactly one of $task / $client / $project targets the entry.
      *
      * @return array<string, mixed>
+     *
+     * @throws AgentRefusal when the time lands in a settled period
      */
     public function log(
         int $accountId,
@@ -68,19 +73,23 @@ final class TimeLogger
 
         $startAt = (clone $endAt)->subMinutes($minutes);
 
-        $entry = TimeEntry::create([
-            'account_id' => $accId,
-            'project_id' => $projectId,
-            'client_id' => $clientId,
-            'task_id' => $taskId,
-            'source' => TimeEntry::SOURCE_MANUAL,
-            'title' => $title,
-            'description' => $description ?? $descDefault,
-            'start_time' => $startAt,
-            'end_time' => $endAt,
-            'duration_minutes' => $minutes,
-            'billable' => $billable,
-        ]);
+        try {
+            $entry = $this->writer->create([
+                'account_id' => $accId,
+                'project_id' => $projectId,
+                'client_id' => $clientId,
+                'task_id' => $taskId,
+                'source' => TimeEntry::SOURCE_MANUAL,
+                'title' => $title,
+                'description' => $description ?? $descDefault,
+                'start_time' => $startAt,
+                'end_time' => $endAt,
+                'duration_minutes' => $minutes,
+                'billable' => $billable,
+            ]);
+        } catch (PeriodSettled $settled) {
+            throw AgentRefusal::periodSettled($settled);
+        }
 
         $startLocal = (clone $startAt)->setTimezone($displayTz);
         $endLocal = (clone $endAt)->setTimezone($displayTz);
@@ -117,7 +126,7 @@ final class TimeLogger
         }
 
         $client = $this->resolver->client((string) $targets['client'], $accountId);
-        $project = $client->projects()->where('name', 'General')->first() ?? $client->projects()->first();
+        $project = $client->generalProject() ?? $client->projects()->first();
 
         if ($project === null) {
             throw new InvalidArgumentException("Client #{$client->id} \"{$client->name}\" has no project to log against.");

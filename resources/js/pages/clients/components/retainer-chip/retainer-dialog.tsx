@@ -1,14 +1,12 @@
 import { router } from '@inertiajs/react';
-import { Pencil, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { FormInput, FormLabel, FormMessage } from '@/components/form';
-import { Button } from '@/components/ui/button';
+import { fieldControl, SoloField, SoloFieldRow, SoloInput, SoloTextarea } from '@/components/solo/field';
+import { SectionAction, SectionHead, SoloButton } from '@/components/solo/primitives';
+import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
+import { ResponsiveSelect } from '@/components/solo/responsive-select';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog/confirm-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { useFormatters } from '@/lib/format';
 import { ClientCurrency } from '@/types';
 
@@ -21,371 +19,342 @@ interface Props {
     clientId: number;
     clientCurrency: ClientCurrency;
     retainers: Retainer[];
+    /** Positions in force, the leading one first: the dialog opens on it. */
     activeIds: number[];
+    /** Below 768 px a bottom sheet (Solo pages only). */
+    sheet?: boolean;
 }
 
-type FormMode = { kind: 'create' } | { kind: 'edit'; retainer: Retainer };
+export type Draft = {
+    label: string;
+    description: string;
+    monthly_hours: string;
+    monthly_fee: string;
+    rollover_cap_hours: string;
+    invoice_group: string;
+    vat_symbol: string;
+    currency: ClientCurrency;
+    effective_from: string;
+    notes: string;
+};
 
-export function RetainerDialog({ open, onOpenChange, clientId, clientCurrency, retainers, activeIds }: Props) {
+const text = (value: number | string | null | undefined): string => (value === null || value === undefined ? '' : String(value));
+
+export function draftOf(retainer: Retainer | null, currency: ClientCurrency): Draft {
+    return {
+        label: text(retainer?.label),
+        description: text(retainer?.description),
+        monthly_hours: text(retainer?.monthly_hours),
+        monthly_fee: text(retainer?.monthly_fee),
+        rollover_cap_hours: text(retainer?.rollover_cap_hours),
+        invoice_group: text(retainer?.invoice_group ?? 1),
+        vat_symbol: retainer?.vat_symbol ?? '23',
+        currency: retainer?.currency ?? currency,
+        effective_from: retainer?.effective_from ?? localToday(),
+        notes: text(retainer?.notes),
+    };
+}
+
+/** YYYY-MM-DD on the viewer's clock, not UTC's. */
+const localToday = (): string => new Date().toLocaleDateString('sv-SE');
+
+const numberOrNull = (value: string): number | null => (value.trim() === '' ? null : Number(value.replace(/\s/g, '').replace(',', '.')));
+
+/** Behind the disclosure, so the form keeps Figma's six fields up front; an error in one opens it. */
+const MORE_FIELDS = ['label', 'description', 'invoice_group', 'currency', 'notes'];
+
+export const errorsNeedMore = (errors: Record<string, string>): boolean => MORE_FIELDS.some((field) => field in errors);
+
+const NUMBER_FIELDS = ['monthly_fee', 'monthly_hours', 'rollover_cap_hours', 'invoice_group'] as const;
+
+/** Fields whose text is not a number: sent as is they would arrive empty and clear the stored value. */
+export function invalidNumbers(draft: Draft): (typeof NUMBER_FIELDS)[number][] {
+    return NUMBER_FIELDS.filter((field) => {
+        const text = draft[field].replace(/\s/g, '');
+        if (text === '') {
+            return field === 'monthly_hours';
+        }
+
+        return field === 'invoice_group' ? !/^\d+$/.test(text) : !Number.isFinite(Number(text.replace(',', '.')));
+    });
+}
+
+/** Only what the form shows: the update keeps every field it is not sent (project, overage rate, order). */
+export function retainerPayload(draft: Draft) {
+    return {
+        label: draft.label.trim() === '' ? null : draft.label.trim(),
+        description: draft.description.trim() === '' ? null : draft.description.trim(),
+        monthly_hours: numberOrNull(draft.monthly_hours) ?? 0,
+        monthly_fee: numberOrNull(draft.monthly_fee),
+        rollover_cap_hours: numberOrNull(draft.rollover_cap_hours),
+        invoice_group: draft.invoice_group.trim() === '' ? 1 : parseInt(draft.invoice_group, 10),
+        vat_symbol: draft.vat_symbol.trim() === '' ? null : draft.vat_symbol.trim(),
+        currency: draft.currency,
+        effective_from: draft.effective_from,
+        notes: draft.notes.trim() === '' ? null : draft.notes.trim(),
+    };
+}
+
+/** Figma: Dialog / Zmień abonament, a bottom sheet on phones. Overage goes to the hours bank and is never billed, so its stored rate is not shown. */
+export function RetainerDialog({ open, onOpenChange, clientId, clientCurrency, retainers, activeIds, sheet = false }: Props) {
     const { t } = useTranslation();
     const f = useFormatters();
-    const [mode, setMode] = useState<FormMode>({ kind: 'create' });
-    const [label, setLabel] = useState('');
-    const [description, setDescription] = useState('');
-    const [monthlyHours, setMonthlyHours] = useState('');
-    const [monthlyFee, setMonthlyFee] = useState('');
-    const [overageRate, setOverageRate] = useState('');
-    const [rolloverCap, setRolloverCap] = useState('');
-    const [invoiceGroup, setInvoiceGroup] = useState('1');
-    const [currency, setCurrency] = useState<ClientCurrency>(clientCurrency);
-    const [effectiveFrom, setEffectiveFrom] = useState(() => new Date().toISOString().slice(0, 10));
-    const [notes, setNotes] = useState('');
+    const [editing, setEditing] = useState<Retainer | null>(null);
+    const [draft, setDraft] = useState<Draft>(() => draftOf(null, clientCurrency));
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [processing, setProcessing] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState<Retainer | null>(null);
+    const [more, setMore] = useState(false);
 
-    useEffect(() => {
-        if (open) {
-            resetForm();
+    function fail(errs: Record<string, string>) {
+        setErrors(errs);
+        if (errorsNeedMore(errs)) {
+            setMore(true);
         }
-    }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    function resetForm() {
-        setMode({ kind: 'create' });
-        setLabel('');
-        setDescription('');
-        setMonthlyHours('');
-        setMonthlyFee('');
-        setOverageRate('');
-        setRolloverCap('');
-        setInvoiceGroup('1');
-        setCurrency(clientCurrency);
-        setEffectiveFrom(new Date().toISOString().slice(0, 10));
-        setNotes('');
-        setErrors({});
     }
 
-    function startEdit(retainer: Retainer) {
-        setMode({ kind: 'edit', retainer });
-        setLabel(retainer.label ?? '');
-        setDescription(retainer.description ?? '');
-        setMonthlyHours(retainer.monthly_hours.toString());
-        setMonthlyFee(retainer.monthly_fee?.toString() ?? '');
-        setOverageRate(retainer.overage_hourly_rate?.toString() ?? '');
-        setRolloverCap(retainer.rollover_cap_hours?.toString() ?? '');
-        setInvoiceGroup(retainer.invoice_group?.toString() ?? '1');
-        setCurrency(retainer.currency);
-        setEffectiveFrom(retainer.effective_from);
-        setNotes(retainer.notes ?? '');
+    function edit(retainer: Retainer | null) {
+        setEditing(retainer);
+        setDraft(draftOf(retainer, clientCurrency));
         setErrors({});
+        setMore(false);
     }
 
-    function submit(e: React.FormEvent) {
+    // Opened from outside, so the form is reset while rendering the open, not in an effect after it.
+    const [wasOpen, setWasOpen] = useState(open);
+    if (open !== wasOpen) {
+        setWasOpen(open);
+        if (open) {
+            edit(retainers.find((r) => r.id === activeIds[0]) ?? null);
+        }
+    }
+
+    const set = (key: keyof Draft) => (value: string) => setDraft((current) => ({ ...current, [key]: value }));
+
+    function submit(e: FormEvent) {
         e.preventDefault();
+        const invalid = invalidNumbers(draft);
+        if (invalid.length > 0) {
+            fail(Object.fromEntries(invalid.map((field) => [field, t('Enter a number.')])));
+            return;
+        }
         setProcessing(true);
 
-        const payload: Record<string, string | number | null> = {
-            label: label.trim() === '' ? null : label.trim(),
-            description: description.trim() === '' ? null : description.trim(),
-            monthly_hours: parseFloat(monthlyHours),
-            monthly_fee: monthlyFee.trim() === '' ? null : parseFloat(monthlyFee),
-            overage_hourly_rate: overageRate.trim() === '' ? null : parseFloat(overageRate),
-            rollover_cap_hours: rolloverCap.trim() === '' ? null : parseFloat(rolloverCap),
-            invoice_group: invoiceGroup.trim() === '' ? 1 : parseInt(invoiceGroup, 10),
-            currency,
-            effective_from: effectiveFrom,
-            notes: notes.trim() === '' ? null : notes.trim(),
+        const payload = retainerPayload(draft);
+        const options = {
+            preserveScroll: true,
+            onSuccess: () => onOpenChange(false),
+            onError: (errs: Record<string, string>) => fail(errs),
+            onFinish: () => setProcessing(false),
         };
 
-        const onSuccess = () => {
-            setProcessing(false);
-            resetForm();
-        };
-        const onError = (errs: Record<string, string>) => {
-            setErrors(errs);
-            setProcessing(false);
-        };
-
-        if (mode.kind === 'edit') {
-            router.put(`/clients/${clientId}/retainers/${mode.retainer.id}`, payload, {
-                preserveScroll: true,
-                onSuccess,
-                onError,
-            });
+        if (editing !== null) {
+            router.put(`/clients/${clientId}/retainers/${editing.id}`, payload, options);
         } else {
-            router.post(
-                `/clients/${clientId}/retainers`,
-                { ...payload, effective_from: effectiveFrom },
-                { preserveScroll: true, onSuccess, onError },
-            );
+            router.post(`/clients/${clientId}/retainers`, payload, options);
         }
     }
 
     function doDelete(retainer: Retainer) {
         router.delete(`/clients/${clientId}/retainers/${retainer.id}`, {
             preserveScroll: true,
+            onSuccess: () => {
+                if (editing?.id === retainer.id) {
+                    edit(null);
+                }
+            },
             onFinish: () => setConfirmDelete(null),
         });
     }
 
-    const isEdit = mode.kind === 'edit';
-    const effectiveInPackageRate = computeInPackageRate(monthlyFee, monthlyHours);
-
     return (
         <>
-            <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>{t('Abonament')}</DialogTitle>
-                    </DialogHeader>
-
-                    <div className={styles.body}>
-                        <section className={styles.section}>
-                            <p className={styles.heading}>{isEdit ? t('Edit position') : t('Add position')}</p>
-                            <form className={styles.form} onSubmit={submit}>
-                                <div className={styles.formFullRow}>
-                                    <FormLabel htmlFor="retainer-label">{t('Position name')}</FormLabel>
-                                    <FormInput
-                                        id="retainer-label"
-                                        value={label}
-                                        onChange={(e) => setLabel(e.target.value)}
-                                        disabled={processing}
-                                        placeholder={t('e.g. example.com, dev hours')}
-                                    />
-                                </div>
-                                <div className={styles.formFullRow}>
-                                    <FormLabel htmlFor="retainer-desc">{t('Invoice line (with contact)')}</FormLabel>
-                                    <Textarea
-                                        id="retainer-desc"
-                                        value={description}
-                                        onChange={(e) => setDescription(e.target.value)}
-                                        rows={2}
-                                        disabled={processing}
-                                        placeholder={t('Falls back to the position name / client description')}
-                                    />
-                                </div>
-                                <div>
-                                    <FormLabel htmlFor="retainer-hours" error={errors.monthly_hours}>
-                                        {t('Included hours / month')}
-                                    </FormLabel>
-                                    <FormInput
-                                        id="retainer-hours"
-                                        type="number"
-                                        step="0.5"
-                                        min="0"
-                                        value={monthlyHours}
-                                        onChange={(e) => setMonthlyHours(e.target.value)}
-                                        required
-                                        disabled={processing}
-                                        error={errors.monthly_hours}
-                                    />
-                                    <FormMessage error={errors.monthly_hours} />
-                                </div>
-                                <div>
-                                    <FormLabel htmlFor="retainer-fee" error={errors.monthly_fee}>
-                                        {t('Package fee / month')}
-                                    </FormLabel>
-                                    <FormInput
-                                        id="retainer-fee"
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        value={monthlyFee}
-                                        onChange={(e) => setMonthlyFee(e.target.value)}
-                                        disabled={processing}
-                                        error={errors.monthly_fee}
-                                    />
-                                    {effectiveInPackageRate !== null && (
-                                        <span className={styles.effectiveRate}>
-                                            {t('= {{rate}} in package', {
-                                                rate: f.perHour(effectiveInPackageRate, currency),
-                                            })}
-                                        </span>
-                                    )}
-                                    <FormMessage error={errors.monthly_fee} />
-                                </div>
-                                <div>
-                                    <FormLabel htmlFor="retainer-overage" error={errors.overage_hourly_rate}>
-                                        {t('Overage rate (per hour)')}
-                                    </FormLabel>
-                                    <FormInput
-                                        id="retainer-overage"
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        value={overageRate}
-                                        onChange={(e) => setOverageRate(e.target.value)}
-                                        disabled={processing}
-                                        error={errors.overage_hourly_rate}
-                                    />
-                                    <FormMessage error={errors.overage_hourly_rate} />
-                                </div>
-                                <div>
-                                    <FormLabel htmlFor="retainer-rollover" error={errors.rollover_cap_hours}>
-                                        {t('Rollover cap (hours)')}
-                                    </FormLabel>
-                                    <FormInput
-                                        id="retainer-rollover"
-                                        type="number"
-                                        step="0.5"
-                                        min="0"
-                                        value={rolloverCap}
-                                        onChange={(e) => setRolloverCap(e.target.value)}
-                                        disabled={processing}
-                                        error={errors.rollover_cap_hours}
-                                    />
-                                    <FormMessage error={errors.rollover_cap_hours} />
-                                </div>
-                                <div>
-                                    <FormLabel htmlFor="retainer-group" error={errors.invoice_group}>
-                                        {t('Invoice #')}
-                                    </FormLabel>
-                                    <FormInput
-                                        id="retainer-group"
-                                        type="number"
-                                        min="1"
-                                        step="1"
-                                        value={invoiceGroup}
-                                        onChange={(e) => setInvoiceGroup(e.target.value)}
-                                        disabled={processing}
-                                        error={errors.invoice_group}
-                                    />
-                                    <FormMessage error={errors.invoice_group} />
-                                </div>
-                                <div>
-                                    <FormLabel htmlFor="retainer-currency" error={errors.currency}>
-                                        {t('Currency')}
-                                    </FormLabel>
-                                    <Select value={currency} onValueChange={(v) => setCurrency(v as ClientCurrency)} disabled={processing}>
-                                        <SelectTrigger id="retainer-currency">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="PLN">PLN</SelectItem>
-                                            <SelectItem value="EUR">EUR</SelectItem>
-                                            <SelectItem value="USD">USD</SelectItem>
-                                            <SelectItem value="GBP">GBP</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage error={errors.currency} />
-                                </div>
-                                {!isEdit && (
-                                    <div className={styles.formFullRow}>
-                                        <FormLabel htmlFor="retainer-from" error={errors.effective_from}>
-                                            {t('Effective from')}
-                                        </FormLabel>
-                                        <FormInput
-                                            id="retainer-from"
-                                            type="date"
-                                            value={effectiveFrom}
-                                            onChange={(e) => setEffectiveFrom(e.target.value)}
-                                            required
-                                            disabled={processing}
-                                            error={errors.effective_from}
-                                        />
-                                        <FormMessage error={errors.effective_from} />
-                                    </div>
-                                )}
-                                <div className={styles.formFullRow}>
-                                    <FormLabel htmlFor="retainer-notes">{t('Notes')}</FormLabel>
-                                    <Textarea
-                                        id="retainer-notes"
-                                        value={notes}
-                                        onChange={(e) => setNotes(e.target.value)}
-                                        rows={2}
-                                        disabled={processing}
-                                    />
-                                </div>
-                                <div className={styles.formActions}>
-                                    {isEdit && (
-                                        <Button type="button" variant="ghost" onClick={resetForm} disabled={processing}>
-                                            {t('Cancel')}
-                                        </Button>
-                                    )}
-                                    <Button type="submit" disabled={processing}>
-                                        {isEdit ? t('Save changes') : t('Add position')}
-                                    </Button>
-                                </div>
-                            </form>
-                        </section>
-
-                        <section className={styles.section}>
-                            <p className={styles.heading}>{t('Positions')}</p>
-                            {retainers.length === 0 ? (
-                                <p className={styles.emptyHistory}>{t('No positions yet.')}</p>
-                            ) : (
-                                <div className={styles.history}>
-                                    {retainers.map((r) => (
-                                        <div key={r.id} className={styles.row} data-active={activeIds.includes(r.id)}>
-                                            {activeIds.includes(r.id) && <span className={styles.activeDot} aria-hidden />}
-                                            <div className={styles.rowMain}>
-                                                <span className={styles.rowSummary}>
-                                                    <strong className={styles.rowHours}>{r.label || f.hoursPerMonth(r.monthly_hours)}</strong>
-                                                    {r.label && r.monthly_hours > 0 && (
-                                                        <>
-                                                            <span className={styles.rowSep}>·</span>
-                                                            <span>{f.hoursPerMonth(r.monthly_hours)}</span>
-                                                        </>
-                                                    )}
-                                                    {r.monthly_fee !== null && (
-                                                        <>
-                                                            <span className={styles.rowSep}>·</span>
-                                                            <span>{f.perMonth(r.monthly_fee, r.currency)}</span>
-                                                        </>
-                                                    )}
-                                                    {r.overage_hourly_rate !== null && (
-                                                        <>
-                                                            <span className={styles.rowSep}>·</span>
-                                                            <span className={styles.rowOverage}>
-                                                                {t('overage {{rate}}', { rate: f.perHour(r.overage_hourly_rate, r.currency) })}
-                                                            </span>
-                                                        </>
-                                                    )}
-                                                </span>
-                                                <span className={styles.rowMeta} title={r.notes ?? undefined}>
-                                                    {t('invoice #{{n}}', { n: r.invoice_group })}
-                                                    {r.rollover_cap_hours !== null && (
-                                                        <>
-                                                            <span className={styles.rowSep}>·</span>
-                                                            <span>{t('rollover ≤ {{cap}}h', { cap: r.rollover_cap_hours })}</span>
-                                                        </>
-                                                    )}
-                                                    <span className={styles.rowSep}>·</span>
-                                                    {formatRange(r.effective_from, r.effective_to, t)}
-                                                    {r.notes && (
-                                                        <>
-                                                            <span className={styles.rowSep}>·</span>
-                                                            <span className={styles.rowNotes}>{r.notes}</span>
-                                                        </>
-                                                    )}
-                                                </span>
-                                            </div>
-                                            <div className={styles.rowActions}>
-                                                <button
-                                                    type="button"
-                                                    className={styles.iconButton}
-                                                    onClick={() => startEdit(r)}
-                                                    aria-label={t('Edit')}
-                                                >
-                                                    <Pencil size={13} />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className={styles.iconButton}
-                                                    onClick={() => setConfirmDelete(r)}
-                                                    aria-label={t('Delete')}
-                                                >
-                                                    <Trash2 size={13} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </section>
+            <ResponsiveDialog
+                open={open}
+                onOpenChange={onOpenChange}
+                sheet={sheet}
+                fields
+                title={editing !== null || retainers.length > 0 ? t('Change retainer') : t('Add a retainer')}
+                onSubmit={submit}
+                footerClassName={styles.actions}
+                actions={(size) => (
+                    <>
+                        <SoloButton variant="pill" onClick={() => onOpenChange(false)} disabled={processing}>
+                            {t('Cancel')}
+                        </SoloButton>
+                        <SoloButton type="submit" variant="ink" size={size} disabled={processing}>
+                            {processing ? t('Saving…') : editing !== null ? t('Save') : t('Add position')}
+                        </SoloButton>
+                    </>
+                )}
+            >
+                <SoloField label={t('Net amount / month')} htmlFor="retainer-fee" error={errors.monthly_fee}>
+                    <SoloInput
+                        {...fieldControl('retainer-fee', errors.monthly_fee)}
+                        inputMode="decimal"
+                        value={draft.monthly_fee}
+                        onChange={(e) => set('monthly_fee')(e.target.value)}
+                        disabled={processing}
+                    />
+                </SoloField>
+                <SoloFieldRow>
+                    <SoloField label={t('Package (h)')} htmlFor="retainer-hours" error={errors.monthly_hours}>
+                        <SoloInput
+                            {...fieldControl('retainer-hours', errors.monthly_hours)}
+                            inputMode="decimal"
+                            value={draft.monthly_hours}
+                            onChange={(e) => set('monthly_hours')(e.target.value)}
+                            required
+                            disabled={processing}
+                        />
+                    </SoloField>
+                    <SoloField label={t('Rollover up to (h)')} htmlFor="retainer-rollover" error={errors.rollover_cap_hours}>
+                        <SoloInput
+                            {...fieldControl('retainer-rollover', errors.rollover_cap_hours)}
+                            inputMode="decimal"
+                            value={draft.rollover_cap_hours}
+                            onChange={(e) => set('rollover_cap_hours')(e.target.value)}
+                            disabled={processing}
+                        />
+                    </SoloField>
+                </SoloFieldRow>
+                <SoloField label={t('Over the package')} htmlFor="retainer-overage">
+                    <SoloInput id="retainer-overage" value={t('to the hours bank, no surcharge')} readOnly tabIndex={-1} />
+                </SoloField>
+                <SoloFieldRow>
+                    <SoloField label={t('From')} htmlFor="retainer-from" error={errors.effective_from}>
+                        <SoloInput
+                            {...fieldControl('retainer-from', errors.effective_from)}
+                            type="date"
+                            value={draft.effective_from}
+                            onChange={(e) => set('effective_from')(e.target.value)}
+                            required
+                            disabled={processing}
+                        />
+                    </SoloField>
+                    <SoloField label={t('VAT')} htmlFor="retainer-vat" error={errors.vat_symbol}>
+                        <SoloInput
+                            {...fieldControl('retainer-vat', errors.vat_symbol)}
+                            value={draft.vat_symbol}
+                            onChange={(e) => set('vat_symbol')(e.target.value)}
+                            maxLength={8}
+                            disabled={processing}
+                        />
+                    </SoloField>
+                </SoloFieldRow>
+                <SectionAction
+                    className={styles.more}
+                    aria-expanded={more}
+                    aria-controls="retainer-more"
+                    onClick={() => setMore((current) => !current)}
+                >
+                    {t('Invoice details and notes')} {more ? '↑' : '↓'}
+                </SectionAction>
+                {more && (
+                    <div id="retainer-more" className={styles.moreFields}>
+                        <SoloField label={t('Position name')} htmlFor="retainer-label" error={errors.label}>
+                            <SoloInput
+                                {...fieldControl('retainer-label', errors.label)}
+                                value={draft.label}
+                                onChange={(e) => set('label')(e.target.value)}
+                                placeholder={t('e.g. example.com, dev hours')}
+                                maxLength={200}
+                                disabled={processing}
+                            />
+                        </SoloField>
+                        <SoloField label={t('Invoice line (with contact)')} htmlFor="retainer-desc" error={errors.description}>
+                            <SoloTextarea
+                                {...fieldControl('retainer-desc', errors.description)}
+                                value={draft.description}
+                                onChange={(e) => set('description')(e.target.value)}
+                                rows={2}
+                                placeholder={t('Falls back to the position name / client description')}
+                                disabled={processing}
+                            />
+                        </SoloField>
+                        <SoloFieldRow>
+                            <SoloField label={t('Invoice #')} htmlFor="retainer-group" error={errors.invoice_group}>
+                                <SoloInput
+                                    {...fieldControl('retainer-group', errors.invoice_group)}
+                                    inputMode="numeric"
+                                    value={draft.invoice_group}
+                                    onChange={(e) => set('invoice_group')(e.target.value)}
+                                    disabled={processing}
+                                />
+                            </SoloField>
+                            <SoloField label={t('Currency')} htmlFor="retainer-currency" error={errors.currency}>
+                                <ResponsiveSelect
+                                    label={t('Currency')}
+                                    value={draft.currency}
+                                    onValueChange={set('currency')}
+                                    disabled={processing}
+                                    control={fieldControl('retainer-currency', errors.currency)}
+                                    sheet={sheet}
+                                    options={['PLN', 'EUR', 'USD', 'GBP'].map((currency) => ({ value: currency, label: currency }))}
+                                />
+                            </SoloField>
+                        </SoloFieldRow>
+                        <SoloField label={t('Notes')} htmlFor="retainer-notes" error={errors.notes}>
+                            <SoloTextarea
+                                {...fieldControl('retainer-notes', errors.notes)}
+                                value={draft.notes}
+                                onChange={(e) => set('notes')(e.target.value)}
+                                rows={2}
+                                disabled={processing}
+                            />
+                        </SoloField>
                     </div>
-                </DialogContent>
-            </Dialog>
+                )}
+
+                {retainers.length > 0 && (
+                    <section className={styles.positions}>
+                        <SectionHead
+                            kind="body"
+                            quiet
+                            label={t('Positions')}
+                            action={
+                                editing !== null ? (
+                                    <SectionAction onClick={() => edit(null)} disabled={processing}>
+                                        {t('New position')}
+                                    </SectionAction>
+                                ) : undefined
+                            }
+                        />
+                        <ul className={styles.list}>
+                            {retainers.map((r) => (
+                                <li key={r.id} className={styles.row} data-editing={editing?.id === r.id ? true : undefined}>
+                                    <div className={styles.rowMain}>
+                                        <span className={styles.rowTitle}>
+                                            {r.label || f.hoursPerMonth(r.monthly_hours)}
+                                            {activeIds.includes(r.id) && <span className={styles.rowActive}>{t('active')}</span>}
+                                        </span>
+                                        <span className={styles.rowMeta}>
+                                            {[
+                                                r.label && r.monthly_hours > 0 ? f.hoursPerMonth(r.monthly_hours) : null,
+                                                r.monthly_fee !== null ? f.perMonth(r.monthly_fee, r.currency) : null,
+                                                t('invoice #{{n}}', { n: r.invoice_group }),
+                                                r.effective_to === null
+                                                    ? t('Since {{from}}', { from: r.effective_from })
+                                                    : t('{{from}} → {{to}}', { from: r.effective_from, to: r.effective_to }),
+                                            ]
+                                                .filter(Boolean)
+                                                .join(' · ')}
+                                        </span>
+                                    </div>
+                                    <div className={styles.rowActions}>
+                                        <SectionAction onClick={() => edit(r)} disabled={processing || editing?.id === r.id}>
+                                            {t('Edit')}
+                                        </SectionAction>
+                                        <SectionAction onClick={() => setConfirmDelete(r)} disabled={processing}>
+                                            {t('Delete')}
+                                        </SectionAction>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
+                )}
+            </ResponsiveDialog>
 
             <ConfirmDialog
                 open={confirmDelete !== null}
@@ -402,18 +371,4 @@ export function RetainerDialog({ open, onOpenChange, clientId, clientCurrency, r
             />
         </>
     );
-}
-
-function computeInPackageRate(fee: string, hours: string): number | null {
-    const f = parseFloat(fee);
-    const h = parseFloat(hours);
-    if (!Number.isFinite(f) || !Number.isFinite(h) || h <= 0) return null;
-    return f / h;
-}
-
-function formatRange(from: string, to: string | null, t: (k: string, o?: Record<string, unknown>) => string): string {
-    if (to === null) {
-        return t('Since {{from}}', { from });
-    }
-    return t('{{from}} → {{to}}', { from, to });
 }

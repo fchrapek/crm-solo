@@ -4,57 +4,169 @@
     justify-content: center;
     gap: var(--solo-space-2);
     border: 0;
-    border-radius: var(--solo-radius-full);
+    border-radius: var(--solo-button-radius, var(--solo-radius-full));
     font-family: var(--solo-font-text);
-    font-weight: 700;
+    font-weight: var(--solo-button-weight, 700);
     line-height: 1.3;
     text-decoration: none;
     cursor: pointer;
     white-space: nowrap;
 }
 
-.button:disabled {
+.button:disabled,
+.button[aria-disabled='true'] {
     opacity: 0.5;
     cursor: not-allowed;
 }
 
 .button:focus-visible {
-    outline: 2px solid var(--solo-fg);
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
     outline-offset: 3px;
 }
 
+/* --solo-main-*: a Bottom action on phones gives its main button the surface's main look (bottom-action.module.css) */
 .primary {
-    background: var(--solo-accent);
-    color: var(--solo-on-accent);
+    background: var(--solo-main-bg, var(--solo-primary, var(--solo-accent)));
+    color: var(--solo-main-fg, var(--solo-on-primary, var(--solo-on-accent)));
 }
 
 .ghost {
-    background: none;
+    border: var(--solo-control-width, 0) solid var(--solo-control-border, transparent);
+    background: var(--solo-control-bg, none);
     color: var(--solo-fg);
-    opacity: 0.8;
+    opacity: var(--solo-ghost-opacity, 0.8);
 }
 
-.ghost:hover {
-    opacity: 1;
+.text {
+    background: none;
+    color: var(--solo-link, var(--solo-fg));
+}
+
+.text:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.ink {
+    background: var(--solo-main-bg, var(--solo-primary, var(--solo-fg)));
+    color: var(--solo-main-fg, var(--solo-on-primary, var(--solo-bg)));
+}
+
+.outline {
+    background: var(--solo-main-bg, var(--solo-control-bg, none));
+    color: var(--solo-main-fg, var(--solo-fg));
+    border: var(--solo-outline-width, 1px) solid var(--solo-main-edge, var(--solo-control-border, var(--solo-fg)));
+}
+
+.stop {
+    background: var(--solo-main-bg, var(--solo-fg));
+    color: var(--solo-main-fg, var(--solo-bg));
+}
+
+:is(.primary, .ink, .outline, .stop, .ghost):hover:not(:disabled, [aria-disabled='true']) {
+    opacity: 0.85;
 }
 
 .sm {
     font-size: var(--solo-button-sm);
-    padding: 7px 16px;
+    padding: 7px var(--solo-button-sm-x, var(--solo-space-4));
 }
 
+/* the main button of the day and record screens (Start, Stop, Zamknij dzień, Zapisz plan): one size in every variant, 44 px tall on phones */
 .md {
+    min-height: var(--solo-touch);
     font-size: var(--solo-button-md);
-    padding: 10px 20px;
+    padding: var(--solo-space-2-5) 20px;
+}
+
+@media (min-width: 768px) {
+    .md {
+        min-height: 0;
+    }
 }
 
 .lg {
     font-size: var(--solo-button-lg);
-    padding: 16px 34px;
+    padding: var(--solo-space-4) 34px;
+}
+
+/* Figma keeps a small ink or outline button at a 14 px inset */
+.ink.sm,
+.outline.sm {
+    padding: 7px var(--solo-space-row);
+}
+
+.ghost.sm {
+    padding-inline: var(--solo-ghost-x, var(--solo-button-sm-x, var(--solo-space-4)));
+}
+
+.text.sm,
+.text.md,
+.text.lg {
+    padding: 0;
+    border-radius: var(--solo-radius-xs);
 }
 
 .block {
     width: 100%;
+}
+
+/* Figma Button Size=touch: the 44 px phone target in every variant */
+.touch {
+    min-height: var(--solo-touch);
+    padding: 0 var(--solo-space-4);
+    font-size: var(--solo-text-action);
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.outline.touch {
+    border-width: 1px;
+    border-color: var(--solo-control-border, var(--solo-rule-strong));
+}
+
+.text.touch {
+    padding: 0 var(--solo-space-1);
+    border-radius: var(--solo-radius-full);
+}
+
+/* The secondary pill, one look wherever it appears: the masthead search, a record header's actions, a dialog's Anuluj. 44 px tall on phones. */
+.pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--solo-space-2);
+    min-height: var(--solo-touch);
+    padding: var(--solo-space-2) var(--solo-space-4);
+    border: 1px solid var(--solo-control-border, var(--solo-fg-muted));
+    border-radius: var(--solo-button-radius, var(--solo-radius-full));
+    background: var(--solo-control-bg, none);
+    color: var(--solo-fg);
+    font: 500 var(--solo-text-control) / normal var(--solo-font-text);
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.pill:hover {
+    border-color: var(--solo-fg);
+}
+
+.pill:disabled,
+.pill[aria-disabled='true'] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pill:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+}
+
+@media (min-width: 768px) {
+    .pill {
+        min-height: 0;
+    }
 }
 
 .sectionHead {
@@ -62,16 +174,23 @@
     justify-content: space-between;
     align-items: baseline;
     gap: var(--solo-space-4);
-    padding-bottom: 10px;
-    border-bottom: 2px solid var(--solo-rule-strong);
+    padding-bottom: var(--solo-space-2-5);
+    padding-inline: var(--solo-head-inset, 0);
+    border-bottom: var(--solo-head-rule, 2px) solid var(--solo-rule-strong);
+}
+
+/* Figma Section head Inset=None: on the page, not over a block */
+.sectionFlush {
+    padding-inline: 0;
 }
 
 .sectionLabel {
     margin: 0;
-    font-size: var(--solo-text-label);
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-family: inherit;
+    font-size: var(--solo-head-size, var(--solo-text-label));
+    font-weight: var(--solo-head-weight, 700);
+    letter-spacing: var(--solo-head-tracking, 0.08em);
+    text-transform: var(--solo-head-case, uppercase);
 }
 
 .sectionMeta {
@@ -80,23 +199,157 @@
     color: var(--solo-fg-muted);
 }
 
-.eyebrow {
-    margin: 0;
-    font-size: var(--solo-text-eyebrow);
-    font-weight: 500;
-    color: var(--solo-fg-muted);
-}
-
+/* Heading: every title, weekdays included; Display: the moment screens (GOTOWE., 404) */
 .poster {
     margin: 0;
     font-family: var(--solo-font-display);
-    font-stretch: 62%;
-    font-weight: 900;
-    font-size: var(--solo-display-poster);
-    line-height: 0.88;
-    letter-spacing: -0.02em;
-    text-transform: uppercase;
+    font-stretch: var(--solo-display-stretch, 62%);
+    font-weight: var(--solo-display-weight, 900);
+    font-size: var(--solo-poster-heading);
+    line-height: var(--solo-caps-leading);
+    letter-spacing: var(--solo-display-tracking, -0.02em);
+    text-transform: var(--solo-display-case, uppercase);
     overflow-wrap: anywhere;
+}
+
+.posterDisplay {
+    font-size: var(--solo-poster-display);
+}
+
+/* Mobile / Section head (Rule) on phones, the body head from 768 px */
+.sectionBody {
+    align-items: center;
+    min-height: var(--solo-touch);
+    padding-bottom: 0;
+}
+
+.sectionBody .sectionLabel {
+    font-size: var(--solo-head-size, var(--solo-text-label));
+    line-height: 16px;
+    letter-spacing: var(--solo-head-tracking, 0.08em);
+}
+
+.sectionBody .sectionMeta {
+    font-size: var(--solo-text-meta-strong);
+    line-height: normal;
+}
+
+/* Mobile / Section head (Plain): muted caps, no rule, the meta read inline as "LABEL · META" */
+.sectionPlain {
+    justify-content: flex-start;
+    gap: 0;
+    padding-bottom: var(--solo-space-2);
+    border-bottom: 0;
+}
+
+.sectionPlain .sectionLabel,
+.sectionPlain .sectionMeta {
+    color: var(--solo-fg-muted);
+    font-size: var(--solo-label-size, var(--solo-text-label));
+    font-weight: var(--solo-label-weight, 700);
+    line-height: 1.3;
+    letter-spacing: var(--solo-label-tracking, 0.08em);
+    text-transform: var(--solo-label-case, uppercase);
+}
+
+.sectionPlain .sectionLabel {
+    color: var(--solo-head-quiet, var(--solo-fg));
+    font-size: var(--solo-head-size, var(--solo-text-label));
+    font-weight: var(--solo-head-weight, 700);
+}
+
+.sectionPlain .sectionMeta::before {
+    content: '\00a0·\00a0';
+}
+
+@media (min-width: 768px) {
+    .sectionBody {
+        align-items: flex-end;
+        min-height: 0;
+        padding-bottom: var(--solo-space-2-5);
+    }
+
+    .sectionBody .sectionLabel {
+        line-height: 1.3;
+    }
+
+    .sectionPlain {
+        justify-content: space-between;
+        gap: var(--solo-space-4);
+        border-bottom: var(--solo-head-rule, 2px) solid var(--solo-rule-strong);
+    }
+
+    .sectionPlain .sectionLabel {
+        color: inherit;
+    }
+
+    .sectionPlain .sectionMeta {
+        color: var(--solo-fg-muted);
+        font-size: var(--solo-text-meta-strong);
+        font-weight: 500;
+        line-height: normal;
+        letter-spacing: normal;
+        text-transform: none;
+    }
+
+    .sectionPlain .sectionMeta::before {
+        content: none;
+    }
+}
+
+.sectionWithAction {
+    align-items: center;
+    padding-bottom: var(--solo-space-3);
+}
+
+/* Mobile / Section head keeps 44 px with its action, a 15 px text action with a 44 px target */
+.sectionBody.sectionWithAction {
+    padding-bottom: 0;
+}
+
+/* no side padding, so the action ends on the head's 20 px line */
+.sectionBody .sectionLink {
+    padding: var(--solo-space-3) 0;
+    font-size: var(--solo-text-action);
+}
+
+@media (min-width: 768px) {
+    .sectionBody.sectionWithAction {
+        padding-bottom: var(--solo-space-3);
+    }
+
+    .sectionBody .sectionLink {
+        padding: 0;
+        font-size: var(--solo-link-size, var(--solo-text-control-strong));
+    }
+}
+
+.sectionActions {
+    display: flex;
+    align-items: center;
+    gap: var(--solo-space-5);
+}
+
+.sectionLink {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-link, var(--solo-fg));
+    font: var(--solo-link-weight, 600) var(--solo-link-size, var(--solo-text-control-strong)) / normal var(--solo-font-text);
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.sectionLink:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.sectionLink:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
 }
 
 .sectionQuiet {
@@ -104,5 +357,103 @@
 }
 
 .sectionQuiet .sectionLabel {
+    color: var(--solo-head-quiet, var(--solo-fg-muted));
+}
+
+.bodyLink {
+    color: var(--solo-link, var(--solo-fg));
+    font: 500 var(--solo-text-control) / normal var(--solo-font-text);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.bodyLink:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.bodyLink:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+    border-radius: var(--solo-radius-xs);
+}
+
+.emptyBlock {
+    padding: var(--solo-block-pad, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+}
+
+.emptyLine {
+    margin: 0;
+    padding: var(--solo-space-3) var(--solo-row-inset, 0);
     color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-sub) / 1.35 var(--solo-font-text);
+}
+
+/* Figma: A2f / Stat row and Stat; on the accent surfaces the label takes the surface ink */
+.statRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--solo-space-4) 44px;
+}
+
+.statFill {
+    justify-content: space-between;
+    gap: var(--solo-space-4) var(--solo-space-5);
+}
+
+@media (min-width: 768px) {
+    .statFill {
+        justify-content: flex-start;
+        gap: var(--solo-space-4) 44px;
+    }
+}
+
+.stat {
+    display: grid;
+    gap: var(--solo-space-1);
+    min-width: 0;
+}
+
+.statValue {
+    color: var(--solo-fg);
+    font-family: var(--solo-font-display);
+    font-stretch: var(--solo-display-stretch, 62%);
+    font-weight: var(--solo-display-weight, 900);
+    font-size: var(--solo-display-stat);
+    line-height: 0.92;
+    white-space: nowrap;
+    font-variant-numeric: var(--solo-display-numeric, normal);
+}
+
+.statLabel {
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+:where([data-day='timer'], [data-day='done']) .statLabel {
+    color: var(--solo-fg);
+}
+
+/* A small text link keeps its look and gets a 44 px hit area on phones. */
+.touchTarget {
+    position: relative;
+}
+
+.touchTarget::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--solo-touch));
+    height: max(100%, var(--solo-touch));
+    transform: translate(-50%, -50%);
+}
+
+@media (min-width: 768px) {
+    .touchTarget::before {
+        content: none;
+    }
 }

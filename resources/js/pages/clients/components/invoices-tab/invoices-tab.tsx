@@ -1,5 +1,5 @@
+import { Icon } from '@/components/ui/icon';
 import { router } from '@inertiajs/react';
-import { ExternalLink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { TableContainer } from '@/components/table-container';
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { type Currency, useFormatters } from '@/lib/format';
 
+import { monthName } from '@/lib/dates';
 import styles from './invoices-tab.module.css';
 
 export interface ClientInvoice {
@@ -28,7 +29,7 @@ export interface ClientInvoices {
 }
 
 export interface InvoiceFilters {
-    year: number | 'all';
+    year: number | 'all' | 'last12';
     month: number | null;
     years: number[];
 }
@@ -76,8 +77,8 @@ export function InvoicesTab({ invoices, revenue, filters }: Props) {
 
     // The default year (current) may not appear in the data yet - keep it a
     // valid option so the select always shows its value.
-    const yearOptions =
-        filters.year === 'all' || filters.years.includes(Number(filters.year)) ? filters.years : [Number(filters.year), ...filters.years];
+    const yearOptions = typeof filters.year !== 'number' || filters.years.includes(filters.year) ? filters.years : [filters.year, ...filters.years];
+    const wholeRange = (year: string) => year === 'all' || year === 'last12';
 
     const applyFilters = (year: string, month: string) => {
         // Merge with the existing query string - the time-entries pager shares
@@ -85,7 +86,7 @@ export function InvoicesTab({ invoices, revenue, filters }: Props) {
         const params = Object.fromEntries(new URLSearchParams(window.location.search));
         delete params.invoice_month;
         router.get(
-            window.location.pathname,
+            window.location.pathname + window.location.hash,
             {
                 ...params,
                 invoice_year: year,
@@ -95,10 +96,16 @@ export function InvoicesTab({ invoices, revenue, filters }: Props) {
         );
     };
 
-    const monthName = (month: number) => new Date(2000, month - 1, 1).toLocaleDateString(i18n.language, { month: 'long' });
+    const monthOf = (month: number) => monthName(`2000-${String(month).padStart(2, '0')}`, i18n.language);
 
     const periodText =
-        filters.year === 'all' ? t('All years') : filters.month === null ? String(filters.year) : `${monthName(filters.month)} ${filters.year}`;
+        filters.year === 'all'
+            ? t('All years')
+            : filters.year === 'last12'
+              ? t('Last 12 months')
+              : filters.month === null
+                ? String(filters.year)
+                : `${monthOf(filters.month)} ${filters.year}`;
 
     return (
         <div className={styles.root}>
@@ -107,12 +114,13 @@ export function InvoicesTab({ invoices, revenue, filters }: Props) {
                     the fixed-width wrappers are what keep the two selects side
                     by side instead of stacking full-width. */}
                 <div className={styles.filterSelect}>
-                    <Select value={yearValue} onValueChange={(value) => applyFilters(value, value === 'all' ? 'all' : monthValue)}>
+                    <Select value={yearValue} onValueChange={(value) => applyFilters(value, wholeRange(value) ? 'all' : monthValue)}>
                         <SelectTrigger>
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">{t('All years')}</SelectItem>
+                            <SelectItem value="last12">{t('Last 12 months')}</SelectItem>
                             {yearOptions.map((year) => (
                                 <SelectItem key={year} value={String(year)}>
                                     {year}
@@ -122,7 +130,7 @@ export function InvoicesTab({ invoices, revenue, filters }: Props) {
                     </Select>
                 </div>
                 <div className={styles.filterSelect}>
-                    <Select value={monthValue} onValueChange={(value) => applyFilters(yearValue, value)} disabled={filters.year === 'all'}>
+                    <Select value={monthValue} onValueChange={(value) => applyFilters(yearValue, value)} disabled={wholeRange(yearValue)}>
                         <SelectTrigger>
                             <SelectValue />
                         </SelectTrigger>
@@ -130,7 +138,7 @@ export function InvoicesTab({ invoices, revenue, filters }: Props) {
                             <SelectItem value="all">{t('All months')}</SelectItem>
                             {MONTHS.map((month) => (
                                 <SelectItem key={month} value={String(month)}>
-                                    {monthName(month)}
+                                    {monthOf(month)}
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -193,7 +201,7 @@ export function InvoicesTab({ invoices, revenue, filters }: Props) {
                                                 aria-label={t('Open in Infakt')}
                                                 title={t('Open in Infakt')}
                                             >
-                                                <ExternalLink size={13} />
+                                                <Icon name="external-link" size={16} />
                                             </a>
                                         )}
                                     </TableCell>

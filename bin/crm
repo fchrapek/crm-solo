@@ -18,7 +18,7 @@
 # attached file (the id a task record lists) to stdout.
 #
 # The remote list below is AgentAbilities::VERBS; CrmShimRemoteModeTest pins the two together.
-# remote-verbs: today brief task task-brief note task-done timer-start timer-stop time:log lead-capture lead-stage client:config month-close:tick
+# remote-verbs: today brief task tasks clients search task-brief note task-done task-create task-edit plan unplan client-create project-create client-fields client-field-define client-field-set client-assign client-sms-opt-out messages message-cancel message-resend message-template-set message-rule-set message-sending message-preview timer-start timer-stop time:log time-entries time-edit time-split lead-capture lead-stage client:config month-close:tick month-close report reports month-settle
 
 private_or_exit() {
     # GNU first: on Linux `stat -f` is the filesystem mode and succeeds with the wrong answer.
@@ -39,14 +39,14 @@ remote() {
     VERB="${1:-}"
     ENDPOINT="$URL/agent/verb"
     case "$VERB" in
-        today|brief|task|task-brief|note|task-done|timer-start|timer-stop|time:log|lead-capture|lead-stage|client:config|month-close:tick) ;;
+        today|brief|task|tasks|clients|search|task-brief|note|task-done|task-create|task-edit|plan|unplan|client-create|project-create|client-fields|client-field-define|client-field-set|client-assign|client-sms-opt-out|messages|message-cancel|message-resend|message-template-set|message-rule-set|message-sending|message-preview|timer-start|timer-stop|time:log|time-entries|time-edit|time-split|lead-capture|lead-stage|client:config|month-close:tick|month-close|report|reports|month-settle) ;;
         attachment)
             case "${2:-}" in
                 ''|*[!0-9]*) echo "crm: usage: crm attachment <id> > file (the id a task record lists)." >&2; exit 64 ;;
             esac
             ENDPOINT="$URL/agent/attachments/$2" ;;
         ""|help|-h|--help)
-            echo "crm (remote: $URL): today, brief, task, task-brief, note, task-done, timer-start, timer-stop, time:log, lead-capture, lead-stage, client:config, month-close:tick, attachment <id>"
+            echo "crm (remote: $URL): today, brief, task, tasks, clients, search, task-brief, note, task-done, task-create, task-edit, plan, unplan, client-create, project-create, client-fields, client-field-define, client-field-set, client-assign, client-sms-opt-out, messages, message-cancel, message-resend, message-template-set, message-rule-set, message-sending, message-preview, timer-start, timer-stop, time:log, time-entries, time-edit, time-split, lead-capture, lead-stage, client:config, month-close:tick, month-close, report, reports, month-settle, attachment <id>"
             exit 0 ;;
         *)
             echo "crm: \"$VERB\" is not available in remote mode (CRM_REMOTE_URL is set). Unset it to run local artisan commands." >&2
@@ -135,7 +135,7 @@ SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 DIR="$(cd "$(dirname "$SELF")/.." && pwd)"
 FIRST="$1"
 case "$FIRST" in
-    brief|today|task|task-brief|note|task-done|lead-capture|lead-stage|timer-start|timer-stop)
+    brief|today|task|tasks|clients|search|task-brief|note|task-done|task-create|task-edit|plan|unplan|client-create|project-create|client-fields|client-field-define|client-field-set|client-assign|client-sms-opt-out|messages|message-cancel|message-resend|message-template-set|message-rule-set|message-sending|message-preview|lead-capture|lead-stage|timer-start|timer-stop|time-entries|time-edit|time-split|month-close|report|reports|month-settle)
         shift
         exec php "$DIR/artisan" "crm:$FIRST" "$@"
         ;;

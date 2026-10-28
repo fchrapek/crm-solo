@@ -5,22 +5,41 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ClientsRequest;
-use App\Http\Resources\ClientCollection;
 use App\Http\Resources\ClientResource;
 use App\Models\Client;
+use App\Models\ClientRetainer;
 use App\Models\Invoice;
 use App\Models\Task;
+use App\Services\Agent\ClientBrief;
+use App\Services\Clients\ClientBillingMode;
+use App\Services\Clients\ClientBillingQuery;
+use App\Services\Clients\ClientCreator;
+use App\Services\Clients\ClientDetailsQuery;
+use App\Services\Clients\ClientHeader;
+use App\Services\Clients\ClientJournalQuery;
+use App\Services\Clients\ClientListQuery;
+use App\Services\Clients\ClientOverviewQuery;
+use App\Services\Clients\ClientTasksQuery;
+use App\Services\Clients\ClientViews;
 use App\Services\Revenue\RevenueAggregator;
 use App\Support\LocalCalendar;
+use Carbon\CarbonImmutable;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Request;
 use Inertia\Inertia;
+use Inertia\Response;
+use Inertia\Support\Header;
 
 final class ClientsController extends Controller
 {
+    /** The client record's tabs, in header order; the route accepts only these. */
+    public const array TABS = ['przeglad', 'zadania', 'dziennik', 'rozliczenia', 'dane'];
+
     /**
      * Invoice rows shipped to the Invoices tab. At solo scale a client's whole
      * history fits well inside this, so the cap is a payload guard rather than
@@ -28,49 +47,61 @@ final class ClientsController extends Controller
      */
     private const int INVOICE_LIST_LIMIT = 100;
 
-    public function index()
+    public function index(): Response
     {
-        // Lifecycle-stage filter. Defaults to 'active' so the list opens on
-        // live clients; 'all' is the explicit escape hatch (any other value
-        // falls back to the default rather than returning an empty list).
-        $stage = (string) Request::input('stage', 'active');
-        if (! in_array($stage, [...Client::LIFECYCLE_STAGES, 'all'], true)) {
-            $stage = 'active';
-        }
+        return Inertia::render('clients/index', app(ClientListQuery::class)->props(
+            Auth::user()->account_id,
+            Request::only(['stage', 'cooperation_type', 'search', 'assignee', 'f']),
+            Auth::id(),
+        ));
+    }
 
-        $filters = [
-            ...Request::only(['search', 'trashed', 'month_close_type']),
-            'stage' => $stage,
-        ];
+    /** Creating a client is a dialog on Klienci now; the old address opens it there. */
+    public function create(): RedirectResponse
+    {
+        return Redirect::route('clients.index', ['nowy' => 1]);
+    }
 
-        return Inertia::render('clients/index', [
-            'filters' => $filters,
-            'clients' => new ClientCollection(
-                Auth::user()->account->clients()
-                    ->withCount('contacts')
-                    ->orderByDesc('is_pinned')
-                    ->orderBy('name')
-                    ->filter($filters, Auth::user()->account_id)
-                    ->paginate()
-                    ->withQueryString()
-            ),
+    public function store(ClientsRequest $request, ClientCreator $creator): RedirectResponse
+    {
+        $client = $creator->create(Auth::user()->account_id, $request->validated())['client'];
+
+        // A fresh record is filled in next, so it lands on its data rather than the list.
+        return Redirect::route('clients.show', [$client, 'dane'])->with('success', translate_with_gender('created', 'Client'));
+    }
+
+    public function record(Client $client): RedirectResponse
+    {
+        return Redirect::route('clients.show', [$client, 'przeglad']);
+    }
+
+    public function show(Client $client, string $tab): Response
+    {
+        abort_if($tab === 'rozliczenia' && ! $client->account->hasFeature('billing'), 404);
+        $since = $this->openRecord($client);
+        $mode = app(ClientBillingMode::class)->of($client);
+
+        return Inertia::render('clients/show', [
+            'tab' => $tab,
+            // A closure, so Przegląd's SMS poll (a partial reload of overview) skips the header.
+            'client' => fn (): array => app(ClientHeader::class)->props($client, $mode),
+            ...match ($tab) {
+                'przeglad' => app(ClientOverviewQuery::class)->props($client, $since, $mode),
+                'dziennik' => app(ClientJournalQuery::class)->props($client, $since, $this->queryString('praca'), $this->queryString('wpisy')),
+                'zadania' => app(ClientTasksQuery::class)->props($client, is_string(Request::query('wszystkie')) ? Request::query('wszystkie') : null, $mode),
+                'rozliczenia' => app(ClientBillingQuery::class)->props($client, $this->queryString('miesiace'), $mode),
+                'dane' => app(ClientDetailsQuery::class)->props($client),
+                default => [],
+            },
         ]);
     }
 
-    public function create()
+    /** What `crm brief --json` gives an agent, for pasting into an agent session. */
+    public function agentContext(Client $client, ClientBrief $brief): JsonResponse
     {
-        return Inertia::render('clients/create');
-    }
-
-    public function store(ClientsRequest $request): RedirectResponse
-    {
-        $client = Auth::user()->account->clients()->create($request->validated());
-
-        // Land on the new client's edit page, not the index — new clients
-        // start at lifecycle_stage 'prospect' while the index defaults to the
-        // 'active' filter, so a redirect there makes the fresh client
-        // invisibly vanish.
-        return Redirect::route('clients.edit', $client)->with('success', translate_with_gender('created', 'Client'));
+        return response()->json([
+            'context' => (string) json_encode($brief->for($client), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
     }
 
     public function edit(Client $client)
@@ -83,7 +114,6 @@ final class ClientsController extends Controller
             ->withCount([
                 'tasks',
                 'tasks as completed_tasks_count' => fn ($q) => $q->where(fn ($done) => $done->where('is_completed', true)->orWhereNotNull('finished_at')),
-                'tasks as active_agent_tasks_count' => fn ($q) => $q->whereNotNull('cli')->where('agent_lane', '!=', 'done')->whereNull('archived_at'),
             ])
             ->get()
             ->map(fn ($project) => [
@@ -96,14 +126,10 @@ final class ClientsController extends Controller
                 'trello_lists' => $project->settings['trello_lists'] ?? [],
                 'trello_list_mapping' => $project->settings['trello_list_mapping'] ?? [],
                 'custom_lanes' => $project->settings['custom_lanes'] ?? [],
-                'preview_command' => $project->preview_command,
-                'preview_working_dir' => $project->preview_working_dir,
-                'preview_url' => $project->preview_url,
                 'include_in_month_close' => $project->include_in_month_close,
                 'backup_path' => $project->backup_path,
                 'tasks_count' => $project->tasks_count,
                 'completed_tasks_count' => $project->completed_tasks_count,
-                'active_agent_tasks_count' => $project->active_agent_tasks_count,
                 'repositories' => $project->repositories->map(fn ($repo) => [
                     'id' => $repo->id,
                     'name' => $repo->name,
@@ -129,41 +155,8 @@ final class ClientsController extends Controller
                     'parent_task_id' => $task->parent_task_id,
                     'parent_task' => $task->parentTask ? ['id' => $task->parentTask->id, 'name' => $task->parentTask->name] : null,
                     'child_tasks_count' => (int) ($task->child_tasks_count ?? 0),
-                    'cli' => $task->cli,
-                    'agent_lane' => $task->agent_lane,
                     'is_overdue' => $task->isOverdue(),
                 ]),
-            ]);
-
-        $agentTasks = Task::onAgentBoard()
-            ->whereHas('project', fn ($q) => $q->where('client_id', $client->id))
-            ->with(['project:id,name', 'parentTask:id,name'])
-            ->withCount('childTasks')
-            ->orderBy('updated_at', 'desc')
-            ->get()
-            ->map(fn (Task $task) => [
-                'id' => $task->id,
-                'name' => $task->name,
-                'description' => $task->description,
-                'list_name' => $task->list_name,
-                'due_date' => $task->due_date?->toIso8601String(),
-                'is_overdue' => $task->isOverdue(),
-                'priority' => $task->priority,
-                'parent_task_id' => $task->parent_task_id,
-                'parent_task' => $task->parentTask ? ['id' => $task->parentTask->id, 'name' => $task->parentTask->name] : null,
-                'child_tasks_count' => (int) ($task->child_tasks_count ?? 0),
-                'source' => $task->source,
-                'has_trello_card' => $task->hasTrelloCard(),
-                'type' => $task->type,
-                'agent_lane' => $task->agent_lane ?? Task::AGENT_LANE_BACKLOG,
-                'cli' => $task->cli,
-                'session_branch_name' => $task->cli !== null ? $task->sessionBranchName() : null,
-                'session_port' => $task->session_port,
-                'session_attention_at' => $task->session_attention_at?->toIso8601String(),
-                'issue_url' => $task->issue_url,
-                'project' => $task->project ? ['id' => $task->project->id, 'name' => $task->project->name] : null,
-                'trello_url' => $task->trello_url,
-                'updated_at' => $task->updated_at?->toIso8601String(),
             ]);
 
         // Aktywność → Czas paginates server-side. `time_page` gets its own
@@ -231,26 +224,7 @@ final class ClientsController extends Controller
             ])
             ->values();
 
-        $retainers = $client->retainers()
-            ->get()
-            ->map(fn ($retainer) => [
-                'id' => $retainer->id,
-                'project_id' => $retainer->project_id,
-                'label' => $retainer->label,
-                'description' => $retainer->description,
-                'monthly_hours' => (float) $retainer->monthly_hours,
-                'monthly_fee' => $retainer->monthly_fee !== null ? (float) $retainer->monthly_fee : null,
-                'overage_hourly_rate' => $retainer->overage_hourly_rate !== null ? (float) $retainer->overage_hourly_rate : null,
-                'rollover_cap_hours' => $retainer->rollover_cap_hours !== null ? (float) $retainer->rollover_cap_hours : null,
-                'invoice_group' => $retainer->invoice_group,
-                'vat_symbol' => $retainer->vat_symbol,
-                'is_active' => $retainer->is_active,
-                'sort_order' => $retainer->sort_order,
-                'currency' => $retainer->currency,
-                'effective_from' => $retainer->effective_from->toDateString(),
-                'effective_to' => $retainer->effective_to?->toDateString(),
-                'notes' => $retainer->notes,
-            ]);
+        $retainers = $client->retainers()->get()->map(fn (ClientRetainer $retainer): array => $retainer->toPayload());
 
         $documents = $client->documents()
             ->get()
@@ -280,21 +254,6 @@ final class ClientsController extends Controller
                 ] : null,
             ]);
 
-        // The Przegląd glance: logged time this month vs the retainer limit,
-        // plus the newest report's state. Deliberately simpler than the report
-        // hours-bank math (which is reportable-only + opening balance) — this
-        // answers "how loaded is this client right now", the report stays the
-        // billing truth.
-        $monthStart = LocalCalendar::monthRange(LocalCalendar::currentMonth())[0];
-        $monthMinutes = (int) $client->timeEntries()
-            ->where('start_time', '>=', $monthStart)
-            ->sum('duration_minutes');
-        $latestReport = $client->reports()
-            ->orderByDesc('period_start')
-            ->first();
-        // Faktury: the last few Infakt documents plus a 12-month total, so the
-        // overview answers "is this client billing" alongside "is it busy".
-        //
         // Status is the ONLY payment signal used here. Infakt marks documents
         // paid without settling the amount fields - 770 of 796 rows carry
         // status=paid with paid_price=0, and 790 still show left_to_pay > 0 -
@@ -317,16 +276,18 @@ final class ClientsController extends Controller
                 : null,
         ];
 
-        // The overview card is a glance (3 rows + a link); the Invoices tab
-        // holds the full list. Same map either way.
-        $recentInvoices = $client->invoices()->limit(3)->get()->map($mapInvoice);
-
         $yearParam = (string) request()->query('invoice_year', (string) LocalCalendar::now()->year);
-        $invoiceYear = $yearParam === 'all' ? null : (int) $yearParam;
+        $lastTwelve = $yearParam === 'last12';
+        $invoiceYear = $yearParam === 'all' || $lastTwelve ? null : (int) $yearParam;
         $monthParam = request()->query('invoice_month');
-        $invoiceMonth = is_numeric($monthParam) && (int) $monthParam >= 1 && (int) $monthParam <= 12 ? (int) $monthParam : null;
+        $invoiceMonth = ! $lastTwelve && is_numeric($monthParam) && (int) $monthParam >= 1 && (int) $monthParam <= 12 ? (int) $monthParam : null;
+
+        // The rolling year counts by the books' date (sale date first) from the local today, as the revenue card does.
+        $twelveTo = LocalCalendar::todayDate();
+        $twelveFrom = $twelveTo->copy()->subYear();
 
         $filteredInvoices = fn () => $client->invoices()
+            ->when($lastTwelve, fn ($q) => $q->whereBetween(DB::raw(Invoice::ACCRUAL_DATE_SQL), [$twelveFrom->toDateString(), $twelveTo->toDateString()]))
             ->when($invoiceYear !== null, fn ($q) => $q->whereYear('invoice_date', $invoiceYear))
             ->when($invoiceMonth !== null, fn ($q) => $q->whereMonth('invoice_date', $invoiceMonth));
 
@@ -340,13 +301,16 @@ final class ClientsController extends Controller
         // table refilters the numbers above it. Null bounds = all-time.
         $periodFrom = null;
         $periodTo = null;
-        if ($invoiceYear !== null) {
+        if ($lastTwelve) {
+            $periodFrom = $twelveFrom;
+            $periodTo = $twelveTo;
+        } elseif ($invoiceYear !== null) {
             $periodFrom = Carbon::create($invoiceYear, $invoiceMonth ?? 1, 1)->startOfDay();
             $periodTo = $invoiceMonth !== null ? $periodFrom->copy()->endOfMonth() : $periodFrom->copy()->endOfYear();
         }
 
         $invoiceFilters = [
-            'year' => $invoiceYear ?? 'all',
+            'year' => $lastTwelve ? 'last12' : ($invoiceYear ?? 'all'),
             'month' => $invoiceMonth,
             // Distinct years in PHP: YEAR() vs strftime() differs per driver
             // (tests run sqlite), and a client's invoice list is small.
@@ -358,52 +322,12 @@ final class ClientsController extends Controller
                 ->sortDesc()
                 ->values(),
         ];
-        // Advances (ZAL) repeat the full contract net on every document, so
-        // they are excluded from the rolling total; sale_date matches how the
-        // books recognise the same invoices.
-        $invoicedYear = (int) $client->invoices()
-            ->countsAsRevenue()
-            ->whereRaw(Invoice::ACCRUAL_DATE_SQL.' >= ?', [LocalCalendar::today()->subYear()->toDateString()])
-            ->sum('net_price');
-
-        // What this month actually offers: the pool plus whatever last month's
-        // report closed with, capped at the agreed ceiling. Showing the bare
-        // pool understates the budget for any client carrying a surplus.
-        $today = LocalCalendar::todayDate();
-        $contractedHours = (float) $client->activeRetainersOn($today)->sum('monthly_hours');
-        $carriedHours = $this->carriedHoursInto($client, $today->copy()->startOfMonth());
-        $capHours = $client->activeRetainerOn($today)?->rollover_cap_hours;
-        $availableHours = $capHours !== null
-            ? min($contractedHours + $carriedHours, (float) $capHours)
-            : $contractedHours + $carriedHours;
-
-        $overview = [
-            'month_hours' => round($monthMinutes / 60, 1),
-            'contracted_hours' => $contractedHours,
-            'carried_hours' => round($carriedHours, 2),
-            'available_hours' => round($availableHours, 2),
-            'latest_report' => $latestReport ? [
-                'id' => $latestReport->id,
-                'period_type' => $latestReport->period_type,
-                'period_start' => $latestReport->period_start?->toDateString(),
-                'period_end' => $latestReport->period_end?->toDateString(),
-                'status' => $latestReport->status,
-            ] : null,
-            'invoices' => [
-                'recent' => $recentInvoices,
-                'net_last_12_months' => (float) ($invoicedYear / 100),
-                'currency' => $recentInvoices->first()['currency'] ?? 'PLN',
-            ],
-        ];
 
         return Inertia::render('clients/edit', [
             'client' => new ClientResource($client),
-            'overview' => $overview,
             'invoices' => $invoices,
             'invoiceFilters' => $invoiceFilters,
             'projects' => $projects,
-            'agentTasks' => $agentTasks,
-            'agentLanes' => Task::AGENT_LANES,
             'timeEntries' => $timeEntries,
             'clientTasks' => $clientTasks,
             'lifecycleEvents' => $lifecycleEvents,
@@ -466,7 +390,8 @@ final class ClientsController extends Controller
 
     public function pin(Client $client): RedirectResponse
     {
-        $client->update(['is_pinned' => ! $client->is_pinned]);
+        $data = Request::validate(['pinned' => ['required', 'boolean']]);
+        $client->update(['is_pinned' => (bool) $data['pinned']]);
 
         return Redirect::back();
     }
@@ -522,18 +447,21 @@ final class ClientsController extends Controller
         return Redirect::back()->with('success', __('Stage updated.'));
     }
 
-    /**
-     * Hours carried into a month, from the closing balance of the last report
-     * that ended before it. Negative when the client overran, which is the
-     * honest reading: they start the month already in debt.
-     */
-    private function carriedHoursInto(Client $client, Carbon $monthStart): float
+    /** A page the user opens records the view; a partial reload or a prefetch only reads where "nowe" starts. */
+    private function openRecord(Client $client): CarbonImmutable
     {
-        $previous = $client->reports()
-            ->where('period_end', '<', $monthStart)
-            ->orderByDesc('period_end')
-            ->first();
+        $views = app(ClientViews::class);
+        $user = Auth::user();
 
-        return $previous !== null ? $previous->closingBalanceHours() : 0.0;
+        return Request::hasHeader(Header::PARTIAL_COMPONENT) || Request::header('Purpose') === 'prefetch'
+            ? $views->since($user, $client)
+            : $views->open($user, $client);
+    }
+
+    private function queryString(string $key): ?string
+    {
+        $value = Request::query($key);
+
+        return is_string($value) ? $value : null;
     }
 }

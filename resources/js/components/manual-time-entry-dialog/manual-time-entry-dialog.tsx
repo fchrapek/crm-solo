@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { FormInput, FormLabel, FormMessage } from '@/components/form';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
+import { fieldControl, SoloField, SoloFieldRow, SoloInput, SoloTextarea } from '@/components/solo/field';
+import { SoloButton } from '@/components/solo/primitives';
+import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+
+import styles from './manual-time-entry-dialog.module.css';
 
 const readXsrfToken = (): string => {
     if (typeof document === 'undefined') return '';
@@ -13,7 +15,7 @@ const readXsrfToken = (): string => {
     return match ? decodeURIComponent(match.split('=')[1]) : '';
 };
 
-interface RunningEntry {
+export interface RunningEntry {
     id: number;
     description: string | null;
     start_time: string | null;
@@ -24,7 +26,8 @@ interface RunningEntry {
 interface Props {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    taskId: number;
+    /** The task the time goes on; its name and the client's short name make the subtitle. */
+    task: { id: number; name: string; client?: string | null };
     onSaved?: () => void;
 }
 
@@ -40,7 +43,8 @@ type Step = 'checking' | 'conflict_warning' | 'form';
  *   2. Form: description / start / end / billable. End time + duration are
  *      derived from each other; both submit cleanly.
  */
-export function ManualTimeEntryDialog({ open, onOpenChange, taskId, onSaved }: Props) {
+/** Figma: Zaloguj czas, dialog 794:20596, sheet 794:57932; the running-timer step 800:21650, 800:21981. */
+export function ManualTimeEntryDialog({ open, onOpenChange, task, onSaved }: Props) {
     const { t } = useTranslation();
     const [step, setStep] = useState<Step>('checking');
     const [running, setRunning] = useState<RunningEntry[]>([]);
@@ -51,6 +55,8 @@ export function ManualTimeEntryDialog({ open, onOpenChange, taskId, onSaved }: P
     const [billable, setBillable] = useState(true);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
+    // A second submit can arrive before the disabled Save renders; each one would log the time again.
+    const inFlight = useRef(false);
 
     useEffect(() => {
         if (!open) {
@@ -95,10 +101,12 @@ export function ManualTimeEntryDialog({ open, onOpenChange, taskId, onSaved }: P
     }, [open]);
 
     const submit = async () => {
+        if (inFlight.current) return;
+        inFlight.current = true;
         setSubmitting(true);
         setErrors({});
         try {
-            const res = await fetch(`/tasks/${taskId}/time-entries`, {
+            const res = await fetch(`/tasks/${task.id}/time-entries`, {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: {
@@ -137,118 +145,129 @@ export function ManualTimeEntryDialog({ open, onOpenChange, taskId, onSaved }: P
         } catch {
             toast.error(t('Failed to save entry'));
         } finally {
+            inFlight.current = false;
             setSubmitting(false);
         }
     };
 
+    const subtitle = [task.name, task.client].filter(Boolean).join(' · ');
+    const cancel = (
+        <SoloButton variant="pill" onClick={() => onOpenChange(false)} disabled={submitting}>
+            {t('Cancel')}
+        </SoloButton>
+    );
+
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>{t('Log time')}</DialogTitle>
-                </DialogHeader>
+        <ResponsiveDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title={t('Log time')}
+            description={subtitle}
+            onSubmit={(e) => {
+                e.preventDefault();
+                if (step === 'conflict_warning') setStep('form');
+                if (step === 'form') void submit();
+            }}
+            sheetAction={step === 'form' ? 'save' : 'close'}
+            saving={submitting}
+            fields={step === 'form'}
+            footerClassName={styles.actions}
+            actions={(size) => (
+                <>
+                    {cancel}
+                    {step === 'conflict_warning' && (
+                        <SoloButton variant="ink" size={size} onClick={() => setStep('form')}>
+                            {t('Continue anyway')}
+                        </SoloButton>
+                    )}
+                    {step === 'form' && (
+                        <SoloButton type="submit" variant="ink" size={size} disabled={submitting}>
+                            {submitting ? t('Saving…') : t('Save')}
+                        </SoloButton>
+                    )}
+                </>
+            )}
+        >
+            {step === 'checking' && (
+                <p className={styles.checking} role="status">
+                    {t('Checking for active sessions…')}
+                </p>
+            )}
 
-                {step === 'checking' && <p>{t('Checking for active sessions…')}</p>}
+            {step === 'conflict_warning' && <RunningWarning running={running} />}
 
-                {step === 'conflict_warning' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-3)' }}>
-                        <p>{t('A time entry is currently running. Adding a manual entry may overlap with it:')}</p>
-                        <ul style={{ margin: 0, paddingLeft: 'var(--spacing-4)' }}>
-                            {running.map((entry) => (
-                                <li key={entry.id} style={{ fontSize: '0.875rem' }}>
-                                    <strong>{entry.task?.name ?? entry.description ?? t('(no task)')}</strong>
-                                    {' · '}
-                                    {entry.source === 'terminal_session' ? t('Session') : entry.source === 'manual' ? t('Manual') : 'Clockify'}
-                                    {entry.start_time && ` · ${t('Started')} ${new Date(entry.start_time).toLocaleString()}`}
-                                </li>
-                            ))}
-                        </ul>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => onOpenChange(false)}>
-                                {t('Cancel')}
-                            </Button>
-                            <Button onClick={() => setStep('form')}>{t('Continue anyway')}</Button>
-                        </DialogFooter>
-                    </div>
-                )}
-
-                {step === 'form' && (
-                    <form
-                        onSubmit={(e) => {
-                            e.preventDefault();
-                            void submit();
-                        }}
-                        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}
-                    >
-                        <div>
-                            <FormLabel htmlFor="time-title">{t('Title')}</FormLabel>
-                            <FormInput
-                                id="time-title"
-                                type="text"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                maxLength={255}
-                                placeholder={t('Short label shown in the list')}
-                                error={errors.title}
+            {step === 'form' && (
+                <>
+                    <SoloField label={t('Title')} htmlFor="time-title" error={errors.title}>
+                        <SoloInput
+                            {...fieldControl('time-title', errors.title)}
+                            type="text"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            maxLength={255}
+                            placeholder={t('Short label shown in the list')}
+                            autoFocus
+                        />
+                    </SoloField>
+                    <SoloField label={t('Description')} htmlFor="time-description" error={errors.description}>
+                        <SoloTextarea
+                            {...fieldControl('time-description', errors.description)}
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            maxLength={2000}
+                            rows={3}
+                            placeholder={t('Details shown when the entry is opened')}
+                        />
+                    </SoloField>
+                    <SoloFieldRow>
+                        <SoloField label={t('Start time')} htmlFor="time-start" error={errors.start_time}>
+                            <SoloInput
+                                {...fieldControl('time-start', errors.start_time)}
+                                type="datetime-local"
+                                value={startTime}
+                                onChange={(e) => setStartTime(e.target.value)}
+                                required
                             />
-                            <FormMessage error={errors.title} />
-                        </div>
-                        <div>
-                            <FormLabel htmlFor="time-description">{t('Description')}</FormLabel>
-                            <Textarea
-                                id="time-description"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                                maxLength={2000}
-                                rows={4}
-                                placeholder={t('Details shown when the entry is opened')}
-                                aria-invalid={errors.description ? true : undefined}
-                                style={{ resize: 'vertical' }}
+                        </SoloField>
+                        <SoloField label={t('End time')} htmlFor="time-end" error={errors.end_time}>
+                            <SoloInput
+                                {...fieldControl('time-end', errors.end_time)}
+                                type="datetime-local"
+                                value={endTime}
+                                onChange={(e) => setEndTime(e.target.value)}
+                                required
                             />
-                            <FormMessage error={errors.description} />
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-3)' }}>
-                            <div>
-                                <FormLabel htmlFor="time-start">{t('Start time')}</FormLabel>
-                                <FormInput
-                                    id="time-start"
-                                    type="datetime-local"
-                                    value={startTime}
-                                    onChange={(e) => setStartTime(e.target.value)}
-                                    required
-                                    error={errors.start_time}
-                                />
-                                <FormMessage error={errors.start_time} />
-                            </div>
-                            <div>
-                                <FormLabel htmlFor="time-end">{t('End time')}</FormLabel>
-                                <FormInput
-                                    id="time-end"
-                                    type="datetime-local"
-                                    value={endTime}
-                                    onChange={(e) => setEndTime(e.target.value)}
-                                    required
-                                    error={errors.end_time}
-                                />
-                                <FormMessage error={errors.end_time} />
-                            </div>
-                        </div>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}>
-                            <input type="checkbox" checked={billable} onChange={(e) => setBillable(e.target.checked)} />
-                            {t('Billable')}
-                        </label>
-                        <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-                                {t('Cancel')}
-                            </Button>
-                            <Button type="submit" disabled={submitting}>
-                                {submitting ? t('Saving...') : t('Save')}
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                )}
-            </DialogContent>
-        </Dialog>
+                        </SoloField>
+                    </SoloFieldRow>
+                    <label className={styles.billable}>
+                        <Checkbox checked={billable} onCheckedChange={(checked) => setBillable(checked === true)} />
+                        {t('Billable')}
+                    </label>
+                </>
+            )}
+        </ResponsiveDialog>
+    );
+}
+
+/** Figma 800:21650: the warning and one row per running entry, its title and start time. */
+export function RunningWarning({ running }: { running: RunningEntry[] }) {
+    const { t, i18n } = useTranslation();
+    const clock = new Intl.DateTimeFormat(i18n.language, { hour: '2-digit', minute: '2-digit' });
+
+    return (
+        <div className={styles.warning}>
+            <p className={styles.warningText}>{t('A time entry is currently running. Adding a manual entry may overlap with it:')}</p>
+            <ul className={styles.running}>
+                {running.map((entry) => (
+                    <li key={entry.id} className={styles.runningRow}>
+                        <span className={styles.runningTitle}>{entry.task?.name ?? entry.description ?? t('(no task)')}</span>
+                        {entry.start_time && (
+                            <span className={styles.runningSince}>{t('since {{date}}', { date: clock.format(new Date(entry.start_time)) })}</span>
+                        )}
+                    </li>
+                ))}
+            </ul>
+        </div>
     );
 }
 

@@ -70,7 +70,6 @@ final class TaskCompletionParityTest extends TestCase
         $expected = [
             'is_completed' => true,
             'list_name' => 'Done',
-            'agent_lane' => Task::AGENT_LANE_DONE,
             'finished_at' => '2026-09-16 08:00:00',
             'successors' => 1,
             'timer_stopped' => true,
@@ -94,7 +93,6 @@ final class TaskCompletionParityTest extends TestCase
         $expected = [
             'is_completed' => false,
             'list_name' => 'Testing',
-            'agent_lane' => Task::AGENT_LANE_DONE,
             'finished_at' => '2026-09-16 08:00:00',
             'successors' => 1,
             'timer_stopped' => true,
@@ -116,18 +114,6 @@ final class TaskCompletionParityTest extends TestCase
 
         $this->assertTrue($reportable->fresh()->latestOpenSuccessor()->is_reportable);
         $this->assertFalse($hidden->fresh()->latestOpenSuccessor()->is_reportable);
-    }
-
-    public function test_an_agent_task_without_a_lane_lands_in_done_on_every_path(): void
-    {
-        foreach ($this->paths(withListMove: true) as $path => $tick) {
-            $task = $this->manualTask("No lane {$path}");
-            $task->update(['agent_lane' => null]);
-
-            $tick($task);
-
-            $this->assertSame(Task::AGENT_LANE_DONE, $task->fresh()->agent_lane, "Path {$path}.");
-        }
     }
 
     public function test_repeating_done_on_a_finished_task_stops_its_timer_and_changes_nothing_else(): void
@@ -202,9 +188,6 @@ final class TaskCompletionParityTest extends TestCase
         } catch (\Illuminate\Validation\ValidationException $e) {
             $this->assertArrayHasKey('task_id', $e->errors());
         }
-        $this->assertNotNull($task->fresh()->finished_at);
-
-        $this->actingAs($this->user)->patchJson("/tasks/{$task->id}/agent-lane", ['agent_lane' => 'in_progress'])->assertStatus(422);
         $this->assertNotNull($task->fresh()->finished_at);
     }
 
@@ -293,16 +276,6 @@ final class TaskCompletionParityTest extends TestCase
         $this->assertSame('Testing', $task->fresh()->list_name);
     }
 
-    public function test_an_agent_lane_drag_out_of_done_reopens_a_finished_trello_card_and_leaves_its_list(): void
-    {
-        $task = $this->trelloTask('Card');
-        $this->actingAs($this->user)->patchJson("/tasks/{$task->id}/agent-lane", ['agent_lane' => 'done'])->assertOk();
-
-        $this->actingAs($this->user)->patchJson("/tasks/{$task->id}/agent-lane", ['agent_lane' => 'in_progress'])
-            ->assertOk()
-            ->assertJson(['agent_lane' => 'in_progress', 'list_name' => 'Testing', 'finished_at' => null]);
-    }
-
     public function test_moving_a_manual_task_out_of_done_unticks_it(): void
     {
         $task = $this->manualTask('Undo me');
@@ -311,7 +284,6 @@ final class TaskCompletionParityTest extends TestCase
         $this->actingAs($this->user)->patchJson("/tasks/{$task->id}/list-name", ['list_name' => 'Doing'])
             ->assertOk()
             ->assertJson(['list_name' => 'Doing', 'is_completed' => false, 'finished_at' => null]);
-        $this->assertSame(Task::AGENT_LANE_BACKLOG, $task->fresh()->agent_lane);
     }
 
     public function test_the_day_can_close_after_crm_task_done_on_a_running_task(): void
@@ -349,7 +321,6 @@ final class TaskCompletionParityTest extends TestCase
                 $this->actingAs($this->user)->post('/day/picks/'.DayPick::where('task_id', $task->id)->sole()->id.'/complete');
             },
             'day off plan' => fn (Task $task) => $this->actingAs($this->user)->post("/day/tasks/{$task->id}/complete"),
-            'agent lane' => fn (Task $task) => $this->actingAs($this->user)->patchJson("/tasks/{$task->id}/agent-lane", ['agent_lane' => 'done'])->assertOk(),
             'crm task-done' => fn (Task $task) => $this->artisan('crm:task-done', ['task' => (string) $task->id])->assertSuccessful(),
             'mcp task_done' => fn (Task $task) => CrmServer::tool(TaskDoneTool::class, ['task' => $task->id])->assertOk(),
         ];
@@ -366,7 +337,7 @@ final class TaskCompletionParityTest extends TestCase
     {
         return Task::create([
             'project_id' => $this->manualProject->id, 'name' => $name, 'source' => 'manual', 'list_name' => 'Doing',
-            'cli' => 'claude', 'agent_lane' => Task::AGENT_LANE_IN_PROGRESS, 'recurrence_period_days' => 7,
+            'recurrence_period_days' => 7,
         ]);
     }
 
@@ -374,7 +345,7 @@ final class TaskCompletionParityTest extends TestCase
     {
         return Task::create([
             'project_id' => $this->trelloProject->id, 'name' => $name, 'source' => 'trello', 'trello_card_id' => 'card-'.md5($name),
-            'list_name' => 'Testing', 'cli' => 'claude', 'agent_lane' => Task::AGENT_LANE_IN_PROGRESS, 'recurrence_period_days' => 7,
+            'list_name' => 'Testing', 'recurrence_period_days' => 7,
         ]);
     }
 
@@ -397,7 +368,6 @@ final class TaskCompletionParityTest extends TestCase
         return [
             'is_completed' => (bool) $task->is_completed,
             'list_name' => $task->list_name,
-            'agent_lane' => $task->agent_lane,
             'finished_at' => $task->finished_at?->toDateTimeString(),
             'successors' => Task::where('parent_task_id', $task->id)->count(),
             'timer_stopped' => $entry->end_time !== null,

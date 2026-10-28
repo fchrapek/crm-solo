@@ -6,6 +6,8 @@ namespace Tests\Feature;
 
 use App\Models\Account;
 use App\Models\Client;
+use App\Models\ClientMonthClosure;
+use App\Models\ClientRetainer;
 use App\Models\MonthCloseRun;
 use App\Models\MonthCloseStep;
 use App\Models\Project;
@@ -531,5 +533,106 @@ final class MonthCloseTest extends TestCase
         $this->actingAs($intruder)
             ->patch("/month-close/steps/{$step->id}", ['state' => MonthCloseStep::STATE_DONE])
             ->assertNotFound();
+    }
+
+    public function test_a_client_still_owing_the_hours_month_is_listed_without_a_checklist(): void
+    {
+        // 00:30 on 1 October in Warsaw: September has just ended there while UTC is still in it.
+        config(['app.display_timezone' => 'Europe/Warsaw']);
+        $this->travelTo(Carbon::parse('2026-09-30 22:30:00', 'UTC'));
+        $account = $this->user->account;
+        $account->update(['settings' => ['settlement_from' => '2026-09']]);
+        $owing = $account->clients()->create(['name' => 'Owing Retainer']);
+        ClientRetainer::create(['account_id' => $account->id, 'client_id' => $owing->id, 'monthly_hours' => 10, 'effective_from' => '2026-01-01']);
+
+        $this->actingAs($this->user)
+            ->get('/month-close?period=2026-09')
+            ->assertInertia(fn (Assert $assert) => $assert
+                ->has('clients', 3)
+                ->where('clients.0.client.name', 'Agency X')
+                ->where('clients.0.can_start_checklist', true)
+                ->where('clients.1.client.name', 'Owing Retainer')
+                ->where('clients.1.client.type', null)
+                ->where('clients.1.can_start_checklist', false)
+                ->where('clients.1.run', null)
+                ->where('clients.1.settlement.state', 'ready')
+                ->where('clients.2.client.name', 'Roofs Ltd'));
+
+        $this->actingAs($this->user)
+            ->post('/month-close', ['client_id' => $owing->id, 'period' => '2026-09'])
+            ->assertNotFound();
+    }
+
+    public function test_only_clients_owing_that_very_month_join_the_list(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-20 10:00:00', 'UTC'));
+        $account = $this->user->account;
+        $account->update(['settings' => ['settlement_from' => '2026-08']]);
+        $retainer = fn (Client $client, ?string $to = null) => ClientRetainer::create(['account_id' => $client->account_id, 'client_id' => $client->id, 'monthly_hours' => 10, 'effective_from' => '2026-01-01', 'effective_to' => $to]);
+
+        $august = $account->clients()->create(['name' => 'Still Owes August']);
+        $retainer($august);
+        $closed = $account->clients()->create(['name' => 'Closed September']);
+        $retainer($closed);
+        foreach (['2026-08', '2026-09'] as $period) {
+            ClientMonthClosure::create(['client_id' => $closed->id, 'period' => $period, 'closed_at' => now(), 'snapshot' => ['closing' => 0.0, 'used' => 10.0, 'contracted' => 10.0, 'opening' => 0.0, 'cap' => null]]);
+        }
+        $ended = $account->clients()->create(['name' => 'Retainer Ended']);
+        $retainer($ended, '2026-08-01');
+        $archived = $account->clients()->create(['name' => 'Archived Owing']);
+        $retainer($archived);
+        ClientMonthClosure::create(['client_id' => $archived->id, 'period' => '2026-08', 'closed_at' => now(), 'snapshot' => ['closing' => 0.0, 'used' => 10.0, 'contracted' => 10.0, 'opening' => 0.0, 'cap' => null]]);
+        $archived->delete();
+        $other = Account::create(['name' => 'Other', 'settings' => ['settlement_from' => '2026-08']]);
+        $foreign = $other->clients()->create(['name' => 'Foreign Owing']);
+        $retainer($foreign);
+        ClientMonthClosure::create(['client_id' => $foreign->id, 'period' => '2026-08', 'closed_at' => now(), 'snapshot' => ['closing' => 0.0, 'used' => 10.0, 'contracted' => 10.0, 'opening' => 0.0, 'cap' => null]]);
+
+        $names = fn (string $period) => collect($this->actingAs($this->user)->get("/month-close?period={$period}")->viewData('page')['props']['clients'])->pluck('client.name')->all();
+
+        $this->assertSame(['Agency X', 'Roofs Ltd'], $names('2026-09'));
+        $this->assertSame(['Agency X', 'Roofs Ltd', 'Still Owes August'], $names('2026-08'));
+    }
+
+    public function test_month_close_lists_exactly_the_clients_the_klienci_note_counts(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-20 10:00:00', 'UTC'));
+        $account = $this->user->account;
+        $account->update(['settings' => ['settlement_from' => '2026-08']]);
+        $close = fn (Client $client, string $period) => ClientMonthClosure::create(['client_id' => $client->id, 'period' => $period, 'closed_at' => now(), 'snapshot' => ['closing' => 0.0, 'used' => 10.0, 'contracted' => 10.0, 'opening' => 0.0, 'cap' => null]]);
+        $retainer = fn (Client $client, ?string $to = null) => ClientRetainer::create(['account_id' => $client->account_id, 'client_id' => $client->id, 'monthly_hours' => 10, 'effective_from' => '2026-01-01', 'effective_to' => $to]);
+
+        // The retainer ended with August, which is still owed.
+        $ended = $account->clients()->create(['name' => 'Ended Retainer']);
+        $retainer($ended, '2026-09-01');
+        // September was closed, then reopened, and its retainer removed after.
+        $reopened = $account->clients()->create(['name' => 'Reopened September']);
+        $reopenedRetainer = $retainer($reopened);
+        $close($reopened, '2026-08');
+        $september = $close($reopened, '2026-09');
+        $this->actingAs($this->user)
+            ->delete("/clients/{$reopened->id}/months/2026-09/close", ['closure_id' => $september->id])
+            ->assertSessionHas('success');
+        $reopenedRetainer->delete();
+        // A maintenance client taken out of the close, still owing September.
+        $excluded = $account->clients()->create(['name' => 'Taken Out', 'month_close_type' => MonthCloseRun::TYPE_MAINTENANCE, 'include_in_month_close' => false]);
+        $retainer($excluded);
+        $close($excluded, '2026-08');
+
+        $owing = function (string $period): array {
+            $rows = collect($this->actingAs($this->user)->get("/month-close?period={$period}")->viewData('page')['props']['clients']);
+
+            return $rows->filter(fn (array $row): bool => ($row['settlement']['state'] ?? null) === 'ready')
+                ->map(fn (array $row): array => [$row['client']['name'], $row['client']['type'], $row['can_start_checklist']])
+                ->values()
+                ->all();
+        };
+
+        $this->assertSame([['Ended Retainer', null, false]], $owing('2026-08'));
+        $this->assertSame([['Reopened September', null, false], ['Taken Out', 'maintenance', false]], $owing('2026-09'));
+
+        $this->actingAs($this->user)
+            ->get('/clients')
+            ->assertInertia(fn (Assert $page) => $page->where('open_months', ['count' => 3, 'period' => null, 'oldest' => '2026-08']));
     }
 }

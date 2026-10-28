@@ -56,6 +56,8 @@ RUN install-php-extensions \
     zip \
     gd \
     bcmath \
+    calendar \
+    intl \
     opcache
 
 WORKDIR /var/www/html
@@ -63,6 +65,10 @@ WORKDIR /var/www/html
 # Copy application
 COPY --from=composer /app /var/www/html
 COPY --from=frontend /app/public/build /var/www/html/public/build
+
+# Stages 1 and 2 skip platform checks; this fails the build when a required extension is missing.
+RUN --mount=from=composer:2,source=/usr/bin/composer,target=/usr/local/bin/composer \
+    composer check-platform-reqs --no-dev
 
 # Create storage directories
 RUN mkdir -p storage/app/private storage/app/public storage/framework/cache \

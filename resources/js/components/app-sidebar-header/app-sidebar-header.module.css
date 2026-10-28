@@ -37,3 +37,14 @@
 .trigger {
     margin-left: calc(-1 * var(--spacing-1));
 }
+
+/* phones navigate from the bottom tab bar, so the sidebar trigger starts at 768 px */
+.header .trigger {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .header .trigger {
+        display: inline-flex;
+    }
+}

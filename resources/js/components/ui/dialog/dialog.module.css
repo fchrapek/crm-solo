@@ -3,7 +3,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: var(--z-50);
+  z-index: var(--z-modal);
   background-color: color-mix(in srgb, var(--color-black) 80%, transparent);
 }
 
@@ -16,19 +16,27 @@
 }
 
 .content {
+  --dialog-bg: var(--color-background);
+  --dialog-pad-top: var(--spacing-6);
+  --dialog-pad-bottom: var(--spacing-6);
+  --dialog-pad-inline: var(--spacing-6);
+  --dialog-gap: var(--spacing-4);
+  --dialog-close-top: var(--spacing-4);
+  --dialog-close-right: var(--spacing-4);
+
   position: fixed;
   top: 50%;
   left: 50%;
-  z-index: var(--z-50);
-  display: grid;
+  z-index: var(--z-modal);
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: calc(100% - 2rem);
+  max-height: calc(100dvh - 2rem);
   transform: translate(-50%, -50%);
-  gap: var(--spacing-4);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
-  background-color: var(--color-background);
-  padding: var(--spacing-6);
+  background-color: var(--dialog-bg);
   box-shadow: var(--shadow-lg);
 }
 
@@ -46,10 +54,23 @@
   animation: fadeOut var(--duration-200) var(--ease-in), zoomOut var(--duration-200) var(--ease-in);
 }
 
+/* Every dialog's content scrolls in here, so the close button outside it stays put; DialogBody narrows the scroll to the fields. */
+.scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--dialog-gap);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--dialog-pad-top) var(--dialog-pad-inline) var(--dialog-pad-bottom);
+}
+
 .closeButton {
   position: absolute;
-  top: var(--spacing-4);
-  right: var(--spacing-4);
+  z-index: 2;
+  top: var(--dialog-close-top);
+  right: var(--dialog-close-right);
   border-radius: var(--radius-sm);
   opacity: 0.7;
   transition: opacity var(--duration-150);
@@ -59,7 +80,7 @@
   opacity: 1;
 }
 
-.closeButton:focus {
+.closeButton:focus-visible {
   box-shadow: 0 0 0 2px var(--color-ring), 0 0 0 4px var(--color-background);
   outline: none;
 }
@@ -81,6 +102,7 @@
 }
 
 .header {
+  flex: none;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2);
@@ -94,6 +116,7 @@
 }
 
 .footer {
+  flex: none;
   display: flex;
   flex-direction: column-reverse;
   gap: var(--spacing-2);
@@ -104,6 +127,28 @@
     flex-direction: row;
     justify-content: flex-end;
   }
+}
+
+/* A dialog taller than the viewport scrolls only its body, so the title, the close button and the actions never cover a focused field. */
+.form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--dialog-gap);
+  min-height: 0;
+}
+
+.body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--dialog-gap);
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* room for focus outlines inside the scroller */
+  margin: -4px;
+  padding: 4px;
 }
 
 .title {
@@ -135,4 +180,74 @@
 @keyframes zoomOut {
   from { transform: translate(-50%, -50%) scale(1); }
   to { transform: translate(-50%, -50%) scale(0.95); }
+}
+
+/* Solo: under a Solo page the portal container is a [data-day] surface (components/solo/surface.tsx) */
+:global([data-day]) .overlay {
+  background-color: var(--solo-scrim, color-mix(in srgb, var(--solo-ink) 45%, transparent));
+}
+
+:global([data-day]) .content {
+  --dialog-bg: var(--solo-dialog-bg, var(--solo-pop-bg, var(--solo-bg)));
+  --dialog-pad-top: 28px;
+  --dialog-pad-bottom: var(--solo-space-5);
+  --dialog-pad-inline: 28px;
+  --dialog-gap: 18px;
+  --dialog-close-top: 30px;
+  --dialog-close-right: 28px;
+
+  border: var(--solo-pop-width, 2px) solid var(--solo-pop-border, var(--solo-fg));
+  border-radius: var(--solo-dialog-radius, var(--solo-radius-xl));
+  color: var(--solo-fg);
+  box-shadow: var(--solo-pop-shadow, none);
+}
+
+@media (min-width: 640px) {
+  :global([data-day]) .content {
+    max-width: 520px;
+  }
+}
+
+:global([data-day]) .closeButton {
+  color: var(--solo-fg);
+}
+
+/* A2f: the bare 24 px × in its corner, centred where the 16 px one sat */
+:global([data-day]) .closeButton {
+  translate: calc((var(--solo-close-size, 1rem) - 1rem) / 2) calc((1rem - var(--solo-close-size, 1rem)) / 2);
+}
+
+:global([data-day]) .closeButton > span:first-child,
+:global([data-day]) .closeButton svg {
+  width: var(--solo-close-size, 1rem);
+  height: var(--solo-close-size, 1rem);
+}
+
+:global([data-day]) .closeButton:focus-visible {
+  box-shadow: none;
+  outline: 2px solid var(--solo-focus, var(--solo-fg));
+  outline-offset: 3px;
+}
+
+:global([data-day]) .header {
+  gap: var(--solo-space-2);
+  padding-right: var(--solo-space-6);
+  text-align: left;
+}
+
+:global([data-day]) .title {
+  font-family: inherit;
+  font-size: var(--solo-heading-dialog);
+  font-weight: var(--solo-title-weight, 600);
+  line-height: normal;
+}
+
+:global([data-day]) .description {
+  margin: 0;
+  color: var(--solo-fg-muted);
+  font-size: var(--solo-text-sub);
+}
+
+:global([data-day]) .footer {
+  gap: var(--solo-space-3);
 }

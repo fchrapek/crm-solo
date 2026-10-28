@@ -11,6 +11,7 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Integrations\Trello\TrelloService;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -36,6 +37,16 @@ final class TrelloSyncTest extends TestCase
             'email' => 'test@example.com',
             'owner' => true,
         ]);
+    }
+
+    public function test_the_scheduled_sync_does_not_overlap_itself_and_its_lock_expires(): void
+    {
+        $event = collect(app(Schedule::class)->events())
+            ->first(fn ($event): bool => str_contains((string) $event->command, 'trello:sync'));
+
+        $this->assertNotNull($event);
+        $this->assertTrue($event->withoutOverlapping);
+        $this->assertSame(10, $event->expiresAt);
     }
 
     public function test_project_syncs_with_tasks(): void
@@ -313,7 +324,7 @@ final class TrelloSyncTest extends TestCase
         ]);
 
         $this->actingAs($this->user)
-            ->get('/integrations')
+            ->get('/settings/integracje')
             ->assertInertia(fn (Assert $assert) => $assert
                 ->has('integrations', fn (Assert $assert) => $assert
                     ->each(fn (Assert $item) => $item->etc())

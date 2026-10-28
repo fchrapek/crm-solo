@@ -73,44 +73,44 @@
   }
 }
 
-.preview :global(p) {
+.markdown :global(p) {
   margin: 0 0 var(--spacing-2);
 }
 
-.preview :global(p:last-child) {
+.markdown :global(p:last-child) {
   margin-bottom: 0;
 }
 
-.preview :global(ul),
-.preview :global(ol) {
+.markdown :global(ul),
+.markdown :global(ol) {
   margin: 0 0 var(--spacing-2) var(--spacing-4);
   padding-left: var(--spacing-3);
 }
 
-.preview :global(ul) {
+.markdown :global(ul) {
   list-style: disc;
 }
 
-.preview :global(ol) {
+.markdown :global(ol) {
   list-style: decimal;
 }
 
-.preview :global(li) {
+.markdown :global(li) {
   margin: 2px 0;
 }
 
-.preview :global(li::marker) {
+.markdown :global(li::marker) {
   color: var(--color-muted-foreground);
 }
 
-.preview :global(code) {
+.markdown :global(code) {
   background-color: var(--color-muted);
   padding: 1px 4px;
   border-radius: var(--radius-sm);
   font-size: 0.9em;
 }
 
-.preview :global(pre) {
+.markdown :global(pre) {
   background-color: var(--color-muted);
   padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-sm);
@@ -118,30 +118,30 @@
   margin: 0 0 var(--spacing-2);
 }
 
-.preview :global(pre code) {
+.markdown :global(pre code) {
   padding: 0;
   background: none;
 }
 
-.preview :global(h1),
-.preview :global(h2),
-.preview :global(h3),
-.preview :global(h4) {
+.markdown :global(h1),
+.markdown :global(h2),
+.markdown :global(h3),
+.markdown :global(h4) {
   margin: var(--spacing-3) 0 var(--spacing-1);
   font-weight: 600;
 }
 
-.preview :global(h1) {
+.markdown :global(h1) {
   font-size: 1.25rem;
 }
-.preview :global(h2) {
+.markdown :global(h2) {
   font-size: 1.125rem;
 }
-.preview :global(h3) {
+.markdown :global(h3) {
   font-size: 1rem;
 }
 
-.preview :global(a) {
+.markdown :global(a) {
   color: var(--color-primary);
   text-decoration: underline;
 }
@@ -149,4 +149,37 @@
 .placeholder {
   color: var(--color-muted-foreground);
   font-style: italic;
+}
+
+/* Solo: quiet tabs, the selected one on the field colour, and the field box for both the textarea and the preview */
+.solo {
+  gap: var(--solo-space-2);
+}
+
+.solo .tabs {
+  gap: var(--solo-space-1);
+  padding: 0;
+  background: none;
+}
+
+.solo .tab {
+  padding: var(--solo-space-1) 10px;
+  border-radius: var(--solo-radius-sm);
+  color: var(--solo-fg-muted);
+  font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.solo .tab:hover {
+  color: var(--solo-fg);
+}
+
+.solo .tabActive {
+  background-color: var(--solo-field-bg);
+  color: var(--solo-field-fg);
+  box-shadow: none;
+}
+
+.soloPreview {
+  height: auto;
+  overflow-y: auto;
 }

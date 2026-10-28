@@ -20,6 +20,10 @@ final class ClientConfigData
      */
     public function for(Client $client): array
     {
+        if (! $client->account()->firstOrFail()->hasFeature('billing')) {
+            return ['id' => $client->id, 'name' => $client->name, 'ssh_config' => $client->ssh_config];
+        }
+
         $retainer = $client->activeRetainerOn(LocalCalendar::todayDate());
 
         return [

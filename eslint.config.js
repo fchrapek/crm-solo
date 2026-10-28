@@ -41,7 +41,7 @@ export default [
         // .worktrees holds full checkouts of this repo (agent sessions, parallel
         // task branches) — linting into them double-reports every file and picks
         // up paths the root ignores miss, e.g. <worktree>/scripts.
-        ignores: ['vendor', 'node_modules', 'public', 'bootstrap/ssr', 'tailwind.config.js', 'mcp-server', 'scripts', '.worktrees'],
+        ignores: ['vendor', 'node_modules', 'public', 'bootstrap/ssr', 'scripts', '.worktrees', '.claude/worktrees/**', 'storybook-static'],
     },
     prettier, // Turn off all rules that might conflict with Prettier
 ];

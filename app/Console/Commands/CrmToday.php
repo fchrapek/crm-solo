@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Console\Attributes\AccountScope;
-use App\Console\Commands\Concerns\AgentConsoleOutput;
+use App\Console\Commands\Concerns\PrintsAgentLists;
 use App\Services\Agent\TodayDigest;
 use Illuminate\Console\Command;
 
@@ -18,11 +18,11 @@ use Illuminate\Console\Command;
 #[AccountScope(AccountScope::ACTING)]
 final class CrmToday extends Command
 {
-    use AgentConsoleOutput;
+    use PrintsAgentLists;
 
     protected $signature = 'crm:today {--json : Machine-readable output}';
 
-    protected $description = 'Cross-client attention list: urgent/overdue tasks, month-close, hot leads, running timers';
+    protected $description = 'Cross-client attention list: urgent/overdue tasks, month-close, hot leads, failed text messages, running timers';
 
     public function handle(TodayDigest $digest): int
     {
@@ -64,12 +64,24 @@ final class CrmToday extends Command
             $lines[] = '  none';
         }
 
+        $lines[] = 'Failed text messages (crm message-resend <id> or message-cancel <id>):';
+        foreach ($data['failed_messages'] as $message) {
+            $lines[] = "  #{$message['id']} ".$this->literal($message['client'] ?? 'archived client').' '.$this->literal($message['template'] ?? 'no template').': '.$this->literal((string) $message['error']).($message['may_have_gone_out'] ? ' (may have gone out)' : '');
+        }
+        if ($data['failed_messages']->isEmpty()) {
+            $lines[] = '  none';
+        }
+
         $lines[] = 'Running time entries:';
         foreach ($running as $entry) {
             $lines[] = "  #{$entry['id']} ".$this->literal($entry['client']).' - '.$this->literal($entry['task'] ?? 'no task')." since {$entry['started']}";
         }
         if ($running->isEmpty()) {
             $lines[] = '  none';
+        }
+
+        foreach ($data['plan'] as $plan) {
+            array_push($lines, ...$this->planLines($plan));
         }
 
         $this->fenced($lines);

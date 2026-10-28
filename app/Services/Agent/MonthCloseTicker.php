@@ -77,28 +77,35 @@ final class MonthCloseTicker
 
         $run = $client->monthCloseRuns()->where('period', $period)->first();
 
-        if ($run === null) {
-            $template = MonthCloseRun::stepTemplateFor($client);
+        return $run === null ? $this->template($client, $period) : $this->checklist($run);
+    }
 
-            return [
-                'client_id' => $client->id,
-                'client' => $client->name,
-                'period' => $period,
-                'close_type' => $client->month_close_type,
-                'status' => 'not_started',
-                'resolved' => 0,
-                'total' => count($template),
-                'steps' => collect($template)
-                    ->map(fn (array $step, int $index): array => [
-                        'key' => $step['key'],
-                        'project' => $step['project'],
-                        'state' => MonthCloseStep::STATE_PENDING,
-                        'position' => $index,
-                    ])->all(),
-            ];
-        }
+    /**
+     * What starting the period would seed, in the checklist's shape.
+     *
+     * @return array<string, mixed>
+     */
+    public function template(Client $client, string $period): array
+    {
+        $template = MonthCloseRun::stepTemplateFor($client);
 
-        return $this->checklist($run);
+        return [
+            'client_id' => $client->id,
+            'client' => $client->name,
+            'period' => $period,
+            'close_type' => $client->month_close_type,
+            'status' => 'not_started',
+            'resolved' => 0,
+            'total' => count($template),
+            'steps' => collect($template)
+                ->map(fn (array $step, int $index): array => [
+                    'key' => $step['key'],
+                    'project' => $step['project'],
+                    'state' => MonthCloseStep::STATE_PENDING,
+                    'position' => $index,
+                    'note' => null,
+                ])->all(),
+        ];
     }
 
     /**
@@ -106,7 +113,7 @@ final class MonthCloseTicker
      */
     public function checklist(MonthCloseRun $run): array
     {
-        $run->load('steps.project:id,name', 'client:id,name');
+        $run->loadMissing('steps.project:id,name', 'client:id,name');
 
         return [
             'client_id' => $run->client_id,
@@ -121,6 +128,7 @@ final class MonthCloseTicker
                 'project' => $step->project?->name,
                 'state' => $step->state,
                 'position' => $step->position,
+                'note' => $step->note,
             ])->values()->all(),
         ];
     }
@@ -189,6 +197,10 @@ final class MonthCloseTicker
 
     private function assertInClose(Client $client): void
     {
+        if (! $client->account->hasFeature('billing')) {
+            throw AgentRefusal::featureOff('billing');
+        }
+
         if ($client->month_close_type === null) {
             throw new InvalidArgumentException("{$client->name} is not in monthly close (no month_close_type set).");
         }

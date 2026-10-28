@@ -16,7 +16,7 @@ use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[IsIdempotent]
-#[Description('Finish a task: stops its running timers, then a manual task moves to Done (agent-lane mirror, next instance spawned when it recurs) while a Trello card only records finished_at and keeps the lane Trello gives it. Safe to call twice.')]
+#[Description('Finish a task: stops its running timers, then a manual task moves to Done (next instance spawned when it recurs) while a Trello card only records finished_at and keeps the lane Trello gives it. Safe to call twice.')]
 final class TaskDoneTool extends Tool
 {
     use HandlesReferenceErrors;

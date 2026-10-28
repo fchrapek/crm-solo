@@ -38,8 +38,8 @@
 }
 
 .toggleGroup button[data-active='true'] {
-    background: var(--color-foreground);
-    color: var(--color-background);
+    background: var(--solo-ink-fill, var(--color-foreground));
+    color: var(--solo-ink-text, var(--color-background));
     font-weight: var(--font-weight-semibold);
 }
 

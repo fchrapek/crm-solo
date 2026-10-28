@@ -2,8 +2,13 @@ import * as SelectPrimitive from '@radix-ui/react-select';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import * as React from 'react';
 
+import { menuBoxClass, menuRowClass } from '@/components/solo/menu';
+import { useSoloPortalSurface } from '@/components/solo/surface';
 import { cn } from '@/lib/utils';
 import styles from './select.module.css';
+
+/** True inside a solo-menu panel, whose items are Menu / Row. */
+const InSoloMenu = React.createContext(false);
 
 function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
     return <SelectPrimitive.Root data-slot="select" {...props} />;
@@ -17,38 +22,28 @@ function SelectValue({ ...props }: React.ComponentProps<typeof SelectPrimitive.V
     return <SelectPrimitive.Value data-slot="select-value" {...props} />;
 }
 
+/** The Figma Select trigger pill, for a popover that opens like a select. */
+const soloPillTriggerClass = cn(styles.trigger, styles.soloPillTrigger);
+const soloPillArrowClass = styles.pillArrow;
+
 function SelectTrigger({
     className,
     children,
+    look = 'default',
     ...props
-}: React.ComponentProps<typeof SelectPrimitive.Trigger>) {
-    const ref = React.useRef<HTMLButtonElement>(null);
-
-    React.useEffect(() => {
-        const el = ref.current;
-        if (!el) return;
-
-        const updateTitle = () => {
-            const span = el.querySelector<HTMLSpanElement>('[data-slot="select-value"]');
-            el.title = span?.textContent ?? '';
-        };
-
-        updateTitle();
-        const observer = new MutationObserver(updateTitle);
-        observer.observe(el, { childList: true, subtree: true, characterData: true });
-        return () => observer.disconnect();
-    }, []);
-
+}: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
+    /** solo: the outlined field box of Solo dialogs (Figma Input / Outline); solo-pill: the filter pill (Figma Select trigger). */
+    look?: 'default' | 'solo' | 'solo-pill';
+}) {
     return (
         <SelectPrimitive.Trigger
-            ref={ref}
             data-slot="select-trigger"
-            className={cn(styles.trigger, className)}
+            className={cn(styles.trigger, look === 'solo' && styles.soloTrigger, look === 'solo-pill' && styles.soloPillTrigger, className)}
             {...props}
         >
             {children}
             <SelectPrimitive.Icon asChild>
-                <ChevronDownIcon className={styles.triggerIcon} />
+                {look === 'solo-pill' ? <span className={styles.pillArrow}>↓</span> : <ChevronDownIcon className={styles.triggerIcon} />}
             </SelectPrimitive.Icon>
         </SelectPrimitive.Trigger>
     );
@@ -58,13 +53,19 @@ function SelectContent({
     className,
     children,
     position = 'popper',
+    look = 'default',
     ...props
-}: React.ComponentProps<typeof SelectPrimitive.Content>) {
+}: React.ComponentProps<typeof SelectPrimitive.Content> & {
+    /** solo-menu: Figma Menu / Filter, a SectionHead in a SelectLabel over ruled rows with the count as meta. */
+    look?: 'default' | 'solo-menu';
+}) {
+    const container = useSoloPortalSurface();
+
     return (
-        <SelectPrimitive.Portal>
+        <SelectPrimitive.Portal container={container}>
             <SelectPrimitive.Content
                 data-slot="select-content"
-                className={cn(styles.content, className)}
+                className={cn(styles.content, look === 'solo-menu' && [styles.soloMenu, menuBoxClass], className)}
                 position={position}
                 {...props}
             >
@@ -72,7 +73,7 @@ function SelectContent({
                 <SelectPrimitive.Viewport
                     className={cn(styles.viewport, position === 'popper' && styles.viewportPopper)}
                 >
-                    {children}
+                    <InSoloMenu.Provider value={look === 'solo-menu'}>{children}</InSoloMenu.Provider>
                 </SelectPrimitive.Viewport>
                 <SelectScrollDownButton />
             </SelectPrimitive.Content>
@@ -93,12 +94,18 @@ function SelectLabel({ className, ...props }: React.ComponentProps<typeof Select
 function SelectItem({
     className,
     children,
+    meta,
     ...props
-}: React.ComponentProps<typeof SelectPrimitive.Item>) {
+}: React.ComponentProps<typeof SelectPrimitive.Item> & {
+    /** Shown after the label but kept out of the trigger's value, like a count. */
+    meta?: React.ReactNode;
+}) {
+    const inSoloMenu = React.useContext(InSoloMenu);
+
     return (
         <SelectPrimitive.Item
             data-slot="select-item"
-            className={cn(styles.item, className)}
+            className={cn(styles.item, inSoloMenu && menuRowClass, className)}
             {...props}
         >
             <span className={styles.itemIndicator}>
@@ -107,6 +114,7 @@ function SelectItem({
                 </SelectPrimitive.ItemIndicator>
             </span>
             <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+            {meta !== undefined && <span className={styles.itemMeta}>{meta}</span>}
         </SelectPrimitive.Item>
     );
 }
@@ -164,5 +172,4 @@ export {
     SelectScrollUpButton,
     SelectSeparator,
     SelectTrigger,
-    SelectValue,
-};
+    SelectValue, soloPillArrowClass, soloPillTriggerClass };

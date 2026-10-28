@@ -5,9 +5,18 @@ name: CI
 # commit that fails it. Each job runs one part of scripts/check.sh, the same
 # script `composer run check` runs locally; the audit rule is written there.
 
+# Both inputs default to the full gate; only pr.yml narrows them, and an
+# unset or unreadable value runs everything.
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      app_checks:
+        type: boolean
+        default: true
+      export_self_test:
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -23,6 +32,7 @@ env:
 jobs:
   php:
     name: PHP (pint, tests)
+    if: format('{0}', inputs.app_checks) != 'false'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -59,6 +69,7 @@ jobs:
 
   js:
     name: JS (types, ESLint, tokens, build)
+    if: format('{0}', inputs.app_checks) != 'false'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -112,6 +123,7 @@ jobs:
 
   audit:
     name: Dependency audits
+    if: format('{0}', inputs.app_checks) != 'false'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -137,7 +149,7 @@ jobs:
   # The export policy is export-ignored, so this job has nothing to run in the public snapshot.
   export-gate:
     name: Public export gate self-test
-    if: github.event.repository.private
+    if: github.event.repository.private && format('{0}', inputs.export_self_test) != 'false'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

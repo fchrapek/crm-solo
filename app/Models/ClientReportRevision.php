@@ -17,6 +17,8 @@ final class ClientReportRevision extends Model
 
     public const string REASON_REOPEN = 'reopen';
 
+    public const string REASON_SENT = 'sent';
+
     public const string REASON_OPENING_BALANCE = 'opening_balance';
 
     public $timestamps = false;
@@ -28,6 +30,8 @@ final class ClientReportRevision extends Model
         'reason',
         'body_markdown_before',
         'status_before',
+        'finalized_at_before',
+        'sent_at_before',
         'contracted_hours_before',
         'actual_hours_before',
         'opening_balance_hours_before',
@@ -54,6 +58,8 @@ final class ClientReportRevision extends Model
             'actual_hours_before' => 'decimal:2',
             'opening_balance_hours_before' => 'decimal:2',
             'rollover_cap_hours_before' => 'decimal:2',
+            'finalized_at_before' => 'datetime',
+            'sent_at_before' => 'datetime',
             'created_at' => 'datetime',
         ];
     }

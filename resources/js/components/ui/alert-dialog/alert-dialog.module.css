@@ -3,7 +3,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: var(--z-50);
+  z-index: var(--z-modal);
   background-color: color-mix(in srgb, var(--color-black) 50%, transparent);
 }
 
@@ -19,7 +19,7 @@
   position: fixed;
   top: 50%;
   left: 50%;
-  z-index: var(--z-50);
+  z-index: var(--z-modal);
   display: grid;
   width: 100%;
   max-width: calc(100% - 2rem);
@@ -116,4 +116,50 @@
   to {
     transform: translate(-50%, -50%) scale(0.95);
   }
+}
+
+/* Solo: under a Solo page the portal container is a [data-day] surface (components/solo/surface.tsx) */
+:global([data-day]) .overlay {
+  background-color: var(--solo-scrim, color-mix(in srgb, var(--solo-ink) 45%, transparent));
+}
+
+:global([data-day]) .content {
+  gap: 18px;
+  padding: 28px 28px var(--solo-space-5);
+  border: var(--solo-pop-width, 2px) solid var(--solo-pop-border, var(--solo-fg));
+  border-radius: var(--solo-dialog-radius, var(--solo-radius-xl));
+  background-color: var(--solo-dialog-bg, var(--solo-pop-bg, var(--solo-bg)));
+  color: var(--solo-fg);
+  box-shadow: var(--solo-pop-shadow, none);
+}
+
+@media (min-width: 640px) {
+  :global([data-day]) .content {
+    max-width: 520px;
+  }
+}
+
+:global([data-day]) .header {
+  gap: var(--solo-space-2);
+  text-align: left;
+}
+
+:global([data-day]) .title {
+  font-size: var(--solo-heading-dialog);
+  font-weight: var(--solo-title-weight, 600);
+}
+
+:global([data-day]) .description {
+  color: var(--solo-fg-muted);
+  font-size: var(--solo-text-sub);
+}
+
+:global([data-day]) .footer {
+  gap: var(--solo-space-3);
+}
+
+/* Ink's shape, so it pairs with the Outline cancel, in the accent */
+:global([data-day]) .soloDestructive {
+  background: var(--solo-accent);
+  color: var(--solo-on-accent);
 }

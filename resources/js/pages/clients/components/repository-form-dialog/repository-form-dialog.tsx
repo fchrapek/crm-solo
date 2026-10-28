@@ -173,7 +173,7 @@ export function RepositoryFormDialog({ open, onOpenChange, projectId, initial, o
                             {t('Cancel')}
                         </Button>
                         <Button type="submit" disabled={processing || !name.trim()}>
-                            {processing ? t('Saving...') : t('Save')}
+                            {processing ? t('Saving…') : t('Save')}
                         </Button>
                     </DialogFooter>
                 </form>

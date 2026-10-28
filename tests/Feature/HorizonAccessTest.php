@@ -31,4 +31,21 @@ final class HorizonAccessTest extends TestCase
         $this->assertFalse(Gate::forUser($member)->allows('viewHorizon'));
         $this->assertFalse(Gate::forUser($otherOwner)->allows('viewHorizon'));
     }
+
+    public function test_the_shared_demo_owner_is_refused_horizon_in_demo_mode(): void
+    {
+        config(['app.demo' => true]);
+        $demoAccount = Account::factory()->create(['is_test' => true]);
+        $demoOwner = User::factory()->for($demoAccount)->create(['email' => User::DEMO_EMAIL, 'owner' => true]);
+
+        $this->assertFalse(Gate::forUser($demoOwner)->allows('viewHorizon'));
+        $this->actingAs($demoOwner)->get('/horizon')->assertForbidden();
+    }
+
+    public function test_the_operator_owner_reaches_the_horizon_dashboard_outside_demo_mode(): void
+    {
+        $owner = User::factory()->for(Account::factory())->create(['owner' => true]);
+
+        $this->actingAs($owner)->get('/horizon')->assertOk();
+    }
 }

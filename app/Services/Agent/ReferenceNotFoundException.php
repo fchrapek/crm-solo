@@ -24,7 +24,7 @@ final class ReferenceNotFoundException extends ReferenceException
             'entity' => $this->entity,
             'needle' => $this->needle,
             'message' => $this->getMessage(),
-            ...($this->nearMisses !== [] ? ['near_misses' => $this->nearMisses] : []),
+            ...($this->nearMisses !== [] ? ['near_misses' => $this->nearMisses, 'untrusted' => ['near_misses']] : []),
         ];
     }
 

@@ -160,18 +160,18 @@ final class DisplayTimezoneBoundariesTest extends TestCase
         $this->assertTrue($card->fresh()->isOverdue());
     }
 
-    public function test_the_project_board_carries_the_server_overdue_flag(): void
+    public function test_the_project_page_carries_each_tasks_local_due_day(): void
     {
         config(['app.display_timezone' => 'Europe/Warsaw']);
         $this->travelTo(Carbon::parse('2026-11-06 12:00:00', 'Europe/Warsaw')->utc());
         $user = User::factory()->create(['account_id' => $this->account->id, 'owner' => true]);
-        Task::create(['project_id' => $this->project->id, 'name' => 'Late', 'due_date' => '2026-11-05']);
-        Task::create(['project_id' => $this->project->id, 'name' => 'Due today', 'due_date' => '2026-11-06']);
+        Task::create(['project_id' => $this->project->id, 'name' => 'Late', 'due_date' => '2026-11-05', 'list_name' => 'To-Do']);
+        Task::create(['project_id' => $this->project->id, 'name' => 'Due today', 'due_date' => '2026-11-06', 'list_name' => 'To-Do']);
 
         $this->actingAs($user)
             ->get("/clients/{$this->client->id}/projects/{$this->project->id}")
             ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
-                ->where('tasks', fn ($tasks) => collect($tasks)->pluck('is_overdue', 'name')->all() === ['Late' => true, 'Due today' => false]));
+                ->where('tasks.lanes', fn ($lanes) => collect($lanes)->flatMap(fn ($lane) => $lane['rows'])->pluck('due', 'name')->all() === ['Late' => '2026-11-05', 'Due today' => '2026-11-06']));
     }
 
     #[DataProvider('boundaries')]

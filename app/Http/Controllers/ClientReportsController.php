@@ -7,16 +7,20 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\ClientReport;
 use App\Models\ClientReportRevision;
-use App\Services\Humanizer;
-use App\Services\Reports\BillingSummary;
 use App\Services\Reports\ReportComposerRegistry;
-use App\Services\Reports\ReportDataAggregator;
+use App\Services\Reports\ReportStatusTransition;
+use App\Services\Reports\ReportTransitionResult;
+use App\Services\Reports\ReportWriter;
+use App\Services\Reports\ReportWriteResult;
+use App\Support\LegalName;
+use App\Support\LocalCalendar;
+use Closure;
+use DateTimeImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -24,62 +28,49 @@ use Inertia\Response;
 final class ClientReportsController extends Controller
 {
     public function __construct(
-        private readonly ReportDataAggregator $aggregator,
         private readonly ReportComposerRegistry $composers,
+        private readonly ReportStatusTransition $transitions,
+        private readonly ReportWriter $writer,
     ) {}
 
     public function store(Request $request, Client $client): RedirectResponse
     {
-        // Weekly reports are refused: the retainer pool is monthly, and a week would be credited all of it.
+        // Weekly and partial reports are refused: the retainer pool is monthly, and a shorter period would be credited all of it.
         $data = $request->validate([
             'period_type' => ['required', 'in:month'],
-            'period_start' => ['required', 'date'],
-            'period_end' => ['required', 'date', 'after_or_equal:period_start'],
+            'period_start' => ['bail', 'required', 'string', 'date_format:Y-m-d', function (string $attribute, mixed $value, Closure $fail): void {
+                if (self::isDate($value) && Carbon::parse($value)->day !== 1) {
+                    $fail(__('A report starts on the first day of a month.'));
+                }
+            }],
+            'period_end' => ['bail', 'required', 'string', 'date_format:Y-m-d', function (string $attribute, mixed $value, Closure $fail) use ($request): void {
+                $start = $request->input('period_start');
+                if (! self::isDate($start) || ! self::isDate($value)) {
+                    return;
+                }
+                if ($value !== Carbon::parse($start)->endOfMonth()->toDateString()) {
+                    $fail(__('A report ends on the last day of the month it starts in.'));
+                }
+            }],
             'composer_key' => ['nullable', 'string', 'max:64'],
         ], [
             'period_type.in' => __('Reports are monthly: the retainer hours are a monthly pool.'),
         ]);
 
-        $start = Carbon::parse($data['period_start']);
-        $end = Carbon::parse($data['period_end']);
-
-        $composer = isset($data['composer_key'])
-            ? $this->composers->get($data['composer_key'])
-            : $this->composers->default();
-
-        $context = $this->aggregator->aggregate(
+        $result = $this->writer->generate(
             $client,
-            $start,
-            $end,
-            $data['period_type'],
+            Carbon::parse($data['period_start']),
+            Carbon::parse($data['period_end']),
             App::getLocale(),
+            $data['composer_key'] ?? null,
         );
 
-        $body = $composer->compose($context);
-
-        $report = $client->reports()->create([
-            'account_id' => $client->account_id,
-            'period_type' => $data['period_type'],
-            'period_start' => $start->toDateString(),
-            'period_end' => $end->toDateString(),
-            'contracted_hours' => $context->contractedHours(),
-            'actual_hours' => $context->actualHours,
-            // Carried in from the previous period, and the ceiling in force when
-            // the report was generated — both snapshotted so a later retainer
-            // edit never rewrites what this period promised.
-            'opening_balance_hours' => $context->openingBalanceHours,
-            'rollover_cap_hours' => $context->rolloverCapHours,
-            'currency' => $context->currency(),
-            'composer_key' => $composer->key(),
-            'body_markdown' => $body,
-            'status' => ClientReport::STATUS_DRAFT,
-            'generated_at' => now(),
-        ]);
-
-        return Redirect::route('client-reports.edit', [
-            'client' => $client->id,
-            'report' => $report->id,
-        ])->with('success', __('Draft report generated.'));
+        return match ($result->outcome) {
+            ReportWriteResult::EXISTS => $this->reportExists($client, $result->report),
+            ReportWriteResult::REFUSED => Redirect::back()->with('error', $result->message),
+            default => Redirect::route('client-reports.edit', ['client' => $client->id, 'report' => $result->report->id])
+                ->with('success', $result->message),
+        };
     }
 
     public function edit(Client $client, ClientReport $report): Response
@@ -94,11 +85,14 @@ final class ClientReportsController extends Controller
                 'id' => $r->id,
                 'reason' => $r->reason,
                 'status_before' => $r->status_before,
+                'finalized_at_before' => $r->finalized_at_before?->toIso8601String(),
+                'sent_at_before' => $r->sent_at_before?->toIso8601String(),
                 'composer_key_before' => $r->composer_key_before,
                 'body_markdown_before' => $r->body_markdown_before,
                 'opening_balance_hours_before' => $r->opening_balance_hours_before !== null ? (float) $r->opening_balance_hours_before : null,
                 'rollover_cap_hours_before' => $r->rollover_cap_hours_before !== null ? (float) $r->rollover_cap_hours_before : null,
                 'created_at' => $r->created_at->toIso8601String(),
+                'created_on' => $r->created_at->copy()->setTimezone(LocalCalendar::timezone())->toDateString(),
                 'user' => $r->user ? [
                     'id' => $r->user->id,
                     'name' => mb_trim($r->user->first_name.' '.$r->user->last_name),
@@ -109,6 +103,7 @@ final class ClientReportsController extends Controller
             'client' => [
                 'id' => $client->id,
                 'name' => $client->name,
+                'short_name' => LegalName::short($client->name),
             ],
             'report' => $this->serialize($report),
             'composers' => collect($this->composers->all())->map(fn ($composer) => [
@@ -128,22 +123,7 @@ final class ClientReportsController extends Controller
             'version' => ['required', 'string'],
         ]);
 
-        return DB::transaction(function () use ($report, $data): RedirectResponse {
-            $report = $this->lockFresh($report);
-            if ($report->version() !== $data['version']) {
-                return $this->staleEdit();
-            }
-
-            // No-op when the body is unchanged — avoid spurious revision rows.
-            if (Humanizer::clean($data['body_markdown']) === $report->body_markdown) {
-                return Redirect::back();
-            }
-
-            $report->recordRevision(ClientReportRevision::REASON_UPDATE, Auth::user());
-            $report->update(['body_markdown' => $data['body_markdown']]);
-
-            return Redirect::back()->with('success', __('Report saved.'));
-        });
+        return $this->written($this->writer->updateBody($report, $data['body_markdown'], $data['version'], Auth::user()));
     }
 
     /**
@@ -163,45 +143,13 @@ final class ClientReportsController extends Controller
             'version' => ['required_with:body_markdown', 'nullable', 'string'],
         ]);
 
-        return DB::transaction(function () use ($report, $data): RedirectResponse {
-            $report = $this->lockFresh($report);
-            if (isset($data['version']) && $report->version() !== $data['version']) {
-                return $this->staleEdit();
-            }
-
-            $body = (string) ($data['body_markdown'] ?? $report->body_markdown);
-            $opening = isset($data['opening_balance_hours']) ? (float) $data['opening_balance_hours'] : null;
-
-            // A report with no retainer prints no balance, so there is nothing to re-render.
-            $summary = $report->contracted_hours === null
-                ? ['status' => BillingSummary::REWRITTEN, 'body' => $body]
-                : BillingSummary::replaceIn(
-                    $body,
-                    (float) $opening,
-                    (float) $report->contracted_hours,
-                    (float) $report->actual_hours,
-                    $report->rollover_cap_hours !== null ? (float) $report->rollover_cap_hours : null,
-                    (string) ($report->period_type ?? 'month'),
-                );
-            $newBody = Humanizer::clean($summary['body']);
-
-            $current = $report->opening_balance_hours !== null ? (float) $report->opening_balance_hours : null;
-            if ($opening === $current && $newBody === $report->body_markdown) {
-                return Redirect::back();
-            }
-
-            $report->recordRevision(ClientReportRevision::REASON_OPENING_BALANCE, Auth::user());
-            $report->update([
-                'opening_balance_hours' => $opening,
-                'body_markdown' => $newBody,
-            ]);
-
-            return Redirect::back()->with('success', match ($summary['status']) {
-                BillingSummary::MISSING => __('Opening balance saved. The report has no billing summary, so its text was left as is.'),
-                BillingSummary::AMBIGUOUS => __('Opening balance saved. The report has more than one billing summary, so its text was left as is: check the balances in it by hand.'),
-                default => __('Opening balance saved.'),
-            });
-        });
+        return $this->written($this->writer->updateOpening(
+            $report,
+            isset($data['opening_balance_hours']) ? (float) $data['opening_balance_hours'] : null,
+            isset($data['body_markdown']) ? (string) $data['body_markdown'] : null,
+            $data['version'] ?? null,
+            Auth::user(),
+        ));
     }
 
     public function regenerate(Request $request, Client $client, ClientReport $report): RedirectResponse
@@ -213,115 +161,78 @@ final class ClientReportsController extends Controller
             'recalculate_opening_balance' => ['sometimes', 'boolean'],
         ]);
 
-        // The saved opening balance is the owner's figure and survives a regenerate;
-        // carrying it in again from the previous report is an explicit choice.
-        $opening = $report->opening_balance_hours !== null && ! $request->boolean('recalculate_opening_balance')
-            ? (float) $report->opening_balance_hours
-            : null;
-
-        // A hand-written report carries a key no composer backs ('manual'), so
-        // fall back to the default rather than 500 on regenerate.
-        $composer = isset($data['composer_key'])
-            ? $this->composers->get($data['composer_key'])
-            : $this->composers->getOrDefault($report->composer_key);
-
-        // Composing can take seconds (an AI call), so the write is refused if the
-        // report changed in the meantime rather than reverting that change.
-        $version = $report->version();
-
-        $context = $this->aggregator->aggregate(
-            $client,
-            $report->period_start,
-            $report->period_end,
-            $report->period_type,
+        return $this->written($this->writer->regenerate(
+            $report,
             App::getLocale(),
-            $opening,
-        );
-
-        $body = $composer->compose($context);
-
-        return DB::transaction(function () use ($report, $composer, $body, $context, $version): RedirectResponse {
-            $report = $this->lockFresh($report);
-            if ($report->version() !== $version) {
-                return Redirect::back()->with('error', __('The report changed while it was being regenerated, so nothing was replaced. Reload the page and regenerate again.'));
-            }
-
-            $report->recordRevision(ClientReportRevision::REASON_REGENERATE, Auth::user());
-            $report->update([
-                'composer_key' => $composer->key(),
-                'body_markdown' => $body,
-                'contracted_hours' => $context->contractedHours(),
-                'actual_hours' => $context->actualHours,
-                'opening_balance_hours' => $context->openingBalanceHours,
-                'rollover_cap_hours' => $context->rolloverCapHours,
-                'currency' => $context->currency(),
-                'generated_at' => now(),
-            ]);
-
-            return Redirect::back()->with('success', __('Report regenerated.'));
-        });
+            $data['composer_key'] ?? null,
+            $request->boolean('recalculate_opening_balance'),
+            Auth::user(),
+        ));
     }
 
     public function finalize(Client $client, ClientReport $report): RedirectResponse
     {
         $this->authorizeReport($client, $report);
 
-        DB::transaction(function () use ($report): void {
-            $report = $this->lockFresh($report);
-            if ($report->status === ClientReport::STATUS_FINALIZED) {
-                return;
-            }
+        return $this->transitioned($this->transitions->finalize($report, Auth::user()));
+    }
 
-            $report->recordRevision(ClientReportRevision::REASON_FINALIZE, Auth::user());
-            $report->update([
-                'status' => ClientReport::STATUS_FINALIZED,
-                'finalized_at' => now(),
-            ]);
-        });
+    public function markSent(Client $client, ClientReport $report): RedirectResponse
+    {
+        $this->authorizeReport($client, $report);
 
-        return Redirect::back()->with('success', __('Report finalized.'));
+        return $this->transitioned($this->transitions->markSent($report, Auth::user()));
     }
 
     public function reopen(Client $client, ClientReport $report): RedirectResponse
     {
         $this->authorizeReport($client, $report);
 
-        DB::transaction(function () use ($report): void {
-            $report = $this->lockFresh($report);
-            if ($report->status === ClientReport::STATUS_DRAFT) {
-                return;
-            }
-
-            $report->recordRevision(ClientReportRevision::REASON_REOPEN, Auth::user());
-            $report->update([
-                'status' => ClientReport::STATUS_DRAFT,
-                'finalized_at' => null,
-                'sent_at' => null,
-            ]);
-        });
-
-        return Redirect::back()->with('success', __('Report reopened as draft.'));
+        return $this->transitioned($this->transitions->reopen($report, Auth::user()));
     }
 
     public function destroy(Client $client, ClientReport $report): RedirectResponse
     {
         $this->authorizeReport($client, $report);
 
-        DB::transaction(fn () => $report->delete());
+        $result = $this->writer->destroy($report);
+        if ($result->isRefused()) {
+            return Redirect::back()->with('error', $result->message);
+        }
 
-        return Redirect::route('clients.edit', $client)
-            ->with('success', __('Report deleted.'));
+        return Redirect::route('clients.show', [$client, 'rozliczenia'])->with('success', $result->message);
     }
 
-    /** The report row, locked and re-read, so a revision snapshots what is stored now. */
-    private function lockFresh(ClientReport $report): ClientReport
+    private static function isDate(mixed $value): bool
     {
-        return ClientReport::query()->lockForUpdate()->findOrFail($report->id);
+        // The parser throws on a null byte instead of failing, so such input is refused before it.
+        if (! is_string($value) || str_contains($value, "\0")) {
+            return false;
+        }
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+
+        return $date !== false && $date->format('Y-m-d') === $value;
     }
 
-    private function staleEdit(): RedirectResponse
+    /** The month already has a report: open it, where Regenerate refreshes its figures, instead of writing a second one. */
+    private function reportExists(Client $client, ClientReport $existing): RedirectResponse
     {
-        return Redirect::back()->with('error', __('The report changed since you opened it, so your edit was not saved. Copy your text, reload the page and apply it again.'));
+        return Redirect::route('client-reports.edit', ['client' => $client->id, 'report' => $existing->id])
+            ->with('error', __('This month already has a report, so no second one was generated. Regenerate this one if its figures are out of date.'));
+    }
+
+    private function transitioned(ReportTransitionResult $result): RedirectResponse
+    {
+        return Redirect::back()->with($result->refused() ? 'error' : 'success', $result->message);
+    }
+
+    private function written(ReportWriteResult $result): RedirectResponse
+    {
+        if ($result->message === '') {
+            return Redirect::back();
+        }
+
+        return Redirect::back()->with($result->isRefused() ? 'error' : 'success', $result->message);
     }
 
     private function authorizeReport(Client $client, ClientReport $report): void
@@ -356,6 +267,10 @@ final class ClientReportsController extends Controller
             'status' => $report->status,
             'generated_at' => $report->generated_at?->toIso8601String(),
             'finalized_at' => $report->finalized_at?->toIso8601String(),
+            'sent_at' => $report->sent_at?->toIso8601String(),
+            'sent_on' => $report->sentOn(),
+            'finalized_on' => $report->finalized_at?->copy()->setTimezone(LocalCalendar::timezone())->toDateString(),
+            'generated_on' => $report->generated_at?->copy()->setTimezone(LocalCalendar::timezone())->toDateString(),
         ];
     }
 }

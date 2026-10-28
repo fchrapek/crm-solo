@@ -18,6 +18,9 @@ return [
     // Lifetime in days of a new token unless agent-tokens:issue says otherwise.
     'token_days' => (int) env('AGENT_TOKEN_DAYS', 90),
 
+    // The account the local CLI and stdio MCP act in; required once a second account exists.
+    'local_account' => env('AGENT_LOCAL_ACCOUNT') !== null ? (int) env('AGENT_LOCAL_ACCOUNT') : null,
+
     // The largest verb output returned in one response, in bytes.
     'output_cap' => 1_000_000,
 ];

@@ -14,8 +14,7 @@ use Illuminate\Console\Command;
 /**
  * Agent verb: stop a running timer. With one open timer no argument is
  * needed; with several, the id (or a task-name fragment) picks one.
- * Closing sets end_time + duration, the same closing contract the
- * terminal-session launcher uses.
+ * Closing sets end_time + duration through TimeEntry::stopNow().
  */
 #[AccountScope(AccountScope::ACTING)]
 final class CrmTimerStop extends Command

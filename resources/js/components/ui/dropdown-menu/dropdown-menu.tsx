@@ -2,6 +2,8 @@ import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react';
 import * as React from 'react';
 
+import { menuBoxClass, menuRowClass } from '@/components/solo/menu';
+import { useInSoloSurface, useSoloPortalSurface } from '@/components/solo/surface';
 import { cn } from '@/lib/utils';
 import styles from './dropdown-menu.module.css';
 
@@ -10,24 +12,26 @@ function DropdownMenu({ ...props }: React.ComponentProps<typeof DropdownMenuPrim
 }
 
 function DropdownMenuPortal({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Portal>) {
-    return <DropdownMenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />;
+    const container = useSoloPortalSurface();
+
+    return <DropdownMenuPrimitive.Portal data-slot="dropdown-menu-portal" container={container} {...props} />;
 }
 
 function DropdownMenuTrigger({ ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Trigger>) {
     return <DropdownMenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />;
 }
 
-function DropdownMenuContent({
-    className,
-    sideOffset = 4,
-    ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+/** On a Solo screen every menu is Figma's Menu / Actions, with Menu / Row items. */
+function DropdownMenuContent({ className, sideOffset = 4, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+    const container = useSoloPortalSurface();
+    const inSolo = useInSoloSurface();
+
     return (
-        <DropdownMenuPrimitive.Portal>
+        <DropdownMenuPrimitive.Portal container={container}>
             <DropdownMenuPrimitive.Content
                 data-slot="dropdown-menu-content"
                 sideOffset={sideOffset}
-                className={cn(styles.content, className)}
+                className={cn(styles.content, inSolo && menuBoxClass, className)}
                 {...props}
             />
         </DropdownMenuPrimitive.Portal>
@@ -47,12 +51,14 @@ function DropdownMenuItem({
     inset?: boolean;
     variant?: 'default' | 'destructive';
 }) {
+    const inSolo = useInSoloSurface();
+
     return (
         <DropdownMenuPrimitive.Item
             data-slot="dropdown-menu-item"
             data-inset={inset}
             data-variant={variant}
-            className={cn(styles.item, variant === 'destructive' && styles.itemDestructive, className)}
+            className={cn(styles.item, inSolo && menuRowClass, variant === 'destructive' && styles.itemDestructive, className)}
             {...props}
         />
     );

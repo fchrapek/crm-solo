@@ -1,0 +1,528 @@
+/* Solo mobile primitives (Figma Components, section Mobile 323:149). Phone first; min-width queries only. */
+
+/* Mobile / Icon button */
+.iconButton {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: var(--solo-touch);
+    height: var(--solo-touch);
+    padding: 0;
+    border: 1px solid var(--solo-icon-ring, var(--solo-rule-strong));
+    border-radius: var(--solo-radius-full);
+    background: var(--solo-soft, none);
+    color: var(--solo-fg);
+    cursor: pointer;
+}
+
+/* Figma: Icon button / More, Size=Desktop: the round 32 px ••• beside desktop actions */
+.iconButton[data-size='sm'] {
+    width: 32px;
+    height: 32px;
+}
+
+/* A close or remove × is the bare glyph, as in the dialogs: no ring around it. */
+.iconButton[data-icon='close'] {
+    border-color: transparent;
+    background: none;
+    color: var(--solo-fg-muted);
+}
+
+.iconButton[data-icon='close']:hover {
+    color: var(--solo-fg);
+}
+
+.iconButton:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 2px;
+}
+
+/* Mobile / Tab bar: phones only, the masthead takes over from 768 px */
+.tabBar {
+    view-transition-name: solo-tab-bar;
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: var(--z-banner);
+    display: flex;
+    padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+    border-top: 1px solid var(--solo-rule);
+    background: var(--solo-header-bg, var(--solo-block, var(--solo-bg)));
+    color: var(--solo-fg);
+}
+
+.tab {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--solo-space-1);
+    min-width: 0;
+    height: var(--solo-tab-bar-height);
+    padding: var(--solo-space-3) 0 0;
+    border: 0;
+    background: none;
+    color: var(--solo-fg-muted);
+    font: 500 var(--solo-mobile-tab-bar) / 12px var(--solo-font-text);
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.tab svg {
+    flex: none;
+}
+
+/* the filled active glyph is Paper's; Lucide marks the active tab by colour and weight only */
+.tab :global(svg.lucide) {
+    fill: none;
+}
+
+.tab[aria-current='page'] {
+    color: var(--solo-fg);
+    font-weight: 700;
+}
+
+.tab:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: -3px;
+    border-radius: var(--solo-radius-md);
+}
+
+@media (min-width: 768px) {
+    .tabBar {
+        display: none;
+    }
+}
+
+/* Mobile / Bottom sheet, inside ui/sheet's bottom side (its Solo look lives in sheet.module.css) */
+.sheetForm {
+    display: contents;
+}
+
+.sheetHeader {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--solo-space-2);
+    min-height: 52px;
+}
+
+.sheetTitle {
+    flex: 1 1 0;
+    min-width: 0;
+    margin: 0;
+    color: var(--solo-fg);
+    font: 600 var(--solo-mobile-sheet-title) / 22px var(--solo-font-text);
+}
+
+.sheetHeader:not([data-action='close']) .sheetTitle {
+    text-align: center;
+}
+
+.sheetHeader .sheetSpacer,
+.sheetHeader .sheetClear,
+.sheetHeader .sheetDone {
+    flex: none;
+    width: 72px;
+}
+
+.sheetHeader .sheetClear {
+    justify-content: flex-start;
+    color: var(--solo-fg-muted);
+}
+
+.sheetHeader .sheetDone {
+    justify-content: flex-end;
+}
+
+/* Figma A2f / Bottom sheet, Header=Cancel · Save: the pills hug their labels and the title stays centred between them */
+.sheetHeader[data-action='save'] {
+    display: grid;
+    grid-template-columns: minmax(max-content, 1fr) minmax(0, max-content) minmax(max-content, 1fr);
+    gap: var(--solo-space-3);
+    padding-top: var(--solo-space-3);
+}
+
+.sheetHeader[data-action='save'] .sheetTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sheetHeader .sheetCancel {
+    justify-self: start;
+    min-height: 0;
+}
+
+.sheetHeader .sheetSave {
+    justify-self: end;
+}
+
+.sheetHeader[data-action='save'] ~ .sheetBody .sheetDescription {
+    text-align: center;
+}
+
+.sheetBody {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding-top: var(--solo-space-1);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.sheetDescription {
+    margin: 0 0 var(--solo-space-2);
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+/*
+ * Mobile / Sheet actions: content-sized buttons side by side while they share a line, otherwise the
+ * fit-content row wraps to the full width and each button fills its own line, the primary (the last child) on top.
+ */
+.sheetActions {
+    display: flex;
+    flex: none;
+    flex-wrap: wrap-reverse;
+    justify-content: flex-end;
+    gap: var(--solo-space-3);
+    width: fit-content;
+    max-width: 100%;
+    margin-left: auto;
+    padding-top: var(--solo-space-4);
+}
+
+.sheetActions > * {
+    flex: 1 0 auto;
+}
+
+/* Mobile / Text field (Select): the field opens a sheet of options */
+.selectField {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--solo-space-2);
+    text-align: left;
+    cursor: pointer;
+}
+
+.selectValue {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.selectOptions {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.selectOptions [aria-pressed='true'] {
+    color: var(--solo-link, var(--solo-accent));
+}
+
+.sheetFields {
+    display: flex;
+    flex-direction: column;
+    gap: var(--solo-space-4);
+    padding-top: var(--solo-space-2);
+}
+
+/* Mobile / Action menu: the 12 % page dim behind the menu, phones only */
+.menuScrim {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    background: color-mix(in srgb, var(--solo-ink) 12%, transparent);
+}
+
+@media (min-width: 768px) {
+    .menuScrim {
+        display: none;
+    }
+}
+
+/* Mobile / Floating button */
+.fab {
+    position: fixed;
+    right: calc(var(--solo-space-4) + env(safe-area-inset-right, 0px));
+    bottom: var(--solo-tab-bar-clearance);
+    z-index: var(--z-banner);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--solo-fab-height);
+    padding: 0 20px;
+    border: 0;
+    border-radius: var(--solo-radius-full);
+    background: var(--solo-primary, var(--solo-fg));
+    color: var(--solo-on-primary, var(--solo-bg));
+    font: 600 var(--solo-text-action) / 1.35 var(--solo-font-text);
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.fab:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: 3px;
+}
+
+@media (min-width: 768px) {
+    .fab {
+        display: none;
+    }
+}
+
+/* Mobile / List row */
+.listRow {
+    display: flex;
+    align-items: center;
+    gap: var(--solo-space-3);
+    width: 100%;
+    min-height: 56px;
+    padding: var(--solo-space-3) var(--solo-row-inset, 0);
+    border: 0;
+    border-bottom: 1px solid var(--solo-rule);
+    background: none;
+    color: var(--solo-fg);
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+div.listRow {
+    cursor: default;
+}
+
+a.listRow:hover,
+button.listRow:hover {
+    border-radius: var(--solo-row-radius, 0);
+    border-bottom-color: var(--solo-hover-rule, var(--solo-rule));
+    background: var(--solo-hover, none);
+}
+
+:last-child > .listRow:only-child {
+    border-bottom-color: var(--solo-rule-end, var(--solo-rule));
+}
+
+.listRow:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: -2px;
+}
+
+.listLeading {
+    display: flex;
+    flex: none;
+}
+
+.listText {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: var(--solo-list-flow, row);
+    align-items: var(--solo-list-align, center);
+    gap: var(--solo-list-gap, var(--solo-space-3));
+    min-width: 0;
+}
+
+.listRow[data-size='large'] .listText {
+    gap: var(--solo-list-gap-large, var(--solo-space-3));
+}
+
+.listText[data-linked] {
+    position: relative;
+    align-self: stretch;
+    justify-content: center;
+}
+
+.listTitleLink {
+    color: inherit;
+    text-decoration: none;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 4px;
+}
+
+.listTitleLink::after {
+    content: '';
+    position: absolute;
+    inset: calc(-1 * var(--solo-space-3)) calc(-1 * var(--solo-space-2));
+}
+
+.listTitleLink:hover {
+    text-decoration: underline;
+}
+
+.listTitleLink:focus-visible {
+    outline: none;
+}
+
+.listTitleLink:focus-visible::after {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: -2px;
+}
+
+.listTitleRow {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: var(--solo-list-title-min, 45%);
+    align-items: center;
+    gap: var(--solo-space-2);
+}
+
+.listTitle {
+    min-width: 0;
+    font: 500 var(--solo-text-cell) / normal var(--solo-font-text);
+    overflow-wrap: anywhere;
+}
+
+.listRow[data-size='large'] .listTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: var(--solo-list-wrap, nowrap);
+}
+
+.listRow[data-size='large'] .listTitle {
+    font: 600 var(--solo-mobile-body) / 21px var(--solo-font-text);
+}
+
+.listPin {
+    flex: none;
+}
+
+.listMark {
+    flex: none;
+    color: var(--solo-accent);
+    font: 700 var(--solo-text-micro) / 13px var(--solo-font-text);
+    letter-spacing: var(--solo-label-tracking, 0.08em);
+    text-transform: var(--solo-label-case, uppercase);
+    white-space: nowrap;
+}
+
+.listSub {
+    display: flex;
+    flex: 0 1 auto;
+    flex-wrap: var(--solo-list-sub-wrap, nowrap);
+    align-items: center;
+    min-width: 0;
+    max-width: var(--solo-list-sub-max, 45%);
+    margin-left: var(--solo-list-sub-push, auto);
+    white-space: var(--solo-list-wrap, nowrap);
+    gap: 2px var(--solo-space-2);
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.listRow[data-size='large'] .listSub {
+    font: 400 var(--solo-text-sub) / normal var(--solo-font-text);
+}
+
+.listSubText {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.listAgent {
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--solo-agent);
+    font: 400 var(--solo-mono-row) / 1.4 var(--solo-font-mono);
+    white-space: nowrap;
+}
+
+.listAgentText {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.listAgentMark {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--solo-radius-xs);
+    background: currentColor;
+}
+
+.listTrailing {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--solo-space-2);
+}
+
+.listValue {
+    font: 500 var(--solo-text-cell) / normal var(--solo-font-text);
+    white-space: nowrap;
+}
+
+/* Mobile / Icon / Checkbox */
+.check {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: var(--solo-touch);
+    height: var(--solo-touch);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--solo-on-primary, var(--solo-bg));
+    cursor: pointer;
+}
+
+.check:disabled {
+    cursor: default;
+}
+
+.checkBox {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: var(--solo-check-width, 1.6px) solid var(--solo-check-border, var(--solo-fg));
+    border-radius: var(--solo-radius-sm);
+    background: var(--solo-control-bg, none);
+}
+
+.check[data-checked] .checkBox {
+    border-color: var(--solo-primary, var(--solo-fg));
+    background: var(--solo-primary, var(--solo-fg));
+}
+
+.check:focus-visible {
+    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline-offset: -4px;
+    border-radius: var(--solo-radius-md);
+}
+
+/* Responsive section: inline from 768 px, a sheet trigger row below */
+.sectionInline {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .sectionInline {
+        display: block;
+    }
+
+    .sectionPhone {
+        display: none;
+    }
+}
+
+/* Figma: Dialog Ink button "Label  ⌘↵"; the form sends on ⌘↵, so the primary button names the keys */
+.dialogFooter button[type='submit']::after {
+    content: '\00a0\00a0⌘↵' / '';
+}

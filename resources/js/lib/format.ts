@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { hoursTerms } from './hours-text';
 
 /**
  * Single source of formatting truth for money, hours, and per-period suffixes.
@@ -10,8 +11,8 @@ import { useTranslation } from 'react-i18next';
  *
  * Use the `useFormatters()` hook inside React components. The hook is bound
  * to the current i18n language so the same call site re-renders correctly
- * on locale change. The pure `formatMoney` / `formatHours` exports are
- * also available for non-React code, but most UI should use the hook.
+ * on locale change. The pure `formatMoney` export is also available for
+ * non-React code, but most UI should use the hook.
  */
 
 export type Currency = 'PLN' | 'EUR' | 'USD' | 'GBP';
@@ -25,13 +26,6 @@ export function formatMoney(amount: number, currency: Currency, locale = 'en-US'
     }).format(amount);
 }
 
-export function formatHours(hours: number): string {
-    if (Number.isInteger(hours)) {
-        return `${hours}h`;
-    }
-    return `${hours.toFixed(2).replace(/\.?0+$/, '')}h`;
-}
-
 function stripTrailingZeros(value: number): string {
     return Number.isInteger(value) ? value.toString() : value.toFixed(2).replace(/\.?0+$/, '');
 }
@@ -43,7 +37,7 @@ function localeFor(language: string | undefined): string {
 export interface Formatters {
     /** Locale-aware money: "949,00 zł" in PL, "PLN 949.00" in EN. */
     money: (amount: number, currency: Currency) => string;
-    /** Hours suffix: "15h", "2.5h". */
+    /** Hours: "15 h", "2,5 h" (hoursTerms, as the Solo screens print them). */
     hours: (hours: number) => string;
     /** Hours per month: "15h/mies.", "15h/mo". */
     hoursPerMonth: (hours: number) => string;
@@ -59,7 +53,7 @@ export function useFormatters(): Formatters {
 
     return {
         money: (amount, currency) => formatMoney(amount, currency, locale),
-        hours: formatHours,
+        hours: (hours) => `${hoursTerms(hours, locale)} h`,
         hoursPerMonth: (hours) => t('{{hours}}h/mo', { hours: stripTrailingZeros(hours) }),
         perHour: (amount, currency) => t('{{money}}/h', { money: formatMoney(amount, currency, locale) }),
         perMonth: (amount, currency) => t('{{money}}/mo', { money: formatMoney(amount, currency, locale) }),

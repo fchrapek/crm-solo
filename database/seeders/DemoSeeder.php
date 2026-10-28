@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Models\Account;
+use App\Models\AgentToken;
 use App\Models\Client;
 use App\Models\ClientLifecycleEvent;
 use App\Models\ClientReport;
@@ -19,11 +20,16 @@ use App\Models\Setting;
 use App\Models\Task;
 use App\Models\TaskAttachment;
 use App\Models\TaskBrief;
-use App\Models\TaskSession;
+use App\Models\TaskCardDetails;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\Agent\AgentCall;
+use App\Services\Agent\AgentCallContext;
 use App\Services\Agent\AgentIdentity;
+use App\Services\Agent\AgentIdentityResolver;
+use App\Services\Agent\FixedIdentityResolver;
 use App\Services\Agent\TaskBriefWriter;
+use App\Services\Clients\MonthSettlement;
 use App\Services\Day\DayPlanner;
 use App\Services\Tasks\TaskCompletion;
 use App\Support\LocalCalendar;
@@ -58,9 +64,6 @@ final class DemoSeeder extends Seeder
     /** @var array<string, Task> */
     private array $tasks = [];
 
-    /** @var list<TimeEntry> */
-    private array $agentEntries = [];
-
     public function run(): void
     {
         if (User::withTrashed()->where('email', User::DEMO_EMAIL)->exists()) {
@@ -74,6 +77,8 @@ final class DemoSeeder extends Seeder
         $this->account = Account::create([
             'name' => 'Brzoza Digital',
             'is_test' => true,
+            // Two elapsed months owe a close, so the backlog, both kinds of closure and an ended retainer all show.
+            'settings' => ['settlement_from' => $this->monthsAgo(2)->format('Y-m')],
         ]);
 
         $this->owner = $this->account->users()->create([
@@ -91,8 +96,11 @@ final class DemoSeeder extends Seeder
         $this->seedCafe();
         $this->seedFoundation();
         $this->seedMovementStudio();
+        $this->seedPrivateOrder();
+        $this->seedClientBook();
         $this->seedLeads();
         $this->seedAgentWork();
+        $this->seedCardTask();
         $this->seedDays();
 
         $this->command->info('');
@@ -216,8 +224,8 @@ MD,
 
         // Time entries: last month + early current month.
         $lastMonth = $this->monthsAgo(1);
-        $this->agentEntries[] = $this->makeTime($client, $www, $formularz, 'Formularz wyceny: szkielet i pola', 165, $lastMonth->copy()->setDay(9)->setTime(9, 30), 'terminal_session');
-        $this->agentEntries[] = $this->makeTime($client, $www, $formularz, 'Formularz wyceny: obsługa załączników', 120, $lastMonth->copy()->setDay(16)->setTime(10, 0), 'terminal_session');
+        $this->makeTime($client, $www, $formularz, 'Formularz wyceny: szkielet i pola', 165, $lastMonth->copy()->setDay(9)->setTime(9, 30), 'terminal_session');
+        $this->makeTime($client, $www, $formularz, 'Formularz wyceny: obsługa załączników', 120, $lastMonth->copy()->setDay(16)->setTime(10, 0), 'terminal_session');
         $this->makeTime($client, $www, $formularz, 'Formularz wyceny: stylowanie i RWD', 90, $lastMonth->copy()->setDay(23)->setTime(13, 15));
         $this->makeTime($client, $www, $migracja, 'Migracja PHP 8.3: testy po przełączeniu', 105, $lastMonth->copy()->setDay(5)->setTime(11, 0));
         $this->makeTime($client, $www, $updates, 'Aktualizacje WP + wtyczki, kopia zapasowa', 45, $lastMonth->copy()->setDay(3)->setTime(8, 30));
@@ -286,6 +294,9 @@ MD,
             'composer_key_before' => 'structured_list',
             'created_at' => $june->copy()->startOfMonth()->addDays(2)->setTime(12, 30)->setTimezone(config('app.timezone')),
         ]);
+
+        // Closed from its finalized report; last month stays open with its draft.
+        $this->closeMonth($client, $may->format('Y-m'));
 
         $draftBodyV1 = <<<'MD'
 # Raport miesięczny: czerwiec 2026
@@ -507,6 +518,117 @@ MD,
         $this->makeInvoice($client, '2026-02-16', 2400, true); // strona wizytówka, jednorazowo
     }
 
+    private function seedPrivateOrder(): void
+    {
+        $client = $this->makeClient([
+            'type' => 'individual',
+            'name' => 'Jan Przykładowy',
+            'email' => 'jan.przykladowy@poczta-testowa.test',
+            'phone' => '+48 100 000 106',
+            'address' => 'ul. Leśna 14',
+            'city' => 'Piaseczno',
+            'postal_code' => '05-500',
+            'country' => 'PL',
+            'segment' => 'individual',
+            'cooperation_type' => 'one_off',
+            'notes' => 'Audyt energetyczny domu jednorodzinnego, płatny po pomiarach.',
+        ], createdMonthsAgo: 1, history: [
+            ['active', 21, 'Umowa na audyt energetyczny domu: 2 400 zł brutto, płatne po pomiarach.'],
+        ]);
+
+        $audyt = $client->ensureGeneralProject();
+        $audyt->update(['name' => 'Audyt energetyczny domu']);
+
+        $wizja = $this->makeTask($audyt, 'Wizja lokalna', 'Done', ['finished_at' => now()->subDays(14)]);
+        $pomiary = $this->makeTask($audyt, 'Pomiary i termowizja', 'Done', ['finished_at' => now()->subDays(7)]);
+        $raport = $this->makeTask($audyt, 'Raport z audytu', 'Doing', ['due_date' => now()->addDays(3), 'is_reportable' => true]);
+        $this->makeTask($audyt, 'Przekazanie raportu', 'To-Do', ['due_date' => now()->addDays(8)]);
+
+        $lastMonth = $this->monthsAgo(1);
+        $measured = $lastMonth->copy()->setDay(min(29, $lastMonth->daysInMonth));
+        $this->makeTime($client, $audyt, $wizja, 'Wizja lokalna', 150, $lastMonth->copy()->setDay(22)->setTime(9, 0), 'manual', 'Oględziny domu, dokumentacja i rozmowa z klientem.');
+        $this->makeTime($client, $audyt, $pomiary, 'Pomiary i termowizja', 240, $measured->copy()->setTime(8, 0), 'manual', 'Termowizja przegród, pomiar szczelności okien i drzwi.');
+        if ($slot = $this->recentSlot(4, 13, 0, 120)) {
+            $this->makeTime($client, $audyt, $raport, 'Raport z audytu', $slot[1], $slot[0], 'manual', 'Zestawienie wyników pomiarów i termogramów.');
+        }
+
+        $invoice = $this->makeInvoice($client, $measured->toDateString(), 1951, false);
+        $invoice->update(['net_price' => 195122, 'tax_price' => 44878, 'gross_price' => 240000, 'left_to_pay' => 240000, 'client_tax_code' => null]);
+    }
+
+    // The rest of the book: two pages of clients on the list, every stage and cooperation type, one retainer over its pool.
+    private function seedClientBook(): void
+    {
+        $book = [
+            // name, mail slug, city, cooperation, stage, retainer hours, minutes logged on recent days
+            ['Biuro Rachunkowe Przykładowe sp. z o.o.', 'biuro-przykladowe', 'Poznań', 'retainer', 'active', 6, [150, 120, 180, 90]],
+            ['Szkoła Językowa Testowa', 'szkola-testowa', 'Wrocław', 'retainer', 'active', 10, [120, 60, 90]],
+            ['Hotel Przykładowy Pod Lipami', 'hotel-przykladowy', 'Zakopane', 'retainer', 'active', 12, [180, 240]],
+            ['Przychodnia Testowa s.c.', 'przychodnia-testowa', 'Lublin', 'retainer', 'active', 4, [200, 130]],
+            ['Klinika Weterynaryjna Testowa', 'klinika-testowa', 'Toruń', 'retainer', 'active', 8, []],
+            ['Piekarnia Przykładowa', 'piekarnia-przykladowa', 'Opole', 'hourly', 'active', null, [90, 45]],
+            ['Warsztat Rowerowy Przykładowy', 'rowery-przykladowe', 'Gdynia', 'hourly', 'active', null, [30]],
+            ['Kancelaria Testowa sp.k.', 'kancelaria-testowa', 'Katowice', 'project', 'active', null, [240]],
+            ['Galeria Sztuki Testowa', 'galeria-testowa', 'Kraków', 'project', 'active', null, []],
+            ['Sklep Zoologiczny Przykładowy', 'zoo-przykladowy', 'Rzeszów', 'one_off', 'active', null, [60]],
+            ['Teatr Przykładowy', 'teatr-przykladowy', 'Łódź', 'hourly', 'paused', null, []],
+            ['Agencja Eventowa Testowa', 'eventy-testowe', 'Warszawa', 'project', 'paused', null, []],
+            ['Księgarnia Przykładowa', 'ksiegarnia-przykladowa', 'Bydgoszcz', 'project', 'churned', null, []],
+            ['Pensjonat Testowy', 'pensjonat-testowy', 'Sopot', 'hourly', 'archived', null, []],
+        ];
+
+        foreach ($book as $i => [$name, $slug, $city, $cooperation, $stage, $hours, $minutes]) {
+            $lifecycle = $stage === 'archived' ? 'churned' : $stage;
+            $client = $this->makeClient([
+                'name' => $name,
+                'email' => "kontakt@{$slug}.test",
+                'phone' => sprintf('+48 100 000 %03d', 110 + $i),
+                'city' => $city,
+                'segment' => 'smb',
+                'cooperation_type' => $cooperation,
+                'hourly_rate' => $cooperation === 'hourly' ? 150 : null,
+                'lifecycle_stage' => $lifecycle,
+            ], createdMonthsAgo: 2 + $i % 5, history: $lifecycle === 'active' ? [] : [
+                [$lifecycle, 20 + $i, $lifecycle === 'paused' ? 'Współpraca wstrzymana do odwołania.' : 'Koniec współpracy, strona przekazana klientowi.'],
+            ]);
+
+            if ($hours !== null) {
+                ClientRetainer::create([
+                    'account_id' => $this->account->id,
+                    'client_id' => $client->id,
+                    'label' => 'Opieka serwisowa WWW',
+                    'monthly_hours' => $hours,
+                    'monthly_fee' => $hours * 150,
+                    'invoice_group' => 1,
+                    'vat_symbol' => '23',
+                    'rollover_cap_hours' => $hours * 2,
+                    'is_active' => true,
+                    'sort_order' => 0,
+                    'currency' => 'PLN',
+                    'effective_from' => $this->monthsAgo(2)->toDateString(),
+                    // The vet clinic's retainer ended last month: its one owed month is closed, its history stays.
+                    'effective_to' => $slug === 'klinika-testowa' ? $this->monthsAgo(1)->toDateString() : null,
+                ]);
+                // Closed from entries: the language school is settled up to last month, the hotel and the clinic up to the one before.
+                $closedThrough = ['szkola-testowa' => 1, 'hotel-przykladowy' => 2, 'klinika-testowa' => 2][$slug] ?? 3;
+                for ($ago = 2; $ago >= $closedThrough; $ago--) {
+                    $this->closeMonth($client, $this->monthsAgo($ago)->format('Y-m'));
+                }
+            }
+
+            $task = $this->makeTask($client->ensureGeneralProject(), 'Bieżące poprawki na stronie', 'Doing', ['is_reportable' => true]);
+            foreach ($minutes as $day => $length) {
+                if ($slot = $this->recentSlot($day + 1, 7 + $i % 4 + $day * 3, 0, $length)) {
+                    $this->makeTime($client, $task->project, $task, 'Bieżące poprawki na stronie', $slot[1], $slot[0]);
+                }
+            }
+
+            if ($stage === 'archived') {
+                $client->delete();
+            }
+        }
+    }
+
     // Leads: both funnels populated across stages, one converted (won)
     private function seedLeads(): void
     {
@@ -592,32 +714,12 @@ MD,
         $won->forceFill(['client_id' => $this->zlotyMlyn->id])->save();
     }
 
-    // The agent board on the furniture site: one card per lane, two ended sessions, a confirmed brief, an attachment.
+    // Agent work on the furniture site: a finished task, a confirmed brief, an attachment.
     private function seedAgentWork(): void
     {
-        $completion = app(TaskCompletion::class);
         $formularz = $this->tasks['formularz'];
 
-        foreach (['filtry' => Task::AGENT_LANE_BACKLOG, 'formularz' => Task::AGENT_LANE_IN_PROGRESS, 'rwd' => Task::AGENT_LANE_IN_REVIEW] as $key => $lane) {
-            $this->tasks[$key]->update(['cli' => 'claude', 'agent_lane' => $lane]);
-        }
-        $this->tasks['migracja']->update(['cli' => 'claude']);
-        $completion->finish($this->tasks['migracja']->fresh());
-
-        foreach ($this->agentEntries as $entry) {
-            TaskSession::create([
-                'task_id' => $formularz->id,
-                'account_id' => $this->account->id,
-                'cli' => 'claude',
-                'base_branch' => 'main',
-                'branch_name' => $formularz->sessionBranchName(),
-                'worktree_path' => $formularz->sessionWorktreePath('/home/demo/meble-przykladowe'),
-                'time_entry_id' => $entry->id,
-                'started_at' => $entry->start_time,
-                'ended_at' => $entry->end_time,
-                'ended_reason' => 'stopped',
-            ]);
-        }
+        app(TaskCompletion::class)->finish($this->tasks['migracja']->fresh());
 
         app(TaskBriefWriter::class)->write($formularz, [
             'where' => 'Strona WWW meble-przykladowe.test, podstrona Wycena.',
@@ -644,6 +746,186 @@ MD,
             'size' => mb_strlen($pdf, '8bit'),
             'label' => 'Szkic od klienta',
         ]);
+    }
+
+    /**
+     * The task page as the design shows it: a Trello card with its checklist, a brief and the files, images and
+     * links under Zasoby, time from the owner and from an agent, and the agent's writes in Aktywność. The agent
+     * acts through a token named like a real one, inside an agent call, so its writes land in the audit trail.
+     * No timer is left running: the demo would show an agent at work all day.
+     */
+    private function seedCardTask(): void
+    {
+        $www = $this->tasks['formularz']->project;
+        $client = $www->client;
+        $card = $this->makeTask($www, 'Nowy cennik PDF na jesień', 'Doing', [
+            'source' => 'trello',
+            'trello_card_id' => 'demo-cennik-jesien',
+            'trello_url' => 'https://trello.example.test/c/demo-cennik',
+            'trello_activity_at' => now()->subHours(3),
+            'priority' => 'medium',
+            'is_reportable' => true,
+            'due_date' => LocalCalendar::today()->addDays(7)->setTime(12, 0)->setTimezone(config('app.timezone')),
+            'description' => <<<'MD'
+### Cennik na sezon jesienny
+
+Nowe ceny są w arkuszu od Marka. Układ tabel zostaje jak w obecnym PDF, zmieniają się tylko kwoty i kolejność kategorii.
+
+- Kuchnie, szafy i stoły w osobnych tabelach
+- Ceny netto, waluta w nagłówku tabeli
+- Po eksporcie podmień plik na stronie i usuń stary z mediów
+
+Obecny cennik: [meble-przykladowe.test/cennik](https://meble-przykladowe.test/cennik)
+MD,
+        ]);
+        TaskCardDetails::create([
+            'task_id' => $card->id,
+            'checklists' => [[
+                'name' => 'Cennik',
+                'items' => [
+                    ['name' => 'Ceny z arkusza', 'done' => true],
+                    ['name' => 'Eksport do PDF', 'done' => false],
+                    ['name' => 'Podmiana pliku na stronie', 'done' => false],
+                ],
+            ]],
+            'comments' => [],
+            'card_attachments' => [],
+            'card_activity_at' => $card->trello_activity_at,
+            'fetched_at' => now()->subHours(2),
+        ]);
+
+        $this->attach($card, 'cennik-wiosna-2026.pdf', 'application/pdf', $this->demoPdf([
+            'Cennik mebli na wymiar: wiosna 2026',
+            'Kuchnie, szafy, stoly. Ceny netto w PLN.',
+            'Dokument przykladowy do wersji demo.',
+        ]));
+        $this->attach($card, 'ceny-jesien-od-klienta.txt', 'text/plain', "Kuchnie: +6%\nSzafy: bez zmian\nStoły rozkładane: brak cen, do potwierdzenia\n");
+        foreach (['stoly-rozkladane.png' => 0, 'szkic-tabeli.png' => 1] as $name => $variant) {
+            $png = $this->demoPng($variant);
+            if ($png !== null) {
+                $this->attach($card, $name, 'image/png', $png);
+            }
+        }
+        $card->links()->create(['url' => 'https://staging.meble-przykladowe.test/cennik', 'label' => null]);
+        $card->links()->create(['url' => 'https://meble-przykladowe.test/makieta-cennika', 'label' => 'Makieta tabel cennika']);
+
+        foreach ([[3, 11, 0, 14, 'Rozmowa z Markiem o cenach.'], [2, 9, 30, 120, 'Nowe ceny, układ tabel, eksport.']] as [$daysAgo, $hour, $minute, $minutes, $text]) {
+            if ($slot = $this->recentSlot($daysAgo, $hour, $minute, $minutes)) {
+                $this->makeTime($client, $www, $card, $card->name, $slot[1], $slot[0], 'manual', $text);
+            }
+        }
+
+        $issued = $this->owner->createToken('codex macbook', ['read', 'write']);
+        /** @var AgentToken $token */
+        $token = $issued->accessToken;
+        $token->forceFill(['account_id' => $this->account->id, 'last_used_at' => now()->subMinutes(12)])->save();
+
+        app()->instance(AgentIdentityResolver::class, new FixedIdentityResolver(new AgentIdentity($this->account, $this->owner, $token)));
+        $context = app(AgentCallContext::class);
+        $writer = app(TaskBriefWriter::class);
+
+        // A test that froze the clock gets its frozen instant back afterwards.
+        $frozen = Carbon::getTestNow();
+        try {
+            $base = now();
+            $monthStart = LocalCalendar::monthRange(LocalCalendar::currentMonth())[0];
+            Carbon::setTestNow($base->copy()->subHours(3));
+            $context->run(new AgentCall(AgentCall::VIA_MCP, 'task_brief'), fn () => $writer->write($card, [
+                'where' => 'Strona WWW meble-przykladowe.test, podstrona Cennik, plik PDF w mediach.',
+                'done_when' => 'Nowy PDF podpięty na stronie.',
+                'constraints' => 'Bez zmian w motywie i w układzie tabel.',
+                'notes' => 'Ceny netto.',
+            ], false, $context->identity(), TaskBrief::VIA_MCP));
+
+            Carbon::setTestNow($base->copy()->subMinutes(30));
+            $context->run(new AgentCall(AgentCall::VIA_MCP, 'add_note'), fn () => $client->transitionTo(
+                $client->lifecycle_stage,
+                'W arkuszu brak cen stołów rozkładanych, pytanie do Marka.',
+                $this->owner,
+                $card,
+            ));
+
+            Carbon::setTestNow($base->copy()->subMinutes(15));
+            // Kept inside the current month, so last month's hours still match its report.
+            if (now()->subMinutes(38)->gte($monthStart)) {
+                $context->run(new AgentCall(AgentCall::VIA_MCP, 'log_time'), fn () => TimeEntry::create([
+                    'account_id' => $this->account->id,
+                    'client_id' => $client->id,
+                    'project_id' => $www->id,
+                    'task_id' => $card->id,
+                    'source' => TimeEntry::SOURCE_MANUAL,
+                    'title' => $card->name,
+                    'description' => 'Odczyt arkusza i plan tabel.',
+                    'start_time' => now()->subMinutes(38),
+                    'end_time' => now(),
+                    'duration_minutes' => 38,
+                    'billable' => true,
+                ]));
+            }
+
+            Carbon::setTestNow($base->copy()->subMinutes(12));
+            $context->run(new AgentCall(AgentCall::VIA_MCP, 'task_brief'), fn () => $writer->write($card, [
+                'done_when' => 'Nowy PDF podpięty na stronie, stary usunięty z mediów, ceny zgodne z arkuszem.',
+                'notes' => 'Arkusz od Marka jest w Zasobach. Ceny netto.',
+            ], false, $context->identity(), TaskBrief::VIA_MCP));
+        } finally {
+            Carbon::setTestNow($frozen);
+            app()->forgetInstance(AgentIdentityResolver::class);
+        }
+    }
+
+    private function attach(Task $task, string $name, string $mime, string $content): void
+    {
+        $extension = pathinfo($name, PATHINFO_EXTENSION);
+        $path = "task-attachments/{$task->id}/".Str::uuid()->toString().'.'.$extension;
+        if (! Storage::disk('local')->put($path, $content)) {
+            throw new RuntimeException("Could not write the demo attachment to {$path}.");
+        }
+        TaskAttachment::create([
+            'task_id' => $task->id,
+            'file_path' => $path,
+            'original_name' => $name,
+            'mime' => $mime,
+            'size' => mb_strlen($content, '8bit'),
+        ]);
+    }
+
+    /** A drawn placeholder (a table sketch or a row of tables), so the thumbnails show something without a photo; null without GD. */
+    private function demoPng(int $variant): ?string
+    {
+        if (! function_exists('imagecreatetruecolor')) {
+            return null;
+        }
+
+        $image = imagecreatetruecolor(504, 336);
+        $paper = imagecolorallocate($image, 243, 237, 226);
+        $sand = imagecolorallocate($image, 214, 205, 190);
+        $ink = imagecolorallocate($image, 21, 20, 18);
+        $wood = imagecolorallocate($image, 176, 132, 88);
+        imagefilledrectangle($image, 0, 0, 503, 335, $paper);
+
+        if ($variant === 0) {
+            foreach ([40, 190, 340] as $x) {
+                imagefilledrectangle($image, $x, 150, $x + 124, 172, $wood);
+                imagefilledrectangle($image, $x + 10, 172, $x + 18, 260, $wood);
+                imagefilledrectangle($image, $x + 106, 172, $x + 114, 260, $wood);
+            }
+            imageline($image, 20, 262, 484, 262, $ink);
+        } else {
+            imagerectangle($image, 40, 40, 464, 296, $ink);
+            for ($y = 88; $y < 296; $y += 48) {
+                imageline($image, 40, $y, 464, $y, $sand);
+            }
+            imageline($image, 240, 40, 240, 296, $sand);
+            imagefilledrectangle($image, 40, 40, 464, 88, $sand);
+        }
+
+        ob_start();
+        imagepng($image);
+        $png = (string) ob_get_clean();
+        imagedestroy($image);
+
+        return $png;
     }
 
     // Today, tomorrow and the month card, all from the local calendar so the nightly reset lands on the right days.
@@ -679,6 +961,16 @@ MD,
                 $this->makeTime($makiety->project->client, $makiety->project, $makiety, 'Makiety: przegląd z zespołem fundacji', 30, $start);
             }
             $planner->close($accountId, $day);
+        }
+    }
+
+    /** Closes a month through the one settlement path, as the owner would from the confirm dialog. */
+    private function closeMonth(Client $client, string $period): void
+    {
+        $settlement = app(MonthSettlement::class);
+        $result = $settlement->close($client, $period, $settlement->preview($client, $period)['hash'], $this->owner);
+        if ($result->isRefused()) {
+            throw new RuntimeException("The demo close of {$client->name} {$period} was refused: {$result->message}");
         }
     }
 
