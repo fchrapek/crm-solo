@@ -67,6 +67,13 @@ final class MonthCloseRun extends Model
     ];
 
     /**
+     * The owner's steps; an agent does the rest (the month-close-site skill and the crm verbs).
+     *
+     * @var list<string>
+     */
+    public const OWNER_STEPS = ['live_deploy', self::DELIVERABLE_STEP, self::REPORT_MODE_SUMMARY_EMAIL];
+
+    /**
      * Step keys seeded before the close went per site (June 2026 runs). Kept so
      * historical runs still render; nothing seeds them any more.
      *

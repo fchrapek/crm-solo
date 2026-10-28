@@ -1,6 +1,6 @@
 .row {
     /* everything hangs off the title's first line, whatever the meta wraps to */
-    --title-line: calc(var(--solo-text-row) * 1.35);
+    --title-line: calc(var(--solo-mobile-body) * 1.235);
     --row-pad: 15px;
 
     display: flex;
@@ -86,10 +86,18 @@
 
 /* one line on every width; the full name is the row's tooltip and the task page's title */
 .title {
-    font-size: var(--solo-text-row);
-    font-weight: 600;
-    line-height: 1.35;
+    font: 500 var(--solo-mobile-body) / 1.235 var(--solo-font-text);
     white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+    .row {
+        --title-line: calc(var(--solo-text-action) * 1.35);
+    }
+
+    .title {
+        font: 500 var(--solo-text-action) / 1.35 var(--solo-font-text);
+    }
 }
 
 /* the cut sits inside the link, so the title never clips the link's enlarged hit area */
@@ -300,15 +308,10 @@
 /* Figma A2f / List row (Wszystkie zadania, Propozycje): 44 px, the title wins, the meta capped on phones, one action */
 .compact {
     --row-pad: 11px;
-    --title-line: calc(var(--solo-mobile-body) * 1.235);
 
     position: relative;
     flex-wrap: nowrap;
     align-items: center;
-}
-
-.compact .title {
-    font: 500 var(--solo-mobile-body) / 1.235 var(--solo-font-text);
 }
 
 .compact .meta {
@@ -323,11 +326,6 @@
 @media (min-width: 768px) {
     .compact {
         --row-pad: 12px;
-        --title-line: calc(var(--solo-text-action) * 1.35);
-    }
-
-    .compact .title {
-        font: 500 var(--solo-text-action) / 1.35 var(--solo-font-text);
     }
 
     .compact .meta {
@@ -340,7 +338,6 @@
 .doneRow,
 .queueRow {
     --row-pad: 10px;
-    --title-line: calc(var(--solo-text-action) * 1.35);
 
     flex-wrap: nowrap;
     align-items: center;
@@ -358,13 +355,9 @@
     flex: 1 1 auto;
 }
 
-.doneRow .title,
-.queueRow .title {
-    font-size: var(--solo-text-action);
-}
-
 .doneRow.done .title,
-.queueRow.done .title {
+.queueRow.done .title,
+.plainDone.done .title {
     color: var(--solo-fg);
     text-decoration: none;
 }

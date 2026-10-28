@@ -26,7 +26,7 @@ final class MonthCloseTicker
      *                             next run nothing about what still has to happen
      * @return array<string, mixed> the checklist after the move
      */
-    public function tick(Client $client, string $period, string $stepKey, string $state, ?User $actor = null, ?string $projectNeedle = null, ?string $note = null): array
+    public function tick(Client $client, string $period, string $stepKey, string $state, ?User $actor = null, ?string $projectNeedle = null, ?string $note = null, string $via = MonthCloseStep::VIA_AGENT): array
     {
         $this->assertInClose($client);
         $this->assertPeriod($period);
@@ -38,25 +38,11 @@ final class MonthCloseTicker
         }
 
         // One transaction, so a step or site that does not resolve leaves no freshly started run behind.
-        $run = DB::transaction(function () use ($client, $period, $stepKey, $projectNeedle, $state, $actor, $note): MonthCloseRun {
+        $run = DB::transaction(function () use ($client, $period, $stepKey, $projectNeedle, $state, $actor, $note, $via): MonthCloseRun {
             $run = MonthCloseRun::startFor($client, $period);
             $step = $this->resolveStep($run, $stepKey, $projectNeedle);
 
-            $isPending = $state === MonthCloseStep::STATE_PENDING;
-            $attributes = [
-                'state' => $state,
-                'completed_at' => $isPending ? null : now(),
-                'completed_by' => $isPending ? null : $actor?->id,
-            ];
-
-            // Only overwrite the note when one is given, so re-ticking a step does
-            // not silently erase the reason someone recorded earlier.
-            if ($note !== null) {
-                $attributes['note'] = $note;
-            }
-
-            $step->update($attributes);
-            $run->refreshStatusFromSteps();
+            $step->mark($state, $actor, $via, $note);
 
             return $run;
         });

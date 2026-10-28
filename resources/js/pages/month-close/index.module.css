@@ -1,4 +1,3 @@
-/* The month close on the Solo shell; the accepted redesign (Figma 206:4598, phones 591:13448) is its own task. */
 .page {
     min-height: 100vh;
 }
@@ -7,330 +6,109 @@
     max-width: var(--solo-grid-max);
     margin: 0 auto;
     padding-inline: var(--solo-grid-margin);
-    padding-bottom: var(--solo-tab-bar-clearance);
-}
-
-.main {
-    display: flex;
-    flex-direction: column;
-    gap: var(--solo-space-5);
-    padding-top: var(--solo-space-6);
-    font-family: var(--solo-font-text);
-}
-
-@media (min-width: 768px) {
-    .frame {
-        padding-bottom: var(--solo-space-8);
-    }
-
-    .main {
-        padding-top: var(--solo-space-8);
-    }
-}
-
-.controls {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 1.25rem;
-    flex-wrap: wrap;
-}
-
-.periodControl {
-    width: 200px;
-    text-transform: capitalize;
-}
-
-.subtitle {
-    font-size: var(--solo-text-sub, 0.85rem);
-    color: var(--solo-fg-muted);
-}
-
-.empty {
-    border: 1px dashed var(--solo-pop-rule, var(--solo-rule));
-    border-radius: var(--solo-radius-md, 0.5rem);
-    padding: 2rem;
-    text-align: center;
-    color: var(--solo-fg-muted);
-}
-
-.group {
-    margin-bottom: 1.75rem;
-}
-
-.groupTitle {
-    display: flex;
-    align-items: center;
-    gap: var(--solo-group-gap, 0);
-    padding-inline: var(--solo-head-inset, 0);
-    font-size: var(--solo-group-size, var(--solo-text-label));
-    font-weight: var(--solo-group-weight, 700);
-    text-transform: var(--solo-label-case, uppercase);
-    letter-spacing: var(--solo-label-tracking, 0.08em);
-    color: var(--solo-group-fg, var(--solo-fg));
-    margin: 0 0 0.75rem;
-}
-
-/* A2f: the count reads inline as "LABEL · N", a pill only under Boring SaaS */
-.groupCount {
-    font-size: var(--solo-group-count-size, inherit);
-    font-variant-numeric: tabular-nums;
-    color: var(--solo-group-count-fg, inherit);
-    padding: var(--solo-group-count-pad, 0);
-    border: 1px solid var(--solo-group-count-ring, transparent);
-    border-radius: 999px;
-}
-
-.groupCount::before {
-    content: var(--solo-group-count-dot, '\00a0·\00a0');
+    padding-bottom: var(--solo-space-8);
 }
 
 .grid {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+    padding-top: var(--solo-space-5);
 }
 
-.card {
-    border: 1px solid var(--solo-rule);
-    border-radius: var(--solo-radius-lg, 0.65rem);
-    background: var(--solo-card, var(--solo-block, var(--solo-bg)));
-    box-shadow: none;
-    overflow: hidden;
+.cardGrid {
+    padding-top: var(--solo-space-5);
 }
 
-.card[data-status='completed'] {
-    border-color: var(--solo-done-border, transparent);
-}
-
-/* When the whole close is done, strike through the client name. */
-.card[data-status='completed'] .clientName {
-    text-decoration: line-through;
-    text-decoration-thickness: 1.5px;
-    color: var(--solo-fg-muted);
-}
-
-.card[data-status='completed'] .clientName:hover {
-    text-decoration: line-through underline;
-}
-
-.cardHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    padding: 0.85rem 1rem;
-    border-bottom: 1px solid var(--solo-rule);
-}
-
-.cardHeader[data-toggle='true'] {
-    cursor: pointer;
-    user-select: none;
-}
-
-.cardHeader[data-toggle='true']:hover {
-    background: var(--solo-pop-rule, var(--solo-rule));
-}
-
-/* Collapsed cards have no visible steps, so drop the divider. */
-.cardHeader[aria-expanded='false'] {
-    border-bottom: none;
-}
-
-.chevron {
-    flex-shrink: 0;
-    color: var(--solo-fg-muted);
-    transition: transform 0.15s ease;
-}
-
-.chevron[data-expanded='true'] {
-    transform: rotate(90deg);
-}
-
-.clientName {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    margin-right: auto;
-    font-weight: 600;
-    color: var(--solo-fg);
-    text-decoration: none;
-}
-
-.clientName:hover {
-    text-decoration: underline;
-}
-
-.clientName svg {
-    color: var(--solo-fg-muted);
-}
-
-.progress {
-    font-size: var(--solo-text-sub, 0.8rem);
-    font-variant-numeric: tabular-nums;
-    color: var(--solo-fg-muted);
-    padding: 0.15rem 0.5rem;
-    border: 1px solid var(--solo-pop-rule, var(--solo-rule));
-    border-radius: 999px;
-}
-
-.progress[data-status='completed'] {
-    color: var(--solo-done-text, var(--solo-bg));
-    background: var(--solo-done-fill, var(--solo-fg));
-    border-color: var(--solo-done-fill, var(--solo-fg));
-}
-
-.startBtn {
-    font-size: var(--solo-text-sub, 0.8rem);
-    font-weight: var(--font-weight-medium, 500);
-    padding: var(--solo-mc-button-pad, 7px var(--solo-space-row));
-    border: 1px solid var(--solo-ink-fill, var(--solo-fg));
-    border-radius: var(--solo-mc-button-radius, var(--solo-radius-full));
-    background: var(--solo-ink-fill, var(--solo-fg));
-    color: var(--solo-ink-text, var(--solo-bg));
-    cursor: pointer;
-}
-
-.startBtn:hover {
-    opacity: 0.85;
-}
-
-.steps {
-    list-style: none;
-    margin: 0;
-    padding: 0.35rem 0;
-}
-
-/* A client runs one section per site, then a client-level tail. */
-.section + .section {
-    border-top: 1px solid var(--solo-rule);
-}
-
-.sectionTitle {
-    display: flex;
-    align-items: baseline;
-    gap: 0.4rem;
-    margin: 0;
-    padding: 0.6rem 1rem 0.1rem;
-    font-size: 0.72rem;
-    font-weight: 600;
-    text-transform: var(--solo-label-case, uppercase);
-    letter-spacing: var(--solo-label-tracking, 0.05em);
-    color: var(--solo-fg-muted);
-}
-
-.sectionCount {
-    font-size: 0.7rem;
-    font-variant-numeric: tabular-nums;
-    text-transform: none;
-    letter-spacing: 0;
-    opacity: 0.75;
-}
-
-/* Steps inside a site section sit under its heading, not the card edge. */
-.section .step {
-    padding-left: 1.6rem;
-}
-
-.section .steps {
-    padding-top: 0;
-}
-
-.step {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.65rem;
-    padding: 0.5rem 1rem;
-}
-
-.step + .step {
-    border-top: 1px solid var(--solo-rule);
-}
-
-.check {
-    flex-shrink: 0;
-    margin-top: 0.1rem;
-    width: 1.4rem;
-    height: 1.4rem;
+.main,
+.head,
+.side {
     display: grid;
-    place-items: center;
-    border: 1px solid var(--solo-pop-rule, var(--solo-rule));
-    border-radius: 999px;
-    background: transparent;
-    color: var(--solo-fg-muted);
-    cursor: pointer;
-}
-
-.step[data-state='done'] .check {
-    background: var(--solo-ink-fill, var(--solo-fg));
-    border-color: var(--solo-ink-fill, var(--solo-fg));
-    color: var(--solo-ink-text, var(--solo-bg));
-}
-
-.step[data-state='skipped'] .check {
-    color: var(--solo-fg-muted);
-    border-style: dashed;
-}
-
-.stepBody {
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-    flex: 1;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
     min-width: 0;
 }
 
-.stepLabel {
-    font-size: 0.9rem;
-    color: var(--solo-fg);
+.main {
+    gap: var(--solo-space-5);
 }
 
-.step[data-state='done'] .stepLabel,
-.step[data-state='skipped'] .stepLabel,
-.settlement[data-state='closed'] .stepLabel {
+.head {
+    gap: 18px;
+}
+
+.side {
+    gap: var(--solo-space-5);
+    margin-top: var(--solo-space-5);
+}
+
+.sub {
+    margin: 0;
+    font-size: var(--solo-text-sub);
     color: var(--solo-fg-muted);
 }
 
-.step[data-state='skipped'] .stepLabel {
-    text-decoration: line-through;
+.recordSub {
+    margin-top: var(--solo-space-3);
 }
 
-.stepHint {
-    font-size: 0.75rem;
-    color: var(--solo-fg-muted);
-    line-height: 1.3;
+.card {
+    padding: var(--solo-card-pad, 0);
+    border: var(--solo-card-width, 0) solid var(--solo-card-border, transparent);
+    border-radius: var(--solo-card-radius, 0);
+    background: var(--solo-card, none);
+    box-shadow: var(--solo-card-shadow, none);
 }
 
-.skipBtn {
-    flex-shrink: 0;
-    font-size: 0.72rem;
-    color: var(--solo-fg-muted);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    padding: 0.15rem 0.25rem;
+.list {
+    margin: 0;
+    padding: var(--solo-block-pad, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    list-style: none;
 }
 
-.skipBtn:hover {
-    color: var(--solo-fg);
-    text-decoration: underline;
+.facts {
+    margin: 0;
+    padding: var(--solo-block-pad, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
 }
 
-/* The financial close sits under the checklist on every retainer card, open or collapsed. */
-.settlement {
-    display: flex;
+.stepMeta {
+    display: inline-flex;
     align-items: center;
-    gap: 0.65rem;
-    padding: 0.6rem 1rem;
-    border-top: 1px solid var(--solo-rule);
+    gap: var(--solo-space-2);
 }
 
-.settlementState {
-    flex-shrink: 0;
-    font-size: var(--solo-text-sub, 0.8rem);
-    color: var(--solo-fg-muted);
+/* the long meta and action labels need the desktop row; a phone gets the short ones */
+.wide {
+    display: none;
 }
 
 .dialogHost {
     display: contents;
+}
+
+@media (min-width: 768px) {
+    .grid {
+        padding-top: var(--solo-page-top, 80px);
+    }
+
+    .cardGrid {
+        padding-top: var(--solo-space-7);
+    }
+
+    .head {
+        margin-bottom: var(--solo-space-5);
+    }
+
+    .side {
+        margin-top: 0;
+    }
+
+    .wide {
+        display: inline;
+    }
+
+    .narrow {
+        display: none;
+    }
 }

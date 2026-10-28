@@ -23,7 +23,7 @@ export function applyLayoutToPage(module: unknown, pageName: string): void {
         pageName === 'tasks/show' ||
         pageName === 'project-board/show' ||
         pageName === 'clients/reports/edit' ||
-        pageName === 'month-close/index' ||
+        pageName.startsWith('month-close/') ||
         pageName === 'settings/index' ||
         pageName === 'contacts/index' ||
         pageName === 'messages/index' ||

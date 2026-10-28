@@ -35,7 +35,27 @@ data and command contract it works against.
 
 **Division of labour**: the owner pulls production databases and does the push
 and live deploy; the agent files the dump into the backup folder, imports it
-locally, updates, verifies and commits.
+locally, updates, verifies and commits. `MonthCloseRun::OWNER_STEPS`
+(`live_deploy` and the deliverable, `report` or `summary_email`) are the
+owner's; every other step is the agent's. The split is fixed, not per client.
+
+Every move of a step goes through `MonthCloseStep::mark()`, from the page and
+from `month-close:tick` / the MCP tool alike. It records `completed_via`
+(`web` or `agent`), since an agent acts as its owner's user and
+`completed_by` cannot tell the two apart; ticks before 2026-10-28 have none.
+
+## The page
+
+`/month-close?period=YYYY-MM` (Figma: Zamknięcie miesiąca, direction A) lists
+every client in the period's close, one row each: progress and who acts next,
+the hours to close for a retainer client with no checklist left, or the day it
+finished (all steps moved and the hours month closed). The month is the poster;
+the trail offers the month before and after, never past the month in progress
+nor before June 2026. `/month-close/{client}?period=` is the client's card: the
+steps per site, then the client's own, with the hours close and the client's
+report mode and SSH alias beside them. Opening a card never starts a close; the
+first tick does (`PATCH month-close/{client}/steps`, the same path as an agent's
+tick).
 
 ## Commands
 
@@ -61,8 +81,9 @@ not look at it. Its rules live in
 Przegląd's `report_due` and the checklist's `report` step stay on the previous
 month whatever is closed.
 
-The page still shows it, on each retainer client's card under the checklist
-(`MonthCloseController::settlementRows()`): for the selected period it is
+The page still shows it, under Godziny on each retainer client's card, and on
+the list row of a client with no checklist step left
+(`MonthCloseWorklist::settlementRows()`): for the selected period it is
 closable when that period is the client's active month, reads "zamknięty DD.MM"
 once closed, and "najpierw zamknij <miesiąc>" for a later month while an earlier
 one is open. The month in progress and months without a retainer get no row.

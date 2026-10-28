@@ -125,8 +125,8 @@ Route::middleware(['auth', 'throttle:demo-writes', App\Http\Middleware\LimitDemo
 
         // Month close (per-maintained-client monthly checklist worklist).
         Route::get('month-close', [App\Http\Controllers\MonthCloseController::class, 'index'])->name('month-close.index');
-        Route::post('month-close', [App\Http\Controllers\MonthCloseController::class, 'store'])->name('month-close.store');
-        Route::patch('month-close/steps/{step}', [App\Http\Controllers\MonthCloseController::class, 'updateStep'])->name('month-close.update-step');
+        Route::get('month-close/{client}', [App\Http\Controllers\MonthCloseController::class, 'show'])->name('month-close.show');
+        Route::patch('month-close/{client}/steps', [App\Http\Controllers\MonthCloseController::class, 'tick'])->name('month-close.tick');
     });
 
     Route::resource('contacts', ContactsController::class)->except(['show']);

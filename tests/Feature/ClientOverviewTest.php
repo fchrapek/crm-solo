@@ -257,7 +257,7 @@ final class ClientOverviewTest extends TestCase
     public function test_an_open_close_stays_waiting_and_reachable_after_the_client_leaves_the_close(array $leave): void
     {
         $this->client->update(['month_close_type' => MonthCloseRun::TYPE_GIG, 'include_in_month_close' => true]);
-        $run = MonthCloseRun::startFor($this->client->fresh(), '2026-08');
+        MonthCloseRun::startFor($this->client->fresh(), '2026-08');
         $this->client->update($leave);
 
         $this->assertSame('2026-08', $this->overview()['month_close']['period']);
@@ -267,9 +267,14 @@ final class ClientOverviewTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->has('clients', 1)
                 ->where('clients.0.client.id', $this->client->id)
-                ->where('clients.0.client.type', MonthCloseRun::TYPE_GIG)
-                ->where('clients.0.run.id', $run->id)
-                ->has('clients.0.run.client_steps', 3)
+                ->where('clients.0.total', 3)
+            );
+
+        $this->actingAs($this->user)
+            ->get("/month-close/{$this->client->id}?period=2026-08")
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('client.type', MonthCloseRun::TYPE_GIG)
+                ->has('client_steps', 3)
             );
 
         $this->actingAs($this->user)

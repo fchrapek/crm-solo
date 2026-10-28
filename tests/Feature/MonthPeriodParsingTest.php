@@ -131,7 +131,7 @@ final class MonthPeriodParsingTest extends TestCase
         Carbon::setTestNow($now);
 
         $this->assertSame(0, Artisan::call('month-close:tick', ['client' => (string) $this->client->id, 'step' => 'report', 'state' => 'done', '--period' => $period]));
-        $this->actingAs($this->owner)->post(route('month-close.store'), ['client_id' => $this->client->id, 'period' => $period])->assertSessionHasNoErrors();
+        $this->actingAs($this->owner)->patch(route('month-close.tick', $this->client), ['period' => $period, 'step' => 'reconcile_log', 'state' => 'pending'])->assertSessionHasNoErrors();
 
         $this->assertSame([$period], MonthCloseRun::pluck('period')->all());
         $this->assertSame($lastDay, LocalCalendar::monthFrom($period)->endOfMonth()->toDateString());
@@ -154,7 +154,7 @@ final class MonthPeriodParsingTest extends TestCase
         $this->assertSame(1, Artisan::call('month-close:tick', ['client' => (string) $this->client->id, 'step' => 'report', 'state' => 'done', '--period' => $period]));
         // The web stack trims input first, so a padded month is a month there.
         if (! LocalCalendar::isMonth(mb_trim($period))) {
-            $this->actingAs($this->owner)->post(route('month-close.store'), ['client_id' => $this->client->id, 'period' => $period])->assertSessionHasErrors('period');
+            $this->actingAs($this->owner)->patch(route('month-close.tick', $this->client), ['period' => $period, 'step' => 'reconcile_log', 'state' => 'pending'])->assertSessionHasErrors('period');
         }
 
         Http::assertNothingSent();
