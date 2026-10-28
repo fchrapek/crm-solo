@@ -75,8 +75,8 @@ final class MonthCloseTest extends TestCase
                 ->where('period', '2026-06')
                 ->has('clients', 2)
                 // One site's steps plus the client-level tail.
-                ->where('clients.1.template_total', count(MonthCloseRun::SITE_STEPS) + count(MonthCloseRun::CLIENT_STEPS))
-                ->where('clients.0.template_total', count(MonthCloseRun::CLIENT_STEPS))
+                ->where('clients.1.total', count(MonthCloseRun::SITE_STEPS) + count(MonthCloseRun::CLIENT_STEPS))
+                ->where('clients.0.total', count(MonthCloseRun::CLIENT_STEPS))
             );
     }
 
@@ -121,22 +121,21 @@ final class MonthCloseTest extends TestCase
             ->assertInertia(fn (Assert $assert) => $assert->where('period', '2026-03'));
     }
 
-    public function test_period_list_is_floored_at_june_2026(): void
+    public function test_the_trail_shows_the_months_around_the_period_within_june_2026_and_the_month_in_progress(): void
     {
         $this->travelTo(Carbon::parse('2026-09-10'));
 
-        // Newest first, down to June 2026 (the first close month) — never earlier.
-        $this->actingAs($this->user)
-            ->get('/month-close')
-            ->assertInertia(fn (Assert $assert) => $assert
-                ->where('periods', ['2026-09', '2026-08', '2026-07', '2026-06'])
-            );
+        foreach (['' => ['2026-07', '2026-08', '2026-09'], '?period=2026-09' => ['2026-07', '2026-08', '2026-09'], '?period=2026-06' => ['2026-06', '2026-07', '2026-08'], '?period=2026-03' => ['2026-06', '2026-07', '2026-08']] as $query => $months) {
+            $this->actingAs($this->user)
+                ->get('/month-close'.$query)
+                ->assertInertia(fn (Assert $assert) => $assert->where('months', $months));
+        }
     }
 
     public function test_maintenance_close_seeds_the_full_checklist(): void
     {
         $this->actingAs($this->user)
-            ->post('/month-close', ['client_id' => $this->site->id, 'period' => '2026-06'])
+            ->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_PENDING])
             ->assertRedirect();
 
         $run = MonthCloseRun::where('client_id', $this->site->id)->firstOrFail();
@@ -170,7 +169,7 @@ final class MonthCloseTest extends TestCase
         ]);
 
         $this->actingAs($this->user)
-            ->post('/month-close', ['client_id' => $this->site->id, 'period' => '2026-06']);
+            ->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_PENDING]);
 
         $run = MonthCloseRun::where('client_id', $this->site->id)->firstOrFail();
 
@@ -192,7 +191,7 @@ final class MonthCloseTest extends TestCase
         $this->mainSite->update(['include_in_month_close' => false]);
 
         $this->actingAs($this->user)
-            ->post('/month-close', ['client_id' => $this->site->id, 'period' => '2026-06']);
+            ->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_PENDING]);
 
         $this->assertSame(
             array_keys(MonthCloseRun::CLIENT_STEPS),
@@ -203,7 +202,7 @@ final class MonthCloseTest extends TestCase
     public function test_gig_close_seeds_the_lean_checklist(): void
     {
         $this->actingAs($this->user)
-            ->post('/month-close', ['client_id' => $this->agency->id, 'period' => '2026-06']);
+            ->patch("/month-close/{$this->agency->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_PENDING]);
 
         $run = MonthCloseRun::where('client_id', $this->agency->id)->firstOrFail();
 
@@ -217,9 +216,9 @@ final class MonthCloseTest extends TestCase
     public function test_start_is_idempotent(): void
     {
         $this->actingAs($this->user)
-            ->post('/month-close', ['client_id' => $this->site->id, 'period' => '2026-06']);
+            ->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_PENDING]);
         $this->actingAs($this->user)
-            ->post('/month-close', ['client_id' => $this->site->id, 'period' => '2026-06']);
+            ->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_PENDING]);
 
         $this->assertSame(1, MonthCloseRun::where('client_id', $this->site->id)->count());
     }
@@ -229,14 +228,16 @@ final class MonthCloseTest extends TestCase
         $other = $this->user->account->clients()->create(['name' => 'Not Ours']);
 
         $this->actingAs($this->user)
-            ->post('/month-close', ['client_id' => $other->id, 'period' => '2026-06'])
-            ->assertNotFound();
+            ->patch("/month-close/{$other->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_PENDING])
+            ->assertSessionHasErrors('step');
+
+        $this->assertSame(0, MonthCloseRun::count());
     }
 
     public function test_toggling_all_steps_marks_the_run_completed(): void
     {
         $this->actingAs($this->user)
-            ->post('/month-close', ['client_id' => $this->site->id, 'period' => '2026-06']);
+            ->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_PENDING]);
 
         $run = MonthCloseRun::firstOrFail();
 
@@ -244,7 +245,7 @@ final class MonthCloseTest extends TestCase
             $state = $index % 2 === 0 ? MonthCloseStep::STATE_DONE : MonthCloseStep::STATE_SKIPPED;
 
             $this->actingAs($this->user)
-                ->patch("/month-close/steps/{$step->id}", ['state' => $state])
+                ->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => $step->step_key, 'project_id' => $step->project_id, 'state' => $state])
                 ->assertRedirect();
         }
 
@@ -261,7 +262,7 @@ final class MonthCloseTest extends TestCase
     public function test_resetting_a_step_to_pending_reopens_the_run(): void
     {
         $this->actingAs($this->user)
-            ->post('/month-close', ['client_id' => $this->site->id, 'period' => '2026-06']);
+            ->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_PENDING]);
 
         $run = MonthCloseRun::firstOrFail();
         $run->steps->each(fn (MonthCloseStep $s) => $s->update(['state' => MonthCloseStep::STATE_DONE]));
@@ -270,7 +271,7 @@ final class MonthCloseTest extends TestCase
 
         $step = $run->steps()->first();
         $this->actingAs($this->user)
-            ->patch("/month-close/steps/{$step->id}", ['state' => MonthCloseStep::STATE_PENDING])
+            ->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => $step->step_key, 'project_id' => $step->project_id, 'state' => MonthCloseStep::STATE_PENDING])
             ->assertRedirect();
 
         $step->refresh();
@@ -284,7 +285,7 @@ final class MonthCloseTest extends TestCase
         $this->site->update(['report_mode' => MonthCloseRun::REPORT_MODE_SUMMARY_EMAIL]);
 
         $this->actingAs($this->user)
-            ->post('/month-close', ['client_id' => $this->site->id, 'period' => '2026-06']);
+            ->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_PENDING]);
 
         $keys = MonthCloseRun::firstOrFail()->steps()->pluck('step_key')->all();
 
@@ -297,7 +298,7 @@ final class MonthCloseTest extends TestCase
         $this->site->update(['report_mode' => MonthCloseRun::REPORT_MODE_NONE]);
 
         $this->actingAs($this->user)
-            ->post('/month-close', ['client_id' => $this->site->id, 'period' => '2026-06']);
+            ->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_PENDING]);
 
         $run = MonthCloseRun::firstOrFail();
         $keys = $run->steps()->pluck('step_key')->all();
@@ -522,7 +523,7 @@ final class MonthCloseTest extends TestCase
     public function test_steps_are_account_scoped(): void
     {
         $this->actingAs($this->user)
-            ->post('/month-close', ['client_id' => $this->site->id, 'period' => '2026-06']);
+            ->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_PENDING]);
         $step = MonthCloseStep::firstOrFail();
 
         $intruder = User::factory()->create([
@@ -531,8 +532,10 @@ final class MonthCloseTest extends TestCase
         ]);
 
         $this->actingAs($intruder)
-            ->patch("/month-close/steps/{$step->id}", ['state' => MonthCloseStep::STATE_DONE])
+            ->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_DONE])
             ->assertNotFound();
+        $this->actingAs($intruder)->get("/month-close/{$this->site->id}?period=2026-06")->assertNotFound();
+        $this->assertSame(MonthCloseStep::STATE_PENDING, $step->fresh()->state);
     }
 
     public function test_a_client_still_owing_the_hours_month_is_listed_without_a_checklist(): void
@@ -550,17 +553,16 @@ final class MonthCloseTest extends TestCase
             ->assertInertia(fn (Assert $assert) => $assert
                 ->has('clients', 3)
                 ->where('clients.0.client.name', 'Agency X')
-                ->where('clients.0.can_start_checklist', true)
+                ->where('clients.0.total', count(MonthCloseRun::CLIENT_STEPS))
                 ->where('clients.1.client.name', 'Owing Retainer')
-                ->where('clients.1.client.type', null)
-                ->where('clients.1.can_start_checklist', false)
-                ->where('clients.1.run', null)
+                ->where('clients.1.total', 0)
+                ->where('clients.1.next', null)
                 ->where('clients.1.settlement.state', 'ready')
                 ->where('clients.2.client.name', 'Roofs Ltd'));
 
         $this->actingAs($this->user)
-            ->post('/month-close', ['client_id' => $owing->id, 'period' => '2026-09'])
-            ->assertNotFound();
+            ->patch("/month-close/{$owing->id}/steps", ['period' => '2026-09', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_DONE])
+            ->assertSessionHasErrors('step');
     }
 
     public function test_only_clients_owing_that_very_month_join_the_list(): void
@@ -623,16 +625,85 @@ final class MonthCloseTest extends TestCase
             $rows = collect($this->actingAs($this->user)->get("/month-close?period={$period}")->viewData('page')['props']['clients']);
 
             return $rows->filter(fn (array $row): bool => ($row['settlement']['state'] ?? null) === 'ready')
-                ->map(fn (array $row): array => [$row['client']['name'], $row['client']['type'], $row['can_start_checklist']])
+                ->map(fn (array $row): array => [$row['client']['name'], $row['total']])
                 ->values()
                 ->all();
         };
 
-        $this->assertSame([['Ended Retainer', null, false]], $owing('2026-08'));
-        $this->assertSame([['Reopened September', null, false], ['Taken Out', 'maintenance', false]], $owing('2026-09'));
+        $this->assertSame([['Ended Retainer', 0]], $owing('2026-08'));
+        $this->assertSame([['Reopened September', 0], ['Taken Out', 0]], $owing('2026-09'));
 
         $this->actingAs($this->user)
             ->get('/clients')
             ->assertInertia(fn (Assert $page) => $page->where('open_months', ['count' => 3, 'period' => null, 'oldest' => '2026-08']));
+    }
+
+    public function test_a_step_remembers_whether_the_app_or_an_agent_moved_it(): void
+    {
+        $this->actingAs($this->user)
+            ->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_DONE])
+            ->assertSessionHasNoErrors();
+        $this->artisan('month-close:tick', ['client' => $this->site->id, 'step' => 'report', 'state' => 'done', '--period' => '2026-06'])->assertSuccessful();
+
+        $steps = MonthCloseStep::whereNull('project_id')->pluck('completed_via', 'step_key');
+        $this->assertSame(MonthCloseStep::VIA_WEB, $steps['reconcile_log']);
+        $this->assertSame(MonthCloseStep::VIA_AGENT, $steps['report']);
+        $this->assertNull($steps['draft_invoice']);
+    }
+
+    public function test_a_client_row_names_the_next_step_and_who_does_it(): void
+    {
+        $this->travelTo(Carbon::parse('2026-07-15'));
+        $tick = fn (string $step) => $this->actingAs($this->user)->patch("/month-close/{$this->site->id}/steps", ['period' => '2026-06', 'step' => $step, 'state' => MonthCloseStep::STATE_DONE]);
+
+        $this->actingAs($this->user)->get('/month-close')->assertInertia(fn (Assert $assert) => $assert
+            ->where('clients.1.client.name', 'Roofs Ltd')
+            ->where('clients.1.resolved', 0)
+            ->where('clients.1.next', ['key' => 'db_archived', 'owner' => 'agent']));
+
+        foreach (['db_archived', 'local_db_import', 'wp_updates', 'local_verify', 'commit_merge'] as $step) {
+            $tick($step);
+        }
+
+        $this->actingAs($this->user)->get('/month-close')->assertInertia(fn (Assert $assert) => $assert
+            ->where('clients.1.resolved', 5)
+            ->where('clients.1.next', ['key' => 'live_deploy', 'owner' => 'you'])
+            ->where('clients.1.finished_on', null));
+    }
+
+    public function test_a_client_with_every_step_moved_is_finished_on_the_day_it_completed(): void
+    {
+        $this->travelTo(Carbon::parse('2026-07-03 10:00'));
+        foreach (array_keys(MonthCloseRun::CLIENT_STEPS) as $step) {
+            $this->actingAs($this->user)->patch("/month-close/{$this->agency->id}/steps", ['period' => '2026-06', 'step' => $step, 'state' => MonthCloseStep::STATE_SKIPPED]);
+        }
+
+        $this->actingAs($this->user)->get('/month-close')->assertInertia(fn (Assert $assert) => $assert
+            ->where('clients.0.client.name', 'Agency X')
+            ->where('clients.0.next', null)
+            ->where('clients.0.finished_on', '2026-07-03'));
+    }
+
+    public function test_the_client_card_shows_the_steps_per_site_then_the_clients_own_without_starting_the_close(): void
+    {
+        $this->actingAs($this->user)
+            ->get("/month-close/{$this->site->id}?period=2026-06")
+            ->assertInertia(fn (Assert $assert) => $assert
+                ->component('month-close/show')
+                ->where('client.name', 'Roofs Ltd')
+                ->has('sites', 1)
+                ->where('sites.0.project_id', $this->mainSite->id)
+                ->has('sites.0.steps', count(MonthCloseRun::SITE_STEPS))
+                ->where('sites.0.steps.5', fn ($step) => $step['key'] === 'live_deploy' && $step['owner'] === 'you' && $step['state'] === 'pending')
+                ->has('client_steps', count(MonthCloseRun::CLIENT_STEPS)));
+
+        $this->assertSame(0, MonthCloseRun::count());
+    }
+
+    public function test_a_client_outside_the_close_has_no_card(): void
+    {
+        $other = $this->user->account->clients()->create(['name' => 'Not Ours']);
+
+        $this->actingAs($this->user)->get("/month-close/{$other->id}?period=2026-06")->assertNotFound();
     }
 }

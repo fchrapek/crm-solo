@@ -194,6 +194,9 @@
 }
 
 .sectionMeta {
+    /* a long label wraps; the count beside it never breaks */
+    flex: none;
+    white-space: nowrap;
     font-size: var(--solo-text-meta);
     font-weight: 500;
     color: var(--solo-fg-muted);

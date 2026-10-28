@@ -15,6 +15,10 @@ final class MonthCloseStep extends Model
 
     public const string STATE_SKIPPED = 'skipped';
 
+    public const string VIA_AGENT = 'agent';
+
+    public const string VIA_WEB = 'web';
+
     protected $fillable = [
         'account_id',
         'month_close_run_id',
@@ -25,6 +29,7 @@ final class MonthCloseStep extends Model
         'note',
         'completed_at',
         'completed_by',
+        'completed_via',
     ];
 
     public function resolveRouteBinding($value, $field = null): ?Model
@@ -32,6 +37,21 @@ final class MonthCloseStep extends Model
         return $this->where($field ?? 'id', $value)
             ->where('account_id', auth()->user()->account_id)
             ->firstOrFail();
+    }
+
+    /** The one write of a step's state, for the app and the agents alike; a null note keeps the one recorded earlier. */
+    public function mark(string $state, ?User $actor, string $via, ?string $note = null): void
+    {
+        $pending = $state === self::STATE_PENDING;
+
+        $this->update([
+            'state' => $state,
+            'completed_at' => $pending ? null : now(),
+            'completed_by' => $pending ? null : $actor?->id,
+            'completed_via' => $pending ? null : $via,
+            ...($note === null ? [] : ['note' => $note]),
+        ]);
+        $this->run->refreshStatusFromSteps();
     }
 
     public function run(): BelongsTo

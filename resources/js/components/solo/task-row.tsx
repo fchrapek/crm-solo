@@ -36,6 +36,8 @@ interface TaskRowProps {
     kind?: 'day' | 'client' | 'done' | 'queue';
     /** Queue row State=Current: the task the timer runs on. */
     current?: boolean;
+    /** A ticked row keeps its title as is: a checklist step is done, not struck out like a finished task. */
+    plainDone?: boolean;
     className?: string;
 }
 
@@ -45,7 +47,7 @@ const KIND_CLASS = { day: styles.day, client: styles.clientRow, done: styles.don
  * Figma: A2f / Task row; kind client is Client task row, done the Done row, queue the Queue row.
  * compact is the A2f / List row of Wszystkie zadania and Propozycje: the title, the project as end meta, one action.
  */
-export function TaskRow({ task, onComplete, onUncomplete, trailing, compact, href, due, kind = 'day', current = false, className }: TaskRowProps) {
+export function TaskRow({ task, onComplete, onUncomplete, trailing, compact, href, due, kind = 'day', current = false, plainDone = false, className }: TaskRowProps) {
     const { t } = useTranslation();
     const brief = kind === 'done' || kind === 'queue';
     const where = brief ? '' : [task.client, task.project].filter(Boolean).join(' · ');
@@ -59,6 +61,7 @@ export function TaskRow({ task, onComplete, onUncomplete, trailing, compact, hre
                 compact ? styles.compact : KIND_CLASS[kind],
                 current ? styles.current : '',
                 task.done ? styles.done : '',
+                plainDone ? styles.plainDone : '',
                 className,
             ]
                 .filter(Boolean)

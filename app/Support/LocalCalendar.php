@@ -64,6 +64,12 @@ final class LocalCalendar
         return CarbonImmutable::instance($instant)->setTimezone(self::timezone())->format('Y-m');
     }
 
+    /** The month before a YYYY-MM month. */
+    public static function monthBefore(string $period): string
+    {
+        return self::monthFrom($period)->subMonthNoOverflow()->format('Y-m');
+    }
+
     /** The month after a YYYY-MM month. */
     public static function nextMonth(string $period): string
     {
