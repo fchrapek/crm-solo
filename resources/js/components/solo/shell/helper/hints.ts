@@ -92,9 +92,9 @@ export function helperHint(page: string, props: Record<string, unknown>, context
     return helperScene(page, props, context).hint;
 }
 
-/** What the closed dog does: surprised at a warning, looking at its line, or the default with the sunglasses. */
-export function helperPose(hint: HelperHint | null): DogPose {
-    return hint === null ? 'cool' : hint.warning ? 'wow' : 'look-left';
+/** What the closed dog does: surprised at a warning, looking at its line while the line shows, otherwise the sunglasses (it follows the pointer). */
+export function helperPose(hint: HelperHint | null, lineShown: boolean): DogPose {
+    return hint === null ? 'cool' : hint.warning ? 'wow' : lineShown ? 'look-left' : 'cool';
 }
 
 export interface HelperState {

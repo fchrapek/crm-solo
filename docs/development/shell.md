@@ -169,8 +169,8 @@ state beyond which window is open.
 - The dog: `shell/dog-still.tsx` is the PNG of a pose (`public/images/helper/`: sunglasses, looking left, right
   or up, surprised). `helper/dog.tsx` shows it first and keeps it where WebGL is missing or the user prefers
   reduced motion; otherwise it loads `helper/dog-model.tsx` (three.js, the landing page's scene and
-  `public/models/dog.glb`) as its own chunk, on desktop only, and the model takes the same pose: it looks at its
-  line, and lifts its sunglasses at a warning. `canAnimate()` asks for WebGL once and caches the answer: a probe
+  `public/models/dog.glb`) as its own chunk, on desktop only, and the model takes the same pose: it follows the
+  pointer, looks at its line only while the line shows (`helperPose(hint, lineShown)`), and is surprised at a warning. `canAnimate()` asks for WebGL once and caches the answer: a probe
   on every render opened a new context each time, and past the browser's limit the dog's own was dropped.
   `fluid` makes the dog fill its parent (`size` is then the drawing's resolution) and read the pointer against its
   own middle instead of the corner; `shade` colours the ground shadow on a coloured page.
@@ -180,7 +180,8 @@ state beyond which window is open.
 `auth/login` and `auth/czesc` are one layout in two colours, `AuthFrame` in `pages/auth/frame.tsx`: cobalt for
 the login, vermilion for the waitlist, the page itself the colour. On a phone the wordmark, the dog and the form
 stack, centred; from 768 px the words and the form sit at the bottom left of the 1040 px column and the large live
-dog (`fluid`) fills the right, cut by the edges. While a field has the cursor the dog looks at the form with its
+dog (`fluid`) fills the right, cut by the edges: its middle stays just below the window's, and on a narrow window
+it grows past the width and moves right so the head never covers the form. While a field has the cursor the dog looks at the form with its
 glasses up; an error gives the surprised pose (`wow`); after joining the list the glasses stay up. The waitlist's
 words are `waitlist_title`, `waitlist_submit` and `waitlist_joined_title`. To see `/czesc` locally, start the PHP
 server with `APP_CLOSED=true WAITLIST_ACCOUNT_ID=1`; without the account id it answers 503 ([setup.md](setup.md),

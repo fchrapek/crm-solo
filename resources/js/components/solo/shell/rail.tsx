@@ -36,7 +36,7 @@ export function Rail({ timer }: { timer: ShellTimer | null }) {
         <header className={styles.rail}>
             <div className={styles.top}>
                 <Link href={dashboard()} className={styles.logo} aria-label="CRM Solo">
-                    <DogStill size={44} />
+                    <DogStill size={56} />
                 </Link>
                 <nav className={styles.nav} aria-label={t('Main navigation')}>
                     {sections.map(({ key, label, href, icon }) => (
