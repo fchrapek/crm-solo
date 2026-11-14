@@ -72,6 +72,15 @@ describe('the sign-in and waitlist screens', () => {
         expect(phone).not.toMatch(/margin-block:[^;]*%/);
     });
 
+    test('from 768 px the dog is placed by its own middle, so a narrow window keeps it centred instead of sinking it to the bottom', () => {
+        const css = readFileSync(`${import.meta.dir}/login.module.css`, 'utf8');
+        const wide = css.slice(css.indexOf('@media')).match(/\.dog \{([^}]*)\}/)?.[1] ?? '';
+
+        expect(wide).toMatch(/top: calc\([\d.]+% - var\(--auth-dog-size\) \/ 2\);/);
+        expect(wide).not.toMatch(/bottom:/);
+        expect(wide).toMatch(/--auth-dog-size: min\(max\(/);
+    });
+
     test('after joining the form gives way to the confirmation and a way to log in', () => {
         const html = renderToStaticMarkup(<Waitlist joined />);
 

@@ -196,12 +196,12 @@
         font-size: var(--solo-text-row);
     }
 
-    /* the ear starts about a fifth into the drawing: on a narrow or short window the dog moves right so it never covers the words */
+    /* the head starts about a fifth into the drawing: on a narrow or short window the dog moves right so it never covers the words; its middle stays a little below the window's at every size */
     .dog {
-        --auth-dog-size: min(104vw, 172dvh);
+        --auth-dog-size: min(max(104vw, 1100px), 172dvh);
 
         position: absolute;
-        bottom: -46dvh;
+        top: calc(55% - var(--auth-dog-size) / 2);
         left: max(3%, 360px + var(--role-space-48) - 0.18 * var(--auth-dog-size));
         width: var(--auth-dog-size);
         margin: 0;

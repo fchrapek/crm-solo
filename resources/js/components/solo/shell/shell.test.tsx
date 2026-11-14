@@ -213,7 +213,7 @@ describe('the helper hints', () => {
         const hint = helperHint('clients/show', props, context);
 
         expect(hint).toMatchObject({ text: 'Pracownia Mebli: 12,8 h ponad pakiet. Tu pomogę przygotować raport.', warning: true });
-        expect(helperPose(hint)).toBe('wow');
+        expect(helperPose(hint, false)).toBe('wow');
         expect(helperHint('clients/show', { ...props, overview: { hours: { remaining: 3 } } }, context)?.warning).toBeUndefined();
     });
 
@@ -223,16 +223,18 @@ describe('the helper hints', () => {
         for (const remaining of [0, 0.25, 30, null, undefined]) {
             expect(scene(remaining)?.warning).toBeUndefined();
             expect(scene(remaining)?.text).toContain('Tu streszczę');
-            expect(helperPose(scene(remaining))).toBe('look-left');
+            expect(helperPose(scene(remaining), true)).toBe('look-left');
         }
         expect(scene(-0.25)).toMatchObject({ text: 'Pracownia Mebli: 0,25 h ponad pakiet. Tu pomogę przygotować raport.', warning: true });
-        expect(helperPose(scene(-0.25))).toBe('wow');
-        expect(helperPose(helperHint('clients/show', { tab: 'rozliczenia', client: { id: 7 }, overview: { hours: { remaining: -5 } } }, context))).toBe('look-left');
+        expect(helperPose(scene(-0.25), false)).toBe('wow');
+        expect(helperPose(helperHint('clients/show', { tab: 'rozliczenia', client: { id: 7 }, overview: { hours: { remaining: -5 } } }, context), true)).toBe('look-left');
     });
 
-    test('the dog looks at its line, and wears the sunglasses when there is none', () => {
-        expect(helperPose({ text: 'x', action: 'y' })).toBe('look-left');
-        expect(helperPose(null)).toBe('cool');
+    test('the dog looks at its line only while the line shows, otherwise it wears the sunglasses and follows the pointer', () => {
+        expect(helperPose({ text: 'x', action: 'y' }, true)).toBe('look-left');
+        expect(helperPose({ text: 'x', action: 'y' }, false)).toBe('cool');
+        expect(helperPose({ text: 'x', action: 'y', warning: true }, false)).toBe('wow');
+        expect(helperPose(null, true)).toBe('cool');
     });
 
     test('the client window links to the tabs of the client on the page', () => {

@@ -69,7 +69,7 @@ export function Helper({ page, props }: { page: string; props: Record<string, un
                     <Dog size={44} />
                 </span>
                 <span className={styles.wideDog}>
-                    <Dog size={88} live={wide} peek={peek} pose={helperPose(hint)} shade={null} />
+                    <Dog size={112} live={wide} peek={peek} pose={helperPose(hint, peek)} shade={null} />
                 </span>
             </button>
             {hint && (
