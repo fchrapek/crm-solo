@@ -206,6 +206,10 @@
   :global([data-day]) .content {
     max-width: 520px;
   }
+
+  :global([data-day]) .content[data-size="wide"] {
+    max-width: 640px;
+  }
 }
 
 :global([data-day]) .closeButton {
@@ -225,7 +229,7 @@
 
 :global([data-day]) .closeButton:focus-visible {
   box-shadow: none;
-  outline: 2px solid var(--solo-focus, var(--solo-fg));
+  outline: 2px solid var(--solo-fg);
   outline-offset: 3px;
 }
 
@@ -238,7 +242,7 @@
 :global([data-day]) .title {
   font-family: inherit;
   font-size: var(--solo-heading-dialog);
-  font-weight: var(--solo-title-weight, 600);
+  font-weight: 600;
   line-height: normal;
 }
 
@@ -248,6 +252,12 @@
   font-size: var(--solo-text-sub);
 }
 
+/* Figma: ActionRow. Anuluj is the quiet button: no edge, the hover fill instead. */
 :global([data-day]) .footer {
-  gap: var(--solo-space-3);
+  --solo-pill-edge: transparent;
+  --solo-pill-edge-hover: transparent;
+  --solo-pill-weight: 600;
+  --solo-pill-hover: var(--role-hover);
+
+  gap: var(--solo-space-2);
 }

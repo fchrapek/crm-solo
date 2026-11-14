@@ -18,6 +18,7 @@ export type Draft = {
     address: string;
     postal_code: string;
     city: string;
+    region: string;
     country: string;
     email: string;
     phone: string;
@@ -36,6 +37,7 @@ const NEW_CLIENT: Draft = {
     address: '',
     postal_code: '',
     city: '',
+    region: '',
     country: 'PL',
     email: '',
     phone: '',
@@ -58,6 +60,7 @@ function draftOf(details: ClientDetails | undefined): Draft {
         address: details.address ?? '',
         postal_code: details.postal_code ?? '',
         city: details.city ?? '',
+        region: details.region ?? '',
         country: details.country ?? '',
         email: details.email ?? '',
         phone: details.phone ?? '',
@@ -66,24 +69,24 @@ function draftOf(details: ClientDetails | undefined): Draft {
         currency: details.currency ?? 'PLN',
         segment: details.segment ?? '',
         hourly_rate: details.hourly_rate !== null && details.hourly_rate !== undefined ? String(details.hourly_rate) : '',
+        notes: details.notes ?? '',
     };
 }
 
 /**
  * What the form sends: the rate only while the cooperation is hourly, so editing anything else never clears a stored
- * rate; notes only on create, since Dane does not show them.
+ * rate.
  */
-export function clientPayload(draft: Draft, creating: boolean): Partial<Draft> {
+export function clientPayload(draft: Draft): Partial<Draft> {
     const payload: Partial<Draft> = { ...draft };
     if (draft.cooperation_type !== 'hourly') delete payload.hourly_rate;
-    if (!creating) delete payload.notes;
 
     return payload;
 }
 
 /**
  * Dane firmy, or with no client Nowy klient (Figma 573:10837, phone 573:15240): every field of the client form, Nazwa
- * first; notes are written only on create. The update rules require the type, so it always goes along, even unchanged.
+ * first. The update rules require the type, so it always goes along, even unchanged.
  */
 export function ClientDetailsDialog({
     clientId,
@@ -127,12 +130,12 @@ export function ClientDetailsDialog({
         };
 
         if (creating) {
-            router.post(store().url, clientPayload(draft, true), options);
+            router.post(store().url, clientPayload(draft), options);
 
             return;
         }
 
-        router.put(update(clientId).url, clientPayload(draft, false), options);
+        router.put(update(clientId).url, clientPayload(draft), options);
     }
 
     const nameField = (
@@ -236,6 +239,18 @@ export function ClientDetailsDialog({
                 />
             </SoloField>
         </SoloFieldRow>
+    );
+
+    const regionField = (
+        <SoloField label={t('Region')} htmlFor="client-region" error={errors.region}>
+            <SoloInput
+                {...fieldControl('client-region', errors.region)}
+                value={draft.region}
+                onChange={(e) => set('region')(e.target.value)}
+                maxLength={50}
+                disabled={processing}
+            />
+        </SoloField>
     );
 
     const contactRow = (
@@ -403,7 +418,8 @@ export function ClientDetailsDialog({
                 {cooperationField}
             </SoloFieldRow>
             {draft.cooperation_type === 'hourly' && hourlyRateField}
-            {creating && notesField}
+            {regionField}
+            {notesField}
         </ResponsiveDialog>
     );
 }

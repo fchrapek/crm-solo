@@ -9,6 +9,7 @@ import {
 } from '@dnd-kit/core';
 import * as React from 'react';
 
+import { GroupHeading } from '@/components/solo/tile';
 import styles from './kanban-board.module.css';
 
 export interface KanbanLane<T> {
@@ -109,12 +110,11 @@ function Lane<T>({
             style={{ minHeight }}
         >
             <div className={styles.laneHeader}>
-                <span className={styles.laneName}>{lane.label}</span>
-                <span className={styles.laneCount}>{count}</span>
+                <GroupHeading size="compact" flush label={lane.label} note={count} />
             </div>
             <div className={styles.laneBody}>
                 {lane.items.length === 0
-                    ? lane.emptyPlaceholder ?? <p className={styles.laneEmpty}> - </p>
+                    ? lane.emptyPlaceholder ?? null
                     : lane.items.map((item) => (
                         <DraggableCard
                             key={getCardId(item)}

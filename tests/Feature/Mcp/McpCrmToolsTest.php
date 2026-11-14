@@ -127,9 +127,9 @@ final class McpCrmToolsTest extends TestCase
             ->assertSee('"period":"2026-09"');
     }
 
-    public function test_task_done_completes_and_spawns_recurrence(): void
+    public function test_task_done_completes_a_task(): void
     {
-        $task = $this->task(['recurrence_period_days' => 7]);
+        $task = $this->task();
 
         CrmServer::tool(TaskDoneTool::class, ['task' => $task->id])
             ->assertOk()
@@ -138,21 +138,16 @@ final class McpCrmToolsTest extends TestCase
         $task->refresh();
         $this->assertTrue((bool) $task->is_completed);
         $this->assertSame('Done', $task->list_name);
-
-        $successor = Task::where('parent_task_id', $task->id)->sole();
     }
 
     public function test_task_done_is_idempotent(): void
     {
-        $task = $this->task(['recurrence_period_days' => 7]);
+        $task = $this->task();
 
         CrmServer::tool(TaskDoneTool::class, ['task' => $task->id])->assertOk();
         CrmServer::tool(TaskDoneTool::class, ['task' => $task->id])
             ->assertOk()
             ->assertSee('"was_already_done":true');
-
-        // A second completion must not spawn a second successor.
-        $this->assertSame(1, Task::where('parent_task_id', $task->id)->count());
     }
 
     public function test_task_done_reports_an_unknown_task(): void
@@ -311,7 +306,7 @@ final class McpCrmToolsTest extends TestCase
         [$ok, $payload] = $this->tool(MonthSettlementPreviewTool::class, ['client' => 'Verb Test', 'period' => '2026-09']);
 
         $this->assertTrue($ok);
-        $this->assertSame(['client_id', 'client', 'period', 'next', 'contracted', 'opening', 'cap', 'forfeited', 'used', 'closing', 'source', 'report_status', 'entries', 'hash', 'refusal'], array_keys($payload));
+        $this->assertSame(['client_id', 'client', 'period', 'next', 'contracted', 'opening', 'cap', 'forfeited', 'used', 'closing', 'source', 'report_status', 'entries', 'billed_time', 'hash', 'refusal'], array_keys($payload));
     }
 
     public function test_report_takes_a_report_id_or_a_client_not_both(): void

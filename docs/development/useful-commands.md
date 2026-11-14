@@ -49,7 +49,7 @@ Notes:
 
 ### `tasks:delete`
 
-Mass-delete (or soft-archive) tasks. Confirmation by default; `--force` skips.
+Mass-delete (or soft-archive) tasks. Confirmation by default; `--force` skips. A batch that holds a Trello card is refused whole: cards change on the board.
 
 ```
 php artisan tasks:delete
@@ -89,31 +89,7 @@ Cascade: deleting a task drops `task_runs`, `task_run_artifacts`, `task_attachme
 
 ## Projects
 
-### `projects:create`
-
-Create one or more **private** projects under a client (no Trello board attached).
-
-```
-php artisan projects:create
-    --client=<id|name>               # required
-    --name="…"                       # repeatable — one project per --name
-    --description="…"                # applied to every project
-    --account=1                      # must be the acting account (the default); another fails
-```
-
-Examples:
-
-```bash
-# Single project
-php artisan projects:create --client="Bakery Co" --name="bakery.test — staging tests"
-
-# Several at once with a shared description
-php artisan projects:create --client=125 \
-  --name="Sprint 1" --name="Sprint 2" --name="Sprint 3" \
-  --description="Throwaway scrum board for the May sprint"
-```
-
-Note: creating a **Client** via `ClientsController::store` auto-spawns a `"General"` private project. This command does not — you control naming, and `settings` start empty.
+A private project under a client is created with `crm project-create --client= --name=` (see `agent-crm-interface.md`).
 
 ### `projects:delete`
 

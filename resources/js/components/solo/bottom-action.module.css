@@ -14,8 +14,8 @@
 
 /* whatever its desktop look, the main action takes the surface's main one: ink on Paper, paper with the surface colour on timer and done */
 .main {
-    --solo-main-bg: var(--solo-primary, var(--solo-fg));
-    --solo-main-fg: var(--solo-on-primary, var(--solo-bg));
+    --solo-main-bg: var(--solo-fg);
+    --solo-main-fg: var(--solo-bg);
     --solo-main-edge: transparent;
 
     display: flex;

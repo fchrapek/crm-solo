@@ -1,264 +1,128 @@
-.brief {
-    max-width: 1040px;
+/* Figma: Klient · Rozliczenia. The tiles, rows and tables are parts; only what sits inside a tile is styled here. */
+
+/* the number tiles: two across, one row from 1100 px */
+.stats {
+    /* four figures share a phone's width two by two, so they are set smaller there */
+    --solo-display-stat: 30px;
+
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--role-space-12);
+}
+
+.stats > * {
+    flex: 1 1 calc(50% - var(--role-space-12));
+}
+
+.pillsLabel {
+    display: none;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.caption {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.ledger,
+.revenue {
+    display: flex;
+    flex-direction: column;
     margin: 0;
-    padding-top: 44px;
-    color: var(--solo-fg);
-    font-size: var(--solo-heading-brief);
-    font-weight: 600;
-    line-height: 1.22;
-    letter-spacing: -0.015em;
-    overflow-wrap: anywhere;
 }
 
-.accent {
-    color: var(--solo-accent);
-}
-
-/* Only an order's body shows on phones (Figma 335:3956); the retainer's desktop tree sits in .wide */
-.body {
-    padding-top: var(--solo-space-row);
-}
-
-.main {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.main,
-.railSection {
-    padding: var(--solo-card-pad, 0);
-    padding-bottom: var(--solo-card-pad-end, 0);
-    border: var(--solo-card-width, 0) solid var(--solo-card-border, transparent);
-    border-radius: var(--solo-card-radius, 0);
-    background: var(--solo-card, none);
-    box-shadow: var(--solo-card-shadow, none);
-}
-
-.rail {
-    display: flex;
-    flex-direction: column;
-    gap: 36px;
-    min-width: 0;
-    margin-top: 20px;
-}
-
-@media (min-width: 768px) {
-    .body {
-        padding-top: 36px;
-    }
-
-    .rail {
-        margin-top: 0;
-    }
-}
-
-.railSection {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.list,
-.ledger {
+.tileTitle {
     margin: 0;
-    padding: var(--solo-block-pad, 0);
-    border-radius: var(--solo-block-radius, 0);
-    background: var(--solo-block, none);
+    font: 600 var(--solo-text-row) / 1.35 var(--solo-font-text);
+}
+
+/* Razem: the sum under the month's tasks */
+.total::before {
+    height: var(--role-stroke-outline);
+}
+
+.locked {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--role-space-12);
+}
+
+.locked > p {
+    align-self: stretch;
+}
+
+.plainLink {
+    color: inherit;
+    text-decoration: none;
+}
+
+.plainLink:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.plainLink:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--role-radius-xs);
+}
+
+.tableInset {
+    padding-block: 0;
+}
+
+.figure {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.menuCell {
+    width: 44px;
+}
+
+.wideLabel {
+    display: none;
+}
+
+.nowrap {
+    white-space: nowrap;
+}
+
+.filters {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-12);
+}
+
+.filters nav {
+    margin-right: calc(-1 * var(--role-space-16));
+}
+
+/* Dialogs: the billed time of a month and of a task, the invoice to copy, the opening balance. */
+.list {
+    margin: 0;
+    padding: 0;
     list-style: none;
-}
-
-/* the last row ends on the block's edge, not on a cut */
-.list > :last-child,
-.ledger > :last-child {
-    border-bottom-width: var(--solo-head-rule, 1px);
 }
 
 .empty {
     margin: 0;
-    padding: var(--solo-space-row) var(--solo-head-inset, 0);
-    border-bottom: var(--solo-head-rule, 1px) solid var(--solo-rule);
-    border-radius: var(--solo-block-radius, 0);
-    background: var(--solo-block, none);
+    padding: var(--solo-space-row) 0;
+    border-bottom: 1px solid var(--solo-rule);
     color: var(--solo-fg-muted);
     font-size: var(--solo-text-row);
     line-height: 1.35;
 }
 
-.emptyBank {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 18px;
-}
-
-.emptyBank .empty {
-    align-self: stretch;
-}
-
-/* Figma: Bank row, six columns 200 / 90 / 90 / 90 / 110 / rest */
-.ledgerHead,
-.ledgerRow {
-    display: grid;
-    grid-template-columns: 200px 90px 90px 90px 110px minmax(0, 1fr);
+.billedCell {
+    display: inline-flex;
     align-items: center;
-    padding: var(--solo-space-row) var(--solo-row-inset, 0);
-    border-bottom: 1px solid var(--solo-rule);
-}
-
-.ledgerHead > *,
-.ledgerRow > * {
-    min-width: 0;
-    text-align: right;
-}
-
-.ledgerHead > :first-child,
-.ledgerRow > :first-child {
-    text-align: left;
-}
-
-.ledgerHead {
-    border-bottom-width: var(--solo-head-rule, 1px);
-    color: var(--solo-fg-muted);
-    font-size: var(--solo-text-micro);
-    font-weight: var(--solo-label-weight, 700);
-    line-height: normal;
-    letter-spacing: var(--solo-label-tracking, 0.06em);
-    text-transform: var(--solo-label-case, uppercase);
-}
-
-.ledgerRow {
-    color: var(--solo-fg);
-    font-size: var(--solo-text-field);
-    font-weight: 400;
-    line-height: normal;
-    font-variant-numeric: tabular-nums;
-}
-
-.ledgerRow [data-tone='accent'] {
-    color: var(--solo-accent);
-}
-
-.correction {
-    color: var(--solo-fg-muted);
-}
-
-.month {
-    font-weight: 500;
-}
-
-.report {
-    display: flex;
     justify-content: flex-end;
-}
-
-.states {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 2px;
-}
-
-.reopen {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--solo-fg);
-    font: inherit;
-    font-weight: 600;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    cursor: pointer;
-}
-
-.reopen:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
-    outline-offset: 3px;
-    border-radius: var(--solo-radius-xs);
-}
-
-.reportLink,
-.muted {
-    color: var(--solo-fg-muted);
-    text-decoration: none;
-}
-
-.reportLink:hover {
-    color: var(--solo-fg);
-    text-decoration: underline;
-    text-underline-offset: 3px;
-}
-
-.reportLink:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
-    outline-offset: 3px;
-    border-radius: var(--solo-radius-xs);
-}
-
-.footnote {
-    margin: 0;
-    padding: var(--solo-space-2-5) var(--solo-head-inset, 0) 0;
-    color: var(--solo-fg-muted);
-    font-size: var(--solo-text-meta);
-    font-weight: 400;
-    line-height: normal;
-}
-
-.more {
-    padding-top: 18px;
-}
-
-/* Figma: Invoice row */
-.invoice {
-    display: flex;
-    flex-direction: column;
-    gap: var(--solo-space-1);
-    padding: var(--solo-space-3) var(--solo-row-inset, 0);
-    border-bottom: 1px solid var(--solo-rule);
-    line-height: normal;
-}
-
-.invoiceTitle {
-    display: flex;
-    justify-content: space-between;
-    gap: var(--solo-space-4);
-    color: var(--solo-fg);
-    font-size: var(--solo-text-control);
-    font-weight: 500;
-}
-
-.invoiceTitle a {
-    min-width: 0;
-    color: inherit;
-    text-decoration: none;
-    overflow-wrap: anywhere;
-}
-
-.invoiceTitle a:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-}
-
-.invoiceTitle a:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
-    outline-offset: 3px;
-    border-radius: var(--solo-radius-xs);
-}
-
-.amount {
-    flex: none;
-    white-space: nowrap;
-}
-
-.invoiceState {
-    margin: 0;
-    color: var(--solo-fg-muted);
-    font-size: var(--solo-text-meta);
-    font-weight: 400;
-}
-
-.invoiceState[data-tone='accent'] {
-    color: var(--solo-accent);
+    gap: 6px;
 }
 
 .hint {
@@ -273,205 +137,156 @@
     justify-content: flex-end;
 }
 
-/* Desktop tree from 768 px, the phone tree below it; both render, so nothing waits for hydration */
-.wide {
-    display: none;
+.billedActions {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
 }
 
-@media (min-width: 768px) {
-    .wide {
-        display: contents;
-    }
-
-    .phone {
-        display: none;
-    }
+.restore {
+    margin-inline-end: auto;
 }
 
-.tone[data-tone='accent'] {
-    color: var(--solo-accent);
-}
-
-/* Figma: Mobile / Balance (334:3308) */
-.poster {
+.lockLine {
     display: flex;
-    flex-direction: column;
     align-items: flex-start;
-    padding-top: var(--solo-space-5);
-}
-
-.posterValue {
+    gap: var(--solo-space-2);
     margin: 0;
     color: var(--solo-fg);
-    font-family: var(--solo-font-display);
-    font-size: var(--solo-display-stat);
-    font-stretch: var(--solo-display-stretch, 62%);
-    font-weight: var(--solo-display-weight, 900);
-    line-height: 0.9;
-    letter-spacing: var(--solo-display-tracking, -0.02em);
-    white-space: nowrap;
+    font-size: var(--solo-text-sub);
+    line-height: 1.4;
 }
 
-.posterValue[data-tone='over'] {
-    color: var(--solo-accent);
+.lockLine > svg {
+    flex: none;
+    margin-top: 2px;
 }
 
-.posterLink {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--solo-space-2);
-    min-height: var(--solo-touch);
+/* The task name is the row's button and its hit area the whole row; the marker stays its own control above it. */
+.billedRow {
+    position: relative;
+}
+
+.taskList,
+.pickList {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.billedRowTitle {
     padding: 0;
     border: 0;
     background: none;
-    color: var(--solo-fg-muted);
-    font: 500 var(--solo-text-field) / normal var(--solo-font-text);
+    color: inherit;
+    font: inherit;
+    text-align: left;
     cursor: pointer;
 }
 
-.posterLink:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
-    outline-offset: 2px;
-    border-radius: var(--solo-radius-xs);
-}
-
-.posterNote {
-    margin: 0;
-    padding-top: var(--solo-space-1);
-    color: var(--solo-fg-muted);
-    font-size: var(--solo-text-meta);
-    line-height: 1.4;
-}
-
-.phoneEmpty {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 18px;
-    padding-top: var(--solo-space-5);
-}
-
-.phoneEmpty .empty {
-    align-self: stretch;
-}
-
-/* The rows under the poster, with the Mobile / Divider above the first */
-.phoneRows {
-    margin-top: var(--solo-space-5);
-    padding: var(--solo-block-pad, 0);
-    border-radius: var(--solo-block-radius, 0);
-    background: var(--solo-block, none);
-}
-
-.phoneRows::before {
+.billedRowTitle::after {
     content: '';
-    display: block;
-    height: var(--solo-head-rule, 1px);
-    background: var(--solo-rule);
+    position: absolute;
+    inset: 0;
 }
 
-.phoneRows .empty {
-    background: none;
+.billedRow .billedCell {
+    position: relative;
+    z-index: 1;
 }
 
-.phoneRows > :last-child {
-    border-bottom-color: var(--solo-block-end, var(--solo-rule));
-}
-
-/* Bank godzin sheet (334:3502): the terms row, Mobile / Ledger row (Month) and the Split entry row */
-.terms > * {
-    align-items: center;
-    min-height: 52px;
-    padding-block: var(--solo-space-2-5);
-}
-
-.monthRow {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--solo-space-3);
-    min-height: 60px;
-    padding: var(--solo-space-2-5) var(--solo-row-inset, 0);
-    border-bottom: 1px solid var(--solo-rule);
-}
-
-.monthText {
-    display: flex;
-    flex: 1 1 0;
-    flex-direction: column;
-    gap: 3px;
-    min-width: 0;
-}
-
-.monthTitle,
-.monthValue {
-    color: var(--solo-fg);
-    font: 500 var(--solo-text-cell) / normal var(--solo-font-text);
-}
-
-.monthSub,
-.monthState {
+.draftAmount {
     color: var(--solo-fg-muted);
-    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    font-weight: 400;
 }
 
-.monthBalance {
-    --month-balance-gap: 3px;
-    display: flex;
-    flex: none;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: var(--month-balance-gap);
-    max-width: 50%;
-    text-align: right;
-}
-
-.monthValue {
-    white-space: nowrap;
-}
-
-.monthValue[data-tone='accent'] {
-    color: var(--solo-accent);
-}
-
-.monthAction {
-    padding-inline: var(--solo-space-1);
-}
-
-/* Over Otwórz ponownie the report link's hit area grows upward over the state line, ending where the button starts. */
-.reportLink:has(+ .monthAction)::before {
-    top: auto;
-    bottom: calc(-1 * var(--month-balance-gap));
-    transform: translateX(-50%);
-}
-
-.splitRow {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--solo-space-3);
-    min-height: 52px;
-    padding: var(--solo-space-2-5) var(--solo-row-inset, 0);
-    border-bottom: 1px solid var(--solo-rule);
-    color: var(--solo-fg);
-    font: 500 var(--solo-text-cell) / normal var(--solo-font-text);
-}
-
-.splitRow > :last-child {
-    flex: none;
-    white-space: nowrap;
-}
-
-.sheetNote {
+.pickNote {
     margin: 0;
     padding-top: var(--solo-space-3);
     color: var(--solo-fg-muted);
-    font-size: var(--solo-text-meta);
+    font-size: 13px;
     line-height: 1.4;
 }
 
-.sheetMore {
-    display: inline-flex;
-    align-items: center;
-    min-height: var(--solo-touch);
-    margin-top: var(--solo-space-2);
+@media (min-width: 768px) {
+    .stats {
+        --solo-display-stat: 44px;
+
+        gap: var(--shell-gap);
+    }
+
+    .stats > * {
+        flex-basis: calc(50% - var(--shell-gap));
+    }
+
+    .pillsLabel,
+    .wideLabel {
+        display: inline;
+    }
+
+    .filters {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .filters nav {
+        margin-right: 0;
+    }
+
+    .monthSelect {
+        width: 220px;
+    }
+
+    .phoneLabel {
+        display: none;
+    }
+
+    .revenue {
+        flex-flow: row wrap;
+        column-gap: var(--shell-gap);
+    }
+
+    .revenue > * {
+        flex: 1 1 calc(50% - var(--shell-gap));
+    }
+
+    /* two rows across: the second of the first line is a first row too */
+    .revenue > :nth-child(2) {
+        border-top-color: transparent;
+    }
+
+    .draftAmount {
+        font-size: 13px;
+    }
+}
+
+@media (min-width: 1100px) {
+    /* the two columns end together: the Miesiąc tile takes what the side column has left and keeps its buttons at its end */
+    .level {
+        align-items: stretch;
+    }
+
+    .fill {
+        flex: 1 1 auto;
+    }
+
+    .atEnd {
+        margin-top: auto;
+    }
+
+    .ledger dd {
+        flex: none;
+        white-space: nowrap;
+    }
+
+    .stats {
+        --solo-display-stat: 58px;
+
+        flex-wrap: nowrap;
+    }
+
+    .stats > * {
+        flex: 1 1 0;
+    }
 }

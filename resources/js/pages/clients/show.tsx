@@ -1,31 +1,41 @@
-import FlashMessages from '@/components/flash-messages';
 import { ClientHeader, type ClientHeaderData, type ClientTab } from '@/components/solo/client-header';
-import { Masthead } from '@/components/solo/masthead';
+import { type PlaceResolver } from '@/components/solo/shell/place';
 import { SoloSurface } from '@/components/solo/surface';
-import { SoloToaster } from '@/components/solo/toaster';
 import { type SharedData } from '@/types';
 import { Head, usePage } from '@inertiajs/react';
 import { useState } from 'react';
-import { BillingActions, type BillingDialog, type BillingLedger, type ClientBilling, ClientBillingTab } from './components/client-billing';
+import {
+    BillingFrame,
+    type BillingInvoiceList,
+    type BillingLedger,
+    type BillingMonth,
+    type ClientBilling,
+    ClientBillingTab,
+    type SummaryEmails,
+} from './components/client-billing';
 import type { ClientCard, FieldEvent, MessageRow } from './components/client-fields';
 import {
     type ClientJournal,
     ClientJournalTab,
-    isRelationshipScreen,
+    JournalActions,
     type JournalNote,
     type JournalPage,
     type JournalWorkRow,
 } from './components/client-journal';
 import { type ClientOverview, ClientOverviewTab, OverviewActions } from './components/client-overview';
-import { type ClientTasks, ClientTasksTab, TasksActions } from './components/client-tasks';
+import { CopyContextAction } from './components/client-overview/copy-context-action';
+import { type ClientTasks, ClientTasksTab, NewTaskAction, TasksActions } from './components/client-tasks';
 import {
     type ClientContactRow,
     type ClientDetails,
     type ClientDocumentRow,
+    type ClientStage,
     DetailsActions,
     type DetailsDialog,
+    type DetailsProject,
     DetailsTab,
 } from './components/details-tab';
+import { clientPlace } from './place';
 import styles from './show.module.css';
 
 interface ShowProps {
@@ -35,10 +45,15 @@ interface ShowProps {
     tasks?: ClientTasks;
     billing?: ClientBilling;
     billing_ledger?: BillingLedger;
+    billing_month?: BillingMonth;
+    billing_invoices?: BillingInvoiceList;
+    billing_emails?: SummaryEmails | null;
     journal?: ClientJournal;
     journal_work?: JournalPage<JournalWorkRow>;
     journal_notes?: JournalPage<JournalNote>;
     details?: ClientDetails;
+    stage?: ClientStage;
+    projects?: DetailsProject[];
     contacts?: ClientContactRow[];
     documents?: ClientDocumentRow[];
     card?: ClientCard | null;
@@ -49,7 +64,7 @@ interface ShowProps {
 }
 
 export default function ClientShow() {
-    const { url, props } = usePage<SharedData & ShowProps>();
+    const { props } = usePage<SharedData & ShowProps>();
     const {
         tab,
         client,
@@ -60,6 +75,8 @@ export default function ClientShow() {
         journal_notes: journalNotes,
         billing,
         billing_ledger: billingLedger,
+        billing_month: billingMonth,
+        billing_invoices: billingInvoices,
         details,
         contacts,
         documents,
@@ -69,75 +86,89 @@ export default function ClientShow() {
         journal_sms: journalSms,
         auth,
     } = props;
-    const [agentsOpen, setAgentsOpen] = useState(false);
-    const [billingDialog, setBillingDialog] = useState<BillingDialog>(null);
+    const [creatingTask, setCreatingTask] = useState(false);
     const [detailsDialog, setDetailsDialog] = useState<DetailsDialog>(null);
-    const relationship = tab === 'dziennik' && isRelationshipScreen(url);
-    const header = (
+    const [composing, setComposing] = useState(false);
+    const header =
+        tab === 'rozliczenia' && billing ? (
+            <BillingFrame client={client} billing={billing} ledger={billingLedger} month={billingMonth} />
+        ) : (
         <ClientHeader
             client={client}
-            tab={tab}
+            phoneMenu={tab !== 'dziennik'}
             actions={
                 tab === 'przeglad' ? (
                     <OverviewActions client={client} />
                 ) : tab === 'zadania' ? (
-                    <TasksActions clientId={client.id} onOpenAgents={() => setAgentsOpen(true)} />
-                ) : tab === 'rozliczenia' && billing?.mode === 'retainer' && billingLedger ? (
-                    <BillingActions billing={billing} ledger={billingLedger} onOpen={setBillingDialog} />
+                    <TasksActions clientId={client.id} canCreate={(tasks?.projects.length ?? 0) > 0} onCreate={() => setCreatingTask(true)} />
+                ) : tab === 'dziennik' ? (
+                    <JournalActions onCompose={() => setComposing(true)} />
                 ) : tab === 'dane' && details ? (
                     <DetailsActions details={details} onOpen={setDetailsDialog} />
                 ) : undefined
             }
+            main={
+                tab === 'przeglad' ? (
+                    <CopyContextAction clientId={client.id} />
+                ) : tab === 'zadania' && (tasks?.projects.length ?? 0) > 0 ? (
+                    <NewTaskAction onCreate={() => setCreatingTask(true)} />
+                ) : tab === 'dziennik' ? (
+                    <JournalActions onCompose={() => setComposing(true)} />
+                ) : undefined
+            }
         />
-    );
+        );
 
     return (
-        <SoloSurface className={styles.page} day="paper">
+        <SoloSurface day="paper">
             <Head title={client.short_name} />
-            <div className={styles.frame}>
-                <Masthead current="clients" />
-                <main>
-                    {relationship ? <div className={styles.pushedAway}>{header}</div> : header}
-                    {tab === 'przeglad' && overview ? (
-                        <ClientOverviewTab clientId={client.id} overview={overview} />
-                    ) : tab === 'zadania' && tasks ? (
-                        <ClientTasksTab clientId={client.id} tasks={tasks} agentsOpen={agentsOpen} onAgentsOpenChange={setAgentsOpen} />
-                    ) : tab === 'rozliczenia' && billing && (billing.mode === 'order' || billingLedger) ? (
-                        <ClientBillingTab
-                            clientId={client.id}
-                            clientName={client.short_name}
-                            billing={billing}
-                            ledger={billingLedger}
-                            dialog={billingDialog}
-                            onDialogChange={setBillingDialog}
-                        />
-                    ) : tab === 'dane' && details && contacts ? (
-                        <DetailsTab
-                            client={client}
-                            details={details}
-                            contacts={contacts}
-                            documents={documents ?? []}
-                            card={card ?? null}
-                            fieldHistory={fieldHistory ?? []}
-                            fieldHistoryCount={fieldHistoryCount}
-                            dialog={detailsDialog}
-                            onDialogChange={setDetailsDialog}
-                        />
-                    ) : tab === 'dziennik' && journal && journalWork && journalNotes ? (
-                        <ClientJournalTab
-                            clientId={client.id}
-                            clientName={client.short_name}
-                            journal={journal}
-                            work={journalWork}
-                            notes={journalNotes}
-                            sms={journalSms ?? null}
-                            owner={auth.user?.name ?? null}
-                            relationship={relationship}
-                        />
-                    ) : null}
-                </main>
-            </div>
-            <FlashMessages toaster={<SoloToaster />} />
+            <main className={styles.page}>
+                {header}
+                {tab === 'przeglad' && overview ? (
+                    <ClientOverviewTab clientId={client.id} overview={overview} manage={Boolean(auth.user?.owner)} />
+                ) : tab === 'zadania' && tasks ? (
+                    <ClientTasksTab clientId={client.id} tasks={tasks} creating={creatingTask} onCreatingChange={setCreatingTask} />
+                ) : tab === 'rozliczenia' && billing && (billing.mode === 'order' || billingLedger) ? (
+                    <ClientBillingTab
+                        clientId={client.id}
+                        clientName={client.short_name}
+                        billing={billing}
+                        ledger={billingLedger}
+                        month={billingMonth}
+                        invoices={billingInvoices}
+                        emails={props.billing_emails ?? null}
+                    />
+                ) : tab === 'dane' && details && contacts ? (
+                    <DetailsTab
+                        client={client}
+                        details={details}
+                        contacts={contacts}
+                        documents={documents ?? []}
+                        card={card ?? null}
+                        fieldHistory={fieldHistory ?? []}
+                        fieldHistoryCount={fieldHistoryCount}
+                        stage={props.stage ?? null}
+                        projects={props.projects ?? []}
+                        owner={Boolean(auth.user?.owner)}
+                        dialog={detailsDialog}
+                        onDialogChange={setDetailsDialog}
+                    />
+                ) : tab === 'dziennik' && journal && journalWork && journalNotes ? (
+                    <ClientJournalTab
+                        clientId={client.id}
+                        journal={journal}
+                        work={journalWork}
+                        notes={journalNotes}
+                        sms={journalSms ?? null}
+                        owner={auth.user?.name ?? null}
+                        manage={Boolean(auth.user?.owner)}
+                        composing={composing}
+                        onComposingChange={setComposing}
+                    />
+                ) : null}
+            </main>
         </SoloSurface>
     );
 }
+
+ClientShow.place = clientPlace satisfies PlaceResolver<ShowProps>;

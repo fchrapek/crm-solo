@@ -89,6 +89,10 @@
         "check": [
             "Composer\\Config::disableProcessTimeout",
             "bash scripts/check.sh"
+        ],
+        "check:locks": [
+            "Composer\\Config::disableProcessTimeout",
+            "bash scripts/check-locks.sh"
         ]
     },
     "extra": {

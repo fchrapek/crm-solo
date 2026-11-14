@@ -1,46 +1,37 @@
-.page {
-    min-height: 100vh;
-}
-
-.frame {
-    max-width: var(--solo-grid-max);
-    margin: 0 auto;
-    padding-inline: var(--solo-grid-margin);
+/* Figma: Błąd. In the shell the page is the column; a guest gets the page ground and its margins from here. */
+.page[data-guest] {
+    min-height: 100dvh;
+    padding: var(--shell-margin);
+    background: var(--role-page);
+    color: var(--role-text-primary);
+    font-family: var(--solo-font-text);
 }
 
 .main {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--solo-space-5);
-    padding-top: var(--solo-space-7);
+    gap: var(--role-space-16);
+    padding-top: var(--role-space-24);
+}
+
+.dog {
+    display: block;
+    margin-bottom: var(--role-space-8);
 }
 
 .line {
     margin: 0;
-    color: var(--solo-fg-muted);
-    font: 400 var(--solo-mobile-body) / 1.4 var(--solo-font-text);
-}
-
-.link {
-    color: var(--solo-fg);
-    font: 600 var(--solo-text-action) / normal var(--solo-font-text);
-    text-decoration: none;
-}
-
-.link:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-}
-
-.link:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
-    outline-offset: 3px;
-    border-radius: var(--solo-radius-xs);
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-row) / 1.4 var(--solo-font-text);
 }
 
 @media (min-width: 768px) {
+    .page[data-guest] {
+        padding: var(--role-space-48) calc(var(--shell-rail) + var(--role-space-48));
+    }
+
     .main {
-        padding-top: var(--solo-space-8);
+        padding-top: var(--role-space-48);
     }
 }

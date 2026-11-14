@@ -1,21 +1,13 @@
+/* The client record: the frame, then the tab's tiles. */
 .page {
-    min-height: 100vh;
-}
-
-.frame {
-    max-width: var(--solo-grid-max);
-    margin: 0 auto;
-    padding-inline: var(--solo-grid-margin);
-    padding-bottom: 72px;
-}
-
-/* The header gives way to a pushed phone screen (Dziennik's Relacja z klientem); from 768 px nothing is pushed. */
-.pushedAway {
-    display: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-12);
+    min-width: 0;
 }
 
 @media (min-width: 768px) {
-    .pushedAway {
-        display: contents;
+    .page {
+        gap: var(--shell-gap);
     }
 }

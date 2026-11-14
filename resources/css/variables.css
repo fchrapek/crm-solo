@@ -149,9 +149,6 @@
     /* Icon treatment — lucide strokes. Weight plus cap/join geometry is what a
    * theme changes instead of swapping icon packages (see docs theming.md). */
     --icon-stroke: 2;
-    --icon-stroke-16: 2;
-    --icon-stroke-20: 2;
-    --icon-stroke-24: 2.25;
     --icon-linecap: round;
     --icon-linejoin: round;
 
@@ -183,7 +180,7 @@
    * ======================================== */
     --font-family-sans:
         'Spline Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-    --font-family-mono: 'Spline Sans Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    --font-family-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
     /* Display face for headings — themes swap this independently of body text,
    * which is where most of a theme's personality lives. */

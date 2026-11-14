@@ -90,6 +90,42 @@ final class ClientJournalTest extends TestCase
         $this->assertSame(['rows' => 4, 'notes' => 2, 'field_changes' => 0, 'sms' => 0, 'person_minutes' => 285], $journal['summary']);
     }
 
+    public function test_a_work_row_of_one_finished_entry_carries_what_its_editor_needs_and_a_session_or_a_running_timer_none(): void
+    {
+        $task = Task::create(['project_id' => $this->project->id, 'name' => 'Deploy na prod', 'list_name' => 'Doing']);
+        $single = $this->entry('2026-10-02 08:00:00', 45, task: $task, description: 'Poprawki po testach');
+        $this->entry('2026-10-01 08:00:00', 40, session: 'run-1', task: $task);
+        $this->entry('2026-10-01 09:00:00', 20, session: 'run-1', task: $task);
+        $running = $this->entry('2026-10-03 08:00:00', 5);
+        $running->update(['end_time' => null, 'duration_minutes' => 0]);
+
+        $rows = collect($this->journal()['work']['rows'])->keyBy('date');
+
+        $this->assertSame([
+            'id' => $single->id,
+            'title' => null,
+            'description' => 'Poprawki po testach',
+            'task_id' => $task->id,
+            'start_time' => '2026-10-02T08:00:00+00:00',
+            'end_time' => '2026-10-02T08:45:00+00:00',
+            'billable' => true,
+        ], $rows['2026-10-02']['entry']);
+        $this->assertNull($rows['2026-10-01']['entry']);
+        $this->assertNull($rows['2026-10-03']['entry']);
+    }
+
+    public function test_the_journal_lists_this_clients_tasks_for_tying_a_time_entry_to_one(): void
+    {
+        $task = Task::create(['project_id' => $this->project->id, 'name' => 'Deploy na prod', 'list_name' => 'Doing']);
+        Task::create(['project_id' => $this->project->id, 'name' => 'Archived', 'list_name' => 'Doing', 'archived_at' => now()]);
+        $other = Account::create(['name' => 'Other']);
+        $foreign = $other->clients()->create(['name' => 'Foreign', 'currency' => 'PLN']);
+        $foreignProject = Project::create(['account_id' => $other->id, 'client_id' => $foreign->id, 'name' => 'Theirs']);
+        Task::create(['project_id' => $foreignProject->id, 'name' => 'Not ours', 'list_name' => 'Doing']);
+
+        $this->assertSame([['id' => $task->id, 'name' => 'Deploy na prod', 'project_name' => $this->project->name]], $this->journal()['tasks']);
+    }
+
     public function test_an_agent_session_is_one_work_row_with_the_writes_that_target_its_own_rows(): void
     {
         $task = Task::create(['project_id' => $this->project->id, 'name' => 'Deploy na prod', 'list_name' => 'Doing']);
@@ -119,6 +155,7 @@ final class ClientJournalTest extends TestCase
             'running' => false,
             'writes' => 3,
             'is_new' => true,
+            'entry' => null,
         ], $rows[0]);
         $this->assertSame(['entry', null, null], [$rows[1]['kind'], $rows[1]['via'], $rows[1]['writes']]);
     }

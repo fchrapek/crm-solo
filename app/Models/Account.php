@@ -41,10 +41,16 @@ final class Account extends Model
         return ($this->settings['features'][$feature] ?? true) !== false;
     }
 
-    /** @return array<string, bool> */
-    public function features(): array
+    /** Whether a module is there for this viewer: billing is the owner's; no viewer is an agent or a command, which act as the account. */
+    public function shows(string $feature, ?User $viewer): bool
     {
-        return array_combine(self::FEATURES, array_map($this->hasFeature(...), self::FEATURES));
+        return $this->hasFeature($feature) && ($feature !== 'billing' || $viewer === null || (bool) $viewer->owner);
+    }
+
+    /** @return array<string, bool> */
+    public function features(?User $viewer = null): array
+    {
+        return array_combine(self::FEATURES, array_map(fn (string $feature): bool => $this->shows($feature, $viewer), self::FEATURES));
     }
 
     /** The first month (YYYY-MM) whose retainer months must be settled; an account without the setting starts in the local month it was created. */

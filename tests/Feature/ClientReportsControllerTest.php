@@ -507,7 +507,7 @@ final class ClientReportsControllerTest extends TestCase
 
     public function test_finalize_sets_status_and_logs_revision(): void
     {
-        $report = $this->makeReport();
+        $report = $this->makeReport(backed: true);
 
         $this->actingAs($this->user)
             ->post("/clients/{$this->client->id}/reports/{$report->id}/finalize")
@@ -655,7 +655,7 @@ final class ClientReportsControllerTest extends TestCase
 
     public function test_finalize_and_reopen_snapshot_what_is_stored_when_they_run(): void
     {
-        $report = $this->makeReport();
+        $report = $this->makeReport(backed: true);
         // Another request saves new text right after this one loaded the report.
         $this->afterNextLoad($report, ['body_markdown' => 'saved meanwhile']);
 
@@ -669,6 +669,17 @@ final class ClientReportsControllerTest extends TestCase
         $this->actingAs($this->user)->post("/clients/{$this->client->id}/reports/{$report->id}/reopen")->assertRedirect();
 
         $this->assertCount(1, $report->fresh()->revisions);
+    }
+
+    public function test_the_report_page_says_when_the_draft_waits_for_a_recalculation(): void
+    {
+        $report = $this->makeReport();
+
+        $flag = fn (): bool => $this->actingAs($this->user)->get("/clients/{$this->client->id}/reports/{$report->id}")->assertOk()->viewData('page')['props']['report']['needs_recalculation'];
+
+        $this->assertFalse($flag());
+        $report->forceFill(['needs_recalculation' => true])->save();
+        $this->assertTrue($flag());
     }
 
     public function test_destroy_removes_the_report_and_returns_to_the_billing_tab(): void
@@ -839,8 +850,15 @@ final class ClientReportsControllerTest extends TestCase
         );
     }
 
-    private function makeReport(string $status = ClientReport::STATUS_DRAFT): ClientReport
+    /** A March report billing 3 h; $backed states one task's figure at 3 h, as a finalize needs. */
+    private function makeReport(string $status = ClientReport::STATUS_DRAFT, bool $backed = false): ClientReport
     {
+        if ($backed) {
+            $project = Project::query()->firstOrCreate(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'name' => 'Strona']);
+            $task = Task::query()->firstOrCreate(['project_id' => $project->id, 'name' => 'Wdrożenie'], ['is_reportable' => true]);
+            \App\Models\TaskBilledMonth::query()->updateOrCreate(['task_id' => $task->id, 'client_id' => $this->client->id, 'period' => '2026-03'], ['billed_minutes' => 180]);
+        }
+
         return $this->client->reports()->create([
             'account_id' => $this->account->id,
             'period_type' => 'month',

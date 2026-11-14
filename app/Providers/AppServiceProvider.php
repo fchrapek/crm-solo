@@ -6,15 +6,27 @@ namespace App\Providers;
 
 use App\Models\AgentToken;
 use App\Models\Client;
+use App\Models\ClientBilledMonth;
+use App\Models\ClientFieldDefinition;
 use App\Models\ClientLifecycleEvent;
+use App\Models\ClientMonthClosure;
+use App\Models\ClientMonthSettlementEvent;
+use App\Models\ClientReport;
+use App\Models\ClientReportRevision;
+use App\Models\ClientRetainer;
+use App\Models\ClientSummaryEmail;
 use App\Models\Contact;
 use App\Models\DayPick;
+use App\Models\InfaktDraftRequest;
 use App\Models\Lead;
 use App\Models\LeadStageEvent;
+use App\Models\MessageRule;
+use App\Models\MessageTemplate;
 use App\Models\MonthCloseRun;
 use App\Models\MonthCloseStep;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TaskBilledMonth;
 use App\Models\TaskBrief;
 use App\Models\TimeEntry;
 use App\Models\User;
@@ -120,10 +132,13 @@ final class AppServiceProvider extends ServiceProvider
         // Agent tokens: one per agent, account-bound, per-token budget across MCP and the verb endpoint.
         Sanctum::usePersonalAccessTokenModel(AgentToken::class);
         Gate::define('manage-agent-tokens', fn (User $user): bool => (bool) $user->owner);
+        Gate::define('manage-summary-emails', fn (User $user): bool => (bool) $user->owner);
+        // Money, integrations and settings; a member works with clients, tasks, time and notes.
+        Gate::define('manage-account', fn (User $user): bool => (bool) $user->owner);
         RateLimiter::for('agent', fn (Request $request): Limit => Limit::perMinute((int) config('agent.per_minute'))
             ->by('agent|'.($request->attributes->get('agent_token_id') ?? $request->ip())));
 
-        foreach ([TimeEntry::class, ClientLifecycleEvent::class, Task::class, TaskBrief::class, Lead::class, LeadStageEvent::class, MonthCloseRun::class, MonthCloseStep::class, Project::class, Client::class, Contact::class, DayPick::class] as $model) {
+        foreach ([TimeEntry::class, ClientLifecycleEvent::class, Task::class, TaskBrief::class, Lead::class, LeadStageEvent::class, MonthCloseRun::class, MonthCloseStep::class, Project::class, Client::class, Contact::class, DayPick::class, ClientReport::class, ClientReportRevision::class, ClientMonthClosure::class, ClientMonthSettlementEvent::class, ClientRetainer::class, ClientBilledMonth::class, TaskBilledMonth::class, InfaktDraftRequest::class, ClientSummaryEmail::class, MessageTemplate::class, MessageRule::class, ClientFieldDefinition::class] as $model) {
             $model::observe(AgentWriteRecorder::class);
         }
     }

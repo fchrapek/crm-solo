@@ -41,7 +41,7 @@ final class InfaktWebSyncConflictsTest extends TestCase
         ]);
 
         $this->account = Account::create(['name' => 'Studio']);
-        $this->user = User::factory()->for($this->account)->create();
+        $this->user = User::factory()->for($this->account)->create(['owner' => true]);
         Integration::create(['account_id' => $this->account->id, 'provider' => 'infakt', 'api_key' => 'key', 'is_enabled' => true]);
     }
 

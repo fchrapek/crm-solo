@@ -12,6 +12,7 @@ use App\Models\Lead;
 use App\Services\Agent\ClientDirectory;
 use App\Services\Agent\TaskList;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * ⌘K, `crm search` and the MCP `search` tool: one query over everything the owner can open, grouped by type.
@@ -41,7 +42,7 @@ final class GlobalSearch
     {
         $query = mb_trim($query);
         $groups = $group !== null && in_array($group, self::GROUPS, true) ? [$group] : self::GROUPS;
-        if (! Account::query()->findOrFail($accountId)->hasFeature('billing')) {
+        if (! Account::query()->findOrFail($accountId)->shows('billing', Auth::user())) {
             $groups = array_values(array_diff($groups, ['reports', 'invoices']));
         }
         $limit = count($groups) === 1 ? self::MORE : self::PER_GROUP;

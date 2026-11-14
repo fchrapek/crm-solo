@@ -8,15 +8,24 @@ use App\Models\Account;
 use App\Models\AgentAuditEvent;
 use App\Models\AgentToken;
 use App\Models\Client;
+use App\Models\ClientMonthClosure;
+use App\Models\ClientMonthSettlementEvent;
+use App\Models\ClientReport;
+use App\Models\ClientReportRevision;
+use App\Models\ClientRetainer;
 use App\Models\DayPick;
+use App\Models\InfaktDraftRequest;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\Agent\AgentAbilities;
+use App\Services\Agent\AgentCall;
+use App\Services\Agent\AgentCallContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -36,6 +45,11 @@ final class AgentWriteAbilitiesTest extends TestCase
         'unplan' => ['TASK'],
         'client-create' => ['--name=New Co'],
         'project-create' => ['--client=Bridge Co', '--name=Shop'],
+        'report-create' => ['Bridge Co', '--period=2026-09'],
+        'report-update' => ['1', '--body=x', '--version=v'],
+        'report-regenerate' => ['1'],
+        'report-opening-balance' => ['1', '2'],
+        'report-status' => ['1', 'finalize'],
     ];
 
     private User $owner;
@@ -161,6 +175,36 @@ final class AgentWriteAbilitiesTest extends TestCase
         $token->forceFill(['revoked_at' => now()])->save();
         $this->assertSame(1, Artisan::call('agent-tokens:grant', ['id' => (string) $token->id, '--ability' => ['write:clients']]));
         $this->assertSame([AgentAbilities::READ], $token->fresh()->abilities);
+    }
+
+    public function test_write_at_issue_includes_the_report_invoice_and_billing_groups_and_older_tokens_get_them_only_by_grant(): void
+    {
+        $this->assertSame(
+            [AgentAbilities::REPORTS, AgentAbilities::INVOICE_DRAFTS, AgentAbilities::BILLING],
+            array_values(array_intersect(AgentAbilities::normalise(['write']), [AgentAbilities::REPORTS, AgentAbilities::INVOICE_DRAFTS, AgentAbilities::BILLING])),
+        );
+
+        $this->token([AgentAbilities::READ, AgentAbilities::MONTH_CLOSE]);
+        $token = AgentToken::query()->sole();
+        $this->assertSame(0, Artisan::call('agent-tokens:grant', ['id' => (string) $token->id, '--ability' => ['write:reports']]));
+
+        $this->assertSame([AgentAbilities::READ, AgentAbilities::MONTH_CLOSE, AgentAbilities::REPORTS], $token->fresh()->abilities);
+    }
+
+    public function test_an_agent_write_to_a_retainer_report_closure_or_invoice_draft_is_audited(): void
+    {
+        config(['agent.local_account' => $this->owner->account_id]);
+
+        $retainer = app(AgentCallContext::class)->run(new AgentCall(AgentCall::VIA_CLI, 'crm:retainer-set'), fn (): ClientRetainer => ClientRetainer::create([
+            'account_id' => $this->owner->account_id, 'client_id' => $this->client->id, 'monthly_hours' => 10,
+            'effective_from' => '2026-10-01', 'currency' => 'PLN',
+        ]));
+
+        $audit = AgentAuditEvent::query()->where('target_type', 'client_retainers')->sole();
+        $this->assertSame([$retainer->id, 'created', 'crm:retainer-set'], [$audit->target_id, $audit->action, $audit->verb]);
+        foreach ([ClientReport::class, ClientReportRevision::class, ClientMonthClosure::class, ClientMonthSettlementEvent::class, InfaktDraftRequest::class] as $model) {
+            $this->assertTrue(Event::hasListeners("eloquent.created: {$model}"), "{$model} is not audited");
+        }
     }
 
     public function test_a_read_token_reads_the_month_close_reports_and_settlement_preview(): void

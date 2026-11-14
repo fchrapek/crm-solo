@@ -1,8 +1,8 @@
 import { fieldControl, SoloField, SoloInput } from '@/components/solo/field';
-import { KvRow } from '@/components/solo/kv-row';
-import { ListRow } from '@/components/solo/list-row';
-import { SectionAction, SectionHead, SoloButton } from '@/components/solo/primitives';
+import { SoloButton } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
+import { Row } from '@/components/solo/row';
+import { Tile, TileHeader, TileInset, TileNote, TileRows } from '@/components/solo/tile';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import settings from '@/routes/settings';
 import { router } from '@inertiajs/react';
@@ -10,6 +10,7 @@ import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLeadLabel } from '../../leads/lib/labels';
 import type { LeadgenSettings } from '../types';
+import { RowButton, TileButton } from './parts';
 import styles from './tab.module.css';
 
 type Source = { slug: string; label: string };
@@ -39,60 +40,41 @@ export function LeadsTab({ leadgen }: { leadgen: LeadgenSettings }) {
 
     return (
         <>
-            <section className={styles.section}>
-                <SectionHead
-                    kind="body"
-                    label={`${t('Default sources')} · ${leadgen.default_sources.length}`}
-                    meta={<span className={styles.wide}>{t('read only')}</span>}
-                />
-                <div className={styles.chipBlock}>
-                    <div className={styles.chips}>
-                        {leadgen.default_sources.map((slug) => (
-                            <span key={slug} className={styles.chip}>
-                                {label('source', slug)}
-                            </span>
-                        ))}
-                    </div>
+            <Tile kind="plain">
+                <TileHeader label={t('Default sources')} count={leadgen.default_sources.length} end={t('read only')} />
+                <div className={styles.chips}>
+                    {leadgen.default_sources.map((slug) => (
+                        <span key={slug} className={styles.chip}>
+                            {label('source', slug)}
+                        </span>
+                    ))}
                 </div>
-                <dl className={`${styles.list} ${styles.phone} ${styles.chipList}`}>
-                    <KvRow label={t('Sources')}>{leadgen.default_sources.map((slug) => label('source', slug)).join(', ')}</KvRow>
-                </dl>
-                <p className={`${styles.note} ${styles.phone}`}>{t('From the configuration, read only')}</p>
-            </section>
+            </Tile>
 
-            <section className={styles.section}>
-                <SectionHead
-                    kind="body"
-                    label={`${t('Custom sources')} · ${custom.length}`}
-                    action={<SectionAction onClick={() => setEditing('new')}>{t('New source')}</SectionAction>}
+            <Tile kind="list">
+                <TileHeader
+                    label={t('Custom sources')}
+                    count={custom.length}
+                    end={<TileButton onClick={() => setEditing('new')}>{t('New source')}</TileButton>}
                 />
-                {custom.length === 0 && <p className={`${styles.note} ${styles.emptyBlock}`}>{t('No custom sources yet.')}</p>}
-                <ul className={`${styles.list} ${styles.phone}`}>
-                    {custom.map((source) => (
-                        <li key={source.slug}>
-                            <ListRow
+                {custom.length === 0 ? (
+                    <TileInset>
+                        <TileNote>{t('No custom sources yet.')}</TileNote>
+                    </TileInset>
+                ) : (
+                    <TileRows>
+                        {custom.map((source, index) => (
+                            <Row
+                                key={source.slug}
+                                rule={index > 0}
                                 title={source.label || label('source', source.slug)}
-                                sub={<span className={styles.mono}>{source.slug}</span>}
-                                onClick={() => setEditing(source)}
+                                wideMeta={<span className={styles.code}>{source.slug}</span>}
+                                action={<RowButton onClick={() => setEditing(source)}>{t('Edit')}</RowButton>}
                             />
-                        </li>
-                    ))}
-                </ul>
-                <ul className={`${styles.list} ${styles.wide}`}>
-                    {custom.map((source) => (
-                        <li key={source.slug} className={styles.row}>
-                            <span className={styles.rowText}>
-                                <span className={styles.rowTitle}>{source.label || label('source', source.slug)}</span>
-                                <span className={styles.mono}>{source.slug}</span>
-                            </span>
-                            <span className={styles.rowEnd}>
-                                <SectionAction onClick={() => setEditing(source)}>{t('Edit')}</SectionAction>
-                                <SectionAction onClick={() => setRemoving(source)}>{t('Remove')}</SectionAction>
-                            </span>
-                        </li>
-                    ))}
-                </ul>
-            </section>
+                        ))}
+                    </TileRows>
+                )}
+            </Tile>
 
             <SourceDialog
                 editing={editing}
@@ -172,6 +154,11 @@ function SourceDialog({
             footerClassName={styles.dialogActions}
             actions={(size) => (
                 <>
+                    {existing !== null && (
+                        <SoloButton variant="text" size={size} data-start="" onClick={() => onRemove(existing)} disabled={processing}>
+                            {t('Remove source')}
+                        </SoloButton>
+                    )}
                     <SoloButton variant="pill" onClick={onClose} disabled={processing}>
                         {t('Cancel')}
                     </SoloButton>

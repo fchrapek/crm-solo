@@ -1,0 +1,33 @@
+/* Figma: ClientSwitcher. The menu's own box and rows; the open client is the current selection. */
+.body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-8);
+}
+
+.group {
+    display: flex;
+    flex-direction: column;
+}
+
+:global([data-day]) .body.body a[aria-current],
+:global([data-day]) .body.body a[aria-current]:focus {
+    margin-inline: calc(-1 * var(--role-space-8));
+    padding-inline: var(--role-space-8);
+    border-bottom-color: transparent;
+    border-radius: var(--role-radius-sm);
+    background: var(--role-selection);
+    color: var(--role-selection-text);
+}
+
+.empty {
+    margin: 0;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-control) / 1.4 var(--solo-font-text);
+}
+
+@media (min-width: 768px) {
+    :global([data-day]) .panel {
+        width: 320px;
+    }
+}

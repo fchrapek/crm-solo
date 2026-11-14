@@ -1,5 +1,4 @@
-import { router } from '@inertiajs/react';
-import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import i18next from 'i18next';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { initReactI18next } from 'react-i18next';
@@ -7,18 +6,9 @@ import { initReactI18next } from 'react-i18next';
 import { durationText, inMonth } from '@/lib/dates';
 import en from '../../../../../../lang/en.json';
 import pl from '../../../../../../lang/pl.json';
-import { ClientJournalTab, PhoneWorkRow, ProjectsSheetBody, RelationshipScreen } from './client-journal';
-import { isRelationshipScreen, projectHours, withRelationshipScreen } from './format';
-import {
-    closeRelationshipScreen,
-    forgetHeldJournal,
-    holdJournal,
-    journalChanged,
-    markHistoryReturn,
-    openRelationshipScreen,
-    takeFocusReturn,
-    takeHeldJournal,
-} from './relationship-screen';
+import { ClientJournalTab, journalBrief, ProjectsTile, workMeta } from './client-journal';
+import { projectHours } from './format';
+import type { MessageRow } from '../client-fields';
 import type { ClientJournal, JournalEntryNote, JournalNote, JournalPage, JournalSettlement, JournalWorkRow } from './types';
 
 await i18next.use(initReactI18next).init({
@@ -27,6 +17,8 @@ await i18next.use(initReactI18next).init({
     resources: { pl: { translation: pl }, en: { translation: en } },
     interpolation: { escapeValue: false },
 });
+
+const t = i18next.getFixedT('pl');
 
 const work = (key: string, extra: Partial<JournalWorkRow> = {}): JournalWorkRow => ({
     key,
@@ -83,87 +75,164 @@ const frame = (extra: Partial<ClientJournal> = {}): ClientJournal => ({
 });
 
 const render = (journal: ClientJournal, work = workPage(), notes = notesPage()) =>
-    renderToStaticMarkup(
-        <ClientJournalTab clientName="Pracownia Mebli Przykładowa" clientId={7} journal={journal} work={work} notes={notes} owner="Filip Chrapek" />,
-    );
+    renderToStaticMarkup(<ClientJournalTab clientId={7} journal={journal} work={work} notes={notes} owner="Filip Chrapek" />);
+
+describe('Dziennik SMS', () => {
+    const sms = (over: Partial<MessageRow>): MessageRow => ({
+        id: 1,
+        client_id: 7,
+        client: 'Jan Kowalczyk',
+        day: '2026-10-22',
+        time: '18:00',
+        status: 'pending',
+        held: false,
+        template: 'Przypomnienie',
+        body: 'Wizja jutro o 10:00.',
+        to: '+48100100200',
+        error: null,
+        may_have_gone_out: false,
+        resends: 0,
+        previous_error: null,
+        expires: '2026-10-22 20:00',
+        ...over,
+    });
+    const tab = (manage: boolean) =>
+        renderToStaticMarkup(
+            <ClientJournalTab
+                clientId={7}
+                journal={frame({})}
+                work={workPage()}
+                notes={notesPage()}
+                owner="Filip Chrapek"
+                manage={manage}
+                sms={[sms({}), sms({ id: 2, status: 'failed', error: 'SMSAPI 13' })]}
+            />,
+        );
+
+    test('a member reads the text messages without Anuluj or Wyślij ponownie; the owner has both', () => {
+        expect(tab(false)).toContain('Wizja jutro o 10:00.');
+        expect(tab(false)).not.toContain('>Anuluj<');
+        expect(tab(false)).not.toContain('Wyślij ponownie');
+        expect(tab(true)).toContain('>Anuluj<');
+        expect(tab(true)).toContain('Wyślij ponownie');
+    });
+});
 
 describe('Dziennik', () => {
+    const sentence = (extra: Partial<ClientJournal>) => journalBrief(frame(extra), 'pl-PL', t);
+
     test('the sentence reads like the frame and counts what it was given', () => {
-        const html = render(frame());
-        expect(html).toContain('Od 28.09: <span');
-        expect(html).toContain('>5 rzeczy</span>');
-        expect(html).toContain('>1 nowy wpis</span>');
-        expect(html).toContain('>Twój czas 6 h 15 min</span>.</p>');
+        expect(sentence({})).toBe('Od 28.09: 5 rzeczy, 1 nowy wpis, Twój czas 6 h 15 min.');
+        expect(render(frame())).toContain('Od 28.09: 5 rzeczy, 1 nowy wpis, Twój czas 6 h 15 min.');
     });
 
     test('the sentence takes the Polish form for every count', () => {
-        const sentence = (rows: number, notes: number) => render(frame({ summary: { rows, notes, person_minutes: 0 } }));
-        expect(sentence(1, 0)).toContain('>1 rzecz</span>.');
-        expect(sentence(3, 2)).toContain('>3 rzeczy</span>, <span');
-        expect(sentence(3, 2)).toContain('>2 nowe wpisy</span>');
-        expect(sentence(22, 5)).toContain('>5 nowych wpisów</span>');
-        expect(sentence(22, 5)).not.toContain('Twój czas');
+        const counted = (rows: number, notes: number) => sentence({ summary: { rows, notes, person_minutes: 0 } });
+
+        expect(counted(1, 0)).toBe('Od 28.09: 1 rzecz.');
+        expect(counted(3, 2)).toBe('Od 28.09: 3 rzeczy, 2 nowe wpisy.');
+        expect(counted(22, 5)).toBe('Od 28.09: 22 rzeczy, 5 nowych wpisów.');
     });
 
     test('with nothing since the last visit the sentence says so', () => {
-        expect(render(frame({ summary: { rows: 0, notes: 0, person_minutes: 0 } }))).toContain('Nic nowego od 28.09.');
+        expect(sentence({ summary: { rows: 0, notes: 0, person_minutes: 0 } })).toBe('Nic nowego od 28.09.');
     });
 
     test('a visit earlier today reads as today, not as a date', () => {
-        expect(render(frame({ since: '2026-10-05', since_today: true, summary: { rows: 0, notes: 0, person_minutes: 0 } }))).toContain(
-            'Nic nowego od dziś.',
-        );
-        expect(render(frame({ since: '2026-10-05', since_today: true }))).toContain('Od dziś: <span');
+        expect(sentence({ since: '2026-10-05', since_today: true, summary: { rows: 0, notes: 0, person_minutes: 0 } })).toBe('Nic nowego od dziś.');
+        expect(sentence({ since: '2026-10-05', since_today: true })).toStartWith('Od dziś: ');
     });
 
-    test('an agent session is one row with its write count and the agent mark', () => {
-        const html = render(frame());
-        expect(html).toContain('claude · sesja, 3 zapisy');
-        expect(html).toContain('data-actor="agent"');
-        expect(html).toContain('3 h 15 min');
-        expect(html).not.toContain('Cofnij');
+    test('an agent session is one row with its write count, and a person row names the owner', () => {
+        const [session, entry] = workPage().rows;
+
+        expect(workMeta(session, 'Filip Chrapek', 'pl-PL', t)).toBe('30.09 · claude · sesja, 3 zapisy');
+        expect(workMeta(entry, 'Filip Chrapek', 'pl-PL', t)).toBe('30.09 · Filip Chrapek');
+        expect(workMeta({ ...entry, running: true, minutes: null }, 'Filip Chrapek', 'pl-PL', t)).toBe('30.09 · Filip Chrapek · trwa');
+        expect(render(frame())).toContain('3 h 15 min');
+        expect(render(frame())).not.toContain('Cofnij');
     });
 
-    test('work rows new since the last visit carry the label after the title, older ones and the rail do not', () => {
+    test('work rows new since the last visit carry the Nowe chip, older ones and the entries do not', () => {
         const fresh = workPage({
             rows: [work('session:run-1', { kind: 'session', title: 'Deploy na prod', via: 'cli', is_new: true }), work('entry:3')],
         });
         const html = render(frame(), fresh);
-        // once in the desktop row, once in the phone row
-        expect(html.match(/>Nowe</g)?.length).toBe(2);
-        expect(html).toContain('<p>Deploy na prod<span>Nowe</span></p>');
-        expect(html.slice(html.lastIndexOf('Relacja z klientem'))).not.toContain('>Nowe<');
+
+        expect(html.match(/>Nowe</g)).toHaveLength(1);
+        expect(html.indexOf('Nowe<')).toBeGreaterThan(html.indexOf('Deploy na prod'));
+        expect(html.slice(0, html.indexOf('Praca · od'))).not.toContain('>Nowe<');
         expect(render(frame())).not.toContain('>Nowe<');
     });
 
-    test('a person row shows the owner and an agent entry the agent', () => {
+    test('an entry shows who wrote it: the owner, or the agent', () => {
         const html = render(frame());
+
         expect(html).toContain('aria-label="Filip Chrapek"');
         expect(html).toContain('aria-label="claude (agent)"');
     });
 
-    test('Starsze shows only under a list with an older page', () => {
-        expect(render(frame()).match(/Starsze/g)?.length).toBe(1);
-        expect(render(frame(), workPage({ next: null }), notesPage({ next: '1790000000-4' })).match(/Starsze/g)?.length).toBe(1);
+    test('Starsze shows only under a list with an older page, and asks for that list alone', () => {
+        expect(render(frame()).match(/>Starsze</g)).toHaveLength(1);
+        expect(render(frame(), workPage({ next: null }), notesPage({ next: '1790000000-4' })).match(/>Starsze</g)).toHaveLength(1);
         expect(render(frame(), workPage({ next: null }))).not.toContain('Starsze');
     });
 
-    test('the rail shows projects with this months hours, the stage and the stage change entry', () => {
+    test('the relationship tile names the stage and since when, and a stage change is an entry of its own kind', () => {
         const html = render(frame());
-        expect(html).toContain('Projekty · 1');
-        expect(html).toContain('href="/clients/7/projects/4"');
-        expect(html).toContain('26,5 h we wrześniu');
-        expect(html).toContain('Trello ↗');
-        expect(html).toContain('od 13.06.2026 · abonament od 02.06');
+
+        expect(html).toContain('Aktywny od 13.06.2026 · abonament od 02.06');
         expect(html).toContain('Potencjalny → Aktywny');
         expect(html).toContain('>Etap<');
-        expect(html).toContain('Nowy wpis');
-        expect(html).toContain('href="/clients/7/edit#work">Nowy projekt</a>');
+    });
+
+    test('a note can be edited from its menu; nothing offers to delete one', () => {
+        const html = render(frame());
+
+        expect(html.match(/aria-label="Więcej akcji: /g)).toHaveLength(2);
+        expect(html).not.toContain('Usuń');
+    });
+
+    test('a work row that is one finished time entry opens its editor, a session or a running timer does not', () => {
+        const entry = {
+            id: 12,
+            title: null,
+            description: null,
+            task_id: null,
+            start_time: '2026-09-30T08:00:00+00:00',
+            end_time: '2026-09-30T11:15:00+00:00',
+            billable: true,
+        };
+        const html = render(
+            frame(),
+            workPage({
+                rows: [
+                    work('session:run-1', { kind: 'session', via: 'cli' }),
+                    work('entry:2', { entry }),
+                    work('entry:3', { running: true, minutes: null }),
+                ],
+            }),
+        );
+
+        expect(html.match(/<button[^>]*aria-label="Edytuj wpis czasu: Ładowanie \/ animacje"[^>]*>Edytuj<\/button>/g)).toHaveLength(1);
+    });
+
+    test('the projects tile lists this months hours, the board and the page of each project, and adds a project in place', () => {
+        const html = renderToStaticMarkup(<ProjectsTile clientId={7} projects={frame().projects} period="2026-09" locale="pl-PL" />);
+
+        expect(html).toMatch(/<h2[^>]*>Projekty<\/h2><span[^>]*>1<\/span>/);
+        expect(html).toContain('href="/clients/7/projects/4"');
+        expect(html.replace(/<[^>]+>/g, '')).toContain('26,5 hwe wrześniu');
+        expect(html).toContain('Trello ↗');
+        expect(html).toMatch(/<button[^>]*>Nowy projekt<\/button>/);
+        expect(html).not.toContain('/edit');
+        expect(renderToStaticMarkup(<ProjectsTile clientId={7} projects={[]} period="2026-09" locale="pl-PL" />)).toContain('Brak projektów.');
     });
 
     test('a long note opens folded with a more button', () => {
         const long = 'Marek poprosił, żeby meble kuchenne z galerii były pierwsze w stopce strony. '.repeat(3);
         const html = render(frame(), workPage(), notesPage({ rows: [note(1, { note: long })] }));
+
         expect(html).toContain('data-folded="true"');
         expect(html).toContain('>więcej</button>');
     });
@@ -210,9 +279,7 @@ describe('Dziennik settlement rows', () => {
         expect(text.indexOf('Otwarto ponownie')).toBeLessThan(text.indexOf('Zamknięto'));
         expect(text.indexOf('Zamknięto')).toBeLessThan(text.indexOf('Raport za sierpień wysłany'));
         expect(text).toContain('Rozliczenie');
-        expect((html.match(/<button/g) ?? []).length).toBe(
-            (render(frame(), workPage(), { rows: [note(1)], next: null }).match(/<button/g) ?? []).length,
-        );
+        expect(html.match(/aria-label="Więcej akcji: /g)).toHaveLength(1);
     });
 
     test('a month closed without a package reads its hours alone', () => {
@@ -223,194 +290,10 @@ describe('Dziennik settlement rows', () => {
 
         expect(html).toContain('Zamknięto wrzesień 2026: 4,0 h, bilans 0,0 h (z wpisów)');
     });
-});
 
-describe('Dziennik on phones', () => {
-    const settlement: JournalSettlement = {
-        key: 'settlement-1',
-        kind: 'settlement',
-        date: '2026-10-06',
-        via: null,
-        author: null,
-        settlement: { action: 'close', period: '2026-08', used: 7.5, contracted: 8, closing: 0.5, source: 'report' },
-    };
-    const screen = (notes = notesPage()) =>
-        renderToStaticMarkup(
-            <RelationshipScreen
-                clientId={7}
-                clientName="Pracownia Mebli Przykładowa"
-                journal={frame()}
-                notes={notes}
-                owner="Filip Chrapek"
-                locale="pl-PL"
-            />,
-        );
+    test('a month closed on billed time names it as the source', () => {
+        const html = render(frame(), workPage(), { rows: [settlement('close', { used: 32.5, closing: -12, source: 'billed' })], next: null });
 
-    test('Relacja z klientem is a row with the new entries, Projekty a row with the count', () => {
-        const html = render(frame());
-        const text = html.replace(/<[^>]+>/g, '|');
-
-        expect(html).toContain('href="/clients/7/dziennik?relacja=1"');
-        expect(text).toMatch(/Relacja z klientem\|+1 nowy wpis/);
-        expect(text).toMatch(/Projekty\|+1\|/);
-        expect(html).toContain('aria-haspopup="dialog"');
-        expect(render(frame({ summary: { rows: 5, notes: 0, person_minutes: 0 } })).replace(/<[^>]+>/g, '|')).not.toMatch(/Relacja z klientem\|+0/);
-    });
-
-    test('the pushed screen has the back link to Dziennik, the title, the stage line and every note', () => {
-        const html = screen();
-
-        expect(html).toMatch(/<a[^>]*href="\/clients\/7\/dziennik"[^>]*>.*Dziennik<\/span><\/a>/);
-        expect(html).toContain('<h1 id="relationship-title">Relacja z klientem</h1>');
-        expect(html).toContain('Pracownia Mebli Przykładowa');
-        expect(html).toContain('Aktywny');
-        expect(html).toContain('od 13.06.2026 · abonament od 02.06');
-        expect(html).toContain('Raport za sierpień wysłany do Marka.');
-        expect(html).toContain('Potencjalny → Aktywny');
-    });
-
-    test('settlement rows read ROZLICZENIE with their frozen figures and stay read-only', () => {
-        const html = screen(notesPage({ rows: [settlement, note(1)] }));
-
-        expect(html).toContain('>Rozliczenie<');
-        expect(html).toContain('Zamknięto sierpień 2026: 7,5 z 8 h, bilans +0,5 h (z raportu)');
-        expect(html.slice(0, html.indexOf('Raport za sierpień'))).not.toContain('<button');
-    });
-
-    test('the page renders the pushed screen only when the URL asks for it, and the page stays beside it for desktop', () => {
-        const pushed = renderToStaticMarkup(
-            <ClientJournalTab
-                clientName="Pracownia Mebli Przykładowa"
-                clientId={7}
-                journal={frame()}
-                work={workPage()}
-                notes={notesPage()}
-                owner="Filip Chrapek"
-                relationship
-            />,
-        );
-
-        expect(pushed).toContain('id="relationship-title"');
-        expect(pushed).toContain('Od 28.09:');
-        expect(render(frame())).not.toContain('id="relationship-title"');
-    });
-
-    test('the screen lives in the query string, so back closes it and other parameters survive', () => {
-        expect(isRelationshipScreen('/clients/7/dziennik?relacja=1')).toBe(true);
-        expect(isRelationshipScreen('/clients/7/dziennik?praca=12')).toBe(false);
-        expect(isRelationshipScreen('/clients/7/dziennik#relacja')).toBe(false);
-        expect(withRelationshipScreen('/clients/7/dziennik?praca=12', true)).toBe('/clients/7/dziennik?praca=12&relacja=1');
-        expect(withRelationshipScreen('/clients/7/dziennik?relacja=1', false)).toBe('/clients/7/dziennik');
-    });
-
-    test('the Projekty sheet lists hours this month, Trello and Nowy projekt to where projects are made', () => {
-        const html = renderToStaticMarkup(<ProjectsSheetBody clientId={7} projects={frame().projects} period="2026-09" locale="pl-PL" />);
-
-        expect(html).toContain('href="/clients/7/projects/4"');
-        expect(html).toContain('26,5 h we wrześniu');
-        expect(html).toContain('href="https://trello.com/b/abc" target="_blank" rel="noopener noreferrer"');
-        expect(html).toContain('href="/clients/7/edit#work"');
-        expect(html).toContain('Nowy projekt');
-        expect(renderToStaticMarkup(<ProjectsSheetBody clientId={7} projects={[]} period="2026-09" locale="pl-PL" />)).toContain('Brak projektów.');
-    });
-
-    test('NOWE marks new work rows only, never a note', () => {
-        const row = (is_new: boolean) =>
-            renderToStaticMarkup(
-                <ul>
-                    <PhoneWorkRow
-                        row={work('session:run-1', { kind: 'session', title: 'Deploy na prod', via: 'cli', writes: 3, is_new })}
-                        owner="Filip Chrapek"
-                        locale="pl-PL"
-                    />
-                </ul>,
-            );
-
-        expect(row(true)).toContain('>Nowe<');
-        expect(row(true)).toContain('claude · sesja, 3 zapisy');
-        expect(row(true)).toContain(' · 30.09');
-        expect(row(false)).not.toContain('>Nowe<');
-        expect(screen()).not.toContain('>Nowe<');
-    });
-});
-
-describe('the Relacja screen in history', () => {
-    const spies: { mockRestore: () => void }[] = [];
-    afterEach(() => {
-        spies.splice(0).forEach((spy) => spy.mockRestore());
-        delete (globalThis as { window?: unknown }).window;
-    });
-
-    test('opening pushes a client-side visit; its back link pops the entry, again after Forward, and replaces on a direct load', () => {
-        const back: string[] = [];
-        (globalThis as { window?: unknown }).window = { history: { back: () => back.push('back') } };
-        const push = spyOn(router, 'push').mockImplementation(() => undefined);
-        const replace = spyOn(router, 'replace').mockImplementation(() => undefined);
-        spies.push(push, replace);
-
-        openRelationshipScreen('/clients/7/dziennik');
-        expect(push.mock.calls[0]?.[0]).toMatchObject({ url: '/clients/7/dziennik?relacja=1', preserveState: true, preserveScroll: false });
-
-        closeRelationshipScreen('/clients/7/dziennik?relacja=1');
-        closeRelationshipScreen('/clients/7/dziennik?relacja=1');
-        expect(back).toEqual(['back', 'back']);
-
-        closeRelationshipScreen('/clients/8/dziennik?relacja=1');
-        expect(replace.mock.calls[0]?.[0]).toMatchObject({ url: '/clients/8/dziennik' });
-    });
-
-    test('Dziennik restored from history gets the journal the screen last held, once and for its own client only', () => {
-        const held = { journal: frame({ summary: { rows: 6, notes: 2, person_minutes: 0 } }), notes: notesPage() };
-        const before = { journal: frame(), notes: notesPage() };
-
-        expect(journalChanged(held, before)).toBe(true);
-        expect(journalChanged(before, { journal: frame(), notes: notesPage() })).toBe(false);
-
-        holdJournal('/clients/7/dziennik', held);
-        markHistoryReturn();
-        expect(takeHeldJournal('/clients/8/dziennik')).toBeNull();
-        holdJournal('/clients/7/dziennik', held);
-        markHistoryReturn();
-        expect(takeHeldJournal('/clients/7/dziennik')).toBe(held);
-        expect(takeHeldJournal('/clients/7/dziennik')).toBeNull();
-    });
-
-    test('a fresh visit to Dziennik after leaving Relacja another way keeps the server props', () => {
-        holdJournal('/clients/7/dziennik', { journal: frame(), notes: notesPage() });
-        expect(takeHeldJournal('/clients/7/dziennik')).toBeNull();
-
-        // Relacja, then Klienci (a server visit), Przegląd, Back to Klienci, Przegląd, Dziennik
-        holdJournal('/clients/7/dziennik', { journal: frame(), notes: notesPage() });
-        forgetHeldJournal();
-        markHistoryReturn();
-        forgetHeldJournal();
-        expect(takeHeldJournal('/clients/7/dziennik')).toBeNull();
-    });
-
-    test('closing the screen gives the focus back to the Relacja row of its own Dziennik once, and a server visit cancels it', () => {
-        holdJournal('/clients/7/dziennik', { journal: frame(), notes: notesPage() });
-        expect(takeFocusReturn('/clients/8/dziennik')).toBe(false);
-
-        holdJournal('/clients/7/dziennik', { journal: frame(), notes: notesPage() });
-        expect(takeFocusReturn('/clients/7/dziennik')).toBe(true);
-        expect(takeFocusReturn('/clients/7/dziennik')).toBe(false);
-
-        holdJournal('/clients/7/dziennik', { journal: frame(), notes: notesPage() });
-        forgetHeldJournal();
-        expect(takeFocusReturn('/clients/7/dziennik')).toBe(false);
-    });
-
-    test('Starsze and the project rows keep 44 px targets on phones and their desktop size from 768 px', async () => {
-        const css = await Bun.file(new URL('./client-journal.module.css', import.meta.url)).text();
-        const phone = css.indexOf(
-            '.olderNotes {\n    display: inline-flex;\n    align-items: center;\n    align-self: flex-start;\n    min-height: var(--solo-touch);',
-        );
-        const desktop = css.indexOf('.olderNotes {\n        display: inline;\n        min-height: auto;');
-
-        expect(phone).toBeGreaterThan(-1);
-        expect(desktop).toBeGreaterThan(-1);
-        expect(css.lastIndexOf('@media (min-width: 768px)', desktop)).toBeGreaterThan(phone);
-        expect(css).toMatch(/\.sheetItem \{\s*position: relative;/);
-        expect(css).toMatch(/\.sheetProject::after \{\s*content: '';\s*position: absolute;\s*inset: 0;/);
+        expect(html.replace(/[\u00a0\u202f]/g, ' ')).toContain('Zamknięto wrzesień 2026: 32,5 z 30 h, bilans −12,0 h (z czasu rozliczanego)');
     });
 });

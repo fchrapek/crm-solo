@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Jobs\SyncTrelloProjectsJob;
 use App\Models\Integration;
 use App\Services\Integrations\InfaktApiException;
+use App\Services\Integrations\Trello\TrelloListMapper;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -27,7 +28,13 @@ final class IntegrationsController extends Controller
             'is_enabled' => ['boolean'],
             'settings' => ['nullable', 'array'],
             'trello_api_key' => ['nullable', 'string', 'max:500'],
+            'settings.skipped_lists' => ['sometimes', 'array', 'max:50'],
+            'settings.skipped_lists.*' => ['nullable', 'string', 'max:100'],
         ]);
+
+        if (isset($validated['settings']['skipped_lists'])) {
+            $validated['settings']['skipped_lists'] = TrelloListMapper::uniqueNames($validated['settings']['skipped_lists']);
+        }
 
         $integration = Auth::user()->account->integrations()->firstOrNew(['provider' => $provider]);
         $secretFields = Integration::secretFields($provider);

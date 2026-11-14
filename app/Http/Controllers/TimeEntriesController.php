@@ -180,7 +180,11 @@ final class TimeEntriesController extends Controller
 
         $data = $request->validate(['request_id' => ['nullable', 'uuid']]);
 
-        $entry = TimeEntry::startFor($task, requestId: $data['request_id'] ?? null);
+        try {
+            $entry = TimeEntry::startFor($task, requestId: $data['request_id'] ?? null);
+        } catch (PeriodSettled $settled) {
+            return $this->settled($settled);
+        }
 
         // A replay returns the timer that request opened, stopped or not; the same id on another task is a client bug.
         if (! $entry->wasRecentlyCreated && $entry->task_id !== $task->id) {

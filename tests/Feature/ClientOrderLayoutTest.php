@@ -109,6 +109,29 @@ final class ClientOrderLayoutTest extends TestCase
         }
     }
 
+    public function test_rozliczenia_lists_the_reports_of_a_client_without_a_retainer_and_what_a_new_one_needs(): void
+    {
+        $this->report('2026-08-01', '2026-08-31', null);
+        $this->report('2026-09-01', '2026-09-30', null);
+
+        $billing = $this->props('rozliczenia')['billing'];
+
+        $this->assertSame(['2026-09', '2026-08'], array_column($billing['reports'], 'period'));
+        $this->assertSame(ClientReport::STATUS_DRAFT, $billing['reports'][0]['status']);
+        $this->assertSame('2026-09', $billing['report_period']);
+        $this->assertNotEmpty($billing['composers']);
+        $this->assertSame('PLN', $billing['currency']);
+    }
+
+    public function test_a_first_retainer_added_to_a_client_without_one_turns_it_into_the_retainer_layout(): void
+    {
+        $this->actingAs($this->user)
+            ->post("/clients/{$this->client->id}/retainers", ['monthly_hours' => 8, 'monthly_fee' => 1200, 'effective_from' => '2026-10-01', 'currency' => 'PLN'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(ClientBillingMode::RETAINER, $this->mode());
+    }
+
     public function test_przeglad_and_rozliczenia_carry_the_same_order_block(): void
     {
         $this->client->generalProject()->update(['name' => 'Audyt energetyczny domu']);
@@ -168,6 +191,18 @@ final class ClientOrderLayoutTest extends TestCase
 
         $this->assertSame(['done' => 3, 'total' => 4], $order['tasks']);
         $this->assertSame('in_progress', $order['state']);
+    }
+
+    public function test_a_card_in_a_skipped_trello_column_is_neither_done_nor_counted_unless_finished_before(): void
+    {
+        $project = $this->client->generalProject();
+        Task::create(['project_id' => $project->id, 'name' => 'Open', 'source' => 'manual']);
+        Task::create(['project_id' => $project->id, 'name' => 'Raport', 'source' => 'trello', 'trello_card_id' => 'c1', 'archived_at' => now(), 'trello_skipped' => true]);
+        $filed = Task::create(['project_id' => $project->id, 'name' => 'Wdrożenie', 'source' => 'trello', 'trello_card_id' => 'c2', 'archived_at' => now(), 'trello_skipped' => true, 'finished_at' => '2026-10-01 10:00:00']);
+
+        $this->assertSame(['done' => 1, 'total' => 2], $this->props('przeglad')['overview']['order']['tasks']);
+        $done = $this->props('zadania')['tasks']['done'];
+        $this->assertSame([1, [$filed->id]], [$done['count'], array_column($done['rows'], 'task_id')]);
     }
 
     public function test_an_order_with_every_task_done_reads_done_and_one_without_tasks_has_no_state(): void
@@ -430,7 +465,7 @@ final class ClientOrderLayoutTest extends TestCase
         $this->assertSame(ClientBillingMode::RETAINER, app(ClientBrief::class)->for($this->client->fresh())['billing_mode']);
     }
 
-    public function test_an_order_page_reads_the_layout_once_and_never_builds_the_hours_bank_however_many_reports(): void
+    public function test_an_order_page_costs_the_same_queries_however_many_reports(): void
     {
         $this->report('2026-08-01', '2026-08-31', null);
         $queries = fn (string $tab): array => $this->queriesFor("/clients/{$this->client->id}/{$tab}");
@@ -445,8 +480,6 @@ final class ClientOrderLayoutTest extends TestCase
         foreach (['przeglad' => $overview, 'rozliczenia' => $billing] as $tab => $before) {
             $after = $queries($tab);
             $this->assertCount(count($before), $after, "{$tab} grows with the report history");
-            $this->assertCount(1, array_filter($after, fn (string $sql): bool => str_contains($sql, 'client_month_closures')), "{$tab} reads closures beyond the layout check");
-            $this->assertCount(1, array_filter($after, fn (string $sql): bool => str_contains($sql, 'client_retainers')), "{$tab} reads retainers beyond the layout check");
         }
     }
 

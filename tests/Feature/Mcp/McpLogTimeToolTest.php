@@ -111,15 +111,12 @@ final class McpLogTimeToolTest extends TestCase
         $this->assertSame('2026-07-14 13:00', $entry->start_time->format('Y-m-d H:i'));
     }
 
-    public function test_non_billable_and_unparseable_end(): void
+    public function test_an_unparseable_end_is_refused(): void
     {
         CrmServer::tool(LogTimeTool::class, [
             'minutes' => 15,
             'task' => (string) $this->task->id,
-            'billable' => false,
         ])->assertOk();
-
-        $this->assertFalse(TimeEntry::sole()->billable);
 
         CrmServer::tool(LogTimeTool::class, [
             'minutes' => 15,

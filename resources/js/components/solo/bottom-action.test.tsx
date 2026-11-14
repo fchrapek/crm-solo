@@ -53,8 +53,8 @@ describe('BottomAction', () => {
         const buttons = await read('./primitives.module.css');
         const wideAt = css.indexOf('@media (min-width: 768px)');
 
-        expect(rule(css.slice(0, wideAt), '.main')).toContain('--solo-main-bg: var(--solo-primary, var(--solo-fg));');
-        expect(rule(css.slice(0, wideAt), '.main')).toContain('--solo-main-fg: var(--solo-on-primary, var(--solo-bg));');
+        expect(rule(css.slice(0, wideAt), '.main')).toContain('--solo-main-bg: var(--solo-fg);');
+        expect(rule(css.slice(0, wideAt), '.main')).toContain('--solo-main-fg: var(--solo-bg);');
         expect(rule(css.slice(wideAt), '.main')).toContain('--solo-main-bg: initial;');
         for (const variant of ['.primary', '.ink', '.outline', '.stop']) {
             expect(rule(buttons, variant)).toMatch(/background: var\(--solo-main-bg, /);
@@ -68,14 +68,9 @@ describe('BottomAction', () => {
         expect(css).toContain(
             '--solo-bottom-action-clearance: calc(var(--solo-bottom-action-button) + 2 * var(--solo-space-3) + var(--solo-space-2));',
         );
-        expect(css).toContain(
-            '[data-day]:has([data-solo-tab-bar]):has([data-solo-bottom-action]) {\n    padding-bottom: calc(var(--solo-tab-bar-clearance) + var(--solo-bottom-action-clearance));',
-        );
-        expect(css).toMatch(
-            /\[data-day\]:has\(\[data-solo-tab-bar\]\):has\(\[data-solo-bottom-action\]\[data-secondary\]\) \{\n {4}padding-bottom: calc\([^;]*--solo-bottom-action-secondary\)\);/,
-        );
-        expect(css).toMatch(
-            /@media \(min-width: 768px\) \{\n[^}]*\[data-day\]:has\(\[data-solo-tab-bar\]\):has\(\[data-solo-bottom-action\]\) ?,?[^}]*padding-bottom: 0;/,
-        );
+        expect(css).toContain(':root:has([data-solo-bottom-action]) {\n    --shell-dock: var(--solo-bottom-action-clearance);');
+        expect(css).toMatch(/:root:has\(\[data-solo-bottom-action\]\[data-secondary\]\) \{\n {4}--shell-dock: calc\([^;]*--solo-bottom-action-secondary\)\);/);
+        expect(css).toContain('[data-shell] {\n    padding-bottom: calc(var(--solo-tab-bar-clearance) + var(--shell-dock) + var(--shell-strip) + var(--shell-helper));');
+        expect(css).toMatch(/@media \(min-width: 768px\) \{\n\s*:root:root \{\n\s*--shell-dock: 0px;/);
     });
 });

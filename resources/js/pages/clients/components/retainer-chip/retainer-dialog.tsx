@@ -10,7 +10,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog/confirm-dialog';
 import { useFormatters } from '@/lib/format';
 import { ClientCurrency } from '@/types';
 
-import type { Retainer } from './retainer-chip';
+import type { Retainer } from './types';
 import styles from './retainer-dialog.module.css';
 
 interface Props {

@@ -1,6 +1,7 @@
 import { MarkdownView } from '@/components/markdown-view';
-import { fieldControl, SoloTextarea } from '@/components/solo/field';
-import { EmptyBlock, SectionAction, SectionHead, SoloButton } from '@/components/solo/primitives';
+import { fieldControl, SoloField, SoloTextarea } from '@/components/solo/field';
+import { SoloButton, soloButtonClass } from '@/components/solo/primitives';
+import { Tile, TileHeader, TileNote } from '@/components/solo/tile';
 import tasks from '@/routes/tasks';
 import { router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -28,8 +29,8 @@ export function MarkdownPreview({ markdown }: { markdown: string }) {
 }
 
 /**
- * Figma: Opis (770:56741; phones 849:20996; empty 910:59811). A CRM task edits in place (Edytuj, then Podgląd
- * of the draft, or Dodaj opis while there is none); a card's description is Trello's, read here and edited there.
+ * Figma: Zadanie, the Opis tile (1094:40618; in edit 1094:41102). A CRM task edits in place (Edytuj, then Podgląd of
+ * the draft, or Dodaj opis while there is none); a card's description is Trello's, read here and edited there.
  */
 export function DescriptionSection({ task }: { task: TaskData }) {
     const { t } = useTranslation();
@@ -66,49 +67,48 @@ export function DescriptionSection({ task }: { task: TaskData }) {
     const empty = !editing && shown.trim() === '';
     const long = !editing && isLongDescription(shown);
 
+    const quiet = { variant: 'quiet', size: 'control', className: styles.headAction } as const;
     const actions = card ? (
-        <span className={styles.cardActions}>
-            {task.trello_url !== null && (
-                <a href={task.trello_url} target="_blank" rel="noopener noreferrer" className={styles.trelloAction}>
-                    {t('Edit in Trello')} ↗
-                </a>
-            )}
-            {!empty && <span className={styles.previewLabel}>{t('Preview')}</span>}
-        </span>
+        task.trello_url !== null ? (
+            <a href={task.trello_url} target="_blank" rel="noopener noreferrer" className={soloButtonClass(quiet)}>
+                {t('Edit in Trello')} ↗
+            </a>
+        ) : undefined
     ) : empty ? (
-        <SectionAction onClick={startEditing}>{t('Add description')}</SectionAction>
+        <SoloButton {...quiet} onClick={startEditing}>
+            {t('Add description')}
+        </SoloButton>
+    ) : !editing ? (
+        <SoloButton {...quiet} onClick={startEditing}>
+            {t('Edit')}
+        </SoloButton>
     ) : (
-        <>
-            <SectionAction aria-pressed={editing && mode === 'edit'} onClick={() => (editing ? setMode('edit') : startEditing())}>
-                {t('Edit')}
-            </SectionAction>
-            <SectionAction aria-pressed={!editing || mode === 'preview'} onClick={() => editing && setMode('preview')}>
-                {t('Preview')}
-            </SectionAction>
-        </>
+        <SoloButton {...quiet} onClick={() => setMode(mode === 'edit' ? 'preview' : 'edit')}>
+            {mode === 'edit' ? t('Preview') : t('Edit')}
+        </SoloButton>
     );
 
     return (
-        <section className={styles.description} aria-labelledby="task-description">
-            <SectionHead kind="body" label={<span id="task-description">{t('Description')}</span>} action={actions} />
+        <Tile kind="plain" aria-labelledby="task-description">
+            <TileHeader label={<span id="task-description">{t('Description')}</span>} end={actions} />
             {editing && mode === 'edit' ? (
-                <div className={styles.descriptionEdit}>
-                    <SoloTextarea
-                        {...fieldControl('task-description-text', error)}
-                        aria-label={t('Description')}
-                        value={draft ?? ''}
-                        onChange={(event) => setDraft(event.target.value)}
-                        rows={12}
-                        maxLength={50000}
-                        disabled={saving}
-                        autoFocus
-                    />
-                    {error && <p className={styles.fieldError}>{error}</p>}
+                <div data-fill="">
+                    <SoloField label={t('Description (Markdown)')} htmlFor="task-description-text" error={error}>
+                        <SoloTextarea
+                            {...fieldControl('task-description-text', error)}
+                            value={draft ?? ''}
+                            onChange={(event) => setDraft(event.target.value)}
+                            rows={8}
+                            maxLength={50000}
+                            disabled={saving}
+                            autoFocus
+                        />
+                    </SoloField>
                 </div>
             ) : shown.trim() === '' ? (
-                <EmptyBlock>{t('No description yet.')}</EmptyBlock>
+                <TileNote>{t('No description yet.')}</TileNote>
             ) : (
-                <div className={styles.descriptionBody} data-clamped={(long && !expanded) || undefined}>
+                <div className={styles.descriptionBody} data-clamped={(long && !expanded) || undefined} data-fill="">
                     <MarkdownPreview markdown={shown} />
                     {long && (
                         <button type="button" className={styles.moreToggle} aria-expanded={expanded} onClick={() => setExpanded((open) => !open)}>
@@ -118,15 +118,15 @@ export function DescriptionSection({ task }: { task: TaskData }) {
                 </div>
             )}
             {editing && (
-                <div className={styles.editActions}>
-                    <SoloButton variant="outline" size="touch" className={styles.editButton} onClick={() => setDraft(null)} disabled={saving}>
+                <div className={styles.editActions} data-fill="">
+                    <SoloButton variant="quiet" size="control" onClick={() => setDraft(null)} disabled={saving}>
                         {t('Cancel')}
                     </SoloButton>
-                    <SoloButton variant="ink" size="touch" className={styles.editButton} onClick={save} disabled={saving}>
+                    <SoloButton size="control" onClick={save} disabled={saving}>
                         {saving ? t('Saving…') : t('Save')}
                     </SoloButton>
                 </div>
             )}
-        </section>
+        </Tile>
     );
 }

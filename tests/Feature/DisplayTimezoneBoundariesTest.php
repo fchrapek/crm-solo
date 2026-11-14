@@ -73,7 +73,7 @@ final class DisplayTimezoneBoundariesTest extends TestCase
         $this->assertSame($previous, LocalCalendar::previousMonth());
         $this->assertSame($previous, app(MonthCloseTicker::class)->defaultPeriod());
 
-        $this->artisan('reports:generate', ['client' => $this->client->id, '--composer' => 'structured_list'])->assertSuccessful();
+        $this->artisan('crm:report-create', ['client' => (string) $this->client->id, '--composer' => 'structured_list'])->assertSuccessful();
         $this->assertSame($previous.'-01', $this->client->reports()->sole()->period_start->toDateString());
     }
 
@@ -172,20 +172,6 @@ final class DisplayTimezoneBoundariesTest extends TestCase
             ->get("/clients/{$this->client->id}/projects/{$this->project->id}")
             ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
                 ->where('tasks.lanes', fn ($lanes) => collect($lanes)->flatMap(fn ($lane) => $lane['rows'])->pluck('due', 'name')->all() === ['Late' => '2026-11-05', 'Due today' => '2026-11-06']));
-    }
-
-    #[DataProvider('boundaries')]
-    public function test_a_recurring_successor_is_due_counted_from_the_local_day(string $tz, string $utcNow, string $current, string $previous): void
-    {
-        config(['app.display_timezone' => $tz]);
-        $this->travelTo(Carbon::parse($utcNow, 'UTC'));
-        $task = Task::create(['project_id' => $this->project->id, 'name' => 'Backups', 'source' => 'manual', 'recurrence_period_days' => 7]);
-
-        $this->artisan('crm:task-done', ['task' => $task->id])->assertSuccessful();
-
-        $expected = Carbon::parse($utcNow, 'UTC')->setTimezone($tz)->addDays(7)->toDateString();
-        $successor = Task::query()->whereKeyNot($task->id)->sole();
-        $this->assertSame($expected, $successor->due_date->toDateString());
     }
 
     public function test_month_ranges_run_from_local_midnight_to_the_next_local_midnight_exclusive(): void

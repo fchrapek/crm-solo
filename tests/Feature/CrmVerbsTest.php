@@ -55,7 +55,7 @@ final class CrmVerbsTest extends TestCase
             ->expectsOutputToContain('Ambiguous');
     }
 
-    public function test_task_done_completes_and_spawns_recurrence(): void
+    public function test_task_done_completes_a_manual_task(): void
     {
         $project = Project::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'name' => 'P']);
         $task = Task::create([
@@ -63,7 +63,6 @@ final class CrmVerbsTest extends TestCase
             'name' => 'Weekly check',
             'source' => 'manual',
             'is_completed' => false,
-            'recurrence_period_days' => 7,
         ]);
 
         $this->artisan('crm:task-done', ['task' => (string) $task->id])->assertSuccessful();
@@ -71,10 +70,6 @@ final class CrmVerbsTest extends TestCase
         $task->refresh();
         $this->assertTrue((bool) $task->is_completed);
         $this->assertSame('Done', $task->list_name);
-
-        $successor = Task::query()->where('parent_task_id', $task->id)->first();
-        $this->assertNotNull($successor);
-        $this->assertFalse((bool) $successor->is_completed);
     }
 
     public function test_task_done_is_idempotent_on_completed_tasks(): void
@@ -86,13 +81,13 @@ final class CrmVerbsTest extends TestCase
             'source' => 'manual',
             'is_completed' => true,
             'list_name' => 'Done',
-            'recurrence_period_days' => 7,
         ]);
 
         $this->artisan('crm:task-done', ['task' => (string) $task->id])->assertSuccessful();
 
-        // Already-done tasks must not spawn another successor.
-        $this->assertSame(0, Task::query()->where('parent_task_id', $task->id)->count());
+        $task->refresh();
+        $this->assertTrue((bool) $task->is_completed);
+        $this->assertSame('Done', $task->list_name);
     }
 
     public function test_note_appends_a_journal_event_without_changing_stage(): void

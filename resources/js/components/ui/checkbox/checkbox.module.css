@@ -72,7 +72,7 @@
 
 :global([data-day]) .checkbox:focus-visible {
   box-shadow: none;
-  outline: 2px solid var(--solo-focus, var(--solo-fg));
+  outline: 2px solid var(--solo-fg);
   outline-offset: 2px;
 }
 
@@ -84,4 +84,48 @@
 :global([data-day]) .icon svg {
   width: 14px;
   height: 14px;
+}
+
+/* Figma A2f / Switch: 36 by 20, a 16 px knob; off on the soft fill, on in ink, disabled on the page with a soft edge */
+.switch {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  width: 36px;
+  height: 20px;
+  padding: 2px;
+  border: none;
+  border-radius: 10px;
+  background: var(--solo-soft);
+  cursor: pointer;
+  transition: background-color var(--solo-motion-in) var(--solo-ease);
+}
+
+.switch[data-state="checked"] {
+  background: var(--solo-fg);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--solo-fg);
+  outline-offset: 2px;
+}
+
+.switch:disabled {
+  background: var(--solo-bg);
+  box-shadow: inset 0 0 0 1px var(--solo-soft);
+  cursor: not-allowed;
+}
+
+.knob {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--solo-block);
+  transition: transform var(--solo-motion-in) var(--solo-ease);
+}
+
+.switch[data-state="checked"] .knob {
+  background: var(--solo-bg);
+  transform: translateX(16px);
 }

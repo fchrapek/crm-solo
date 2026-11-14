@@ -6,6 +6,7 @@ namespace App\Services\Agent;
 
 use App\Models\Task;
 use App\Models\TimeEntry;
+use App\Services\Time\PeriodSettled;
 use Illuminate\Support\Collection;
 
 /**
@@ -16,9 +17,14 @@ use Illuminate\Support\Collection;
  */
 final class TimerService
 {
+    /** @throws AgentRefusal period_settled */
     public function start(Task $task, ?string $description = null, bool $billable = true): TimeEntry
     {
-        return TimeEntry::startFor($task, TimeEntry::SOURCE_MANUAL, $description, $billable);
+        try {
+            return TimeEntry::startFor($task, TimeEntry::SOURCE_MANUAL, $description, $billable);
+        } catch (PeriodSettled $settled) {
+            throw AgentRefusal::periodSettled($settled);
+        }
     }
 
     public function stop(TimeEntry $entry, ?string $description = null): TimeEntry
@@ -47,6 +53,7 @@ final class TimerService
                 'task' => $other->task?->name,
                 'untrusted' => $other->task !== null && TaskRecord::isExternal($other->task) ? ['task'] : [],
             ])->values()->all(),
+            ...TaskBillingNotes::forTask($task),
             'untrusted' => [],
         ];
     }
@@ -63,6 +70,7 @@ final class TimerService
             'minutes' => $entry->duration_minutes,
             'task' => $entry->task?->name,
             'client' => $entry->client?->name,
+            ...TaskBillingNotes::forTask($entry->task),
             'untrusted' => $entry->task !== null && TaskRecord::isExternal($entry->task) ? ['task'] : [],
         ];
     }

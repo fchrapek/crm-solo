@@ -3,32 +3,26 @@
     justify-content: flex-end;
 }
 
-/* Figma: A2f / Checkbox beside a two-line label, the hint in Meta */
+/* Figma: Edytuj zadanie, the report switch: the label with the switch at the row's end, the hint under them */
+.reportable {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-4);
+}
+
 .reportableRow {
     display: flex;
-    gap: var(--solo-space-3);
-    align-items: flex-start;
-    padding: var(--solo-space-1) var(--solo-space-2);
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--role-space-16);
+    min-height: var(--role-control);
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-control) / 1.4 var(--solo-font-text);
     cursor: pointer;
 }
 
-.reportableCheck {
-    margin-top: 1px;
-}
-
-.reportableLabel {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-}
-
-.reportableTitle {
-    color: var(--solo-fg);
-    font: 600 var(--solo-text-sub) / 1.35 var(--solo-font-text);
-}
-
 .reportableHint {
-    color: var(--solo-fg-muted);
+    margin: 0;
+    color: var(--role-text-secondary);
     font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
 }

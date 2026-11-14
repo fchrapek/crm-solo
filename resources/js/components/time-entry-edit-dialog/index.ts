@@ -1,1 +1,1 @@
-export { TimeEntryEditDialog, type EditableTimeEntry, type TaskOption } from './time-entry-edit-dialog';
+export { spanMinutes, TimeEntryEditDialog, type EditableTimeEntry, type TaskOption } from './time-entry-edit-dialog';

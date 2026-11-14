@@ -229,10 +229,10 @@ final class AgentTimeEntriesTest extends TestCase
         $order = Task::create(['project_id' => $shop->id, 'name' => 'Order page', 'source' => 'manual', 'list_name' => 'To-Do']);
         $entry = $this->entry($this->catchAll, '2026-10-06 08:00:00', 60);
 
-        [, $out] = $this->verb('crm:time-edit', ['entry' => (string) $entry->id, '--task' => 'Order page', '--not-billable' => true]);
+        [, $out] = $this->verb('crm:time-edit', ['entry' => (string) $entry->id, '--task' => 'Order page']);
 
         $entry->refresh();
-        $this->assertSame([$order->id, $shop->id, $florist->id, false], [$entry->task_id, $entry->project_id, $entry->client_id, (bool) $entry->billable]);
+        $this->assertSame([$order->id, $shop->id, $florist->id], [$entry->task_id, $entry->project_id, $entry->client_id]);
         $this->assertSame(['Kwiaciarnia Fiolek', 'Shop'], [$out['entry']['client'], $out['entry']['project']]);
     }
 
@@ -333,16 +333,16 @@ final class AgentTimeEntriesTest extends TestCase
         $this->assertSame('2026-09-30 23:30', $items[$september->id]['start']);
     }
 
-    public function test_a_closed_month_takes_a_new_title_and_description_but_not_billable(): void
+    public function test_a_closed_month_takes_a_new_title_and_description_but_not_new_minutes(): void
     {
         ClientMonthClosure::create(['client_id' => $this->client->id, 'period' => '2026-09', 'closed_at' => now(), 'snapshot' => ['closing' => 0.0]]);
         $september = $this->entry($this->header, '2026-09-15 08:00:00', 60);
 
         [$exit, $text] = $this->verb('crm:time-edit', ['entry' => (string) $september->id, '--desc' => 'Header copy', '--title' => 'Header']);
-        [$ok, $billable] = $this->tool(TimeEditTool::class, ['entry' => (string) $september->id, 'billable' => false]);
+        [$ok, $minutes] = $this->tool(TimeEditTool::class, ['entry' => (string) $september->id, 'minutes' => 30]);
 
         $this->assertSame([0, ['description', 'title']], [$exit, $text['changed']]);
-        $this->assertSame([false, 'period_settled'], [$ok, $billable['error']]);
+        $this->assertSame([false, 'period_settled'], [$ok, $minutes['error']]);
         $this->assertSame(['Header copy', 'Header', true, 60], [$september->fresh()->description, $september->fresh()->title, $september->fresh()->billable, $september->fresh()->duration_minutes]);
     }
 

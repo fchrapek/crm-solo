@@ -21,6 +21,8 @@ final class ClientReportRevision extends Model
 
     public const string REASON_OPENING_BALANCE = 'opening_balance';
 
+    public const string REASON_BILLED_HOURS = 'billed_hours';
+
     public $timestamps = false;
 
     protected $fillable = [

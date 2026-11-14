@@ -11,7 +11,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-/** Payment state comes from `status`: Infakt leaves the amount columns unsettled on paid invoices. */
+/** The whole invoice list on Rozliczenia. Payment state comes from `status`: Infakt leaves the amount columns unsettled on paid invoices. */
 final class ClientInvoicesTabTest extends TestCase
 {
     use RefreshDatabase;
@@ -43,10 +43,10 @@ final class ClientInvoicesTabTest extends TestCase
             'invoice_date' => now()->startOfYear()->addDays(14)->toDateString(),
         ]);
 
-        $response = $this->actingAs($user)->get("/clients/{$client->id}/edit");
+        $response = $this->actingAs($user)->get("/clients/{$client->id}/rozliczenia");
 
         $response->assertOk();
-        $tab = $response->viewData('page')['props']['invoices'];
+        $tab = $response->viewData('page')['props']['billing_invoices'];
 
         $this->assertCount(1, $tab['rows']);
         $this->assertSame(1, $tab['total']);
@@ -87,13 +87,13 @@ final class ClientInvoicesTabTest extends TestCase
             ]);
         }
 
-        $props = $this->actingAs($user)->get("/clients/{$client->id}/edit?invoice_year=last12")->viewData('page')['props'];
+        $props = $this->actingAs($user)->get("/clients/{$client->id}/rozliczenia?invoice_year=last12")->viewData('page')['props']['billing_invoices'];
 
         $this->assertSame(200.0, $props['revenue']['period_net']);
-        $this->assertSame(1, $props['invoices']['total']);
-        $this->assertSame('2025-11-01', $props['invoices']['rows'][0]['number']);
-        $this->assertSame('last12', $props['invoiceFilters']['year']);
-        $this->assertNull($props['invoiceFilters']['month']);
+        $this->assertSame(1, $props['total']);
+        $this->assertSame('2025-11-01', $props['rows'][0]['number']);
+        $this->assertSame('last12', $props['filters']['year']);
+        $this->assertNull($props['filters']['month']);
     }
 
     public function test_the_last_twelve_months_count_by_sale_date_leave_out_advances_and_ignore_a_month(): void
@@ -113,12 +113,12 @@ final class ClientInvoicesTabTest extends TestCase
         // Issued inside the year, but its sale date is older, so the books put it outside.
         $make('3/10/2025', 30000, '2025-10-25', '2025-10-10');
 
-        $props = $this->actingAs($user)->get("/clients/{$client->id}/edit?invoice_year=last12&invoice_month=3")->viewData('page')['props'];
+        $props = $this->actingAs($user)->get("/clients/{$client->id}/rozliczenia?invoice_year=last12&invoice_month=3")->viewData('page')['props']['billing_invoices'];
 
         $this->assertSame(100.0, $props['revenue']['period_net']);
         $this->assertSame(1, $props['revenue']['period_invoice_count']);
-        $this->assertSame(2, $props['invoices']['total']);
-        $this->assertNull($props['invoiceFilters']['month']);
+        $this->assertSame(2, $props['total']);
+        $this->assertNull($props['filters']['month']);
     }
 
     public function test_the_tab_lists_every_invoice_of_the_period_newest_first(): void
@@ -143,12 +143,12 @@ final class ClientInvoicesTabTest extends TestCase
             ]);
         }
 
-        $props = $this->actingAs($user)->get("/clients/{$client->id}/edit")->viewData('page')['props'];
+        $props = $this->actingAs($user)->get("/clients/{$client->id}/rozliczenia")->viewData('page')['props']['billing_invoices'];
 
-        $this->assertCount(5, $props['invoices']['rows']);
-        $this->assertSame(5, $props['invoices']['total']);
-        $this->assertFalse($props['invoices']['truncated']);
-        $this->assertSame('5/2026', $props['invoices']['rows'][0]['number']);
+        $this->assertCount(5, $props['rows']);
+        $this->assertSame(5, $props['total']);
+        $this->assertFalse($props['truncated']);
+        $this->assertSame('5/2026', $props['rows'][0]['number']);
     }
 
     public function test_invoices_tab_filters_by_year_and_month_defaulting_to_current_year(): void
@@ -177,27 +177,27 @@ final class ClientInvoicesTabTest extends TestCase
         $make('THIS/JUL', now()->startOfYear()->addMonths(6)->toDateString());
         $make('LAST/NOV', now()->subYear()->startOfYear()->addMonths(10)->toDateString());
 
-        $url = "/clients/{$client->id}/edit";
+        $url = "/clients/{$client->id}/rozliczenia";
 
         // Default = current year.
-        $props = $this->actingAs($user)->get($url)->viewData('page')['props'];
-        $this->assertSame(2, $props['invoices']['total']);
-        $this->assertSame($thisYear, $props['invoiceFilters']['year']);
+        $props = $this->actingAs($user)->get($url)->viewData('page')['props']['billing_invoices'];
+        $this->assertSame(2, $props['total']);
+        $this->assertSame($thisYear, $props['filters']['year']);
 
         // Explicit past year.
-        $props = $this->actingAs($user)->get("{$url}?invoice_year={$lastYear}")->viewData('page')['props'];
-        $this->assertSame(1, $props['invoices']['total']);
-        $this->assertSame('LAST/NOV', $props['invoices']['rows'][0]['number']);
+        $props = $this->actingAs($user)->get("{$url}?invoice_year={$lastYear}")->viewData('page')['props']['billing_invoices'];
+        $this->assertSame(1, $props['total']);
+        $this->assertSame('LAST/NOV', $props['rows'][0]['number']);
 
         // Year + month narrows further.
-        $props = $this->actingAs($user)->get("{$url}?invoice_year={$thisYear}&invoice_month=7")->viewData('page')['props'];
-        $this->assertSame(1, $props['invoices']['total']);
-        $this->assertSame('THIS/JUL', $props['invoices']['rows'][0]['number']);
+        $props = $this->actingAs($user)->get("{$url}?invoice_year={$thisYear}&invoice_month=7")->viewData('page')['props']['billing_invoices'];
+        $this->assertSame(1, $props['total']);
+        $this->assertSame('THIS/JUL', $props['rows'][0]['number']);
 
         // 'all' widens to everything; both years offered in the filter.
-        $props = $this->actingAs($user)->get("{$url}?invoice_year=all")->viewData('page')['props'];
-        $this->assertSame(3, $props['invoices']['total']);
-        $this->assertSame([$thisYear, $lastYear], $props['invoiceFilters']['years']);
+        $props = $this->actingAs($user)->get("{$url}?invoice_year=all")->viewData('page')['props']['billing_invoices'];
+        $this->assertSame(3, $props['total']);
+        $this->assertSame([$thisYear, $lastYear], $props['filters']['years']);
     }
 
     public function test_invoices_of_other_clients_do_not_leak(): void
@@ -219,10 +219,10 @@ final class ClientInvoicesTabTest extends TestCase
             'invoice_date' => now()->startOfYear()->addMonths(6)->toDateString(),
         ]);
 
-        $props = $this->actingAs($user)->get("/clients/{$client->id}/edit?invoice_year=all")->viewData('page')['props'];
+        $props = $this->actingAs($user)->get("/clients/{$client->id}/rozliczenia?invoice_year=all")->viewData('page')['props']['billing_invoices'];
 
-        $this->assertCount(0, $props['invoices']['rows']);
-        $this->assertSame(0, $props['invoices']['total']);
+        $this->assertCount(0, $props['rows']);
+        $this->assertSame(0, $props['total']);
         $this->assertNull($props['revenue']);
     }
 }

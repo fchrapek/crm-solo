@@ -1,6 +1,5 @@
 import '../css/app.css';
 
-import { LayoutProvider } from '@/contexts/page-context';
 import { initializeTheme } from '@/hooks/use-appearance';
 import { initializeTheme as initializeVisualTheme } from '@/hooks/use-theme';
 import { loadAccessLoginOnRefusal } from '@/lib/access-login';
@@ -70,11 +69,9 @@ void createInertiaApp({
         setLocale(currentLocale);
 
         const AppWithProviders = (
-            <LayoutProvider>
-                <I18nextProvider i18n={i18nInstance}>
-                    <App {...props} />
-                </I18nextProvider>
-            </LayoutProvider>
+            <I18nextProvider i18n={i18nInstance}>
+                <App {...props} />
+            </I18nextProvider>
         );
 
         if (import.meta.env.SSR) {

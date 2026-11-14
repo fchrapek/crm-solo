@@ -25,7 +25,7 @@ php artisan time:log 60 --client=Acme --desc="Ad-hoc DB work"
 php artisan time:log 45 --project="Acme site"
 
 # backdated (start = end − minutes), non-billable
-php artisan time:log 120 --task=912 --end="2026-07-13 17:00" --not-billable
+php artisan time:log 120 --task=912 --end="2026-07-13 17:00"
 ```
 
 ### `--end` is LOCAL time, storage is UTC
@@ -41,7 +41,7 @@ The browser is unaffected — the UI sends absolute ISO instants (`localInputToI
 
 ### Days and months are local too
 
-Every human boundary (today, overdue, this month's hours, a report's month, the default period of a close, a draft invoice or `reports:generate`) is the display timezone's calendar, computed in `App\Support\LocalCalendar` and queried as UTC instants. So with `Europe/Warsaw`, work logged at 00:30 on the 1st belongs to the new month's report, and at 00:30 on the 1st the month just ended is the previous one. When querying by hand, bound a Warsaw month as `[first day 00:00 local, last day 23:59:59 local]` converted to UTC (`LocalCalendar::monthRange('2026-11')`), not `'2026-11-01'..'2026-11-30'`. A month given as text (`--period`, the month-close picker) is read only by `LocalCalendar::monthFrom()`: exactly `YYYY-MM` with month 01 to 12, built with the reset modifier so no field comes from the clock (`Carbon::createFromFormat('Y-m', ...)` takes today's day and turns September into October on the 31st). Anything else is refused before anything is written or sent.
+Every human boundary (today, overdue, this month's hours, a report's month, the default period of a close, a draft invoice or `crm report-create`) is the display timezone's calendar, computed in `App\Support\LocalCalendar` and queried as UTC instants. So with `Europe/Warsaw`, work logged at 00:30 on the 1st belongs to the new month's report, and at 00:30 on the 1st the month just ended is the previous one. When querying by hand, bound a Warsaw month as `[first day 00:00 local, last day 23:59:59 local]` converted to UTC (`LocalCalendar::monthRange('2026-11')`), not `'2026-11-01'..'2026-11-30'`. A month given as text (`--period`, the month-close picker) is read only by `LocalCalendar::monthFrom()`: exactly `YYYY-MM` with month 01 to 12, built with the reset modifier so no field comes from the clock (`Carbon::createFromFormat('Y-m', ...)` takes today's day and turns September into October on the 31st). Anything else is refused before anything is written or sent.
 
 Overdue is one server rule, `Task::isOverdue()`, sent to every page as `is_overdue`: a task is overdue once its due day has ended locally. A CRM due date is a calendar date stored as its midnight and read as written; a Trello card's due is an instant, read in the display timezone (`Task::dueDay()`).
 

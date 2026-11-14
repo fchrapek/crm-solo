@@ -1,16 +1,19 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { Tile } from '@/components/solo/tile';
 import { FreeSlots } from './plan';
 
-/** Figma: A2f / Free slots on Plan jutro. */
+/** Figma: Jutro, the free places as the list's last row. */
 const meta = {
     title: 'Dziś/Free slots',
     component: FreeSlots,
     args: { free: 2, proposing: true },
     decorators: [
         (Story) => (
-            <div style={{ maxWidth: 760 }}>
-                <Story />
-            </div>
+            <Tile kind="list" style={{ maxWidth: 640 }}>
+                <ul style={{ margin: 0, padding: 0 }}>
+                    <Story />
+                </ul>
+            </Tile>
         ),
     ],
 } satisfies Meta<typeof FreeSlots>;

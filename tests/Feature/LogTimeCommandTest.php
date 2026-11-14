@@ -103,18 +103,16 @@ final class LogTimeCommandTest extends TestCase
         $this->assertSame($this->client->id, $entry->project->client_id);
     }
 
-    public function test_backdated_end_and_non_billable(): void
+    public function test_backdated_end(): void
     {
         // Display timezone is pinned to UTC in phpunit.xml, so wall-clock in == stored.
         $this->artisan('time:log', [
             'minutes' => 120,
             '--task' => $this->task->id,
             '--end' => '2026-07-13 17:00',
-            '--not-billable' => true,
         ])->assertExitCode(Command::SUCCESS);
 
         $entry = TimeEntry::sole();
-        $this->assertFalse($entry->billable);
         $this->assertSame(120, $entry->duration_minutes);
         $this->assertSame('17:00', $entry->end_time->format('H:i'));
         $this->assertSame('15:00', $entry->start_time->format('H:i'));

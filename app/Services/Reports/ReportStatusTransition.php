@@ -9,6 +9,7 @@ use App\Models\ClientReport;
 use App\Models\ClientReportRevision;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\Clients\BilledTime;
 use App\Services\Clients\ClientFinancialLock;
 use App\Services\Clients\SettlementPolicy;
 use App\Support\LocalCalendar;
@@ -72,7 +73,8 @@ final class ReportStatusTransition
                 return new ReportTransitionResult($settled[0], $report, $settled[1]);
             }
 
-            $refusal = $this->recalculationRefusal($report, $client, $to) ?? $this->runningTimerRefusal($report, $client, $to) ?? $this->governingRefusal($report, $client, $to);
+            $refusal = $this->recalculationRefusal($report, $client, $to) ?? $this->runningTimerRefusal($report, $client, $to) ?? $this->governingRefusal($report, $client, $to)
+                ?? ($to !== ClientReport::STATUS_DRAFT ? app(BilledTime::class)->taskSumRefusal($client, $report) : null);
             if ($refusal !== null) {
                 return new ReportTransitionResult(ReportTransitionOutcome::Refused, $report, $refusal);
             }

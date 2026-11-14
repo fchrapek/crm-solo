@@ -23,7 +23,7 @@ final class TaskCompletion
 {
     /**
      * Idempotent: on a task already done it still stops running timers, and
-     * keeps the finish date and the recurring successor it already has.
+     * keeps the finish date it already has.
      */
     public function finish(Task $task): TaskFinishResult
     {
@@ -44,10 +44,6 @@ final class TaskCompletion
                 $update['is_completed'] = true;
             }
             $task->update($update);
-
-            if (! $wasDone) {
-                $task->spawnRecurringInstance();
-            }
 
             return new TaskFinishResult($wasDone, $stopped->values());
         });

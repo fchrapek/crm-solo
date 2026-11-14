@@ -1,4 +1,4 @@
-import { touchTargetClass } from '@/components/solo/primitives';
+import { soloButtonClass, touchTargetClass } from '@/components/solo/primitives';
 import { getButtonStyles } from '@/components/ui/button';
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem } from '@/components/ui/pagination';
 import { cn } from '@/lib/utils';
@@ -26,7 +26,8 @@ interface InertiaPaginationProps {
     preserveState?: boolean;
     preserveScroll?: boolean;
     replace?: boolean;
-    look?: 'default' | 'solo';
+    /** tile: the redesign's pagination (Figma: Pagination), inside a list tile: what is shown, then previous, the page and next. */
+    look?: 'default' | 'solo' | 'tile';
     summary?: React.ReactNode;
 }
 
@@ -114,6 +115,30 @@ export default function InertiaPagination({
     };
 
     const pageLinks = getVisiblePageLinks();
+
+    if (look === 'tile') {
+        const step = (link: InertiaLinkType, label: string) =>
+            link.url ? (
+                <Link href={link.url} {...visitProps} className={soloButtonClass({ variant: 'secondary', size: 'control' })}>
+                    {label}
+                </Link>
+            ) : (
+                <span className={soloButtonClass({ variant: 'secondary', size: 'control' })} aria-disabled="true">
+                    {label}
+                </span>
+            );
+
+        return (
+            <nav className={cn(styles.tile, className)} aria-label={t('Pagination')}>
+                <span className={styles.tileSummary}>{summary}</span>
+                <div className={styles.tilePages}>
+                    {step(prevLink, t('Previous'))}
+                    <span className={styles.tilePage}>{t('Page {{page}} of {{pages}}', { page: activeIndex + 1, pages: totalPages })}</span>
+                    {step(nextLink, t('Next'))}
+                </div>
+            </nav>
+        );
+    }
 
     if (look === 'solo') {
         const step = (link: InertiaLinkType, label: string, aria: string) =>

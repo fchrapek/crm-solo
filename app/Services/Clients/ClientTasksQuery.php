@@ -58,7 +58,7 @@ final class ClientTasksQuery
             return $this->orderProps($client, in_array($expanded, ['open', 'done', 'time'], true) ? $expanded : null);
         }
 
-        $expanded = array_key_exists((string) $expanded, self::LANES) ? $expanded : null;
+        $expanded = array_key_exists((string) $expanded, self::LANES) || $expanded === 'done' ? $expanded : null;
 
         $counts = collect(self::LANES)->map(fn (string $list) => $this->inLane($this->openTasks($client), $list)->count());
 
@@ -66,10 +66,14 @@ final class ClientTasksQuery
             ->orderBy('tasks.position')
             ->orderBy('tasks.id')
             ->when($key !== $expanded, fn (Builder $q) => $q->limit(self::LANE_LIMIT))
+            ->with('project:id,name')
             ->get(['tasks.*']));
 
         $running = $this->runningByTask($client, $rows->flatten()->pluck('id')->all());
         $picked = $this->pickedToday($client);
+        $done = $this->latestDone($client)
+            ->when($expanded !== 'done', fn (Builder $q) => $q->limit(self::LANE_LIMIT))
+            ->get(['tasks.*']);
 
         return [
             'tasks' => [
@@ -80,10 +84,10 @@ final class ClientTasksQuery
                     'count' => (int) $counts[$key],
                     'rows' => $tasks->map(fn (Task $task) => $this->row($task, $running->get($task->id, collect()), $picked))->values()->all(),
                 ])->values()->all(),
-                'projects' => $this->liveProjects($client)->get(['id', 'name'])
-                    ->map(fn (Project $p) => ['id' => (int) $p->id, 'name' => $p->name])
-                    ->all(),
+                'done' => ['count' => $this->doneTasks($client)->count(), 'rows' => $this->doneRows($client, $done)],
+                'projects' => $this->projects($client, ClientBillingMode::RETAINER),
                 'repositories' => $this->repositoryPaths($client),
+                'reportable_by_default' => Task::reportableByDefault($client->id),
             ],
         ];
     }
@@ -105,6 +109,28 @@ final class ClientTasksQuery
     }
 
     /**
+     * The client's live projects with their open tasks, for the project filter and the project page's pills.
+     *
+     * @return list<array{id: int, name: string, open: int, is_private: bool}>
+     */
+    public function projects(Client $client, ?string $mode = null): array
+    {
+        $open = $this->visibleOpenTasks($client, $mode)
+            ->groupBy('tasks.project_id')
+            ->selectRaw('tasks.project_id, COUNT(*) as open')
+            ->pluck('open', 'tasks.project_id');
+
+        return $this->liveProjects($client)->get(['id', 'name', 'trello_board_id'])
+            ->map(fn (Project $p): array => [
+                'id' => (int) $p->id,
+                'name' => $p->name,
+                'open' => (int) ($open[$p->id] ?? 0),
+                'is_private' => $p->trello_board_id === null,
+            ])
+            ->all();
+    }
+
+    /**
      * @return array{tasks: array<string, mixed>}
      */
     private function orderProps(Client $client, ?string $expanded): array
@@ -118,25 +144,14 @@ final class ClientTasksQuery
                 ->orderByRaw('CASE WHEN tasks.due_date IS NULL THEN 1 ELSE 0 END')
                 ->orderBy('tasks.due_date')
                 ->orderBy('tasks.position')
-                ->orderBy('tasks.id'),
+                ->orderBy('tasks.id')
+                ->with('project:id,name'),
             'open',
             self::ORDER_OPEN_LIMIT,
         );
-        $done = $bounded(
-            $this->doneTasks($client)
-                ->orderByRaw('COALESCE(tasks.finished_at, tasks.archived_at, tasks.updated_at) DESC')
-                ->orderByDesc('tasks.id'),
-            'done',
-            self::ORDER_DONE_LIMIT,
-        );
+        $done = $bounded($this->latestDone($client), 'done', self::ORDER_DONE_LIMIT);
         $running = $this->runningByTask($client, $open->pluck('id')->all());
         $picked = $this->pickedToday($client);
-        $minutes = TimeEntry::query()
-            ->where('account_id', $client->account_id)
-            ->whereIn('task_id', $done->pluck('id'))
-            ->groupBy('task_id')
-            ->selectRaw('task_id, SUM(duration_minutes) as minutes')
-            ->pluck('minutes', 'task_id');
         $entries = $client->timeEntries()
             ->with(['task:id,name', 'project:id,name'])
             ->latest('start_time')
@@ -155,12 +170,7 @@ final class ClientTasksQuery
                 ],
                 'done' => [
                     'count' => $this->doneTasks($client)->count(),
-                    'rows' => $done->map(fn (Task $task): array => [
-                        ...$this->row($task, collect()),
-                        'done' => true,
-                        'done_on' => CarbonImmutable::instance($task->finished_at ?? $task->archived_at ?? $task->updated_at)->setTimezone(LocalCalendar::timezone())->toDateString(),
-                        'minutes' => (int) ($minutes[$task->id] ?? 0),
-                    ])->values()->all(),
+                    'rows' => $this->doneRows($client, $done),
                 ],
                 'time' => [
                     'hours' => round((int) $client->timeEntries()->sum('duration_minutes') / 60, 2),
@@ -172,16 +182,48 @@ final class ClientTasksQuery
                         'minutes' => (int) $entry->duration_minutes,
                     ])->values()->all(),
                 ],
-                'projects' => $this->liveProjects($client)->get(['id', 'name'])
-                    ->map(fn (Project $p) => ['id' => (int) $p->id, 'name' => $p->name])
-                    ->all(),
+                'projects' => $this->projects($client, ClientBillingMode::ORDER),
                 'repositories' => [],
+                'reportable_by_default' => Task::reportableByDefault($client->id),
             ],
         ];
     }
 
     /**
-     * Done is whatever the open scope leaves out, so Trello Done, archived and ticked tasks all count.
+     * @return Builder<Task>
+     */
+    private function latestDone(Client $client): Builder
+    {
+        return $this->doneTasks($client)
+            ->orderByRaw('COALESCE(tasks.finished_at, tasks.archived_at, tasks.updated_at) DESC')
+            ->orderByDesc('tasks.id')
+            ->with('project:id,name');
+    }
+
+    /**
+     * @param  Collection<int, Task>  $done
+     * @return list<array<string, mixed>>
+     */
+    private function doneRows(Client $client, Collection $done): array
+    {
+        $minutes = TimeEntry::query()
+            ->where('account_id', $client->account_id)
+            ->whereIn('task_id', $done->pluck('id'))
+            ->groupBy('task_id')
+            ->selectRaw('task_id, SUM(duration_minutes) as minutes')
+            ->pluck('minutes', 'task_id');
+
+        return $done->map(fn (Task $task): array => [
+            ...$this->row($task, collect()),
+            'done' => true,
+            'done_on' => CarbonImmutable::instance($task->finished_at ?? $task->archived_at ?? $task->updated_at)->setTimezone(LocalCalendar::timezone())->toDateString(),
+            'minutes' => (int) ($minutes[$task->id] ?? 0),
+        ])->values()->all();
+    }
+
+    /**
+     * Done is whatever the open scope leaves out, so Trello Done, archived and ticked tasks all count;
+     * a card in a skipped column is no work unless it was finished before it was filed there.
      *
      * @return Builder<Task>
      */
@@ -191,7 +233,9 @@ final class ClientTasksQuery
             ->whereHas('project', fn (Builder $q) => $q
                 ->where('client_id', $client->id)
                 ->where('account_id', $client->account_id))
-            ->whereNotIn('tasks.id', $this->openTasks($client)->select('tasks.id'));
+            ->whereNotIn('tasks.id', $this->openTasks($client)->select('tasks.id'))
+            ->when($this->only !== null, fn (Builder $q) => $q->where('tasks.project_id', $this->only->id))
+            ->work();
     }
 
     /**
@@ -247,6 +291,7 @@ final class ClientTasksQuery
         return [
             'task_id' => (int) $task->id,
             'name' => $task->name,
+            'project' => $task->relationLoaded('project') ? $task->project?->name : null,
             'done' => $task->isDone(),
             'can_untick' => $task->canUnfinish(),
             'due' => $task->dueDay(),

@@ -38,7 +38,7 @@ final class SettlementLedgerTest extends TestCase
         $this->retainer(30, '2026-01-01');
         $this->report('2026-07', opening: 0, contracted: 30, actual: 24, status: ClientReport::STATUS_SENT);
         $this->settle('2026-08');
-        $this->report('2026-09', opening: 6, contracted: 30, actual: 32, status: ClientReport::STATUS_FINALIZED);
+        $this->report('2026-09', opening: 6, contracted: 30, actual: 32, status: ClientReport::STATUS_FINALIZED, backed: true);
         $september = $this->settle('2026-09');
 
         $rows = collect($this->billing()['ledger']['rows'])->keyBy('period');
@@ -90,7 +90,7 @@ final class SettlementLedgerTest extends TestCase
 
     public function test_the_opening_balance_edit_is_offered_only_while_the_rules_let_it_change(): void
     {
-        $september = $this->report('2026-09', opening: 0, contracted: 30, actual: 20);
+        $september = $this->report('2026-09', opening: 0, contracted: 30, actual: 20, backed: true);
         $this->assertSame($september->id, $this->billing()['opening_balance']['report_id']);
 
         $this->settle('2026-09');

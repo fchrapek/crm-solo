@@ -387,7 +387,7 @@ final class ClientListTest extends TestCase
         }
 
         $this->assertSame($one, $measure());
-        $this->assertSame(20, $one, 'whether the account has its own fields, stage counts, type counts, page total, page rows, the book\'s settlement (account ids plus five) and nine for the hours bank');
+        $this->assertSame(23, $one, 'whether the account has its own fields, stage counts, type counts, page total, page rows, the book\'s settlement (account ids plus five) and twelve for the hours bank');
     }
 
     public function test_rows_behind_and_rows_on_the_running_month_cost_queries_per_month_not_per_client(): void

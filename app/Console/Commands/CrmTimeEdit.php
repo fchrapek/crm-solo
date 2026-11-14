@@ -27,18 +27,12 @@ final class CrmTimeEdit extends Command
         {--task= : Move it to this task (id or name fragment); project and client follow}
         {--desc= : New description; empty clears it}
         {--title= : New title; empty clears it}
-        {--billable : Mark it billable}
-        {--not-billable : Mark it not billable}
         {--json : Machine-readable output}';
 
-    protected $description = 'Edit a time entry: minutes, start, end, task, description, title, billable';
+    protected $description = 'Edit a time entry: minutes, start, end, task, description, title';
 
     public function handle(TimeEntryEditor $editor): int
     {
-        if ($this->option('billable') && $this->option('not-billable')) {
-            return $this->refusal(AgentRefusal::invalid('Pass --billable or --not-billable, not both.'));
-        }
-
         try {
             $result = $editor->edit($this->actingIdentity()->account->id, (string) $this->argument('entry'), [
                 'minutes' => $this->option('minutes'),
@@ -47,11 +41,6 @@ final class CrmTimeEdit extends Command
                 'task' => $this->option('task'),
                 'description' => $this->option('desc'),
                 'title' => $this->option('title'),
-                'billable' => match (true) {
-                    (bool) $this->option('billable') => true,
-                    (bool) $this->option('not-billable') => false,
-                    default => null,
-                },
             ]);
         } catch (ReferenceException $e) {
             return $this->referenceFailure($e);

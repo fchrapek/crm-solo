@@ -19,6 +19,7 @@ use App\Models\Project;
 use App\Models\Setting;
 use App\Models\Task;
 use App\Models\TaskAttachment;
+use App\Models\TaskBilledMonth;
 use App\Models\TaskBrief;
 use App\Models\TaskCardDetails;
 use App\Models\TimeEntry;
@@ -219,7 +220,7 @@ MD,
         $cennik = $this->makeTask($www, 'Aktualizacja cennika PDF', 'To-Do', ['priority' => 'medium', 'is_reportable' => true]);
         $rwd = $this->makeTask($www, 'Poprawka RWD nagłówka na tablecie', 'Testing', ['type' => 'bug', 'priority' => 'medium', 'is_reportable' => true]);
         $migracja = $this->makeTask($www, 'Migracja hostingu na PHP 8.3', 'Done', ['is_reportable' => true]);
-        $updates = $this->makeTask($www, 'Aktualizacja WordPress i wtyczek (czerwiec)', 'Done', ['recurrence_period_days' => 30]);
+        $updates = $this->makeTask($www, 'Aktualizacja WordPress i wtyczek (czerwiec)', 'Done');
         $this->makeTask($general, 'Przygotować ofertę rozbudowy o sklep', 'To-Do', ['priority' => 'medium']);
 
         // Time entries: last month + early current month.
@@ -293,6 +294,16 @@ MD,
             'currency_before' => 'PLN',
             'composer_key_before' => 'structured_list',
             'created_at' => $june->copy()->startOfMonth()->addDays(2)->setTime(12, 30)->setTimezone(config('app.timezone')),
+        ]);
+
+        // May's report bills the form's design, stated on the task, since no time was logged that month.
+        TaskBilledMonth::create([
+            'task_id' => $formularz->id,
+            'client_id' => $client->id,
+            'period' => $may->format('Y-m'),
+            'billed_minutes' => 450,
+            'note' => 'Projekt formularza wyceny uzgodniony z klientem.',
+            'updated_by_user_id' => $this->owner->id,
         ]);
 
         // Closed from its finalized report; last month stays open with its draft.

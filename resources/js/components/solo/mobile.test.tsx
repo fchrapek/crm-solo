@@ -14,10 +14,9 @@ const inertia = await import('@inertiajs/react');
 mock.module('@inertiajs/react', () => ({ ...inertia, usePage: () => ({ url: currentUrl, props: { auth: { user: { name: 'Anna Zając' } } } }) }));
 
 const { TabBar, tabBarSection } = await import('./tab-bar');
-const { Masthead } = await import('./masthead');
+const { Rail } = await import('./shell/rail');
 const { ClientHeader } = await import('./client-header');
 const { BottomSheet, BottomSheetPanel } = await import('./bottom-sheet');
-const { ResponsiveSection } = await import('./responsive-section');
 const { ListRow } = await import('./list-row');
 const { ResponsiveSelect } = await import('./responsive-select');
 const { returnTarget, submitOnCommandEnter } = await import('./responsive-dialog');
@@ -32,17 +31,20 @@ describe('TabBar', () => {
         expect(tabBarSection('/')).toBe('today');
         expect(tabBarSection('/?widok=gotowe')).toBe('today');
         expect(tabBarSection('/jutro')).toBe('today');
+        expect(tabBarSection('/tydzien?nastepny=1')).toBe('today');
         expect(tabBarSection('/zadania?na=jutro')).toBe('today');
         expect(tabBarSection('/clients')).toBe('clients');
         expect(tabBarSection('/clients/7/rozliczenia')).toBe('clients');
         expect(tabBarSection('/contacts?kontakt=3')).toBe('contacts');
         expect(tabBarSection('/settings')).toBe('settings');
         expect(tabBarSection('/settings/agenci')).toBe('settings');
-        expect(tabBarSection('/leads/3')).toBeNull();
+        // Leady are a pill beside Kontakty
+        expect(tabBarSection('/leads/3')).toBe('contacts');
         expect(tabBarSection('/revenue?year=2026')).toBeNull();
         expect(tabBarSection('/clientsx')).toBeNull();
         // a task and the month close are reached from Klienci, so they light it (Figma: Zadanie on phones)
         expect(tabBarSection('/tasks/12')).toBe('clients');
+        expect(tabBarSection('/sms?status=failed')).toBe('clients');
         expect(tabBarSection('/month-close')).toBe('clients');
     });
 
@@ -74,18 +76,20 @@ describe('TabBar', () => {
         expect(html).not.toContain('Więcej');
     });
 
-    test('the masthead brings the tab bar along, so every Solo page renders both and CSS picks one', () => {
-        const html = renderToStaticMarkup(<Masthead current="clients" />);
-        expect(html).toContain('<header');
-        expect(html).toContain('data-solo-tab-bar=""');
+    test('the rail lists the same four sections and marks the current one', () => {
+        currentUrl = '/settings/agenci';
+        const html = renderToStaticMarkup(<Rail timer={null} />);
+        const nav = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
+        expect([...nav.matchAll(/<a[^>]*>.*?<\/span>([^<]+)<\/a>/g)].map((m) => m[1])).toEqual(['Dziś', 'Klienci', 'Kontakty', 'Ustawienia']);
+        expect(nav).toMatch(/<a[^>]*aria-current="page"[^>]*>.*?Ustawienia<\/a>/);
+        expect(nav).not.toContain('Finanse');
     });
 
-    test('the masthead lists the same four pages and marks the current one', () => {
-        const html = renderToStaticMarkup(<Masthead current="settings" />);
-        const nav = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
-        expect([...nav.matchAll(/<a[^>]*>([^<]+)<\/a>/g)].map((m) => m[1])).toEqual(['Dziś', 'Klienci', 'Kontakty', 'Ustawienia']);
-        expect(nav).toMatch(/<a[^>]*aria-current="page"[^>]*>Ustawienia<\/a>/);
-        expect(nav).not.toContain('Finanse');
+    test('the rail carries the running timer with Stop only while one runs', () => {
+        const timer = { id: 4, started_at: '2026-10-28T08:00:00Z', task: 'Korekta faktury', client: 'Fundacja Testowa' };
+
+        expect(renderToStaticMarkup(<Rail timer={timer} />)).toContain('aria-label="Stop: Korekta faktury"');
+        expect(renderToStaticMarkup(<Rail timer={null} />)).not.toContain('Stop');
     });
 });
 
@@ -101,15 +105,14 @@ const client = {
 };
 
 describe('ClientHeader on phones', () => {
-    test('the compact header has the chevron back link, the record tabs as 44 px links and the title once', () => {
-        const html = renderToStaticMarkup(<ClientHeader client={client} tab="rozliczenia" />);
-        expect(html).toMatch(/<a[^>]*href="\/clients"[^>]*><span aria-hidden="true"[^>]*data-icon="chevron-left">[\s\S]*?<\/span><span[^>]*>Klienci<\/span><\/a>/);
-        expect(html).not.toContain('←');
+    test('the head draws the title once and no back link or tabs: the place and its pills carry them', () => {
+        const html = renderToStaticMarkup(<ClientHeader client={client} />);
         expect(html.match(/<h1/g)).toHaveLength(1);
-        expect(html).toContain('aria-current="page" href="/clients/7/rozliczenia"');
+        expect(html).not.toContain('href="/clients"');
+        expect(html).not.toContain('aria-current="page"');
     });
 
-    test('a long back label ends in an ellipsis on one line and never squeezes the arrow', async () => {
+    test('a long back label of a record nav bar ends in an ellipsis on one line and never squeezes the arrow', async () => {
         const css = await Bun.file(new URL('./client-header.module.css', import.meta.url)).text();
         const rule = (selector: string) => css.match(new RegExp(`\\n${selector.replace(/[.()[\]:]/g, '\\$&')} \\{([^}]*)\\}`))?.[1] ?? '';
 
@@ -121,24 +124,18 @@ describe('ClientHeader on phones', () => {
         expect(rule('.backLabel')).toMatch(/min-width: 0;\s*overflow: hidden;\s*text-overflow: ellipsis;/);
     });
 
-    test('a running agent shows the cobalt chip next to the desktop live line', () => {
-        const html = renderToStaticMarkup(<ClientHeader client={{ ...client, live_agent_minutes: 14 }} tab="przeglad" />);
-        expect(html).toContain('claude · 14 min</span>');
-        expect(html).toContain('claude pracuje · 14 min');
-        expect(renderToStaticMarkup(<ClientHeader client={client} tab="przeglad" />)).not.toContain('claude ·');
+    test('a running agent shows one chip with its minutes', () => {
+        const html = renderToStaticMarkup(<ClientHeader client={{ ...client, live_agent_minutes: 14 }} />);
+        expect(html.match(/claude pracuje · 14 min/g)).toHaveLength(1);
+        expect(renderToStaticMarkup(<ClientHeader client={client} />)).not.toContain('claude');
     });
 
-    test('header actions add the ••• button, whose menu stays unmounted until opened', () => {
-        const html = renderToStaticMarkup(<ClientHeader client={client} tab="przeglad" actions={<HeaderAction>Kopiuj kontekst</HeaderAction>} />);
+    test('header actions add the "more" button, whose menu stays unmounted until opened', () => {
+        const html = renderToStaticMarkup(<ClientHeader client={client} actions={<HeaderAction>Kopiuj kontekst</HeaderAction>} />);
         expect(html).toContain('aria-label="Więcej akcji"');
         expect(html).toContain('aria-haspopup="menu"');
         expect(html.match(/Kopiuj kontekst/g)).toHaveLength(1);
-        expect(renderToStaticMarkup(<ClientHeader client={client} tab="dane" />)).not.toContain('Więcej akcji');
-    });
-
-    test('the open task count is its own span, read as one label with the tab', () => {
-        const html = renderToStaticMarkup(<ClientHeader client={client} tab="dane" />);
-        expect(html).toMatch(/Zadania<span[^>]*><span[^>]*> · <\/span>54<\/span>/);
+        expect(renderToStaticMarkup(<ClientHeader client={client} />)).not.toContain('Więcej akcji');
     });
 });
 
@@ -205,30 +202,6 @@ describe('BottomSheet', () => {
         expect(html).toMatch(/^<form noValidate=""><div data-action="save">/);
         expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Anuluj<\/button><h2[^>]*>Dane firmy<\/h2><button type="submit"[^>]*disabled=""[^>]*>Zapisz<\/button>/);
         expect(html).not.toContain('aria-label="Zamknij"');
-    });
-});
-
-describe('ResponsiveSection', () => {
-    const section = () =>
-        renderToStaticMarkup(
-            <ResponsiveSection label="Godziny" summary="−16,0 h">
-                <p>Bank godzin</p>
-            </ResponsiveSection>,
-        );
-
-    test('on desktop the children render inline once beside the hidden phone row', () => {
-        wide = true;
-        const html = section();
-        expect(html.match(/Bank godzin/g)).toHaveLength(1);
-        expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*>.*Godziny.*−16,0 h/);
-    });
-
-    test('on a phone nothing of the children is mounted until the sheet opens', () => {
-        wide = false;
-        const html = section();
-        wide = true;
-        expect(html).not.toContain('Bank godzin');
-        expect(html).toContain('aria-haspopup="dialog"');
     });
 });
 

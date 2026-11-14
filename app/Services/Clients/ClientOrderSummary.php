@@ -33,7 +33,7 @@ final class ClientOrderSummary
         $title = $project !== null && $project->name !== 'General' ? $project->name : LegalName::short($client->name);
         [$from, $to] = LocalCalendar::monthRange(LocalCalendar::currentMonth());
 
-        $tasks = Task::query()->whereHas('project', fn ($q) => $q->where('client_id', $client->id)->where('account_id', $client->account_id));
+        $tasks = Task::query()->work()->whereHas('project', fn ($q) => $q->where('client_id', $client->id)->where('account_id', $client->account_id));
         $total = (clone $tasks)->count();
         $open = (clone $tasks)->open()->count();
         $first = $client->timeEntries()->min('start_time');

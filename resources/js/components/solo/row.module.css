@@ -1,0 +1,175 @@
+.row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--role-space-12);
+    min-height: 64px;
+    padding: var(--role-space-8) var(--role-space-12);
+    border-radius: var(--role-radius-sm);
+    color: var(--role-text-primary);
+    list-style: none;
+}
+
+/* the 1 px line above a row, as far in as the row's text */
+.ruled::before {
+    content: '';
+    position: absolute;
+    inset: 0 var(--role-space-12) auto;
+    height: var(--role-stroke-rule);
+    background: var(--role-rule);
+}
+
+.row[data-selected] {
+    background: var(--role-selection);
+    color: var(--role-selection-text);
+}
+
+.row[data-selected]::before,
+.row[data-selected] + .row::before {
+    content: none;
+}
+
+.title {
+    flex: 1 1 0;
+    min-width: 0;
+    font: 600 var(--solo-text-row) / 1.35 var(--solo-font-text);
+    overflow-wrap: anywhere;
+}
+
+.link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.link:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.link:focus-visible,
+.check:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--role-radius-xs);
+}
+
+.done .title {
+    color: var(--role-text-secondary);
+}
+
+/* a 20 px mark with a 44 px target, pulled back so the mark keeps the row's 12 px inset */
+.check {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin: 0 calc(-1 * var(--role-space-12));
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+}
+
+.check:disabled {
+    cursor: default;
+}
+
+.done .check {
+    color: var(--role-status-done);
+}
+
+.time {
+    flex: none;
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.time[data-tone='over'] {
+    color: var(--role-text-over);
+}
+
+.meta {
+    flex: none;
+    max-width: 45%;
+    overflow: hidden;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.row[data-selected] :is(.meta, .time) {
+    color: inherit;
+}
+
+.wide {
+    display: none;
+}
+
+/* a row with two buttons: on a phone they stand under the title */
+.row[data-stack] {
+    flex-wrap: wrap;
+}
+
+.end {
+    display: flex;
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--role-space-8);
+    padding-bottom: var(--role-space-4);
+}
+
+@media (min-width: 768px) {
+    .row {
+        gap: var(--role-space-16);
+        padding-block: 0;
+    }
+
+    /* one line each: the meta is cut first, down to a few letters, and only then the title */
+    .title {
+        flex: 1 1 auto;
+        min-width: 34%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .row[data-wrap] {
+        padding-block: var(--role-space-8);
+    }
+
+    .row[data-wrap] .title {
+        overflow: visible;
+        white-space: normal;
+    }
+
+    /* the shrink factor is large enough that the title's share of a squeeze stays under a layout unit */
+    .meta {
+        flex: 0 100000 auto;
+        min-width: 5ch;
+    }
+
+    /* a wrapping title makes the room itself, so its meta stays whole */
+    .row[data-wrap] .meta {
+        flex: none;
+    }
+
+    .wide {
+        display: block;
+    }
+
+    .row[data-stack] {
+        flex-wrap: nowrap;
+    }
+
+    .end {
+        flex: none;
+        flex-wrap: nowrap;
+        padding-bottom: 0;
+    }
+}

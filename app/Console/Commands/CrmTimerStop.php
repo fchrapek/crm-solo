@@ -8,6 +8,7 @@ use App\Console\Attributes\AccountScope;
 use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Services\Agent\CrmEntityResolver;
 use App\Services\Agent\ReferenceException;
+use App\Services\Agent\TaskBillingNotes;
 use App\Services\Agent\TimerService;
 use Illuminate\Console\Command;
 
@@ -46,6 +47,9 @@ final class CrmTimerStop extends Command
 
         $this->raw("Timer stopped: #{$entry->id} - {$minutes} min");
         $this->fenced(['Task: '.$this->literal($entry->task?->name ?? 'no task').' ['.$this->literal($entry->client?->name).']']);
+        foreach (TaskBillingNotes::forTask($entry->task)['warnings'] as $warning) {
+            $this->raw('WARNING '.$warning);
+        }
 
         return self::SUCCESS;
     }

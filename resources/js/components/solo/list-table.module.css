@@ -1,0 +1,162 @@
+/* Figma: TableHeaderCell and TableCell. The table sits in a list tile and keeps the rows' 12 px inset. */
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    color: var(--role-text-primary);
+}
+
+/* a phone reads the rows without captions */
+.table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+}
+
+.head {
+    height: 32px;
+    padding: 0 var(--role-space-8);
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.cell {
+    height: 54px;
+    padding: var(--role-space-8) 6px;
+    border-top: var(--role-stroke-rule) solid var(--role-rule);
+    font: 400 var(--solo-text-control) / normal var(--solo-font-text);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.table tbody tr:first-child .cell {
+    border-top-color: transparent;
+}
+
+.head:first-child,
+.cell:first-child {
+    padding-left: 0;
+}
+
+.head:last-child,
+.cell:last-child {
+    padding-right: 0;
+}
+
+.head[data-align='end'],
+.cell[data-align='end'] {
+    text-align: right;
+}
+
+.cell[data-kind='title'] {
+    width: 100%;
+    max-width: 0;
+    font: 600 var(--solo-text-row) / 1.35 var(--solo-font-text);
+}
+
+/* reports no width of its own, so a long name truncates instead of widening the table past its tile */
+.truncate {
+    contain: inline-size;
+}
+
+.cell[data-kind='meta'] {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.cell[data-kind='number'] {
+    font: 400 var(--solo-text-sub) / 1.4 var(--solo-font-text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.cell[data-tone='over'] {
+    color: var(--role-text-over);
+}
+
+.cell[data-tone='muted'] {
+    color: var(--role-text-secondary);
+}
+
+.head:is([data-wide], [data-full]),
+.cell:is([data-wide], [data-full]) {
+    display: none;
+}
+
+/* the row the page is on stands on the ground colour, edge to edge of the tile's inset */
+.row[aria-current] .cell {
+    border-top-color: transparent;
+    background: var(--role-page);
+}
+
+.row[aria-current] + tr .cell {
+    border-top-color: transparent;
+}
+
+.row[aria-current] .cell:first-child {
+    border-radius: var(--role-radius-sm) 0 0 var(--role-radius-sm);
+    box-shadow: calc(-1 * var(--role-space-12)) 0 0 var(--role-page);
+}
+
+.row[aria-current] .cell:last-child {
+    border-radius: 0 var(--role-radius-sm) var(--role-radius-sm) 0;
+    box-shadow: var(--role-space-12) 0 0 var(--role-page);
+}
+
+.row[data-minor] .cell {
+    height: 44px;
+    color: var(--role-text-secondary);
+    font-weight: 400;
+}
+
+.row[data-minor] .cell[data-kind='title'] {
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+@media (min-width: 768px) {
+    .head[data-narrow],
+    .cell[data-narrow] {
+        display: none;
+    }
+
+    .table thead {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: visible;
+        clip-path: none;
+    }
+
+    .cell {
+        height: 56px;
+        padding: 0 var(--role-space-8);
+    }
+
+    .table tbody tr:first-child .cell {
+        border-top-color: var(--role-rule);
+    }
+
+    .table thead + tbody tr:first-child .cell {
+        border-top-color: transparent;
+    }
+
+    .cell[data-kind='title'] {
+        width: auto;
+        max-width: none;
+    }
+
+    .head[data-wide],
+    .cell[data-wide] {
+        display: table-cell;
+    }
+}
+
+@media (min-width: 1100px) {
+    .head[data-full],
+    .cell[data-full] {
+        display: table-cell;
+    }
+}

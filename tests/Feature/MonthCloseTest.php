@@ -700,6 +700,21 @@ final class MonthCloseTest extends TestCase
         $this->assertSame(0, MonthCloseRun::count());
     }
 
+    public function test_the_client_card_lists_the_months_clients_with_their_progress(): void
+    {
+        $this->actingAs($this->user)
+            ->patch("/month-close/{$this->agency->id}/steps", ['period' => '2026-06', 'step' => 'reconcile_log', 'state' => MonthCloseStep::STATE_DONE]);
+
+        $clients = $this->actingAs($this->user)->get("/month-close/{$this->site->id}?period=2026-06")->viewData('page')['props']['clients'];
+        $list = $this->actingAs($this->user)->get('/month-close?period=2026-06')->viewData('page')['props']['clients'];
+
+        $this->assertSame(array_map(fn (array $row): int => $row['client']['id'], $list), array_column($clients, 'id'));
+        $this->assertSame(array_column($list, 'resolved'), array_column($clients, 'resolved'));
+        $this->assertSame(array_column($list, 'total'), array_column($clients, 'total'));
+        $agency = collect($clients)->firstWhere('id', $this->agency->id);
+        $this->assertSame(['id' => $this->agency->id, 'name' => 'Agency X', 'resolved' => 1, 'total' => count(MonthCloseRun::CLIENT_STEPS)], $agency);
+    }
+
     public function test_a_client_outside_the_close_has_no_card(): void
     {
         $other = $this->user->account->clients()->create(['name' => 'Not Ours']);

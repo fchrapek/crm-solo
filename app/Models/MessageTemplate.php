@@ -10,11 +10,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 final class MessageTemplate extends Model
 {
+    public const string SMS = 'sms';
+
+    public const string EMAIL = 'email';
+
     protected $fillable = [
         'account_id',
         'key',
+        'channel',
         'name',
+        'subject',
         'body',
+        'is_default',
+    ];
+
+    protected $attributes = [
+        'channel' => self::SMS,
     ];
 
     public function account(): BelongsTo
@@ -25,7 +36,9 @@ final class MessageTemplate extends Model
     protected function casts(): array
     {
         return [
+            'subject' => HumanizedText::class,
             'body' => HumanizedText::class,
+            'is_default' => 'boolean',
         ];
     }
 }

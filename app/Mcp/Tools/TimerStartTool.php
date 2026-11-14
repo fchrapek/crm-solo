@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Mcp\Tools;
 
 use App\Mcp\Tools\Concerns\HandlesReferenceErrors;
+use App\Services\Agent\AgentRefusal;
 use App\Services\Agent\CrmEntityResolver;
 use App\Services\Agent\ReferenceException;
 use App\Services\Agent\TimerService;
@@ -26,7 +27,6 @@ final class TimerStartTool extends Tool
         $validated = $request->validate([
             'task' => ['required', 'string'],
             'description' => ['nullable', 'string'],
-            'billable' => ['nullable', 'boolean'],
         ], [
             'task.required' => 'Pass a task id or a fragment of the task name.',
         ]);
@@ -41,11 +41,11 @@ final class TimerStartTool extends Tool
 
         $open = $timers->open($accountId);
 
-        $entry = $timers->start(
-            $task,
-            $validated['description'] ?? null,
-            $validated['billable'] ?? true,
-        );
+        try {
+            $entry = $timers->start($task, $validated['description'] ?? null);
+        } catch (AgentRefusal $e) {
+            return $this->refusalError($e);
+        }
 
         return $this->payload($timers->startPayload($entry, $task, $open));
     }
@@ -62,10 +62,6 @@ final class TimerStartTool extends Tool
 
             'description' => $schema->string()
                 ->description('What is being worked on. Defaults to the task name.'),
-
-            'billable' => $schema->boolean()
-                ->description('Whether the time is billable.')
-                ->default(true),
         ];
     }
 }

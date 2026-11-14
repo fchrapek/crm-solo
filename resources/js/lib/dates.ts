@@ -26,6 +26,11 @@ export function fullDate(day: string, locale: string): string {
     return format(day, locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+/** "28 października 2026". */
+export function longDate(day: string, locale: string): string {
+    return format(day, locale, { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 /** "październik" / "October": the standalone month name. */
 export function monthName(period: string, locale: string): string {
     return format(period, locale, { month: 'long' });

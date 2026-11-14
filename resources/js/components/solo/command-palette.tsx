@@ -1,16 +1,15 @@
 import { router } from '@inertiajs/react';
-import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { jsonRequest } from '@/lib/json-request';
 import { search } from '@/routes';
 import { capitalize, monthName } from '@/lib/dates';
 import { cooperationLabel } from '@/pages/clients/components/client-list/filters';
 import { type ClientCooperationType } from '@/types';
-import { menuBoxClass, menuHeadClass, menuLabelClass, menuRowClass, menuValueClass } from './menu';
 import styles from './command-palette.module.css';
+import { GroupHeading } from './tile';
 
-export type SearchGroupName = 'clients' | 'tasks' | 'contacts' | 'leads' | 'reports' | 'invoices';
+export type SearchGroupName = 'places' | 'clients' | 'tasks' | 'contacts' | 'leads' | 'reports' | 'invoices';
 
 export interface SearchItem {
     id: number;
@@ -29,6 +28,7 @@ export interface SearchGroup {
 
 const OPEN_EVENT = 'solo:search';
 const GROUP_LABEL: Record<SearchGroupName, string> = {
+    places: 'Places',
     clients: 'Clients',
     tasks: 'Tasks',
     contacts: 'Contacts',
@@ -37,30 +37,70 @@ const GROUP_LABEL: Record<SearchGroupName, string> = {
     invoices: 'Invoices',
 };
 
-/** Opens the palette from anywhere, such as the phone search button. */
+/** Puts the cursor in the command bar from anywhere, such as the phone search button. */
 export function openSearch(): void {
     window.dispatchEvent(new Event(OPEN_EVENT));
 }
 
-type Row = { kind: 'item'; group: SearchGroupName; item: SearchItem } | { kind: 'more'; group: SearchGroupName; left: number };
+type GroupRow = { kind: 'item'; group: SearchGroupName; item: SearchItem } | { kind: 'more'; group: SearchGroupName; left: number };
+type Row = GroupRow | { kind: 'filter'; group: null };
+
+/** The page's own list, narrowed to the typed words: the first row of the results on a page that offers it. */
+export interface SearchFilter {
+    label: string;
+    href: (query: string) => string;
+}
+
+/** A screen the search can open by its name, such as one the rail has no item for. */
+export interface SearchPlace {
+    label: string;
+    url: string;
+}
+
+const plain = (text: string) =>
+    text
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+        .replace(/ł/gi, 'l')
+        .toLowerCase();
+
+/** The screens whose name holds the typed words, as the first group; it is matched here, so it needs no request. */
+export function placeGroup(query: string, places: SearchPlace[]): SearchGroup | null {
+    const words = plain(query).split(/\s+/).filter(Boolean);
+    const items = places
+        .filter((place) => words.length > 0 && words.every((word) => plain(place.label).includes(word)))
+        .map((place, index): SearchItem => ({ id: index, title: place.label, client: null, url: place.url, archived: false, detail: {} }));
+
+    return items.length > 0 ? { group: 'places', total: items.length, items } : null;
+}
 
 /** The palette's rows in reading order: each group's items, then its "pokaż więcej" while more are left. */
-export function paletteRows(groups: SearchGroup[], more: Partial<Record<SearchGroupName, SearchItem[]>>): Row[] {
+export function paletteRows(groups: SearchGroup[], more: Partial<Record<SearchGroupName, SearchItem[]>>): GroupRow[] {
     return groups.flatMap((group) => {
         const items = more[group.group] ?? group.items;
         const left = group.total - items.length;
 
-        return [...items.map((item): Row => ({ kind: 'item', group: group.group, item })), ...(left > 0 && more[group.group] === undefined ? [{ kind: 'more', group: group.group, left } as Row] : [])];
+        return [...items.map((item): GroupRow => ({ kind: 'item', group: group.group, item })), ...(left > 0 && more[group.group] === undefined ? [{ kind: 'more', group: group.group, left } as GroupRow] : [])];
     });
 }
 
 /**
- * Figma: ⌘K Szukaj (567:10386, empty 569:10666, phone 569:10727). ⌘K or the header pill opens it: a 640 px box on desktop,
- * a full-screen sheet on phones. Five results per group, "pokaż więcej" loads up to twenty, archived records on request.
+ * The one search: the request, the result rows and the keys that walk them. The command bar renders it;
+ * ⌘K or openSearch() asks for the field through onOpen.
  */
-export function CommandPalette() {
-    const { t } = useTranslation();
-    const [open, setOpen] = useState(false);
+export function useSearch({
+    open,
+    onOpen,
+    onClose,
+    filter,
+    places = [],
+}: {
+    open: boolean;
+    onOpen: () => void;
+    onClose: () => void;
+    filter?: SearchFilter;
+    places?: SearchPlace[];
+}) {
     const [query, setQuery] = useState('');
     const [archived, setArchived] = useState(false);
     const [groups, setGroups] = useState<SearchGroup[]>([]);
@@ -70,22 +110,32 @@ export function CommandPalette() {
     // Which result set is on screen, counted up with every one, so a late "pokaż więcej" for an earlier set is dropped.
     const resultSet = useRef(0);
 
+    const close = useCallback(() => {
+        resultSet.current += 1;
+        setQuery('');
+        setGroups([]);
+        setMore({});
+        setSearched('');
+        setArchived(false);
+        onClose();
+    }, [onClose]);
+
     useEffect(() => {
         const toggle = (event: globalThis.KeyboardEvent) => {
             if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
                 event.preventDefault();
-                setOpen((current) => !current);
+                if (open) close();
+                else onOpen();
             }
         };
-        const show = () => setOpen(true);
         window.addEventListener('keydown', toggle);
-        window.addEventListener(OPEN_EVENT, show);
+        window.addEventListener(OPEN_EVENT, onOpen);
 
         return () => {
             window.removeEventListener('keydown', toggle);
-            window.removeEventListener(OPEN_EVENT, show);
+            window.removeEventListener(OPEN_EVENT, onOpen);
         };
-    }, []);
+    }, [open, onOpen, close]);
 
     const trimmed = query.trim();
     useEffect(() => {
@@ -109,18 +159,6 @@ export function CommandPalette() {
         };
     }, [open, trimmed, archived]);
 
-    function change(next: boolean) {
-        setOpen(next);
-        if (!next) {
-            resultSet.current += 1;
-            setQuery('');
-            setGroups([]);
-            setMore({});
-            setSearched('');
-            setArchived(false);
-        }
-    }
-
     function loadMore(group: SearchGroupName) {
         const asked = resultSet.current;
         jsonRequest<{ groups: SearchGroup[] }>(search.url({ query: { q: trimmed, archived: archived ? 1 : undefined, group } }), 'GET')
@@ -135,80 +173,117 @@ export function CommandPalette() {
         document.getElementById(`palette-row-${active}`)?.scrollIntoView({ block: 'nearest' });
     }, [active]);
 
-    const shown = trimmed.length < 2 ? [] : groups;
-    const rows = paletteRows(shown, more);
+    const named = trimmed.length < 2 ? null : placeGroup(trimmed, places);
+    const shown = trimmed.length < 2 ? [] : [...(named !== null ? [named] : []), ...groups];
+    const rows: Row[] = [...(filter !== undefined && trimmed.length >= 2 ? [{ kind: 'filter', group: null } as Row] : []), ...paletteRows(shown, more)];
 
     function choose(row: Row | undefined) {
         if (row === undefined) return;
+        if (row.kind === 'filter') {
+            const href = filter?.href(trimmed);
+            close();
+            if (href !== undefined) router.visit(href);
+
+            return;
+        }
         if (row.kind === 'more') {
             loadMore(row.group);
 
             return;
         }
         if (row.item.url !== null) {
-            change(false);
+            close();
             router.visit(row.item.url);
         }
     }
 
-    /** Arrows walk the rows from anywhere in the palette; Enter opens the row only from the field, so buttons keep their own Enter. */
-    function arrows(event: KeyboardEvent) {
-        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-        event.preventDefault();
-        const step = event.key === 'ArrowDown' ? 1 : -1;
-        setActive((current) => (rows.length === 0 ? 0 : (current + step + rows.length) % rows.length));
-    }
-
-    function enter(event: KeyboardEvent) {
-        if (event.key === 'Enter') {
+    /** Arrows walk the rows, Enter opens the keyboard row, Escape leaves the search. */
+    function onKeyDown(event: KeyboardEvent) {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            close();
+        } else if (event.key === 'Enter') {
             event.preventDefault();
             choose(rows[active]);
+        } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            const step = event.key === 'ArrowDown' ? 1 : -1;
+            setActive((current) => (rows.length === 0 ? 0 : (current + step + rows.length) % rows.length));
         }
     }
 
+    return {
+        query,
+        setQuery,
+        archived,
+        toggleArchived: () => setArchived((current) => !current),
+        groups: shown,
+        rows,
+        active,
+        setActive,
+        choose,
+        onKeyDown,
+        close,
+        /** The query has an answer on screen, even an empty one. */
+        answered: searched !== '' && trimmed === searched,
+        searched,
+        filter: filter !== undefined && trimmed.length >= 2 ? { label: filter.label, query: trimmed } : null,
+        activeId: rows[active] ? `palette-row-${active}` : undefined,
+    };
+}
+
+export type Search = ReturnType<typeof useSearch>;
+
+/** The result groups, the empty line and the archived switch, under the command bar's field. */
+export function SearchResults({ search: found }: { search: Search }) {
+    const { t } = useTranslation();
+
     return (
-        <Dialog open={open} onOpenChange={change}>
-            <DialogContent className={`${menuBoxClass} ${styles.palette}`} closeButton={false} aria-describedby={undefined} onKeyDown={arrows}>
-                <DialogTitle className="sr-only">{t('Search')}</DialogTitle>
-                <div className={styles.field}>
-                    <input
-                        type="search"
-                        className={styles.input}
-                        value={query}
-                        placeholder={t('Search')}
-                        aria-label={t('Search')}
-                        aria-controls="palette-results"
-                        aria-activedescendant={rows[active] ? `palette-row-${active}` : undefined}
-                        onChange={(event) => setQuery(event.target.value)}
-                        onKeyDown={enter}
-                        autoFocus
-                    />
-                    <button type="button" className={styles.cancel} onClick={() => change(false)}>
-                        {t('Cancel')}
+        <>
+            <div id="palette-results" role="listbox" aria-label={t('Search')} className={styles.results}>
+                {found.filter !== null && (
+                    <button
+                        id="palette-row-0"
+                        type="button"
+                        role="option"
+                        aria-selected={found.active === 0}
+                        data-highlighted={found.active === 0 ? '' : undefined}
+                        className={styles.row}
+                        tabIndex={-1}
+                        onMouseMove={() => found.setActive(0)}
+                        onClick={() => found.choose(found.rows[0])}
+                    >
+                        <span className={styles.title}>{found.filter.label}</span>
+                        <span className={styles.caption}>{found.filter.query}</span>
                     </button>
-                </div>
-                <div id="palette-results" role="listbox" aria-label={t('Search')} className={styles.results}>
-                    {shown.map((group) => (
-                        <PaletteGroup key={group.group} group={group} rows={rows} active={active} onHover={setActive} onChoose={choose} />
-                    ))}
-                    {searched !== '' && trimmed === searched && shown.length === 0 && (
-                        <DialogDescription className={styles.empty}>{t('No results for "{{query}}"', { query: searched })}</DialogDescription>
-                    )}
-                </div>
-                <div className={styles.footer}>
-                    <button type="button" className={styles.archived} aria-pressed={archived} onClick={() => setArchived((current) => !current)}>
-                        {archived ? t('Hide archived') : t('Show archived too')}
-                    </button>
-                    <p className={styles.hints} aria-hidden="true">
-                        <span>↑↓ {t('select')}</span>
-                        <span>↵ {t('open')}</span>
-                        <span>
-                            <b>esc</b> {t('close')}
-                        </span>
-                    </p>
-                </div>
-            </DialogContent>
-        </Dialog>
+                )}
+                {found.groups.map((group) => (
+                    <PaletteGroup key={group.group} group={group} rows={found.rows} active={found.active} onHover={found.setActive} onChoose={found.choose} />
+                ))}
+                {found.answered && found.groups.length === 0 && <p className={styles.empty}>{t('No results for "{{query}}"', { query: found.searched })}</p>}
+            </div>
+            <div className={styles.footer}>
+                <button type="button" className={styles.archived} aria-pressed={found.archived} onClick={found.toggleArchived}>
+                    {found.archived ? t('Hide archived') : t('Show archived too')}
+                </button>
+                <SearchHints />
+            </div>
+        </>
+    );
+}
+
+/** The keys that walk the results; a phone has no use for them. */
+export function SearchHints() {
+    const { t } = useTranslation();
+
+    return (
+        <p className={styles.hints} aria-hidden="true">
+            <span>↑↓ {t('select')}</span>
+            <span>↵ {t('open')}</span>
+            <span>
+                <b>esc</b> {t('close')}
+            </span>
+        </p>
     );
 }
 
@@ -229,35 +304,32 @@ function PaletteGroup({
 
     return (
         <div role="group" aria-label={t(GROUP_LABEL[group.group])} className={styles.group}>
-            <p className={menuHeadClass}>
-                <span>{t(GROUP_LABEL[group.group])}</span>
-                <span className={styles.count}>{group.total}</span>
-            </p>
+            <GroupHeading as="p" label={t(GROUP_LABEL[group.group])} note={group.total} />
             {rows.map((row, index) =>
                 row.group !== group.group ? null : (
                     <button
-                        key={row.kind === 'item' ? `${row.group}-${row.item.id}` : `${row.group}-more`}
+                        key={row.kind === 'item' ? `${row.group}-${row.item.id}` : `${row.group}-${row.kind}`}
                         id={`palette-row-${index}`}
                         type="button"
                         role="option"
                         aria-selected={index === active}
                         data-highlighted={index === active ? '' : undefined}
-                        className={`${menuRowClass} ${styles.row}`}
+                        className={styles.row}
                         tabIndex={-1}
                         onMouseMove={() => onHover(index)}
                         onClick={() => onChoose(row)}
                     >
                         {row.kind === 'item' ? (
                             <>
-                                <span className={menuLabelClass}>{itemTitle(row.group, row.item, t, i18n.language)}</span>
-                                <span className={`${menuValueClass} ${styles.caption}`}>{itemCaption(row.group, row.item, t)}</span>
+                                <span className={styles.title}>{itemTitle(row.group, row.item, t, i18n.language)}</span>
+                                <span className={styles.caption}>{itemCaption(row.group, row.item, t)}</span>
                             </>
-                        ) : (
+                        ) : row.kind === 'more' ? (
                             <>
-                                <span className={`${menuLabelClass} ${styles.caption}`}>{t('Show more')} ↓</span>
-                                <span className={`${menuValueClass} ${styles.caption}`}>{t('{{count}} more', { count: row.left })}</span>
+                                <span className={`${styles.title} ${styles.caption}`}>{t('Show more')} ↓</span>
+                                <span className={styles.caption}>{t('{{count}} more', { count: row.left })}</span>
                             </>
-                        )}
+                        ) : null}
                     </button>
                 ),
             )}

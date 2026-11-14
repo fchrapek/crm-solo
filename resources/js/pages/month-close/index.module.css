@@ -1,109 +1,47 @@
+/* Figma: Zamknięcie miesiąca. The tiles and rows are parts; only what sits inside or between them is styled here. */
 .page {
-    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-12);
 }
 
-.frame {
-    max-width: var(--solo-grid-max);
-    margin: 0 auto;
-    padding-inline: var(--solo-grid-margin);
-    padding-bottom: var(--solo-space-8);
+.caption {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
 }
 
-.grid {
-    padding-top: var(--solo-space-5);
-}
-
-.cardGrid {
-    padding-top: var(--solo-space-5);
-}
-
-.main,
-.head,
-.side {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-content: start;
+.filters {
+    display: flex;
+    align-items: center;
+    gap: var(--role-space-8);
     min-width: 0;
 }
 
-.main {
-    gap: var(--solo-space-5);
+.filters > .caption {
+    display: none;
 }
 
-.head {
-    gap: 18px;
-}
-
-.side {
-    gap: var(--solo-space-5);
-    margin-top: var(--solo-space-5);
-}
-
-.sub {
-    margin: 0;
-    font-size: var(--solo-text-sub);
-    color: var(--solo-fg-muted);
-}
-
-.recordSub {
-    margin-top: var(--solo-space-3);
-}
-
-.card {
-    padding: var(--solo-card-pad, 0);
-    border: var(--solo-card-width, 0) solid var(--solo-card-border, transparent);
-    border-radius: var(--solo-card-radius, 0);
-    background: var(--solo-card, none);
-    box-shadow: var(--solo-card-shadow, none);
-}
-
-.list {
-    margin: 0;
-    padding: var(--solo-block-pad, 0);
-    border-radius: var(--solo-block-radius, 0);
-    background: var(--solo-block, none);
-    list-style: none;
+.filters > nav {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .facts {
+    display: flex;
+    flex-direction: column;
     margin: 0;
-    padding: var(--solo-block-pad, 0);
-    border-radius: var(--solo-block-radius, 0);
-    background: var(--solo-block, none);
 }
 
-.stepMeta {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--solo-space-2);
-}
-
-/* the long meta and action labels need the desktop row; a phone gets the short ones */
 .wide {
     display: none;
 }
 
-.dialogHost {
-    display: contents;
-}
-
 @media (min-width: 768px) {
-    .grid {
-        padding-top: var(--solo-page-top, 80px);
+    .page {
+        gap: var(--shell-gap);
     }
 
-    .cardGrid {
-        padding-top: var(--solo-space-7);
-    }
-
-    .head {
-        margin-bottom: var(--solo-space-5);
-    }
-
-    .side {
-        margin-top: 0;
-    }
-
+    .filters > .caption,
     .wide {
         display: inline;
     }

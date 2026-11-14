@@ -1,13 +1,12 @@
+import { fieldControl, SoloField, SoloFieldRow, SoloInput } from '@/components/solo/field';
+import { SoloButton } from '@/components/solo/primitives';
+import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
+import { ResponsiveSelect } from '@/components/solo/responsive-select';
+import { TileNote } from '@/components/solo/tile';
+import clientReports from '@/routes/client-reports';
 import { router } from '@inertiajs/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { FormInput, FormLabel, FormMessage } from '@/components/form';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
-import styles from './generate-report-dialog.module.css';
 
 export interface ComposerOption {
     key: string;
@@ -19,162 +18,112 @@ interface Props {
     onOpenChange: (open: boolean) => void;
     clientId: number;
     composers: ComposerOption[];
+    /** The month the report is for (YYYY-MM): its first and last day fill the dates. */
+    period: string;
 }
 
-export function GenerateReportDialog({ open, onOpenChange, clientId, composers }: Props) {
-    const { t } = useTranslation();
+/** The first and the last day of a month, as the report's dates. */
+export function monthRange(period: string): { start: string; end: string } {
+    const [year, month] = period.split('-').map(Number);
+    const last = new Date(year, month, 0).getDate();
 
-    const defaults = useMemo(() => previousMonthRange(), []);
-    const [periodType, setPeriodType] = useState<'month' | 'week'>('month');
-    const [periodStart, setPeriodStart] = useState(defaults.start);
-    const [periodEnd, setPeriodEnd] = useState(defaults.end);
+    return { start: `${period}-01`, end: `${period}-${String(last).padStart(2, '0')}` };
+}
+
+/** Figma: Generuj raport. A month's draft from its tasks and time; the server takes whole months only and says so on other dates. */
+export function GenerateReportDialog({ open, onOpenChange, clientId, composers, period }: Props) {
+    const { t } = useTranslation();
+    const [range, setRange] = useState(() => monthRange(period));
     const [composerKey, setComposerKey] = useState(composers[0]?.key ?? '');
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [processing, setProcessing] = useState(false);
 
-    useEffect(() => {
+    const [seen, setSeen] = useState({ open, period });
+    if (seen.open !== open || seen.period !== period) {
+        setSeen({ open, period });
         if (open) {
-            const range = periodType === 'month' ? previousMonthRange() : previousWeekRange();
-            setPeriodStart(range.start);
-            setPeriodEnd(range.end);
+            setRange(monthRange(period));
             setErrors({});
         }
-    }, [open, periodType]);
+    }
 
-    function submit(e: React.FormEvent) {
-        e.preventDefault();
+    function submit(event: FormEvent) {
+        event.preventDefault();
         setProcessing(true);
-
         router.post(
-            `/clients/${clientId}/reports`,
+            clientReports.store(clientId).url,
+            { period_type: 'month', period_start: range.start, period_end: range.end, composer_key: composerKey || null },
             {
-                period_type: periodType,
-                period_start: periodStart,
-                period_end: periodEnd,
-                composer_key: composerKey || null,
-            },
-            {
-                onError: (errs) => {
-                    setErrors(errs);
-                    setProcessing(false);
-                },
-                onSuccess: () => {
-                    setProcessing(false);
-                    onOpenChange(false);
-                },
+                onError: setErrors,
+                onSuccess: () => onOpenChange(false),
+                onFinish: () => setProcessing(false),
             },
         );
     }
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>{t('Generate report')}</DialogTitle>
-                </DialogHeader>
-
-                <form onSubmit={submit} className={styles.form}>
-                    <div>
-                        <FormLabel htmlFor="report-period-type">{t('Period')}</FormLabel>
-                        <Select value={periodType} onValueChange={(v) => setPeriodType(v as 'month' | 'week')} disabled={processing}>
-                            <SelectTrigger id="report-period-type">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="month">{t('Monthly')}</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className={styles.dateRow}>
-                        <div>
-                            <FormLabel htmlFor="report-start" error={errors.period_start}>
-                                {t('From')}
-                            </FormLabel>
-                            <FormInput
-                                id="report-start"
-                                type="date"
-                                value={periodStart}
-                                onChange={(e) => setPeriodStart(e.target.value)}
-                                required
-                                disabled={processing}
-                                error={errors.period_start}
-                            />
-                            <FormMessage error={errors.period_start} />
-                        </div>
-                        <div>
-                            <FormLabel htmlFor="report-end" error={errors.period_end}>
-                                {t('To')}
-                            </FormLabel>
-                            <FormInput
-                                id="report-end"
-                                type="date"
-                                value={periodEnd}
-                                onChange={(e) => setPeriodEnd(e.target.value)}
-                                required
-                                disabled={processing}
-                                error={errors.period_end}
-                            />
-                            <FormMessage error={errors.period_end} />
-                        </div>
-                    </div>
-
-                    {composers.length > 1 && (
-                        <div>
-                            <FormLabel htmlFor="report-composer">{t('Composer')}</FormLabel>
-                            <Select value={composerKey} onValueChange={setComposerKey} disabled={processing}>
-                                <SelectTrigger id="report-composer">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {composers.map((c) => (
-                                        <SelectItem key={c.key} value={c.key}>
-                                            {c.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    )}
-
-                    <p className={styles.hint}>
-                        {t('A draft will be generated from time entries and completed tasks in this window. You can edit it before finalizing.')}
-                    </p>
-
-                    <div className={styles.actions}>
-                        <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={processing}>
-                            {t('Cancel')}
-                        </Button>
-                        <Button type="submit" disabled={processing}>
-                            {processing ? t('Generating…') : t('Generate draft')}
-                        </Button>
-                    </div>
-                </form>
-            </DialogContent>
-        </Dialog>
+        <ResponsiveDialog
+            open={open}
+            onOpenChange={onOpenChange}
+            title={t('Generate report')}
+            onSubmit={submit}
+            fields
+            actions={(size) => (
+                <>
+                    <SoloButton variant="pill" onClick={() => onOpenChange(false)} disabled={processing}>
+                        {t('Cancel')}
+                    </SoloButton>
+                    <SoloButton type="submit" variant="ink" size={size} disabled={processing}>
+                        {processing ? t('Generating…') : t('Generate draft')}
+                    </SoloButton>
+                </>
+            )}
+        >
+            <SoloField label={t('Period')} htmlFor="report-period-type" error={errors.period_type}>
+                <ResponsiveSelect
+                    label={t('Period')}
+                    value="month"
+                    onValueChange={() => undefined}
+                    options={[{ value: 'month', label: t('Monthly') }]}
+                    disabled={processing}
+                    control={fieldControl('report-period-type', errors.period_type)}
+                />
+            </SoloField>
+            <SoloFieldRow>
+                <SoloField label={t('From')} htmlFor="report-start" error={errors.period_start}>
+                    <SoloInput
+                        {...fieldControl('report-start', errors.period_start)}
+                        type="date"
+                        value={range.start}
+                        onChange={(event) => setRange((current) => ({ ...current, start: event.target.value }))}
+                        required
+                        disabled={processing}
+                    />
+                </SoloField>
+                <SoloField label={t('To')} htmlFor="report-end" error={errors.period_end}>
+                    <SoloInput
+                        {...fieldControl('report-end', errors.period_end)}
+                        type="date"
+                        value={range.end}
+                        onChange={(event) => setRange((current) => ({ ...current, end: event.target.value }))}
+                        required
+                        disabled={processing}
+                    />
+                </SoloField>
+            </SoloFieldRow>
+            {composers.length > 1 && (
+                <SoloField label={t('Composer')} htmlFor="report-composer">
+                    <ResponsiveSelect
+                        label={t('Composer')}
+                        value={composerKey}
+                        onValueChange={setComposerKey}
+                        options={composers.map((composer) => ({ value: composer.key, label: composer.label }))}
+                        disabled={processing}
+                        control={fieldControl('report-composer')}
+                    />
+                </SoloField>
+            )}
+            <TileNote>{t('A draft will be generated from time entries and completed tasks in this window. You can edit it before finalizing.')}</TileNote>
+        </ResponsiveDialog>
     );
-}
-
-function previousMonthRange(): { start: string; end: string } {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const end = new Date(now.getFullYear(), now.getMonth(), 0);
-    return { start: toIsoDate(start), end: toIsoDate(end) };
-}
-
-function previousWeekRange(): { start: string; end: string } {
-    const now = new Date();
-    const dayOfWeek = now.getDay() || 7; // 1 (Mon) … 7 (Sun)
-    const lastSunday = new Date(now);
-    lastSunday.setDate(now.getDate() - dayOfWeek);
-    const lastMonday = new Date(lastSunday);
-    lastMonday.setDate(lastSunday.getDate() - 6);
-    return { start: toIsoDate(lastMonday), end: toIsoDate(lastSunday) };
-}
-
-function toIsoDate(d: Date): string {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
 }

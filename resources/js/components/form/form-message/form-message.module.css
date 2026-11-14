@@ -3,6 +3,6 @@
     margin-bottom: calc(-1 * var(--spacing-5));
     font-size: var(--font-size-sm);
     line-height: var(--line-height-snug);
-    font-weight: 500;
+    font-weight: 400;
     color: var(--color-destructive);
 }

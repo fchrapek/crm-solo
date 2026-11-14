@@ -19,6 +19,7 @@ final class AgentSurfaceParityTest extends TestCase
     /** A read-only tool may pair with a write verb only through the verb's read form: these arguments. */
     private const array READ_FORMS = [
         'task-brief' => ['42'],
+        'task-billed' => ['42', '--month=2026-11'],
         'plan' => ['--day=tomorrow'],
         'month-close:tick' => ['42', 'list'],
     ];

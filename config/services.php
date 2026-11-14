@@ -18,6 +18,7 @@ return [
 
     'smsapi' => [
         'test' => (bool) env('SMSAPI_TEST', false),
+        'daily_cap' => (int) env('SMSAPI_DAILY_CAP', 200),
     ],
 
     'postmark' => [

@@ -26,11 +26,10 @@ final class MessageSendingTool extends Tool
             'quiet_from' => ['nullable', 'string'],
             'quiet_to' => ['nullable', 'string'],
             'ascii' => ['nullable', 'boolean'],
-            'provider' => ['nullable', 'string'],
         ]);
 
         try {
-            $sending = $settings->sending($this->identity()->account->id, $validated['quiet_from'] ?? null, $validated['quiet_to'] ?? null, $validated['ascii'] ?? null, $validated['provider'] ?? null);
+            $sending = $settings->sending($this->identity()->account->id, $validated['quiet_from'] ?? null, $validated['quiet_to'] ?? null, $validated['ascii'] ?? null);
         } catch (AgentRefusal $e) {
             return $this->refusalError($e);
         }
@@ -47,7 +46,6 @@ final class MessageSendingTool extends Tool
             'quiet_from' => $schema->string()->description('Quiet hours start, local HH:MM.'),
             'quiet_to' => $schema->string()->description('Quiet hours end, local HH:MM.'),
             'ascii' => $schema->boolean()->description('true spells Polish letters without diacritics.'),
-            'provider' => $schema->string()->enum(['simulator', 'smsapi'])->description('simulator or smsapi.'),
         ];
     }
 }

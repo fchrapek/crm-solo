@@ -6,6 +6,7 @@ namespace App\Services\Reports;
 
 use App\Models\Client;
 use App\Models\Task;
+use App\Models\TaskBilledMonth;
 use App\Models\TimeEntry;
 use App\Services\Clients\HoursBank;
 use App\Support\LocalCalendar;
@@ -70,7 +71,14 @@ final class ReportDataAggregator
                 ->where('start_time', '<', $from))
             ->pluck('id');
 
-        $taskIds = $taskIdsFromTime->merge($completedTaskIds)->unique()->values();
+        // A task billed in the period without time of its own there is still work the client pays for.
+        $billedTaskIds = TaskBilledMonth::query()
+            ->where('client_id', $client->id)
+            ->whereBetween('period', [$start->format('Y-m'), $end->format('Y-m')])
+            ->whereHas('task', fn ($q) => $q->where('is_reportable', true))
+            ->pluck('task_id');
+
+        $taskIds = $taskIdsFromTime->merge($completedTaskIds)->merge($billedTaskIds)->unique()->values();
 
         $tasks = Task::query()
             ->with('project:id,name')

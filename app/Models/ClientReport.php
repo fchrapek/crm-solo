@@ -38,6 +38,7 @@ final class ClientReport extends Model
         'body_markdown',
         'status',
         'needs_recalculation',
+        'opening_set_at',
         'generated_at',
         'finalized_at',
         'sent_at',
@@ -212,6 +213,7 @@ final class ClientReport extends Model
             'finalized_at' => 'datetime',
             'sent_at' => 'datetime',
             'needs_recalculation' => 'boolean',
+            'opening_set_at' => 'datetime',
         ];
     }
 }

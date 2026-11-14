@@ -29,7 +29,7 @@
     border-radius: var(--solo-row-radius, 0);
     background: none;
     color: var(--solo-fg);
-    font: 500 var(--solo-text-control) / 1.2 var(--solo-font-text);
+    font: 600 var(--solo-text-control) / 1.2 var(--solo-font-text);
     text-align: left;
     text-decoration: none;
     cursor: pointer;
@@ -53,7 +53,7 @@
 
 :global([data-day]) .box .row:is([aria-pressed='true'], [data-state='checked']),
 :global([data-day]) .box .row:is([aria-pressed='true'], [data-state='checked']):focus {
-    color: var(--solo-link, var(--solo-accent));
+    color: var(--solo-accent);
 }
 
 :global([data-day]) .box .row[data-tone='agent'] {
@@ -92,9 +92,7 @@
     padding: 0 0 var(--solo-space-2);
     border-bottom: var(--solo-menu-head-rule, 2px) solid var(--solo-rule-strong);
     color: var(--solo-fg);
-    font: var(--solo-head-weight, 700) var(--solo-text-label) / 1.3 var(--solo-font-text);
-    letter-spacing: var(--solo-head-tracking, 0.08em);
-    text-transform: var(--solo-head-case, uppercase);
+    font: 400 var(--solo-heading-group) / 1.3 var(--solo-font-text);
 }
 
 /* a row that belongs to the row above it, as a group under its client */

@@ -1,4 +1,3 @@
-import { LayoutProvider } from '@/contexts/page-context';
 import { applyLayoutToPage } from '@/lib/layout-resolver';
 import { Page } from '@inertiajs/core';
 import { createInertiaApp } from '@inertiajs/react';
@@ -39,11 +38,9 @@ createServer((page: Page) =>
             setLocale(currentLocale);
 
             return (
-                <LayoutProvider>
-                    <I18nextProvider i18n={i18nInstance}>
-                        <App {...props} />
-                    </I18nextProvider>
-                </LayoutProvider>
+                <I18nextProvider i18n={i18nInstance}>
+                    <App {...props} />
+                </I18nextProvider>
             );
         },
     }),

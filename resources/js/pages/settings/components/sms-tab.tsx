@@ -1,8 +1,12 @@
+import { Chip } from '@/components/solo/chip';
 import { fieldControl, SoloField, SoloFieldRow, SoloInput, SoloTextarea } from '@/components/solo/field';
-import { ListRow } from '@/components/solo/list-row';
-import { SectionAction, SectionHead, SectionLink, SoloButton } from '@/components/solo/primitives';
+import { KvRow } from '@/components/solo/kv-row';
+import { Notice } from '@/components/solo/notice';
+import { SectionHead, SectionLink, SoloButton, SoloButtonLink } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
 import { ResponsiveSelect } from '@/components/solo/responsive-select';
+import { Row } from '@/components/solo/row';
+import { Tile, TileHeader, TileInset, TileNote, TileRows } from '@/components/solo/tile';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { InfoHint } from '@/components/ui/info-hint';
 import { jsonRequest } from '@/lib/json-request';
@@ -12,6 +16,7 @@ import { router } from '@inertiajs/react';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { FieldDefinition, MessageRuleRow, MessageTemplateRow, SendingSettings } from '../types';
+import { RowButton, TileButton } from './parts';
 import styles from './tab.module.css';
 
 interface Props {
@@ -23,7 +28,7 @@ interface Props {
 
 const DAY = 1440;
 
-/** Figma: Ustawienia / Wiadomości SMS (599:1141), phones 599:20041. How messages go out, the templates, the rules. */
+/** Figma: Ustawienia · Wiadomości SMS (1091:20933, phone 1091:21234). How messages go out, the templates, the rules. */
 export function SmsTab({ sending, templates, rules, fields }: Props) {
     const { t } = useTranslation();
     const [sendingOpen, setSendingOpen] = useState(false);
@@ -36,145 +41,90 @@ export function SmsTab({ sending, templates, rules, fields }: Props) {
 
     return (
         <>
-            <section className={styles.section}>
-                <SectionHead
-                    kind="body"
-                    label={
-                        <>
-                            {t('Sending')}{' '}
-                            {sending.provider === 'simulator' && (
-                                <InfoHint>{t('Simulator: nothing is sent. Every message gets the status simulated.')}</InfoHint>
-                            )}
-                        </>
-                    }
-                    action={<SectionAction onClick={() => setSendingOpen(true)}>{t('Edit')}</SectionAction>}
-                />
-                <ul className={`${styles.list} ${styles.phone}`}>
-                    <li>
-                        <ListRow title={t('Sent through')} value={provider} onClick={() => setSendingOpen(true)} />
-                    </li>
-                    <li>
-                        <ListRow title={t('Queue')} href={messages.index().url} />
-                    </li>
-                    <li>
-                        <ListRow title={t('Quiet hours')} value={quiet} onClick={() => setSendingOpen(true)} />
-                    </li>
-                    <li>
-                        <ListRow title={t('Polish letters')} value={letters} onClick={() => setSendingOpen(true)} />
-                    </li>
-                </ul>
-                <ul className={`${styles.list} ${styles.wide}`}>
-                    <li className={styles.row}>
-                        <span className={styles.rowText}>
-                            <span className={styles.rowTitle}>{provider}</span>
-                        </span>
-                        <span className={styles.rowEnd}>
-                            <SectionLink href={messages.index().url}>{t('Queue')} →</SectionLink>
-                        </span>
-                    </li>
-                    <li className={styles.row}>
-                        <span className={styles.rowText}>
-                            <span className={styles.rowTitle}>
+            <Tile kind="plain">
+                <TileHeader label={t('Sending')} end={<TileButton onClick={() => setSendingOpen(true)}>{t('Edit')}</TileButton>} />
+                <dl className={styles.kv}>
+                    <KvRow layout="tile" label={t('Sent through')}>
+                        {provider}
+                    </KvRow>
+                    <KvRow
+                        layout="tile"
+                        label={
+                            <>
                                 {t('Quiet hours')} <InfoHint>{t('A message due in these hours waits for their end.')}</InfoHint>
-                            </span>
-                        </span>
-                        <span className={styles.rowEnd}>
-                            <strong>{quiet}</strong>
-                        </span>
-                    </li>
-                    <li className={styles.row}>
-                        <span className={styles.rowText}>
-                            <span className={styles.rowTitle}>
+                            </>
+                        }
+                    >
+                        {quiet}
+                    </KvRow>
+                    <KvRow
+                        layout="tile"
+                        label={
+                            <>
                                 {t('Polish letters')}{' '}
                                 <InfoHint>{t('One Polish letter cuts an SMS from 160 characters to 70. Without them, ą becomes a.')}</InfoHint>
-                            </span>
-                        </span>
-                        <span className={styles.rowEnd}>
-                            <strong>{letters}</strong>
-                        </span>
-                    </li>
-                </ul>
-            </section>
-
-            <section className={styles.section}>
-                <SectionHead
-                    kind="body"
-                    label={`${t('Templates')} · ${templates.length}`}
-                    action={<SectionAction onClick={() => setTemplate('new')}>{t('New template')}</SectionAction>}
-                />
-                {templates.length === 0 && (
-                    <p className={styles.note}>
-                        {t('No templates yet. A template is the text of a message, with the client name or a field filled in.')}
-                    </p>
+                            </>
+                        }
+                    >
+                        {letters}
+                    </KvRow>
+                </dl>
+                {sending.provider === 'simulator' && (
+                    <Notice kind="info">{t('Simulator: nothing is sent. Every message gets the status simulated.')}</Notice>
                 )}
-                <ul className={`${styles.list} ${styles.phone}`}>
-                    {templates.map((row) => (
-                        <li key={row.key}>
-                            <ListRow title={row.name} value={t('rule_count', { count: row.rules })} onClick={() => setTemplate(row)} />
-                        </li>
-                    ))}
-                </ul>
-                <ul className={`${styles.list} ${styles.wide}`}>
-                    {templates.map((row) => (
-                        <li key={row.key} className={styles.row}>
-                            <span className={styles.rowText}>
-                                <button type="button" className={styles.rowTitle} onClick={() => setTemplate(row)}>
-                                    {row.name}
-                                </button>
-                            </span>
-                            <span className={styles.rowEnd}>
-                                {t('rule_count', { count: row.rules })}
-                                <SectionAction onClick={() => setTemplate(row)}>{t('Edit')}</SectionAction>
-                            </span>
-                        </li>
-                    ))}
-                </ul>
-            </section>
+            </Tile>
 
-            <section className={styles.section}>
-                <SectionHead
-                    kind="body"
-                    label={`${t('Rules')} · ${rules.length}`}
-                    action={templates.length > 0 ? <SectionAction onClick={() => setRule('new')}>{t('New rule')}</SectionAction> : undefined}
+            <Tile kind="list">
+                <TileHeader
+                    label={t('Templates')}
+                    count={templates.length}
+                    end={<TileButton onClick={() => setTemplate('new')}>{t('New template')}</TileButton>}
                 />
-                {rules.length === 0 && (
-                    <p className={styles.note}>
-                        {t('No rules yet. A rule sends a template when a field takes a value, or some days before a date.')}
-                    </p>
-                )}
-                <ul className={`${styles.list} ${styles.phone}`}>
-                    {rules.map((row) => (
-                        <li key={row.key}>
-                            <ListRow
-                                title={describe(row)}
-                                value={!row.enabled ? t('off') : row.pending > 0 ? t('scheduled_count', { count: row.pending }) : undefined}
-                                onClick={() => setRule(row)}
+                {templates.length === 0 ? (
+                    <TileInset>
+                        <TileNote>{t('No templates yet. A template is the text of a message, with the client name or a field filled in.')}</TileNote>
+                    </TileInset>
+                ) : (
+                    <TileRows>
+                        {templates.map((row, index) => (
+                            <Row
+                                key={row.key}
+                                rule={index > 0}
+                                title={row.name}
+                                meta={t('rule_count', { count: row.rules })}
+                                action={<RowButton onClick={() => setTemplate(row)}>{t('Edit')}</RowButton>}
                             />
-                        </li>
-                    ))}
-                </ul>
-                <ul className={`${styles.list} ${styles.wide}`}>
-                    {rules.map((row) => (
-                        <li key={row.key} className={styles.row}>
-                            <span className={styles.rowText}>
-                                <button
-                                    type="button"
-                                    className={styles.rowTitle}
-                                    data-tone={row.enabled ? undefined : 'muted'}
-                                    onClick={() => setRule(row)}
-                                >
-                                    {describe(row)}
-                                </button>
-                            </span>
-                            <span className={styles.rowEnd}>
-                                {row.pending > 0 && t('scheduled_count', { count: row.pending })}
-                                <strong>{row.enabled ? t('on') : t('off')}</strong>
-                                <SectionAction onClick={() => setRule(row)}>{t('Edit')}</SectionAction>
-                            </span>
-                        </li>
-                    ))}
-                </ul>
-            </section>
+                        ))}
+                    </TileRows>
+                )}
+            </Tile>
+
+            <Tile kind="list">
+                <TileHeader
+                    label={t('Rules')}
+                    count={rules.length}
+                    end={templates.length > 0 ? <TileButton onClick={() => setRule('new')}>{t('New rule')}</TileButton> : undefined}
+                />
+                {rules.length === 0 ? (
+                    <TileInset>
+                        <TileNote>{t('No rules yet. A rule sends a template when a field takes a value, or some days before a date.')}</TileNote>
+                    </TileInset>
+                ) : (
+                    <TileRows>
+                        {rules.map((row, index) => (
+                            <Row
+                                key={row.key}
+                                rule={index > 0}
+                                wrap
+                                title={describe(row)}
+                                wideMeta={row.pending > 0 ? t('scheduled_count', { count: row.pending }) : undefined}
+                                chip={<Chip status={row.enabled ? 'done' : 'open'}>{row.enabled ? t('on') : t('off')}</Chip>}
+                                action={<RowButton onClick={() => setRule(row)}>{t('Edit')}</RowButton>}
+                            />
+                        ))}
+                    </TileRows>
+                )}
+            </Tile>
 
             <SendingDialog open={sendingOpen} sending={sending} onClose={() => setSendingOpen(false)} />
             <TemplateDialog
@@ -185,6 +135,21 @@ export function SmsTab({ sending, templates, rules, fields }: Props) {
             />
             <RuleDialog rule={rule} templates={templates} fields={fields} onClose={() => setRule(null)} />
         </>
+    );
+}
+
+/** Figma: Kolejka SMS. The way from the settings to the queue. */
+export function QueueTile() {
+    const { t } = useTranslation();
+
+    return (
+        <Tile kind="plain">
+            <TileHeader label={t('SMS queue')} />
+            <TileNote>{t('sms_queue_note')}</TileNote>
+            <SoloButtonLink href={messages.index().url} variant="secondary" size="control">
+                {t('Open the queue')}
+            </SoloButtonLink>
+        </Tile>
     );
 }
 

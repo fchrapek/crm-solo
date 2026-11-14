@@ -9,6 +9,7 @@ use App\Models\MonthCloseRun;
 use App\Models\MonthCloseStep;
 use App\Services\Agent\MonthCloseTicker;
 use App\Services\Clients\MonthCloseWorklist;
+use App\Services\Messaging\SummaryEmails;
 use App\Support\LegalName;
 use App\Support\LocalCalendar;
 use Closure;
@@ -43,10 +44,13 @@ final class MonthCloseController extends Controller
     }
 
     /** Figma: Zamknięcie miesiąca, the client card: the steps per site, then the client's own, beside the hours close. */
-    public function show(Request $request, Client $client, MonthCloseWorklist $worklist): Response
+    public function show(Request $request, Client $client, MonthCloseWorklist $worklist, SummaryEmails $emails): Response
     {
         $period = $this->resolvePeriod((string) $request->input('period', ''));
-        $row = collect($worklist->rows(Auth::user()->account, $period))->first(fn (array $row): bool => $row['client']->is($client));
+        // Recovery may tick the step, so it runs before the checklist is read.
+        $email = $client->report_mode === MonthCloseRun::REPORT_MODE_SUMMARY_EMAIL && Auth::user()->owner ? $emails->state($emails->find($client, $period)) : null;
+        $rows = $worklist->rows(Auth::user()->account, $period);
+        $row = collect($rows)->first(fn (array $row): bool => $row['client']->is($client));
         abort_if($row === null, 404);
 
         $steps = $this->steps($row['client'], $row['run']);
@@ -69,6 +73,13 @@ final class MonthCloseController extends Controller
                 ->values(),
             'client_steps' => collect($steps)->whereNull('project_id')->values(),
             'settlement' => $row['settlement'],
+            'summary_email' => $email,
+            // The month's clients in list order, for moving from one card to the next.
+            'clients' => array_map(function (array $row): array {
+                $listed = $this->listRow($row);
+
+                return ['id' => $listed['client']['id'], 'name' => LegalName::short($listed['client']['name']), 'resolved' => $listed['resolved'], 'total' => $listed['total']];
+            }, $rows),
         ]);
     }
 

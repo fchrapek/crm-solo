@@ -1,133 +1,153 @@
-.controls {
+/* Figma: Przychody. The tiles, rows and tables are parts; the chart and the split bar are drawn here from role tokens. */
+.page {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: var(--role-space-12);
+}
+
+.caption {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.filters {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-8);
+}
+
+.filter {
+    display: flex;
     align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 1.25rem;
-}
-
-.control {
-    width: 180px;
-}
-
-.fxNote {
-    font-size: var(--font-size-xs);
-    color: var(--color-muted-foreground);
-    margin-left: auto;
-}
-
-/* Segmented net/gross + invoiced/paid toggles */
-.toggleGroup {
-    display: inline-flex;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    overflow: hidden;
-}
-
-.toggleGroup button {
-    padding: 0.4rem 0.85rem;
-    font-size: var(--font-size-sm);
-    background: var(--color-card);
-    color: var(--color-muted-foreground);
-    border: none;
-    cursor: pointer;
-}
-
-.toggleGroup button + button {
-    border-left: 1px solid var(--color-border);
-}
-
-.toggleGroup button[data-active='true'] {
-    background: var(--solo-ink-fill, var(--color-foreground));
-    color: var(--solo-ink-text, var(--color-background));
-    font-weight: var(--font-weight-semibold);
-}
-
-.kpiGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 0.75rem;
-    margin-bottom: 1.25rem;
-}
-
-.kpiCard {
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-card);
-    padding: 1rem;
-    box-shadow: var(--shadow-sm);
-}
-
-.kpiLabel {
-    font-size: var(--font-size-xs);
-    color: var(--color-muted-foreground);
-    margin: 0 0 0.4rem;
-}
-
-.kpiValue {
-    font-size: 1.4rem;
-    font-weight: var(--font-weight-semibold);
-    line-height: var(--line-height-none);
-    margin: 0;
-}
-
-.kpiTrend {
-    margin-top: 0.5rem;
-}
-
-.chartGrid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-    gap: 0.75rem;
-    margin-bottom: 1.25rem;
-}
-
-.chartCard {
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-card);
-    padding: 1rem;
-    box-shadow: var(--shadow-sm);
+    gap: var(--role-space-12);
     min-width: 0;
 }
 
-.chartTitle {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    margin: 0 0 0.75rem;
+.filter > .caption {
+    flex: none;
+    min-width: 72px;
 }
 
-.numCol {
-    text-align: right;
+.facts {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
 }
 
-.clickableRow {
-    cursor: pointer;
+.tableInset {
+    padding-block: 0;
 }
 
-.clickableRow:hover {
-    background: var(--color-muted);
+.plainLink {
+    color: inherit;
+    text-decoration: none;
 }
 
-.trendUp,
-.trendDown,
-.trendNeutral {
-    display: inline-flex;
+.plainLink:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.plainLink:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--role-radius-xs);
+}
+
+/* one bar per month, as tall as its share of the best month */
+.chart {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--role-space-4);
+    height: 200px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.bar {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
     align-items: center;
+    gap: var(--role-space-4);
+    min-width: 0;
+    height: 100%;
+}
+
+.barValue {
+    position: absolute;
+    bottom: calc(100% + var(--role-space-4));
+    left: 50%;
+    display: none;
+    transform: translateX(-50%);
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-label) / 1.3 var(--solo-font-text);
+    white-space: nowrap;
+}
+
+.barTrack {
+    display: flex;
+    flex: 1 1 0;
+    align-items: flex-end;
+    width: 100%;
+    min-height: 0;
+    padding-top: var(--role-space-24);
+}
+
+.barFill {
+    position: relative;
+    width: 100%;
+    border-radius: var(--role-radius-xs);
+    background: var(--role-hours-bar-pool);
+}
+
+.bar[data-running] .barFill {
+    background: var(--role-status-open);
+}
+
+.barLabel {
+    overflow: hidden;
+    max-width: 100%;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-label) / 1.3 var(--solo-font-text);
+    white-space: nowrap;
+}
+
+/* the three biggest clients as parts of the whole */
+.split {
+    display: flex;
     gap: 2px;
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
+    height: 8px;
+    overflow: hidden;
+    border-radius: var(--role-radius-full);
+    background: var(--role-rule);
 }
 
-/* Monochrome: direction is conveyed by the arrow icon, not colour. */
-.trendUp {
-    color: var(--color-foreground);
+.splitPart {
+    background: var(--role-hours-bar-pool);
 }
 
-.trendDown {
-    color: var(--color-muted-foreground);
-}
+@media (min-width: 768px) {
+    .page {
+        gap: var(--shell-gap);
+    }
 
-.trendNeutral {
-    color: var(--color-muted-foreground);
+    .filters {
+        flex-flow: row wrap;
+        gap: var(--role-space-8) var(--role-space-24);
+    }
+
+    .filter > .caption {
+        min-width: 0;
+    }
+
+    .chart {
+        gap: var(--role-space-12);
+        height: 240px;
+    }
+
+    .barValue {
+        display: block;
+    }
 }

@@ -130,6 +130,13 @@ final class MonthCloseReader
         return $this->ticker->defaultPeriod();
     }
 
+    public function assertBilling(Account $account): void
+    {
+        if (! $account->hasFeature('billing')) {
+            throw AgentRefusal::featureOff('billing');
+        }
+    }
+
     /** @return array<string, mixed> */
     private function report(Client $client, ClientReport $report): array
     {
@@ -221,12 +228,5 @@ final class MonthCloseReader
         }
 
         return $period;
-    }
-
-    private function assertBilling(Account $account): void
-    {
-        if (! $account->hasFeature('billing')) {
-            throw AgentRefusal::featureOff('billing');
-        }
     }
 }

@@ -88,7 +88,7 @@ final class DemoSeederScreensTest extends TestCase
         $pickedTasks = Task::query()->with('project')->whereIn('id', DayPick::query()->whereDate('date', $today->toDateString())->pluck('task_id'))->get();
         $this->assertCount(3, $pickedTasks->pluck('project.client_id')->unique(), 'today picks span three clients');
         $this->assertSame(1, $pickedTasks->whereNotNull('finished_at')->count(), 'exactly one pick is ticked');
-        $this->assertSame(1, Task::query()->where('name', 'Aktualizacja cennika PDF')->count(), 'the ticked pick spawns no successor');
+        $this->assertSame(1, Task::query()->where('name', 'Aktualizacja cennika PDF')->count(), 'the ticked pick is one task');
         $minutesByTask = $picks->pluck('minutes', 'name');
         $this->assertSame(0, $minutesByTask['Aktualizacja cennika PDF'], 'the ticked pick logged nothing today');
         if (LocalCalendar::now()->diffInMinutes($today, true) >= 120) {

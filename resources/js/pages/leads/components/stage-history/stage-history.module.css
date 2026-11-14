@@ -1,0 +1,10 @@
+/* an entry's note: its text under the row, in the journal entry's face */
+.note {
+    margin-top: calc(-1 * var(--role-space-8));
+    padding: 0 var(--role-space-12) var(--role-space-12);
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-control) / 1.4 var(--solo-font-text);
+    list-style: none;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}

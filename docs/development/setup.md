@@ -99,7 +99,9 @@ These features degrade gracefully when the env var is unset — local dev works 
 
 - `OPENAI_API_KEY` (and `OPENAI_REPORT_MODEL`, default `gpt-4o`): the AI report composer. Without it reports use the deterministic composer.
 - `KIWWWI_LEADS_BASE_URL`, `KIWWWI_LEADS_EN_BASE_URL`, `KIWWWI_LEADS_USERNAME`, `KIWWWI_LEADS_APP_PASSWORD`: the scheduled lead pull (`kiwwwi:sync-leads`), one URL per site of the multisite (blog 1, blog 2). Unset, the scheduled pull is skipped; a blank site URL leaves only that site out.
+- `SMSAPI_DAILY_CAP` (default 200): how many real messages one account may send in a local day; the next ones fail with `daily_cap` and can be sent again later.
 - `SMSAPI_TEST=1`: an account sending through SMSAPI has each message checked by SMSAPI (token, number, text) without sending it or spending credit; the message is stored as `simulated` ([integrations.md](integrations.md)).
+- `MAIL_ALWAYS_TO` and `MAIL_LIVE_SEND`: every mail goes to the one `MAIL_ALWAYS_TO` address (`.env.example` sets one, Mailpit shows it), and a summary email only counts as sent with `MAIL_LIVE_SEND=true` and a real mailer. Leave both as they are locally; the rules are in hosting.md.
 - `TRELLO_ATTACHMENT_MAX_KB`, `TRELLO_ATTACHMENTS_TASK_MAX_KB`: caps on files pulled from Trello cards (25 MB per file, 100 MB per task by default).
 - `APP_DISPLAY_TIMEZONE` — human-facing timezone for server-side surfaces that read or print a bare wall-clock time (currently `php artisan time:log --end`). Storage stays UTC (`app.timezone`); this only shifts input parsing and console output. Defaults to `UTC`, which keeps behaviour identical when unset — set it to `Europe/Warsaw` locally so `--end="11:00"` means 11:00 local. The browser is unaffected (it sends absolute ISO instants).
 
@@ -108,7 +110,7 @@ These features degrade gracefully when the env var is unset — local dev works 
 `config/waitlist.php`, off by default, so local dev and the demo are unchanged.
 
 - `APP_CLOSED=true`: guests are sent to the splash at `/czesc` from every page that needs a login (the `redirectGuestsTo` in `bootstrap/app.php`). `/login` keeps working for existing users, signed-in users never see the splash, and there is no registration route. With it off, `/czesc` is a 404.
-- `WAITLIST_ACCOUNT_ID`: the account whose funnel receives signups. Required when closed; a wrong id makes `/czesc` answer 503 and log an error, on the first page load and on submit, rather than thanking the visitor.
+- `WAITLIST_ACCOUNT_ID`: the account whose funnel receives signups. Required when closed; a wrong id makes `/czesc` answer 503 and log an error, on the first page load and on submit, rather than thanking the visitor. To look at the page locally, start the PHP server with `APP_CLOSED=true WAITLIST_ACCOUNT_ID=1`.
 - `WAITLIST_PIPELINE`: a pipeline slug from `config/leadgen.php`; empty means the first one. An unknown slug fails the same way as a wrong account.
 - `WAITLIST_PER_MINUTE`, `WAITLIST_PER_HOUR`: signups per visitor IP (5 and 20). The IP is `$request->ip()`, so behind a reverse proxy set `TRUSTED_PROXIES` to the proxy's address or subnet (and `TRUST_CF_CONNECTING_IP=true` behind Cloudflare), or every visitor shares one bucket.
 - `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET`: the same Turnstile gate as the login form, active only with the secret set.
@@ -156,6 +158,9 @@ bun run format
 # Everything CI checks, in one command (or one part: php, js, audit)
 composer run check
 composer run check -- js
+
+# The financial row-lock tests, on a throwaway database in the local MariaDB container
+composer run check:locks
 ```
 
 ## The CI gate
@@ -163,9 +168,10 @@ composer run check -- js
 `.github/workflows/ci.yml` runs for every pull request (called by `pr.yml`)
 and as the first job of the build workflows (`deploy.yml` in the private
 source repository, `deploy-demo.yml` in the public one), so nothing is merged,
-no image is built and the demo is not deployed from a commit that fails it. Each of its jobs runs
-one part of `scripts/check.sh`, the script `composer run check` runs, so a
-local pass means the same commands passed:
+no image is built and the demo is not deployed from a commit that fails it. It is
+one job, because Actions bills each job rounded up to a whole minute. Its app
+steps run the parts of `scripts/check.sh`, the script `composer run check`
+runs, so a local pass means the same commands passed:
 
 - **php**: `vendor/bin/pint --test`, then `php artisan test --parallel`.
 - **js**: `php artisan wayfinder:generate` (the route helpers TypeScript
@@ -178,13 +184,14 @@ local pass means the same commands passed:
 month on a private repository, so the private repository skips work that a
 check on the same tree already did; the release path repeats it on purpose):
 
-- A PR into develop, private repository only: `pr.yml` lists the changed
-  files first (both sides of a rename). Only `docs/` and root Markdown
-  changed: php, js and audit are skipped. The export self-test runs only
-  when `scripts/public-export*`, `.github/`, `resources/fonts/` or a
-  `.gitattributes` changed. The export scan always runs. A file list it
-  cannot read runs everything and blocks the bot merge. Public PRs run the
-  full gate.
+- A PR into develop, private repository only: the gate's first step lists
+  the files the merge commit changes against develop (both sides of a
+  rename). Only `docs/` and root Markdown changed: php, js and audit are
+  skipped. The export self-test runs only when `scripts/public-export*`,
+  `.github/`, `resources/fonts/` or a `.gitattributes` changed, and
+  actionlint only when `.github/` changed. The title check and the export
+  scan always run. A file list it cannot read runs everything. Public PRs
+  run the full gate. `pr.yml` bills two jobs: the gate and the merge.
 - After the bot merges, it sets a "Verified merge" commit status when the
   squash has the tested tree on the tested base, then dispatches
   `deploy.yml`. Develop skips the gate only when that status from the bot
@@ -220,7 +227,8 @@ cut from develop: `feat/<topic>`, `fix/<topic>`, `docs/<topic>`,
 
 **Local hooks.** `bun install` installs them (Lefthook, `lefthook.yml`).
 pre-commit fixes staged PHP with Pint and staged scripts with ESLint, and
-runs the token linter when CSS changed. pre-push runs the types and the JS
+runs the token linter when CSS changed and actionlint (when installed) when a
+workflow changed. pre-push runs the types and the JS
 tests, plus the PHP suite when the push touches PHP, `lang/` or prompts.
 commit-msg checks the house style with `scripts/hooks/commit-msg.sh`:
 `Area: what changed`, the area from `.github/commit-areas.txt`, at most 72

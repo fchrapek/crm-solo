@@ -17,6 +17,7 @@ use App\Services\Integrations\Trello\TrelloListMapper;
 use App\Support\LocalCalendar;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\Auth;
 
 final class ClientOverviewQuery
 {
@@ -35,7 +36,7 @@ final class ClientOverviewQuery
     public function props(Client $client, CarbonInterface $since, ?string $mode = null): array
     {
         $mode ??= $this->mode->of($client);
-        $billing = $client->account->hasFeature('billing');
+        $billing = $client->account->shows('billing', Auth::user());
         $fields = app(ClientFieldsQuery::class);
         // An account that bills keeps its hours here; its fields stay on Dane.
         $card = ! $billing && $fields->uses($client->account_id) ? $fields->card($client) : null;

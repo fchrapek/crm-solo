@@ -2,7 +2,7 @@ import { router } from '@inertiajs/react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { fieldControl, SoloField, SoloFieldRow, SoloInput } from '@/components/solo/field';
+import { FieldError, fieldControl, SoloField, SoloFieldRow, SoloInput } from '@/components/solo/field';
 import { SoloButton } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
 import { ResponsiveSelect } from '@/components/solo/responsive-select';
@@ -256,22 +256,24 @@ export function TaskFormDialog({ open, onOpenChange, projectId, initial, parentO
                 </SoloField>
             </SoloFieldRow>
 
-            <label className={styles.reportableRow}>
-                <Checkbox
-                    className={styles.reportableCheck}
-                    checked={values.is_reportable ?? false}
-                    onCheckedChange={(checked) => setValues({ ...values, is_reportable: checked === true })}
-                    disabled={processing}
-                />
-                <span className={styles.reportableLabel}>
-                    <span className={styles.reportableTitle}>{t('Include in client report')}</span>
-                    <span className={styles.reportableHint}>
-                        {t(
-                            'Off by default. Baseline retainer activities (monitoring, backups, updates) are covered by the baseline scope and stay off.',
-                        )}
-                    </span>
-                </span>
-            </label>
+            <div className={styles.reportable}>
+                <label className={styles.reportableRow}>
+                    <span>{t('Include in client report')}</span>
+                    <Checkbox
+                        {...fieldControl('task-reportable', errors.is_reportable)}
+                        variant="switch"
+                        checked={values.is_reportable ?? false}
+                        onCheckedChange={(checked) => setValues({ ...values, is_reportable: checked === true })}
+                        disabled={processing}
+                    />
+                </label>
+                <p className={styles.reportableHint}>
+                    {t(
+                        'Off by default. Baseline retainer activities (monitoring, backups, updates) are covered by the baseline scope and stay off.',
+                    )}
+                </p>
+            </div>
+            <FieldError htmlFor="task-reportable" error={errors.is_reportable} />
         </ResponsiveDialog>
     );
 }

@@ -1,11 +1,11 @@
 # Client reports
 
-Retainer reports, one per client per month, in the client page's Reports tab.
+Retainer reports, one per client per month, on the client record's Rozliczenia (the month's Raport tile).
 Weekly and partial reports are refused: the retainer hours are a monthly pool,
 so a new report starts on the 1st and ends on the last day of that month. A
 month that already has a report gets no second one: `POST .../reports` opens
 the existing report (Regenerate refreshes its figures there) and
-`reports:generate` fails naming it.
+`crm report-create` fails naming it.
 
 ## Data
 
@@ -31,10 +31,12 @@ matching timestamps, and `needs_recalculation` (see Month settlement).
   snapshot; else a report covering exactly that month (opening, pool and cap;
   its `actual_hours` counts once it is finalized or sent or the month has
   ended, so a draft for the month in progress never freezes the hours); else
-  reportable time in the local month against the retainer the report would
-  snapshot (the leading active position on the 1st; `effective_to` is
-  exclusive; `has_retainer` is false without one). `source` says which applied
-  (`closure`, `report`, `entries`); logged time is always live. The client
+  billed time (each task's stated figure, else its reportable time, in the
+  local month), against the retainer the report would snapshot (the leading active
+  position on the 1st; `effective_to` is exclusive; `has_retainer` is false
+  without one). A draft for the running month reads the live billed or
+  reportable figure too. `source` says which applied (`closure`, `report`,
+  `billed`, `entries`); logged time is always live. The client
   overview and `crm brief` read it; the brief keeps every logged hour of the
   calendar month as `hours.month`, labelled `month_counts: all_logged_time`.
 - Generate and regenerate store the opening balance and cap the body was
@@ -42,15 +44,86 @@ matching timestamps, and `needs_recalculation` (see Month settlement).
   from the previous settled point only with `recalculate_opening_balance`, or
   always on a report flagged `needs_recalculation`.
 - A report with `contracted_hours` null was billed outside a retainer: its closing balance equals its opening, so its hours never become bank debt for a later retainer. Closing such a month freezes that opening too (the snapshot carries `outside_bank: true`, which the closed month reads back).
-- Rounding a month's hours is done on the report's `actual_hours`
-  (`reports:generate --hours=`), never by padding a time entry.
+- A month's hours change only through billed time (below): a task's stated
+  figure, never a padded time entry.
+
+## Billed time
+
+Real time is the month's reportable time, as logged (`time_entries`, written
+only through `TimeEntryWriter`). Billed time is what the client is charged,
+per task and month, for every client, from `App\Services\Clients\BilledTime`,
+the one calculation every reader uses: a task bills the figure the owner stated
+for it (`task_billed_months`, unique per task, client and period), else exactly
+its real time, and the month bills the sum of its reportable tasks; a task with
+a figure and no time of its own in the month counts too. There is no rounding,
+no per-client switch and no month total set by hand: to change a month, set one
+task. Decided in `docs/roadmap/2026-11-05-billed-time-simplified.md`; the
+columns `clients.billed_time`, `clients.billed_rounding_minutes` and
+`client_billed_months.billed_minutes` stay but nothing reads them (a month note
+there still shows on the month).
+
+- Readers: `HoursBank` (the no-report branch and a running-month draft; a
+  governing report's `actual_hours` and a closure still win), report generate
+  and regenerate (`ReportWriter::context`: a whole month without a closure
+  takes the billed figure), and `report-create --hours`, which must equal the
+  task sum or is refused. Report task lines keep real minutes and the client
+  never sees hours per task; a task billed in the month without time of its own
+  there is still on the work list. The billing summary shows the billed total.
+- The one write, under `ClientFinancialLock`: `setTask` (a task's figure with
+  an internal note, null clears it; default month: the local month of the
+  task's latest entry, else of its finish). A task that is not reportable gets
+  no figure (`not_reportable`), and a figure stops counting if its task later
+  turns not reportable. A task's reportable flag changing, or the task being
+  deleted, flags every draft from its first month on (`needs_recalculation`),
+  so a month cannot close on a stale total; a delete is refused by a figure in a
+  closed or reported month. `followTask` moves a task's figures with its time
+  (`task-edit --move-time`, which then needs `write:billing`), month by month
+  under one lock, by the same settled rule as the time, and leaves one in a
+  month settled or reported for either client. A whole-month report whose hours
+  differ from its month's task sum cannot be finalized, sent or closed on
+  (`BilledTime::taskSumRefusal`); a closed month answers to its closure
+  instead. A month with a draft report updates the draft in the same write
+  (`ReportWriter::rewriteActualHours`: `actual_hours`, the billing summary via
+  `BillingSummary::replaceIn`, revision reason `billed_hours`), and later
+  drafts are flagged. Refusals: `SettlementPolicy::reportFigureRefusal`
+  (`period_settled`, or `refused` for an earlier flagged report), plus
+  `not_a_draft` when the month's governing report is finalized or sent, and no
+  billed time for a month not yet started. A body without exactly one billing
+  summary refuses the write before anything is saved.
+- One source: once a closure or a governing report settles a month, its used
+  hours are the billed figure on every surface (`BilledMonth::settledAt`). A
+  month closed before billed time (snapshot schema 1) reads its `entries` as
+  real and its `used` as billed.
+- Closing a month freezes both values: snapshot `schema_version` 2 has
+  `billed_time` (`real`, `billed`, and `tasks`: `task_id`, `real`, `stated`,
+  `billed` per task) and `source: billed`. Snapshots written before 2026-11-05
+  also carry `rounding_minutes`, `rounded` and `override`, which nothing reads;
+  their `used` is the figure.
+- Routes (`feature:billing`): `GET /clients/{client}/billed/{period}`
+  (`BilledTime::figures()` as JSON for the dialog: `tasks` with `task`,
+  `project`, `real`, `stated`, `billed` and `note`, the most billed first) and
+  `PUT|DELETE /clients/{client}/billed/{period}/tasks/{task}` (PUT `hours` and
+  `note`, DELETE back to real time; a task of another client is a 404).
+  Agents: `billed`, `task-billed`, `task-done --billed` and the MCP tools
+  `billed_time`, `task_billed`, `task_billed_set` (writes `write:billing`).
+- Screens (Figma 1087:4031, the redesign's Rozliczenia): the month's tasks stand on the page in both values with an
+  (i) on a stated figure, and Zmień on a task opens the dialog (`client-billing/billed-time-dialog.tsx`, a bottom
+  sheet on phones) straight on that task: its field (empty bills its real time), the month total and balance it would
+  lead to, the note and "Wróć do czasu rzeczywistego". The month total is never typed. A month that cannot change
+  shows what locks it under its tasks, with the reopen of the closure or the way to the report; after a refusal the
+  dialog reads the month again and turns read only. A month closed before per-task figures shows its totals only.
+  The bank's rows show both values with an (i) on a month billed off its real time. A client without a retainer (no
+  ledger) gets its last six months with time or a report as rows in both values (`billing.billed_months`), opening
+  the same dialog on the month's list without the balance parts. The report page's Godziny shows real and billed
+  time, Zmień on a draft opens the same dialog and the editor then takes the rewritten body and version (unsaved
+  text is kept and the stale notice shows), and a finalized or sent report says its hours are frozen.
 
 **Status**: draft, then finalized, then sent, and Reopen back to draft. Every
 status change goes through `App\Services\Reports\ReportStatusTransition`
 (`finalize`, `markSent`, `reopen`), which locks the client row and then the
 report row (`App\Services\Clients\ClientFinancialLock`) and decides on the
 stored status. Every report write takes that lock in that order: generate (web
-and `reports:generate`), body edits, the opening balance, regenerate, delete and
+and `crm report-create`), body edits, the opening balance, regenerate, delete and
 the status moves.
 
 | From \ to | finalized | sent | draft (reopen) |
@@ -78,7 +151,7 @@ report deletes its revisions.
 editor started from (`ClientReport::version()`, a hash of body and opening
 balance). A write based on an older version is refused. Every figure-changing
 write goes through `App\Services\Reports\ReportWriter` (generate for the web
-and `reports:generate`, regenerate, body edits, opening edits, delete).
+and `crm report-create`, regenerate, body edits, opening edits, delete).
 Composing can take an AI call, so it runs before the lock; under the lock the
 writer checks the settlement rules again and recomputes the figures
 (`ReportContext::figures()`: closure, contracted, opening, cap, actual), and
@@ -113,8 +186,9 @@ month can be closed while its report is unsent.
   in it; no report before it (its own included) may be flagged
   `needs_recalculation`; no finalized or sent report may come after it; and the
   snapshot must hash to what the dialog showed (`MonthSettlement::preview()`).
-  The snapshot (`schema_version` 1) takes a governing whole-month report's
-  figures whatever its status (`source: report`), else live reportable time
+  The snapshot (`schema_version` 2) takes a governing whole-month report's
+  figures whatever its status (`source: report`), else live billed time when
+  the client has it on (`source: billed`), else live reportable time
   (`source: entries`), and also stores `entries` (live reportable hours, for
   the dialog's info line) and `logged`. Hours are rounded to 2 places; null
   means not applicable. The redirect flashes the sentence (hours in the app
@@ -154,13 +228,20 @@ month can be closed while its report is unsent.
 
 | Action on P's report | P's month closed, or a closure after it | A later report finalized or sent | An earlier report flagged | Otherwise |
 | --- | --- | --- | --- | --- |
-| Generate (web, `reports:generate`) | P closed: allowed from the closure's figures; `--hours` refused. Closure after P: refused | refused | refused | allowed, later drafts flagged |
+| Generate (web, `crm report-create`) | P closed: allowed from the closure's figures; `--hours` refused. Closure after P: refused | refused | refused | allowed, later drafts flagged |
 | Regenerate | refused: reopen first | refused | refused | allowed, later drafts flagged |
 | Opening balance edit | refused | refused | refused | allowed, later drafts flagged |
+| Billed hours (set, clear, from balance) | refused | refused | refused | allowed on a draft or with no report (`not_a_draft` otherwise), later drafts flagged |
 | Delete | refused | refused | refused | allowed, later drafts flagged |
 | Body edit | allowed; the billing summary is re-rendered from the closure, a body without exactly one is rejected | allowed | allowed | allowed as written |
 | Finalize, mark sent | allowed | allowed | refused | refused while P's own report is flagged |
 | Reopen (report) | allowed | allowed | allowed | allowed |
+
+Timers follow the same freeze from both sides, under the client lock: a timer
+does not start on a day that is settled for its client
+(`TimeEntryWriter::start`, behind `TimeEntry::startFor()`), and a report is not
+finalized or sent, nor a month closed, while a timer runs in its period. So a
+running timer never sits in a settled period and a stop is never refused.
 
 A status move that hands a period to another report ending the same day (a
 legacy duplicate) is treated as a figure change: refused like one, and when
@@ -243,16 +324,27 @@ that never comes.
 
 ## Flow and UI
 
-Reports tab, Generate report, period and composer, `POST
-/clients/{client}/reports`, aggregator, composer, a `draft`, then the edit
-page: `<MarkdownTextarea>` with Write and Preview, and Save, Regenerate,
-Finalize (a draft), Oznacz jako wysłany and Reopen (finalized), Reopen (sent,
-whose status reads "wysłany DD.MM" in local time), Copy, Print, Delete. The change history at the bottom
-expands update and regenerate rows into a line diff (`<MarkdownDiff>`): each
-row shows what that edit changed.
+Rozliczenia, the month's Raport tile, Generuj raport (the month shown fills the dates), `POST
+/clients/{client}/reports`, aggregator, composer, a `draft`, then the report page (`pages/clients/reports/edit.tsx`,
+Figma 1092:25793): tokens client, month, Raport; Podgląd and Edytuj are its pills (`?edycja=1`, the text in the
+editor survives the switch). The text for the client stands first (`<MarkdownView>`, or `<MarkdownTextarea>` with
+Save), beside it Wysyłka (status, period, composer, and the notice of a draft that needs recalculation), Godziny and
+Aktywność. Oznacz jako gotowy (a draft) or Oznacz jako wysłany (finalized) is the ink button; the "more" menu holds
+Edit text, Regenerate, Copy, Print, Reopen as draft and Delete. Aktywność expands update and regenerate rows into a
+line diff (`<MarkdownDiff>`): each row shows what that edit changed. The Raport tile on Rozliczenia offers the same
+steps per state: generate, open and regenerate a draft, regenerate one that waits for a recalculation, mark a ready
+one as sent. A client without a retainer (billing mode `order`) has no month's Raport tile; its Rozliczenia lists its reports
+in a Raporty tile with Generuj raport for the previous month (`ClientBillingQuery`'s order branch sends `reports`,
+`report_period`, `composers` and `currency`).
 
-`php artisan reports:generate {client} [--period= --hours= --composer=
---locale=]` drafts one from the command line.
+`crm report-create <client> [--period= --hours= --composer= --locale=]` drafts
+one from the command line. Agents use the `report-create`,
+`report-update`, `report-regenerate`, `report-opening-balance` and
+`report-status` verbs and their MCP tools (`write:reports`), through
+`App\Services\Agent\ReportEditor` on the same `ReportWriter` and
+`ReportStatusTransition`. They change a draft only (`not_a_draft` otherwise),
+an edit needs the version `crm report --json` printed, and a second report
+for a month is refused with `report_exists`.
 
 Routes: `POST|DELETE /clients/{client}/months/{period}/close`, `POST /clients/{client}/reports`, `GET/PUT/DELETE
 /clients/{client}/reports/{report}`, `POST
@@ -263,6 +355,20 @@ but nothing in the UI calls it; the flag is saved through the task form.
 
 Money and hours on the page format through `useFormatters()` in
 `resources/js/lib/format.ts`.
+
+The client record's Rozliczenia tab shows one month at a time, the one in the URL (`?miesiac=YYYY-MM`; without it,
+or for a month that has not started, the active month): the month is the third place token and a row of pills beside
+the title. `ClientBillingQuery` sends `billing_month` for it: `figures` (exactly `BilledTime::figures()`, what the
+billed time dialog reads), `report` (with `needs_recalculation`), `invoices` (booked in the month, sale date first),
+`checklist` (the month-close run's moved and total steps) and `composers`. The page draws the four figures, the
+month's tasks, its invoices (the Infakt draft groups when it is the drafted month, else the mirror's invoices of the
+month), the report or the summary email, the month's lines with Zamknij miesiąc or Otwórz ponownie, and the retainer.
+From 1100 px it keeps two columns: the tasks, the invoices and the retainer (Abonament) on the left; the report or
+email and the Miesiąc tile on the right, where the Miesiąc tile stretches so both columns end together, its buttons
+at its end (picked 2026-11-12 as option A; a one-column option B was built and reverted, Figma section
+`Rozliczenia · opcje 2026-11-12`). Below them stand the bank across months and the whole invoice list: `billing_invoices` (`ClientInvoiceList`) for a
+year, a month of it, the rolling year or everything (`?invoice_year=`, `?invoice_month=`), with the revenue of the
+same window; its pills reload that prop alone.
 
 The client record's Rozliczenia tab (`ClientBillingQuery`) reads its rows from
 `HoursBank::ledgerPage()` twelve months at a time, so only the shown months have
@@ -277,14 +383,11 @@ report delivery as separate fields: `settlement` is `closed` only from a real
 closure (with `closed_on`), `open` for a month that owes a close or is the
 active one, and null before the baseline or in a gap, where only the report
 status shows. "Otwórz ponownie" sits on the latest closed row only
-(`closure_id`, with `reopen_refusal` when a later report is already out). The
-headline leads with the latest closure when the active month comes after it
-("Wrzesień zamknięty 05.10 na 32 z 30 h, ... Październik otwarty: ..."); an
+(`closure_id`, with `reopen_refusal` when a later report is already out). An
 ended month without a closure reads "skończył się", never "zamknął się". Zmień
 bilans otwarcia patches the newest report's opening balance and is offered only
-while `SettlementPolicy::reportFigureRefusal()` allows that change. A client
-without a retainer, a closure or a report gets an empty state that points to
-generating one. Overage never shows a cost.
+while `SettlementPolicy::reportFigureRefusal()` allows that change. A month's
+name in the bank opens that month. Overage never shows a cost.
 
 **Settlement surfaces.** The confirm dialog (`month-settlement/close-month-dialog`,
 shared by Przegląd and the month-close page) fetches

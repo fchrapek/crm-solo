@@ -7,47 +7,63 @@ import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import styles from './client-journal.module.css';
 
-/** "Nowy wpis": the same journal note the old Activity tab and `crm note` write; a bottom sheet on phones. */
-export function JournalEntryDialog({ clientId, open, onOpenChange }: { clientId: number; open: boolean; onOpenChange: (open: boolean) => void }) {
+export interface EditedEntry {
+    id: number;
+    note: string;
+    /** A stage change stands without a note, so its note may be emptied. */
+    optional: boolean;
+}
+
+interface Props {
+    clientId: number;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    /** An existing entry whose note is edited; a new entry when absent. */
+    entry?: EditedEntry | null;
+}
+
+/** "Nowy wpis" and "Edytuj wpis": the journal note the journal and `crm note` write; a bottom sheet on phones. */
+export function JournalEntryDialog({ clientId, open, onOpenChange, entry = null }: Props) {
     const { t } = useTranslation();
     const [note, setNote] = useState('');
     const [error, setError] = useState<string | undefined>();
     const [processing, setProcessing] = useState(false);
-
     const [wasOpen, setWasOpen] = useState(open);
     if (open !== wasOpen) {
         setWasOpen(open);
         if (open) {
-            setNote('');
+            setNote(entry?.note ?? '');
             setError(undefined);
         }
     }
 
     function submit(e: FormEvent) {
         e.preventDefault();
-        if (note.trim() === '') {
+        if (note.trim() === '' && entry?.optional !== true) {
             setError(t('Write the entry first.'));
+
             return;
         }
         setProcessing(true);
-        router.post(
-            lifecycleEvents.store(clientId).url,
-            { note: note.trim() },
-            {
-                preserveScroll: true,
-                onSuccess: () => onOpenChange(false),
-                onError: (errors) => setError(errors.note),
-                onFinish: () => setProcessing(false),
-            },
-        );
+        const options = {
+            preserveScroll: true,
+            onSuccess: () => onOpenChange(false),
+            onError: (errors: Record<string, string>) => setError(errors.note),
+            onFinish: () => setProcessing(false),
+        };
+        if (entry !== null) {
+            router.patch(lifecycleEvents.updateNote(entry.id).url, { note: note.trim() }, options);
+        } else {
+            router.post(lifecycleEvents.store(clientId).url, { note: note.trim() }, options);
+        }
     }
 
     return (
         <ResponsiveDialog
             open={open}
             onOpenChange={onOpenChange}
-            title={t('Add log entry')}
-            sheetTitle={t('New journal entry')}
+            title={entry !== null ? t('Edit entry') : t('Add log entry')}
+            sheetTitle={entry !== null ? t('Edit entry') : t('New journal entry')}
             onSubmit={submit}
             sheetAction="save"
             saving={processing}

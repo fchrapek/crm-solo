@@ -1,0 +1,4 @@
+Shape: GET https://api.infakt.pl/v3/invoices/{uuid}.json, inFakt API v3.
+Field names: the Infakt API docs (Postman collection 4951438/2s8ZDa31yd), Przychody > Faktury VAT: Definicja (Invoice, Services, ThirdPartyAddress, transaction_terms) and the "Pokaż szczegóły" example response.
+Data: fictional, shaped like a VAT invoice with a Dodatkowy podmiot (third_party_addresses, role_code 2, Odbiorca). No real NIP, ids or names.
+Not yet confirmed by a real GET: one read of the October invoice it stands for must match these names before the first live copy.

@@ -113,7 +113,7 @@ final class DemoSeederTest extends TestCase
 
         $school = $bank->settlement($client('Szkoła Językowa'));
         $this->assertSame('2026-10', $school->activePeriod);
-        $this->assertSame('entries', $school->closureFor('2026-09')?->snapshot['source']);
+        $this->assertSame('billed', $school->closureFor('2026-09')?->snapshot['source']);
 
         $clinic = $bank->settlement($client('Klinika Weterynaryjna'));
         $this->assertSame(['2026-08'], $clinic->eligible);

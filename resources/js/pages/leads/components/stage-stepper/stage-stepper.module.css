@@ -1,68 +1,39 @@
-.stepper {
+.track {
     display: flex;
-    align-items: center;
     flex-wrap: wrap;
-    gap: var(--spacing-1);
-    list-style: none;
-    padding: 0;
-    margin: 0;
+    gap: var(--role-space-4);
+    max-width: 100%;
+    padding: var(--role-space-4);
+    border-radius: var(--role-radius-xl);
+    background: var(--role-page);
 }
 
 .step {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-1);
-}
-
-.stepButton {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-1);
-    padding: var(--spacing-1) var(--spacing-3);
-    border-radius: var(--radius-full);
-    border: 1px solid var(--color-border);
+    height: var(--role-control);
+    padding: 0 var(--role-space-16);
+    border: 0;
+    border-radius: var(--role-radius-full);
     background: none;
-    font-size: var(--font-size-sm);
+    color: var(--role-text-primary);
+    font: 600 var(--solo-text-control) / normal var(--solo-font-text);
     cursor: pointer;
-    transition:
-        background-color var(--duration-150) var(--ease-in-out),
-        border-color var(--duration-150) var(--ease-in-out),
-        color var(--duration-150) var(--ease-in-out);
 }
 
-.stepButton:disabled {
+.step:hover:not([aria-pressed='true'], :disabled) {
+    background: var(--role-hover);
+}
+
+.step[aria-pressed='true'] {
+    background: var(--role-selection);
+    color: var(--role-selection-text);
     cursor: default;
-    opacity: 1;
 }
 
-.done {
-    color: var(--color-muted-foreground);
-    background-color: var(--color-muted);
-    border-color: transparent;
+.step:disabled {
+    cursor: progress;
 }
 
-.done:hover {
-    color: var(--color-foreground);
-}
-
-.current {
-    color: var(--color-brand);
-    background-color: var(--color-brand-soft);
-    border-color: color-mix(in srgb, var(--color-brand) 55%, transparent);
-    font-weight: var(--font-weight-medium);
-}
-
-.upcoming {
-    color: var(--color-muted-foreground);
-}
-
-.upcoming:hover {
-    border-color: color-mix(in srgb, var(--color-brand) 45%, var(--color-border));
-    color: var(--color-foreground);
-}
-
-.connector {
-    width: var(--spacing-3);
-    height: 1px;
-    background-color: var(--color-border);
+.step:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: 2px;
 }

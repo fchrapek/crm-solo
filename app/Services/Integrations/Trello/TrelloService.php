@@ -131,11 +131,11 @@ final class TrelloService
         return $response->json();
     }
 
-    public function fetchLists(string $boardId): array
+    public function fetchLists(string $boardId, bool $withArchived = false): array
     {
         $response = $this->send('GET', "/boards/{$boardId}/lists", [
             'fields' => 'name,pos,closed',
-            'filter' => 'open',
+            'filter' => $withArchived ? 'all' : 'open',
         ]);
 
         if ($response->failed()) {
@@ -485,7 +485,9 @@ final class TrelloService
             ]);
         }
 
-        $lists = $this->fetchLists($boardId);
+        // Cards on an archived list still come back, so a skipped name is matched against every list.
+        $allLists = $this->fetchLists($boardId, withArchived: true);
+        $lists = array_values(array_filter($allLists, fn ($list): bool => ! ($list['closed'] ?? false)));
         $listNames = collect($lists)->keyBy('id')->map(fn ($l) => $l['name']);
 
         $settings = $project->settings ?? [];
@@ -510,6 +512,7 @@ final class TrelloService
         $project->update(['settings' => $settings]);
 
         $listToCanonical = $mapping;
+        $skippedListIds = TrelloListMapper::skippedListIds($allLists, (array) ($this->integration->settings['skipped_lists'] ?? []));
 
         $cards = $this->fetchCards($boardId);
         $complete = $this->isCompleteCardList($cards);
@@ -524,7 +527,7 @@ final class TrelloService
             }
 
             try {
-                $outcome = $this->syncCard($project, $card, $listToCanonical);
+                $outcome = $this->syncCard($project, $card, $listToCanonical, $skippedListIds);
                 if ($outcome === 'created' || $outcome === 'updated') {
                     $stats[$outcome]++;
                 }
@@ -577,14 +580,17 @@ final class TrelloService
      * card's fields and the owner-layer changes that follow from them land
      * in one statement, decided on the row as it is now. A fetch older than
      * the version the row already holds (its trello_activity_at) is ignored.
+     * A card in a skipped column is archived like a closed one, its tick left as it was.
      *
+     * @param  list<string>  $skippedListIds
      * @return 'created'|'updated'|'stale'
      */
-    private function syncCard(Project $project, array $card, array $listToCanonical): string
+    private function syncCard(Project $project, array $card, array $listToCanonical, array $skippedListIds = []): string
     {
         $lane = $listToCanonical[$card['idList']] ?? TrelloListMapper::LANE_BACKLOG;
         $listId = $card['idList'] ?? null;
-        $closed = (bool) ($card['closed'] ?? false);
+        $skipped = in_array($listId, $skippedListIds, true);
+        $closed = (bool) ($card['closed'] ?? false) || $skipped;
         $dueComplete = (bool) ($card['dueComplete'] ?? false);
         $isCompleted = CardFinishReconciler::isCompleted($lane, $dueComplete);
         $activity = isset($card['dateLastActivity'])
@@ -596,7 +602,7 @@ final class TrelloService
         // Only a finished card that moved to an active list could be reopened: only then ask when it moved.
         // Read without the lock, so no network call happens while the row is held.
         $seen = Task::query()->where('project_id', $project->id)->where('trello_card_id', $card['id'])->first();
-        $move = $seen !== null && CardFinishReconciler::needsMoveCheck($seen, $listId, $lane, $isCompleted)
+        $move = ! $skipped && $seen !== null && CardFinishReconciler::needsMoveCheck($seen, $listId, $lane, $isCompleted)
             ? $this->lastMove($card['id'])
             : CardMove::unknown();
 
@@ -613,9 +619,10 @@ final class TrelloService
             'trello_url' => $card['url'] ?? null,
             'is_completed' => $isCompleted,
             'priority' => $this->extractPriorityFromLabels($cardLabels),
+            'trello_skipped' => $skipped,
         ];
 
-        return DB::transaction(function () use ($project, $card, $fields, $listId, $lane, $isCompleted, $activity, $closed, $move): string {
+        return DB::transaction(function () use ($project, $card, $fields, $listId, $lane, $isCompleted, $activity, $closed, $move, $skipped): string {
             $current = Task::query()
                 ->where('project_id', $project->id)
                 ->where('trello_card_id', $card['id'])
@@ -653,7 +660,7 @@ final class TrelloService
                 return 'stale';
             }
 
-            $owner = CardFinishReconciler::ownerChanges($current, $listId, $lane, $isCompleted, $move);
+            $owner = $skipped ? [] : CardFinishReconciler::ownerChanges($current, $listId, $lane, $isCompleted, $move);
 
             // Archive mirrors Trello's closed flag; a still-closed card keeps its first archive date.
             $current->fill([

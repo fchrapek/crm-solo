@@ -79,6 +79,7 @@ Route::middleware(['auth', 'throttle:demo-writes', App\Http\Middleware\LimitDemo
     Route::delete('lead-events/{event}', [App\Http\Controllers\LeadsController::class, 'destroyEvent'])->name('lead-events.destroy');
     Route::post('leads/{lead}/convert', [App\Http\Controllers\LeadsController::class, 'convertToClient'])->name('leads.convert');
 
+    Route::get('clients/switcher', [ClientsController::class, 'switcher'])->name('clients.switcher');
     Route::resource('clients', ClientsController::class)->except(['show']);
     Route::put('clients/{client}/restore', [ClientsController::class, 'restore'])->name('clients.restore');
     Route::get('clients/{client}', [ClientsController::class, 'record'])->name('clients.record');
@@ -87,8 +88,8 @@ Route::middleware(['auth', 'throttle:demo-writes', App\Http\Middleware\LimitDemo
     Route::put('clients/{client}/pin', [ClientsController::class, 'pin'])->name('clients.pin');
     Route::patch('clients/{client}/fields', [App\Http\Controllers\ClientFieldValuesController::class, 'update'])->name('clients.fields.update');
     Route::get('sms', [App\Http\Controllers\MessagesController::class, 'index'])->name('messages.index');
-    Route::post('messages/{message}/cancel', [App\Http\Controllers\MessagesController::class, 'cancel'])->whereNumber('message')->name('messages.cancel');
-    Route::post('messages/{message}/resend', [App\Http\Controllers\MessagesController::class, 'resend'])->whereNumber('message')->name('messages.resend');
+    Route::post('messages/{message}/cancel', [App\Http\Controllers\MessagesController::class, 'cancel'])->whereNumber('message')->middleware('can:manage-account')->name('messages.cancel');
+    Route::post('messages/{message}/resend', [App\Http\Controllers\MessagesController::class, 'resend'])->whereNumber('message')->middleware('can:manage-account')->name('messages.resend');
     Route::patch('clients/{client}/stage', [ClientsController::class, 'transitionStage'])->name('clients.transition-stage');
     Route::patch('clients/{client}/month-close-type', [ClientsController::class, 'updateMonthCloseType'])->middleware('feature:billing')->name('clients.month-close-type');
     Route::patch('clients/{client}/report-mode', [ClientsController::class, 'updateReportMode'])->middleware('feature:billing')->name('clients.report-mode');
@@ -107,6 +108,15 @@ Route::middleware(['auth', 'throttle:demo-writes', App\Http\Middleware\LimitDemo
         Route::post('clients/{client}/months/{period}/close', [App\Http\Controllers\ClientMonthsController::class, 'close'])->name('client-months.close');
         Route::delete('clients/{client}/months/{period}/close', [App\Http\Controllers\ClientMonthsController::class, 'reopen'])->name('client-months.reopen');
 
+        // Billed time beside real time, per client and month.
+        Route::get('clients/{client}/billed/{period}', [App\Http\Controllers\ClientBilledTimeController::class, 'show'])->name('client-billed.show');
+        Route::put('clients/{client}/billed/{period}/tasks/{task}', [App\Http\Controllers\ClientBilledTimeController::class, 'updateTask'])->name('client-billed.task.update');
+        Route::delete('clients/{client}/billed/{period}/tasks/{task}', [App\Http\Controllers\ClientBilledTimeController::class, 'destroyTask'])->name('client-billed.task.destroy');
+
+        // Infakt drafts per invoice group (Faktury za miesiac on Rozliczenia); draft only.
+        Route::get('clients/{client}/invoice-drafts/sources', [App\Http\Controllers\ClientInvoiceDraftsController::class, 'sources'])->middleware('not-in-demo')->name('client-invoice-drafts.sources');
+        Route::post('clients/{client}/invoice-drafts', [App\Http\Controllers\ClientInvoiceDraftsController::class, 'store'])->middleware('not-in-demo')->name('client-invoice-drafts.store');
+
         // Client retainers (contracted hours, periodized).
         Route::post('clients/{client}/retainers', [App\Http\Controllers\ClientRetainersController::class, 'store'])->name('client-retainers.store');
         Route::put('clients/{client}/retainers/{retainer}', [App\Http\Controllers\ClientRetainersController::class, 'update'])->name('client-retainers.update');
@@ -123,6 +133,16 @@ Route::middleware(['auth', 'throttle:demo-writes', App\Http\Middleware\LimitDemo
         Route::post('clients/{client}/reports/{report}/reopen', [App\Http\Controllers\ClientReportsController::class, 'reopen'])->name('client-reports.reopen');
         Route::delete('clients/{client}/reports/{report}', [App\Http\Controllers\ClientReportsController::class, 'destroy'])->name('client-reports.destroy');
 
+        // Month-end summary email: the owner's draft and send.
+        Route::controller(App\Http\Controllers\ClientSummaryEmailsController::class)->middleware('can:manage-summary-emails')->prefix('clients/{client}/summary-emails/{period}')->where(['period' => '\d{4}-(0[1-9]|1[0-2])'])->group(function (): void {
+            Route::get('/', 'show')->name('client-summary-emails.show');
+            Route::post('/', 'store')->name('client-summary-emails.store');
+            Route::put('/', 'update')->name('client-summary-emails.update');
+            Route::post('send', 'send')->name('client-summary-emails.send');
+            Route::post('mark-sent', 'markSent')->name('client-summary-emails.mark-sent');
+            Route::post('tick', 'tick')->name('client-summary-emails.tick');
+        });
+
         // Month close (per-maintained-client monthly checklist worklist).
         Route::get('month-close', [App\Http\Controllers\MonthCloseController::class, 'index'])->name('month-close.index');
         Route::get('month-close/{client}', [App\Http\Controllers\MonthCloseController::class, 'show'])->name('month-close.show');
@@ -138,11 +158,11 @@ Route::middleware(['auth', 'throttle:demo-writes', App\Http\Middleware\LimitDemo
     Route::put('projects/{project}', [ProjectsController::class, 'update'])->name('projects.update');
     Route::delete('projects/{project}', [ProjectsController::class, 'destroy'])->name('projects.destroy');
     Route::middleware('not-in-demo')->group(function () {
-        Route::post('projects/{project}/connect-trello', [ProjectsController::class, 'connectTrello'])->name('projects.connect-trello');
-        Route::post('projects/{project}/disconnect-trello', [ProjectsController::class, 'disconnectTrello'])->name('projects.disconnect-trello');
+        Route::post('projects/{project}/connect-trello', [ProjectsController::class, 'connectTrello'])->middleware('can:manage-account')->name('projects.connect-trello');
+        Route::post('projects/{project}/disconnect-trello', [ProjectsController::class, 'disconnectTrello'])->middleware('can:manage-account')->name('projects.disconnect-trello');
         Route::post('projects/{project}/sync-trello', [ProjectsController::class, 'syncTrello'])->name('projects.sync-trello')->middleware('throttle:5,1');
-        Route::put('projects/{project}/trello-list-mapping', [ProjectsController::class, 'updateTrelloListMapping'])->name('projects.trello-list-mapping');
-        Route::get('projects/{project}/available-trello-boards', [ProjectsController::class, 'availableTrelloBoards'])->name('projects.available-trello-boards');
+        Route::put('projects/{project}/trello-list-mapping', [ProjectsController::class, 'updateTrelloListMapping'])->middleware('can:manage-account')->name('projects.trello-list-mapping');
+        Route::get('projects/{project}/available-trello-boards', [ProjectsController::class, 'availableTrelloBoards'])->middleware('can:manage-account')->name('projects.available-trello-boards');
     });
 
     // Repositories (linked to projects): paths an outside agent reads from `crm task`.
@@ -192,23 +212,30 @@ Route::middleware(['auth', 'throttle:demo-writes', App\Http\Middleware\LimitDemo
         Route::patch('/settings/agent-tokens/{token}', [AgentTokensController::class, 'update'])->whereNumber('token')->name('agent-tokens.update');
         Route::delete('/settings/agent-tokens/{token}', [AgentTokensController::class, 'destroy'])->whereNumber('token')->name('agent-tokens.destroy');
     });
-    Route::patch('/settings/leadgen', [SettingsController::class, 'updateLeadgen'])->name('settings.leadgen.update');
-    Route::put('/settings/client-fields/{key}', [App\Http\Controllers\Settings\ClientFieldDefinitionsController::class, 'update'])->name('settings.client-fields.update');
-    Route::post('/settings/sms/templates', [App\Http\Controllers\Settings\MessageSettingsController::class, 'storeTemplate'])->name('settings.sms.templates.store');
-    Route::put('/settings/sms/templates/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'updateTemplate'])->name('settings.sms.templates.update');
-    Route::delete('/settings/sms/templates/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'destroyTemplate'])->name('settings.sms.templates.destroy');
-    Route::post('/settings/sms/rules', [App\Http\Controllers\Settings\MessageSettingsController::class, 'storeRule'])->name('settings.sms.rules.store');
-    Route::put('/settings/sms/rules/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'updateRule'])->name('settings.sms.rules.update');
-    Route::delete('/settings/sms/rules/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'destroyRule'])->name('settings.sms.rules.destroy');
-    Route::patch('/settings/sms/sending', [App\Http\Controllers\Settings\MessageSettingsController::class, 'sending'])->name('settings.sms.sending');
-    Route::post('/settings/sms/preview', [App\Http\Controllers\Settings\MessageSettingsController::class, 'preview'])->name('settings.sms.preview');
+    Route::patch('/settings/leadgen', [SettingsController::class, 'updateLeadgen'])->middleware('can:manage-account')->name('settings.leadgen.update');
+    Route::put('/settings/client-fields/{key}', [App\Http\Controllers\Settings\ClientFieldDefinitionsController::class, 'update'])->middleware('can:manage-account')->name('settings.client-fields.update');
+    Route::post('/settings/sms/templates', [App\Http\Controllers\Settings\MessageSettingsController::class, 'storeTemplate'])->middleware('can:manage-account')->name('settings.sms.templates.store');
+    Route::put('/settings/sms/templates/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'updateTemplate'])->middleware('can:manage-account')->name('settings.sms.templates.update');
+    Route::delete('/settings/sms/templates/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'destroyTemplate'])->middleware('can:manage-account')->name('settings.sms.templates.destroy');
+    Route::post('/settings/sms/rules', [App\Http\Controllers\Settings\MessageSettingsController::class, 'storeRule'])->middleware('can:manage-account')->name('settings.sms.rules.store');
+    Route::put('/settings/sms/rules/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'updateRule'])->middleware('can:manage-account')->name('settings.sms.rules.update');
+    Route::delete('/settings/sms/rules/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'destroyRule'])->middleware('can:manage-account')->name('settings.sms.rules.destroy');
+    Route::patch('/settings/sms/sending', [App\Http\Controllers\Settings\MessageSettingsController::class, 'sending'])->middleware('can:manage-account')->name('settings.sms.sending');
+    Route::post('/settings/sms/preview', [App\Http\Controllers\Settings\MessageSettingsController::class, 'preview'])->middleware('can:manage-account')->name('settings.sms.preview');
+    Route::middleware('feature:billing')->controller(App\Http\Controllers\Settings\MessageSettingsController::class)->group(function (): void {
+        Route::get('/settings/email/templates', 'emailTemplates')->name('settings.email.templates.index');
+        Route::post('/settings/email/templates', 'storeEmailTemplate')->name('settings.email.templates.store');
+        Route::put('/settings/email/templates/{key}', 'updateEmailTemplate')->name('settings.email.templates.update');
+        Route::delete('/settings/email/templates/{key}', 'destroyEmailTemplate')->name('settings.email.templates.destroy');
+        Route::post('/settings/email/preview', 'previewEmail')->name('settings.email.preview');
+    });
 
     // Integrations live in Ustawienia · Integracje; on the demo that tab says they are not part of it.
     Route::get('integrations', RedirectController::class)->defaults('destination', '/settings/integracje')->defaults('status', 302);
     Route::middleware('not-in-demo')->group(function () {
         Route::get('integrations/{provider}', RedirectController::class)->defaults('destination', '/settings/integracje')->defaults('status', 302);
-        Route::put('/integrations/{provider}', [IntegrationsController::class, 'update'])->name('integrations.update');
-        Route::post('/integrations/{provider}/sync', [IntegrationsController::class, 'sync'])->name('integrations.sync');
-        Route::delete('/integrations/{provider}', [IntegrationsController::class, 'disconnect'])->name('integrations.disconnect');
+        Route::put('/integrations/{provider}', [IntegrationsController::class, 'update'])->middleware('can:manage-account')->name('integrations.update');
+        Route::post('/integrations/{provider}/sync', [IntegrationsController::class, 'sync'])->middleware('can:manage-account')->name('integrations.sync');
+        Route::delete('/integrations/{provider}', [IntegrationsController::class, 'disconnect'])->middleware('can:manage-account')->name('integrations.disconnect');
     });
 });

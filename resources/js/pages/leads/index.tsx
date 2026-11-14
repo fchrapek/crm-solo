@@ -1,20 +1,23 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { Plus, Settings } from 'lucide-react';
-import React from 'react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { usePageActions } from '@/contexts/page-context';
+import { ListTable, ListTableCell, ListTableHead, ListTableRow } from '@/components/solo/list-table';
+import { Poster, SoloButtonLink } from '@/components/solo/primitives';
+import { Row } from '@/components/solo/row';
+import { Pills } from '@/components/solo/shell/pills';
+import { type PlaceResolver } from '@/components/solo/shell/place';
+import { SoloSurface } from '@/components/solo/surface';
+import { Tile, TileInset } from '@/components/solo/tile';
+import { localeOf } from '@/lib/hours-text';
 import leads from '@/routes/leads';
 import settings from '@/routes/settings';
-import { BreadcrumbItem, SharedData } from '@/types';
+import { SharedData } from '@/types';
 
 import { LeadKanban, type LeadCard } from './components/lead-kanban';
 import { TierBadge } from './components/tier-badge';
 import styles from './index.module.css';
 import { useLeadLabel, type LabelMap, type PipelineLabels } from './lib/labels';
+import { filterPill, leadsPlace, leadsUrl, leadView, type LeadFilters } from './place';
 
 interface PipelineMeta {
     key: string;
@@ -24,17 +27,8 @@ interface PipelineMeta {
     labels?: PipelineLabels;
 }
 
-interface Filters {
-    search?: string;
-    source?: string;
-    trashed?: string;
-    pipeline: string;
-    stage: string;
-    tier: string;
-}
-
 interface LeadsPageProps extends SharedData {
-    filters: Filters;
+    filters: LeadFilters;
     pipelines: PipelineMeta[];
     stages: string[];
     stage_labels: LabelMap;
@@ -44,140 +38,106 @@ interface LeadsPageProps extends SharedData {
     leads: { data: LeadCard[] };
 }
 
-type View = 'kanban' | 'list';
+const narrowed = (filters: LeadFilters) =>
+    Boolean(filters.search) || Boolean(filters.source) || filters.pipeline !== 'all' || filters.stage !== 'all' || filters.tier !== 'all';
 
+/**
+ * Figma: Leady (1093:29084, phone 1093:29331). The board or the list, picked by a pill and kept in the URL; the
+ * filters are menu pills beside it and the command bar narrows by words.
+ */
 export default function Index({ filters, pipelines, stages, stage_labels, sources, source_labels, tiers, leads: leadRows }: LeadsPageProps) {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const label = useLeadLabel();
-    const { setBreadcrumbs } = usePageActions();
-    const [view, setView] = React.useState<View>('kanban');
-    const [search, setSearch] = React.useState(filters.search ?? '');
+    const view = leadView(usePage().url);
 
-    const breadcrumbs: BreadcrumbItem[] = React.useMemo(() => [{ title: 'Leads', href: leads.index().url }], []);
-    React.useEffect(() => {
-        setBreadcrumbs(breadcrumbs);
-    }, [breadcrumbs, setBreadcrumbs]);
-
-    // Brand is an attribute, not a board split - the chip/filter only exist
-    // when more than one brand is configured (progressive disclosure).
+    // Brand is an attribute, not a board split - the filter only exists when more than one brand is configured.
     const multiBrand = pipelines.length > 1;
-    const pipelineLabels = React.useMemo(
-        () => Object.fromEntries(pipelines.map((p) => [p.key, label('pipeline', p.key, p.label)])),
-        [pipelines, label],
-    );
+    const pipelineLabels = Object.fromEntries(pipelines.map((p) => [p.key, label('pipeline', p.key, p.label)]));
+    const to = (next: Partial<LeadFilters>) => leadsUrl({ ...filters, ...next }, view);
 
-    const apply = (next: Partial<Filters>) => {
-        router.get(leads.index().url, { ...filters, ...next }, { preserveState: true, replace: true });
-    };
-
-    // Debounce the search box so each keystroke isn't a round-trip.
-    React.useEffect(() => {
-        if (search === (filters.search ?? '')) return;
-        const timer = setTimeout(() => apply({ search: search || undefined }), 300);
-        return () => clearTimeout(timer);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [search]);
+    const choices = [
+        { label: t('Kanban'), href: leadsUrl(filters, 'kanban'), active: view === 'kanban' },
+        { label: t('List'), href: leadsUrl(filters, 'list'), active: view === 'list' },
+        ...(multiBrand
+            ? [
+                  filterPill(
+                      t('Brand'),
+                      filters.pipeline,
+                      [{ value: 'all', label: t('All brands') }, ...pipelines.map((p) => ({ value: p.key, label: pipelineLabels[p.key] }))],
+                      (pipeline) => to({ pipeline }),
+                  ),
+              ]
+            : []),
+        filterPill(
+            t('Source'),
+            filters.source,
+            [{ value: 'all', label: t('All sources') }, ...sources.map((source) => ({ value: source, label: label('source', source, source_labels?.[source]) }))],
+            (source) => to({ source: source === 'all' ? undefined : source }),
+        ),
+        // The tier filter works on both views: "who gets my minutes today" is the question the board is for.
+        filterPill(t('Tier'), filters.tier, [{ value: 'all', label: t('All tiers') }, ...tiers.map((tier) => ({ value: tier, label: label('tier', tier) }))], (tier) =>
+            to({ tier }),
+        ),
+        ...(view === 'list'
+            ? [
+                  filterPill(
+                      t('Stage'),
+                      filters.stage,
+                      [{ value: 'all', label: t('All stages') }, ...stages.map((stage) => ({ value: stage, label: label('stage', stage, stage_labels?.[stage]) }))],
+                      (stage) => to({ stage }),
+                  ),
+              ]
+            : []),
+    ];
 
     return (
-        <>
+        <SoloSurface day="paper">
             <Head title={t('Leads')} />
-
-            <div className={styles.page}>
-                <div className={styles.header}>
-                    <h1 className={styles.pageTitle}>{t('Leads')}</h1>
-
-                    <div className={styles.headerActions}>
-                        <Button asChild variant="ghost" size="icon" aria-label={t('Lead settings')}>
-                            <Link href={settings.show('leady')} prefetch>
-                                <Settings size={16} />
-                            </Link>
-                        </Button>
-                        <Button asChild>
-                            <Link href={leads.create().url}>
-                                <Plus size={16} />
-                                {t('Capture lead')}
-                            </Link>
-                        </Button>
+            <main className={styles.page}>
+                <header className={styles.head}>
+                    <Poster>{t('Leads')}</Poster>
+                    <div className={styles.headActions}>
+                        <SoloButtonLink href={settings.show('leady')} variant="quiet" size="control" prefetch>
+                            {t('Lead settings')}
+                        </SoloButtonLink>
+                        <SoloButtonLink href={leads.create().url} size="control">
+                            {t('Capture lead')}
+                        </SoloButtonLink>
                     </div>
+                </header>
+                <div className={styles.choices}>
+                    <Pills items={choices} label={t('View and filters')} />
                 </div>
-
-                <div className={styles.filters}>
-                    <Input className={styles.search} placeholder={t('Search leads')} value={search} onChange={(e) => setSearch(e.target.value)} />
-
-                    {multiBrand && (
-                        <Select value={filters.pipeline} onValueChange={(v) => apply({ pipeline: v })}>
-                            <SelectTrigger className={styles.select}>
-                                <SelectValue placeholder={t('Brand')} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">{t('All brands')}</SelectItem>
-                                {pipelines.map((pipeline) => (
-                                    <SelectItem key={pipeline.key} value={pipeline.key}>
-                                        {pipelineLabels[pipeline.key]}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    )}
-
-                    <Select value={filters.source ?? 'all'} onValueChange={(v) => apply({ source: v === 'all' ? undefined : v })}>
-                        <SelectTrigger className={styles.select}>
-                            <SelectValue placeholder={t('Source')} />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">{t('All sources')}</SelectItem>
-                            {sources.map((source) => (
-                                <SelectItem key={source} value={source}>
-                                    {label('source', source, source_labels?.[source])}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-
-                    {/* Tier filter works on both views - "who gets my minutes
-                        today" is the question the board is for. */}
-                    <Select value={filters.tier} onValueChange={(v) => apply({ tier: v })}>
-                        <SelectTrigger className={styles.select}>
-                            <SelectValue placeholder={t('Tier')} />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">{t('All tiers')}</SelectItem>
-                            {tiers.map((tier) => (
-                                <SelectItem key={tier} value={tier}>
-                                    {label('tier', tier)}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-
-                    {view === 'list' && (
-                        <Select value={filters.stage} onValueChange={(v) => apply({ stage: v })}>
-                            <SelectTrigger className={styles.select}>
-                                <SelectValue placeholder={t('Stage')} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">{t('All stages')}</SelectItem>
-                                {stages.map((stage) => (
-                                    <SelectItem key={stage} value={stage}>
-                                        {label('stage', stage, stage_labels?.[stage])}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    )}
-
-                    <div className={styles.viewToggle}>
-                        <button type="button" className={view === 'list' ? styles.toggleActive : styles.toggle} onClick={() => setView('list')}>
-                            {t('List')}
-                        </button>
-                        <button type="button" className={view === 'kanban' ? styles.toggleActive : styles.toggle} onClick={() => setView('kanban')}>
-                            {t('Kanban')}
-                        </button>
-                    </div>
-                </div>
-
+                {filters.search && (
+                    <Tile kind="list" as="div">
+                        <Row
+                            as="div"
+                            rule={false}
+                            title={t('Results for "{{query}}"', { query: filters.search })}
+                            meta={leadRows.data.length}
+                            action={
+                                <SoloButtonLink href={to({ search: undefined })} variant="secondary" size="control">
+                                    {t('Clear')}
+                                </SoloButtonLink>
+                            }
+                        />
+                    </Tile>
+                )}
                 {leadRows.data.length === 0 ? (
-                    <p className={styles.empty}>{t('No leads captured yet.')}</p>
+                    <Tile kind="list" as="div">
+                        <TileInset>
+                            <p className={styles.empty}>{narrowed(filters) ? t('No leads match these filters.') : t('No leads captured yet.')}</p>
+                            {narrowed(filters) ? (
+                                <SoloButtonLink href={leadsUrl({}, view)} variant="secondary" size="control">
+                                    {t('Clear filters')}
+                                </SoloButtonLink>
+                            ) : (
+                                <SoloButtonLink href={leads.create().url} variant="secondary" size="control">
+                                    {t('Capture lead')}
+                                </SoloButtonLink>
+                            )}
+                        </TileInset>
+                    </Tile>
                 ) : view === 'kanban' ? (
                     <LeadKanban
                         leads={leadRows.data}
@@ -187,40 +147,54 @@ export default function Index({ filters, pipelines, stages, stage_labels, source
                         brandLabels={multiBrand ? pipelineLabels : undefined}
                     />
                 ) : (
-                    <table className={styles.table}>
-                        <thead>
-                            <tr>
-                                <th>{t('Name')}</th>
-                                <th>{t('Company')}</th>
-                                {multiBrand && <th>{t('Brand')}</th>}
-                                <th>{t('Tier')}</th>
-                                <th>{t('Stage')}</th>
-                                <th>{t('Source')}</th>
-                                <th>{t('Captured')}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {leadRows.data.map((lead) => (
-                                <tr key={lead.id}>
-                                    <td>
-                                        <Link className={styles.rowLink} href={leads.edit(lead.id).url}>
-                                            {lead.name}
-                                        </Link>
-                                    </td>
-                                    <td>{lead.company ?? ' - '}</td>
-                                    {multiBrand && <td>{pipelineLabels[lead.pipeline] ?? lead.pipeline}</td>}
-                                    <td>
-                                        <TierBadge tier={lead.tier} total={lead.score_total} />
-                                    </td>
-                                    <td>{label('stage', lead.stage, stage_labels?.[lead.stage])}</td>
-                                    <td>{label('source', lead.source, source_labels?.[lead.source])}</td>
-                                    <td>{lead.captured_at ? new Date(lead.captured_at).toLocaleDateString() : ' - '}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <Tile kind="list" as="div">
+                        <div className={styles.table}>
+                            <ListTable label={t('Leads')}>
+                                <thead>
+                                    <tr>
+                                        <ListTableHead>{t('Name')}</ListTableHead>
+                                        <ListTableHead wide>{t('Company')}</ListTableHead>
+                                        {multiBrand && <ListTableHead full>{t('Brand')}</ListTableHead>}
+                                        <ListTableHead>{t('Tier')}</ListTableHead>
+                                        <ListTableHead wide>{t('Stage')}</ListTableHead>
+                                        <ListTableHead full>{t('Source')}</ListTableHead>
+                                        <ListTableHead full align="end">
+                                            {t('Captured')}
+                                        </ListTableHead>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {leadRows.data.map((lead) => (
+                                        <ListTableRow key={lead.id}>
+                                            <ListTableCell kind="title" truncate>
+                                                <Link className={styles.rowLink} href={leads.edit(lead.id).url}>
+                                                    {lead.name}
+                                                </Link>
+                                            </ListTableCell>
+                                            <ListTableCell wide>
+                                                {lead.company ?? ''}
+                                            </ListTableCell>
+                                            {multiBrand && <ListTableCell full>{pipelineLabels[lead.pipeline] ?? lead.pipeline}</ListTableCell>}
+                                            <ListTableCell>
+                                                <TierBadge tier={lead.tier} total={lead.score_total} />
+                                            </ListTableCell>
+                                            <ListTableCell wide>{label('stage', lead.stage, stage_labels?.[lead.stage])}</ListTableCell>
+                                            <ListTableCell kind="meta" full>
+                                                {label('source', lead.source, source_labels?.[lead.source])}
+                                            </ListTableCell>
+                                            <ListTableCell kind="number" full align="end">
+                                                {lead.captured_at ? new Date(lead.captured_at).toLocaleDateString(localeOf(i18n.language)) : ''}
+                                            </ListTableCell>
+                                        </ListTableRow>
+                                    ))}
+                                </tbody>
+                            </ListTable>
+                        </div>
+                    </Tile>
                 )}
-            </div>
-        </>
+            </main>
+        </SoloSurface>
     );
 }
+
+Index.place = leadsPlace satisfies PlaceResolver<LeadsPageProps>;

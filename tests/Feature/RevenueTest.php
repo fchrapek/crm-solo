@@ -116,6 +116,20 @@ final class RevenueTest extends TestCase
         $this->assertSame(34500.0, $cash['summary']['total_net']); // 29 500 + 5 000
     }
 
+    public function test_a_draft_counts_as_revenue_only_once_it_is_issued(): void
+    {
+        $this->invoice($this->acme, 500000, 615000, '2026-06-15', null, 'PLN', null, null);
+        $draft = Invoice::query()->latest('id')->firstOrFail();
+        $draft->update(['status' => 'draft']);
+
+        $this->assertSame(32500.0, $this->build(RevenueAggregator::BASIS_ACCRUAL)['summary']['total_net']);
+        $this->assertSame(19999.0, app(RevenueAggregator::class)->clientSummary($this->user->account_id, $this->acme->id)['alltime_net']);
+
+        $draft->update(['status' => 'sent', 'number' => '7/06/2026']);
+
+        $this->assertSame(37500.0, $this->build(RevenueAggregator::BASIS_ACCRUAL)['summary']['total_net']);
+    }
+
     public function test_accrual_recognises_by_sale_date(): void
     {
         // Issued in January 2027 for December 2026 work → belongs to 2026,

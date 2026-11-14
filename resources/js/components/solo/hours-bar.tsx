@@ -15,8 +15,8 @@ export function hoursBarSegments(used: number, available: number): HoursBarSegme
     return spent > pool ? { inPool: pool, rest: spent - pool, over: true } : { inPool: spent, rest: pool - spent, over: false };
 }
 
-/** Row is the list cell; block spans the hours section. */
-export function HoursBar({ used, available, size = 'row' }: { used: number; available: number; size?: 'row' | 'block' }) {
+/** Row is the list cell; block spans the hours section; tile is the redesign's bar (Figma: HoursBar), one 8 px track as wide as its box. */
+export function HoursBar({ used, available, size = 'row' }: { used: number; available: number; size?: 'row' | 'block' | 'tile' }) {
     const { inPool, rest, over } = hoursBarSegments(used, available);
     const empty = inPool === 0 && rest === 0;
 

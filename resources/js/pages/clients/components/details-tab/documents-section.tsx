@@ -1,7 +1,11 @@
+import { ActionMenuItem, ActionMenuLink } from '@/components/solo/action-menu';
 import { fieldControl, SoloField } from '@/components/solo/field';
-import { SectionAction, SectionHead, SoloButton } from '@/components/solo/primitives';
+import { SoloButton } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
 import { ResponsiveSelect } from '@/components/solo/responsive-select';
+import { Row } from '@/components/solo/row';
+import { RowMenu } from '@/components/solo/row-menu';
+import { Tile, TileHeader, TileInset, TileNote, TileRows } from '@/components/solo/tile';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { shortDate } from '@/lib/dates';
 import { localeOf } from '@/lib/hours-text';
@@ -15,7 +19,7 @@ import type { ClientDocumentRow } from './types';
 
 const CATEGORY_LABEL: Record<string, string> = { umowa: 'Contract', podpowierzenie: 'Sub-processing', rodo: 'GDPR', oferta: 'Offer', inne: 'Other' };
 
-/** Figma: Dokumenty · 4 on Dane (578:11582): name, category and date, Otwórz; + Dokument uploads one file with its category. */
+/** Figma: Tile / list · Dokumenty. The name opens the file; the menu opens or deletes it; Dodaj uploads one file with its category. */
 export function DocumentsSection({ clientId, documents }: { clientId: number; documents: ClientDocumentRow[] }) {
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);
@@ -23,40 +27,51 @@ export function DocumentsSection({ clientId, documents }: { clientId: number; do
     const [removing, setRemoving] = useState<ClientDocumentRow | null>(null);
 
     return (
-        <section>
-            <SectionHead
-                kind="body"
-                label={`${t('Documents')} · ${documents.length}`}
-                action={
-                    <SectionAction aria-haspopup="dialog" onClick={() => setAdding(true)}>
-                        {t('New document')}
-                    </SectionAction>
+        <Tile kind="list">
+            <TileHeader
+                label={t('Documents')}
+                count={documents.length}
+                end={
+                    <SoloButton variant="secondary" size="control" aria-haspopup="dialog" onClick={() => setAdding(true)}>
+                        {t('Add')}
+                    </SoloButton>
                 }
             />
             {documents.length === 0 ? (
-                <p className={styles.empty}>{t('No documents yet.')}</p>
+                <TileInset>
+                    <TileNote>{t('No documents yet.')}</TileNote>
+                </TileInset>
             ) : (
-                <ul className={styles.documents}>
-                    {documents.map((document) => (
-                        <li key={document.id} className={styles.document}>
-                            <span className={styles.documentText}>
-                                <span className={styles.documentName}>{document.label || document.original_name}</span>
-                                <span className={styles.documentSub}>
-                                    {t(CATEGORY_LABEL[document.category ?? 'inne'] ?? 'Other')} · {shortDate(document.created_on, locale)}
-                                </span>
-                            </span>
-                            <span className={styles.documentActions}>
-                                <a href={document.url} target="_blank" rel="noopener noreferrer" className={styles.documentLink}>
-                                    {t('Open')} ↗
-                                </a>
-                                <button type="button" className={styles.documentRemove} onClick={() => setRemoving(document)}>
-                                    {t('Delete')}
-                                </button>
-                            </span>
-                        </li>
-                    ))}
-                </ul>
+                <TileRows>
+                    {documents.map((document, index) => {
+                        const name = document.label || document.original_name;
+
+                        return (
+                            <Row
+                                key={document.id}
+                                rule={index > 0}
+                                title={
+                                    <a href={document.url} target="_blank" rel="noopener noreferrer" className={styles.documentLink}>
+                                        {name}
+                                    </a>
+                                }
+                                meta={`${t(CATEGORY_LABEL[document.category ?? 'inne'] ?? 'Other')} · ${shortDate(document.created_on, locale)}`}
+                                more={
+                                    <RowMenu name={name}>
+                                        <ActionMenuLink href={document.url} external>
+                                            {t('Open')}
+                                        </ActionMenuLink>
+                                        <ActionMenuItem onSelect={() => setRemoving(document)}>{t('Delete')}</ActionMenuItem>
+                                    </RowMenu>
+                                }
+                            />
+                        );
+                    })}
+                </TileRows>
             )}
+            <TileInset>
+                <TileNote>{t('Stored locally, max 50 MB.')}</TileNote>
+            </TileInset>
             <AddDocumentDialog clientId={clientId} open={adding} onOpenChange={setAdding} />
             <ConfirmDialog
                 open={removing !== null}
@@ -73,7 +88,7 @@ export function DocumentsSection({ clientId, documents }: { clientId: number; do
                     })
                 }
             />
-        </section>
+        </Tile>
     );
 }
 

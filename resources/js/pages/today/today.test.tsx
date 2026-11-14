@@ -11,9 +11,13 @@ import pl from '../../../../lang/pl.json';
 const primitives = { ...(await import('@/components/solo/primitives')) };
 mock.module('@/components/solo/primitives', () => ({ ...primitives, touchTargetClass: 'touch-target' }));
 
-const { DoneList, PickActions, TimerQueue, TomorrowLine } = await import('./index');
-const { Suggestions } = await import('./plan');
-const { ClientGroup, dayChoices, pickTask } = await import('./tasks');
+const { TimerQueue } = await import('./index');
+const { DayStatus, PlanRows, timeByClient, TomorrowLine } = await import('./summary');
+const { RowMenu } = await import('@/components/solo/row-menu');
+const { dayPills } = await import('./place');
+const { FreeSlots, Suggestions } = await import('./plan');
+const { ClientGroup, dayChoices, dayPillsFor, pickTask } = await import('./tasks');
+const { DaySection } = await import('./week');
 
 await i18next.use(initReactI18next).init({ lng: 'pl', resources: { pl: { translation: pl } }, interpolation: { escapeValue: false } });
 
@@ -62,17 +66,48 @@ describe('Timer queue', () => {
     });
 });
 
-describe('Done rows on Podsumowanie', () => {
-    test('a row is the title and its time only, and an unfinished pick shows no time', () => {
+describe('Podsumowanie', () => {
+    test('a done pick shows its time, an unfinished one none, and the client stands at the end from 768 px', () => {
         const html = renderToStaticMarkup(
-            <DoneList picks={[pick(1, 'Korekta faktury', { done: true, minutes: 68 }), pick(2, 'Synchronizacja', { minutes: 30 })]} timers={[]} />,
+            <PlanRows picks={[pick(1, 'Korekta faktury', { done: true, minutes: 68 }), pick(2, 'Synchronizacja', { minutes: 30 })]} timers={[]} />,
         );
         const [done, open] = rows(html);
 
-        expect(done).toContain('1 h 08');
-        expect(open).not.toContain('0 h 30');
-        expect(html).not.toContain('Fundacja Testowa');
+        expect(done).toContain('1 h 8 min');
+        expect(done).toContain('href="/tasks/10"');
+        expect(open).not.toMatch(/30 min/);
+        expect(open).toContain('Fundacja Testowa');
         expect(html).not.toContain('Strona WWW');
+    });
+
+    test('a pick with a running timer keeps its Stop and leads to the timer', () => {
+        const timer = { id: 7, started_at: '2026-10-28T09:00:00Z', task_id: 10, task: 'Korekta faktury', client: null, project: null };
+        const [row] = rows(renderToStaticMarkup(<PlanRows picks={[pick(1, 'Korekta faktury', { running_id: 7 })]} timers={[timer]} />));
+
+        expect(row).toContain('>Stop</button>');
+        expect(row).toContain('href="/?widok=timer&amp;timer=7"');
+    });
+
+    test('the state beside the close button is a chip, or the reason a running timer blocks the close', () => {
+        expect(renderToStaticMarkup(<DayStatus closed running={false} />)).toContain('data-status="done"');
+        expect(renderToStaticMarkup(<DayStatus closed={false} running={false} />)).toContain('Dzień jest jeszcze otwarty.');
+        expect(renderToStaticMarkup(<DayStatus closed={false} running />)).toContain('Timer wciąż działa. Zatrzymaj go, żeby zamknąć dzień.');
+    });
+
+    test('time per client adds the rows up, most first, and is left out when they do not cover the day', () => {
+        const listed = [
+            { client: 'Pracownia Mebli', minutes: 65 },
+            { client: 'Fundacja Testowa', minutes: 130 },
+            { client: 'Pracownia Mebli', minutes: 25 },
+            { client: 'Przychodnia Testowa', minutes: 0 },
+        ];
+
+        expect(timeByClient(listed, 220)).toEqual([
+            { client: 'Fundacja Testowa', minutes: 130 },
+            { client: 'Pracownia Mebli', minutes: 90 },
+        ]);
+        expect(timeByClient(listed, 250)).toBeNull();
+        expect(timeByClient([], 0)).toBeNull();
     });
 
     test('on phones the title fills the row and the time ends it; from 768 px the time follows the title', async () => {
@@ -99,8 +134,8 @@ describe('JUTRO line', () => {
     });
 });
 
-describe('Propozycje', () => {
-    test('each suggestion is its title and Na jutro, with no client, and the full list link counts every open task', () => {
+describe('Jutro', () => {
+    test('each suggestion is its title and Na jutro, with no client, and the last row opens the full list with its count', () => {
         const html = renderToStaticMarkup(
             <Suggestions
                 date="2026-10-24"
@@ -108,63 +143,141 @@ describe('Propozycje', () => {
             />,
         );
 
-        expect(rows(html)).toHaveLength(2);
+        expect(rows(html)).toHaveLength(3);
         expect(html.match(/>Na jutro</g)).toHaveLength(2);
         expect(html).not.toContain('Fundacja Testowa');
         expect(html).toContain('terminy najpierw');
-        expect(html).toMatch(/<a[^>]*href="\/zadania\?na=jutro"[^>]*>Wszystkie zadania \(19\) →<\/a>/);
+        expect(rows(html)[2]).toContain('Wszystkie zadania (19)');
+        expect(rows(html)[2]).toMatch(/<a[^>]*href="\/zadania\?na=jutro"[^>]*>Otwórz<\/a>/);
     });
 
-    test('on phones Na jutro and the full list link reach 44 px through the shared touch target', () => {
-        const html = renderToStaticMarkup(
-            <Suggestions date="2026-10-24" suggestions={{ tasks: [pick(1, 'Testy formularza')], leftover: 0, open: 19 }} />,
-        );
+    test('free places point at the suggestions while there are any, else they lead to the full list', () => {
+        const proposing = renderToStaticMarkup(<FreeSlots free={3} proposing />);
+        expect(proposing).toContain('3 wolne miejsca');
+        expect(proposing).toContain('dodaj z propozycji obok');
+        expect(proposing).toContain('dodaj z propozycji niżej');
+        expect(proposing).not.toContain('<a ');
 
-        expect(html).toMatch(/<button[^>]*class="[^"]*touch-target[^"]*"[^>]*>Na jutro<\/button>/);
-        expect(html).toMatch(/<a[^>]*class="[^"]*touch-target[^"]*"[^>]*href="\/zadania\?na=jutro"/);
+        const picking = renderToStaticMarkup(<FreeSlots free={1} proposing={false} />);
+        expect(picking).toContain('1 wolne miejsce');
+        expect(picking).toMatch(/<a[^>]*href="\/zadania\?na=jutro"[^>]*>Wybierz<\/a>/);
     });
 });
 
-describe('Wszystkie zadania group', () => {
-    const tasks = Array.from({ length: 6 }, (_, i) => pick(i + 1, `Zadanie ${i + 1}`, { client: null, picked: i === 4 }));
+describe('Tydzień, one date', () => {
+    const entry = (over: object) => ({ date: '2026-10-26', plannable: false, closed: false, picks: [], ...over });
+    const taken = (id: number, name: string, extra: Partial<DayTask> = {}) => ({ ...pick(id, name, extra), id });
 
-    test('shows three rows and every picked one, then Pokaż N więcej for the rest', () => {
-        const html = renderToStaticMarkup(<ClientGroup client="Przychodnia Testowa" tasks={tasks} date="2026-10-23" target="today" full={false} />);
+    test('a past day reads quieter and counts what was done; an unfinished pick can go to today or be dropped behind its more button', () => {
+        const html = renderToStaticMarkup(
+            <DaySection
+                today="2026-10-28"
+                maxPicks={5}
+                entry={entry({ picks: [taken(1, 'Formularz wyceny', { done: true, minutes: 150 }), taken(2, 'Dopracowanie podstron')] })}
+            />,
+        );
+        const [done, late] = rows(html);
+
+        expect(html).toMatch(/data-quiet=""[^>]*>.*<h2[^>]*>Poniedziałek<\/h2><span[^>]*>26\.10<\/span>/);
+        expect(html).toContain('1 z 2 zrobione');
+        expect(done).toContain('2 h 30 min');
+        expect(done).not.toContain('<button type="button" class');
+        expect(late).toContain('nie zrobione');
+        expect(late).toContain('>Na dziś</button>');
+        expect(late).toContain('aria-label="Więcej akcji: Dopracowanie podstron"');
+    });
+
+    test('today carries the mark and is not quiet, its picks can be removed and a free place offers Dodaj', () => {
+        const html = renderToStaticMarkup(
+            <DaySection today="2026-10-28" maxPicks={5} entry={entry({ date: '2026-10-28', plannable: true, picks: [taken(1, 'Korekta faktury')] })} />,
+        );
+
+        expect(html).toMatch(/<h2[^>]*>Środa<\/h2><span[^>]*>28\.10<\/span><span[^>]*>dziś<\/span>/);
+        expect(html).not.toContain('data-quiet');
+        expect(html).toContain('1 z 5 wybrane');
+        expect(html).toContain('aria-label="Usuń: Korekta faktury"');
+        expect(html).toMatch(/<a[^>]*href="\/zadania"[^>]*>Dodaj<\/a>/);
+    });
+
+    test('an empty day is its heading and one quiet line, never a row: ahead it offers Wybierz for its own date, closed or past it offers nothing', () => {
+        const ahead = renderToStaticMarkup(<DaySection today="2026-10-28" maxPicks={5} entry={entry({ date: '2026-10-30', plannable: true })} />);
+        expect(ahead).toMatch(/<p[^>]*>Nic nie zaplanowano<\/p>/);
+        expect(rows(ahead)).toHaveLength(0);
+        expect(ahead).not.toContain('dziś');
+        expect(ahead).toMatch(/<a[^>]*href="\/zadania\?na=2026-10-30"[^>]*>Wybierz<\/a>/);
+
+        const closed = renderToStaticMarkup(
+            <DaySection today="2026-10-28" maxPicks={5} entry={entry({ date: '2026-10-28', plannable: true, closed: true })} />,
+        );
+        expect(closed).toContain('Nic nie zaplanowano');
+        expect(closed).not.toContain('<a ');
+    });
+});
+
+describe('Wszystkie zadania', () => {
+    const tasks = Array.from({ length: 6 }, (_, i) => pick(i + 1, `Zadanie ${i + 1}`, { client: null, picked: i === 4 }));
+    const group = (full = false) =>
+        renderToStaticMarkup(<ClientGroup client="Przychodnia Testowa" tasks={tasks} date="2026-10-23" target="today" full={full} />);
+
+    test('a client shows three rows and every picked one, then Pokaż N więcej for the rest', () => {
+        const html = group();
 
         expect(rows(html)).toHaveLength(4);
         expect(html).toContain('Zadanie 5');
         expect(html).toContain('Pokaż 2 więcej');
     });
 
-    test('the count follows the name on phones and ends the head from 768 px; a picked row carries no pick button', () => {
-        const html = renderToStaticMarkup(<ClientGroup client="Przychodnia Testowa" tasks={tasks} date="2026-10-23" target="today" full={false} />);
+    test('the head counts the client\'s tasks; a picked row is the selected one, says Wybrane and carries no pick button', () => {
+        const html = group();
         const picked = rows(html).find((row) => row.includes('Zadanie 5')) ?? '';
 
-        expect(html).toMatch(/Przychodnia Testowa<span[^>]*> · 6<\/span>/);
-        expect(html).toMatch(/<span[^>]*>6<\/span><\/span><\/div>/);
+        expect(html.replace(/<[^>]+>/g, '|')).toContain('Przychodnia Testowa||6|');
+        expect(picked).toContain('aria-current="true"');
         expect(picked).toContain('Wybrane');
         expect(picked).not.toContain('<button');
         expect(html).toContain('aria-label="Na dziś: Zadanie 1"');
     });
 
-    test('on a full day the disabled pick cover lets taps through to the title link', async () => {
-        const css = await Bun.file(new URL('./today.module.css', import.meta.url)).text();
+    test('on a full day the pick buttons are disabled and the titles still lead to their tasks', () => {
+        const [first] = rows(group(true));
 
-        expect(css).toMatch(/\n\.pickAction:disabled \{\s*pointer-events: none;\s*\}/);
+        expect(first).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Na dziś: Zadanie 1"/);
+        expect(first).toContain('href="/tasks/10"');
+    });
+
+    test('the days a pick can go to are pills: today, tomorrow and the next working days, the shown one selected', () => {
+        const context = { t: (key: string) => i18next.t(key), locale: 'pl' };
+        const pills = dayPillsFor({ today: '2026-10-28', date: '2026-10-29', lastPlannable: '2026-11-08', showHidden: false }, context);
+
+        expect(pills.map((pill) => [pill.label, pill.href, pill.active])).toEqual([
+            ['Dziś · śr. 28.10', '/zadania', false],
+            ['Jutro · czw. 29.10', '/zadania?na=jutro', true],
+            ['pt. 30.10', '/zadania?na=2026-10-30', false],
+            ['pon. 02.11', '/zadania?na=2026-11-02', false],
+            ['wt. 03.11', '/zadania?na=2026-11-03', false],
+        ]);
+    });
+
+    test('a weekend day sent by Tydzień joins the pills in its place, and hidden groups stay shown across days', () => {
+        const context = { t: (key: string) => i18next.t(key), locale: 'pl' };
+        const pills = dayPillsFor({ today: '2026-10-28', date: '2026-10-31', lastPlannable: '2026-11-08', showHidden: true }, context);
+
+        expect(pills.map((pill) => pill.label)).toEqual(['Dziś · śr. 28.10', 'Jutro · czw. 29.10', 'pt. 30.10', 'sob. 31.10', 'pon. 02.11', 'wt. 03.11']);
+        expect(pills.find((pill) => pill.active)?.href).toBe('/zadania?na=2026-10-31&ukryte=1');
     });
 });
 
 describe('Pick actions', () => {
-    const noop = () => {};
+    test("a pick's secondary actions sit behind its more button, named after the task", () => {
+        const html = renderToStaticMarkup(
+            <RowMenu name="Korekta faktury 14/09">
+                <span />
+            </RowMenu>,
+        );
 
-    test('remove is the close icon at the icon size, named and titled Usuń z dzisiaj', () => {
-        const html = renderToStaticMarkup(<PickActions main pending={false} onStart={noop} onRemove={noop} />);
-        const remove = html.match(/<button[^>]*aria-label="Usuń z dzisiaj"[^>]*>(.*?)<\/button>/);
-
-        expect(remove).not.toBeNull();
-        expect(remove![0]).toContain('title="Usuń z dzisiaj"');
-        expect(remove![1]).toContain('<svg');
-        expect(remove![1]).not.toContain('×');
+        expect(html).toMatch(/<button[^>]*aria-label="Więcej akcji: Korekta faktury 14\/09"/);
+        expect(html).toContain('<svg');
+        expect(html).not.toContain('Usuń z dzisiaj');
     });
 
     test('the main Start dims on hover like the other filled buttons, and a disabled one stays dimmed', async () => {
@@ -191,5 +304,27 @@ describe('pickTask', () => {
         expect(post.mock.calls[0][1]).toEqual({ task_id: 7, date: '2026-10-30' });
         expect(post.mock.calls[0][2]).toMatchObject({ preserveState: true, preserveScroll: true });
         post.mockRestore();
+    });
+});
+
+describe('the day pills', () => {
+    const t = (key: string) => i18next.t(key);
+
+    test('the four day views are links and exactly one is the current place', () => {
+        expect(dayPills('done', t).map(({ label, href, active }) => [label, typeof href === 'string' ? href : href.url, active])).toEqual([
+            ['Dziś', '/?widok=dzis', false],
+            ['Podsumowanie', '/?widok=gotowe', true],
+            ['Jutro', '/jutro', false],
+            ['Tydzień', '/tydzien', false],
+        ]);
+    });
+
+    test('a closed day ticks Podsumowanie on every day view', () => {
+        expect(dayPills('today', t, true).map((pill) => pill.done)).toEqual([undefined, 'Dzień zamknięty', undefined, undefined]);
+        expect(dayPills('today', t).some((pill) => pill.done !== undefined)).toBe(false);
+    });
+
+    test('a page beside the day views marks none', () => {
+        expect(dayPills(null, t).some((pill) => pill.active)).toBe(false);
     });
 });

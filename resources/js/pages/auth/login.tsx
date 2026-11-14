@@ -2,11 +2,13 @@ import { Head, useForm } from '@inertiajs/react';
 import { FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Wordmark } from '@/components/solo/logos';
+import { fieldControl, SoloField, SoloInput } from '@/components/solo/field';
+import { Notice } from '@/components/solo/notice';
 import { SoloButton } from '@/components/solo/primitives';
-import { resetTurnstile, TurnstileWidget } from '@/components/turnstile-widget';
+import { resetTurnstile } from '@/components/turnstile-widget';
 import login from '@/routes/login';
 
+import { AuthFrame, TurnstileSlot } from './frame';
 import styles from './login.module.css';
 
 type LoginForm = {
@@ -25,7 +27,7 @@ interface LoginProps {
 }
 
 export default function Login({ status, demo, turnstileSiteKey }: LoginProps) {
-    const { t, i18n } = useTranslation();
+    const { t } = useTranslation();
 
     const { data, setData, submit, processing, errors, reset } = useForm<Required<LoginForm>>({
         email: demo?.email ?? '',
@@ -46,79 +48,50 @@ export default function Login({ status, demo, turnstileSiteKey }: LoginProps) {
         });
     };
 
-    const today = new Intl.DateTimeFormat(i18n.language, { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
-
     return (
-        <div className={styles.page} data-day="timer">
+        <AuthFrame tone="cobalt" heading={t('Log in')} pose={Object.keys(errors).length > 0 ? 'wow' : 'cool'}>
             <Head title={t('Login')} />
-            <main className={styles.frame}>
-                <div className={styles.brand}>
-                    <p className={styles.eyebrow}>{today.charAt(0).toUpperCase() + today.slice(1)}</p>
-                    <Wordmark className={styles.wordmark} />
-                </div>
+            <form className={styles.form} onSubmit={onSubmit}>
+                {demo && (
+                    <Notice kind="info">
+                        <strong>{t('Public demo')}</strong> {t('demo_login_hint')}
+                    </Notice>
+                )}
+                {status && <Notice kind="info">{status}</Notice>}
 
-                <form className={styles.form} onSubmit={onSubmit}>
-                    <h1 className={styles.title}>{t('Log in')}</h1>
+                <SoloField label={t('Email')} htmlFor="email" error={errors.email}>
+                    <SoloInput
+                        {...fieldControl('email', errors.email)}
+                        type="email"
+                        required
+                        autoComplete="email"
+                        value={data.email}
+                        onChange={(e) => setData('email', e.target.value)}
+                    />
+                </SoloField>
 
-                    {demo && (
-                        <div className={styles.demoHint}>
-                            <strong>{t('Public demo')}</strong>
-                            <span>{t('demo_login_hint')}</span>
-                        </div>
-                    )}
+                <SoloField label={t('Password')} htmlFor="password" error={errors.password}>
+                    <SoloInput
+                        {...fieldControl('password', errors.password)}
+                        type="password"
+                        required
+                        autoComplete="current-password"
+                        value={data.password}
+                        onChange={(e) => setData('password', e.target.value)}
+                    />
+                </SoloField>
 
-                    <label className={styles.field} htmlFor="email">
-                        <span>{t('Email')}</span>
-                        <input
-                            id="email"
-                            type="email"
-                            required
-                            autoFocus
-                            autoComplete="email"
-                            value={data.email}
-                            onChange={(e) => setData('email', e.target.value)}
-                        />
-                        {errors.email && <span className={styles.error}>{errors.email}</span>}
-                    </label>
+                <label className={styles.remember} htmlFor="remember">
+                    <input id="remember" name="remember" type="checkbox" checked={data.remember} onChange={(e) => setData('remember', e.target.checked)} />
+                    <span>{t('Remember me')}</span>
+                </label>
 
-                    <label className={styles.field} htmlFor="password">
-                        <span>{t('Password')}</span>
-                        <input
-                            id="password"
-                            type="password"
-                            required
-                            autoComplete="current-password"
-                            value={data.password}
-                            onChange={(e) => setData('password', e.target.value)}
-                        />
-                        {errors.password && <span className={styles.error}>{errors.password}</span>}
-                    </label>
+                <TurnstileSlot siteKey={turnstileSiteKey} action="turnstile-spin-v2" error={errors['cf-turnstile-response']} onToken={setTurnstileToken} />
 
-                    <label className={styles.remember} htmlFor="remember">
-                        <input
-                            id="remember"
-                            name="remember"
-                            type="checkbox"
-                            checked={data.remember}
-                            onChange={(e) => setData('remember', e.target.checked)}
-                        />
-                        <span>{t('Remember me')}</span>
-                    </label>
-
-                    {turnstileSiteKey && (
-                        <div className={styles.turnstile}>
-                            <TurnstileWidget siteKey={turnstileSiteKey} action="turnstile-spin-v2" onToken={setTurnstileToken} />
-                            {errors['cf-turnstile-response'] && <span className={styles.error}>{errors['cf-turnstile-response']}</span>}
-                        </div>
-                    )}
-
-                    <SoloButton type="submit" size="lg" block disabled={processing}>
-                        {processing ? t('Logging in') : t('Log in')} →
-                    </SoloButton>
-
-                    {status && <p className={styles.status}>{status}</p>}
-                </form>
-            </main>
-        </div>
+                <SoloButton type="submit" size="control" variant="primary" block disabled={processing}>
+                    {processing ? t('Logging in') : t('Log in')}
+                </SoloButton>
+            </form>
+        </AuthFrame>
     );
 }

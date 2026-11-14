@@ -8,9 +8,11 @@ use App\Models\Client;
 use App\Models\ClientReport;
 use App\Models\ClientReportRevision;
 use App\Models\User;
+use App\Services\Clients\BilledTime;
 use App\Services\Clients\ClientFinancialLock;
 use App\Services\Clients\SettlementPolicy;
 use App\Services\Humanizer;
+use App\Support\HoursText;
 use App\Support\LocalCalendar;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -27,18 +29,61 @@ final class ReportWriter
         private readonly ReportDataAggregator $aggregator,
         private readonly ReportComposerRegistry $composers,
         private readonly SettlementPolicy $policy,
+        private readonly BilledTime $billed,
     ) {}
 
-    /** A new draft for a whole month; a closed month is generated from its closure's figures. */
-    public function generate(Client $client, Carbon $start, Carbon $end, string $locale, ?string $composerKey = null, ?float $hours = null): ReportWriteResult
+    /**
+     * A draft's body with its billing summary re-rendered from new hours (and an opening, when that moves too). A report
+     * with no retainer prints no balance, so its text stays as it is.
+     *
+     * @return array{status: string, body: string}
+     */
+    public static function billedSummary(ClientReport $report, float $hours, ?float $opening = null): array
+    {
+        $body = (string) $report->body_markdown;
+        if ($report->contracted_hours === null) {
+            return ['status' => BillingSummary::REWRITTEN, 'body' => $body];
+        }
+
+        return BillingSummary::replaceIn(
+            $body,
+            $opening ?? (float) $report->opening_balance_hours,
+            (float) $report->contracted_hours,
+            $hours,
+            $report->rollover_cap_hours !== null ? (float) $report->rollover_cap_hours : null,
+            (string) ($report->period_type ?? ClientReport::PERIOD_MONTH),
+        );
+    }
+
+    /** Why billed hours cannot go into this body: without exactly one billing summary the printed balance would disagree. */
+    public static function summaryRefusal(string $status): ?string
+    {
+        return match ($status) {
+            BillingSummary::MISSING => __('The report has no billing summary, so the billed hours were not saved: regenerate it or add one first.'),
+            BillingSummary::AMBIGUOUS => __('The report has more than one billing summary, so the billed hours were not saved: keep one and try again.'),
+            default => null,
+        };
+    }
+
+    /**
+     * A new draft for a whole month; a closed month is generated from its closure's figures. The hours are the month's
+     * billed figure, the sum of its tasks, and $hours must match it: a different total is a task figure first.
+     */
+    public function generate(Client $client, Carbon $start, Carbon $end, string $locale, ?string $composerKey = null, ?float $hours = null, ?User $by = null): ReportWriteResult
     {
         $existing = ClientReport::coveringPeriod($client->id, $start->toDateString(), $end->toDateString());
         if ($existing !== null) {
             return new ReportWriteResult(ReportWriteResult::EXISTS, '', $existing);
         }
+        if ($hours !== null) {
+            if ($hours < 0 || $hours > BilledTime::MAX_HOURS) {
+                return ReportWriteResult::refused(__('Billed hours are a number from 0 to 9999.'));
+            }
+            $hours = BilledTime::hours(BilledTime::minutes($hours));
+        }
 
         $period = $start->format('Y-m');
-        $refusal = $this->generateRefusal($client, $period, $hours);
+        $refusal = $this->generateRefusal($client, $period, $hours) ?? $this->billedHoursRefusal($client, $period, $hours);
         if ($refusal !== null) {
             return ReportWriteResult::refused($refusal);
         }
@@ -53,7 +98,7 @@ final class ReportWriter
                 return new ReportWriteResult(ReportWriteResult::EXISTS, '', $existing);
             }
 
-            $refusal = $this->generateRefusal($client, $period, $hours);
+            $refusal = $this->generateRefusal($client, $period, $hours) ?? $this->billedHoursRefusal($client, $period, $hours);
             if ($refusal !== null) {
                 return ReportWriteResult::refused($refusal);
             }
@@ -135,6 +180,8 @@ final class ReportWriter
                 'currency' => $context->currency(),
                 'generated_at' => now(),
                 'needs_recalculation' => false,
+                // A balance carried in again is the bank's, no longer one the owner set.
+                ...($opening === null ? ['opening_set_at' => null] : []),
             ]);
             $this->policy->flagLaterDrafts($client, $report->period_end->toDateString());
 
@@ -215,6 +262,7 @@ final class ReportWriter
             $report->update([
                 'opening_balance_hours' => $opening,
                 'body_markdown' => $newBody,
+                ...($opening !== $current ? ['opening_set_at' => now()] : []),
             ]);
             if ($opening !== $current) {
                 $this->policy->flagLaterDrafts($client, $report->period_end->toDateString());
@@ -226,6 +274,24 @@ final class ReportWriter
                 default => __('Opening balance saved.'),
             }, $report);
         });
+    }
+
+    /**
+     * Stores a draft's new actual_hours, and a carried-in opening when it moves, with the billing summary re-rendered
+     * from them; $carried clears the recalculation flag, since the opening was just carried in again. The caller holds
+     * the lock, has checked the settlement rules and that billedSummary() rewrites.
+     */
+    public function rewriteActualHours(ClientReport $report, float $hours, ?User $by = null, ?float $opening = null, bool $carried = false): void
+    {
+        $summary = self::billedSummary($report, $hours, $opening);
+
+        $report->recordRevision(ClientReportRevision::REASON_BILLED_HOURS, $by);
+        $report->update([
+            'actual_hours' => $hours,
+            'body_markdown' => $summary['body'],
+            ...($opening !== null ? ['opening_balance_hours' => $opening] : []),
+            ...($carried ? ['needs_recalculation' => false] : []),
+        ]);
     }
 
     public function destroy(ClientReport $report): ReportWriteResult
@@ -258,6 +324,19 @@ final class ReportWriter
         return $this->policy->reportFigureRefusal($client, $report->period_start->toDateString(), $report->period_end->toDateString());
     }
 
+    /** Hours given for an open month must be its billed figure, which only task figures move. */
+    private function billedHoursRefusal(Client $client, string $period, ?float $hours): ?string
+    {
+        if ($hours === null || $this->policy->closureFor($client, $period) !== null) {
+            return null;
+        }
+        $billed = $this->billed->month($client, $period)->billedHours();
+
+        return BilledTime::minutes($hours) === BilledTime::minutes($billed)
+            ? null
+            : __(':Month bills :hours, the sum of its tasks; set the task figures to change it.', ['month' => LocalCalendar::monthName($period), 'hours' => HoursText::plain($billed)]);
+    }
+
     /** A closed month may still get its report, from the closure's figures, but never at an overridden hour count. */
     private function generateRefusal(Client $client, string $period, ?float $hours): ?string
     {
@@ -281,7 +360,15 @@ final class ReportWriter
             : null;
 
         $context = $this->aggregator->aggregate($client, $start, $end, $type, $locale, $opening, $closure !== null ? ClosureFigures::of($closure) : null);
+        if ($closure !== null) {
+            return $context;
+        }
+        if ($hours !== null) {
+            return $context->withActualHours($hours);
+        }
 
-        return $hours !== null && $closure === null ? $context->withActualHours($hours) : $context;
+        $whole = $type === ClientReport::PERIOD_MONTH && $start->day === 1 && $end->toDateString() === $start->copy()->endOfMonth()->toDateString();
+
+        return $whole ? $context->withActualHours($this->billed->month($client, $start->format('Y-m'))->billedHours()) : $context;
     }
 }

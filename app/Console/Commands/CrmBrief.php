@@ -58,7 +58,7 @@ final class CrmBrief extends Command
                 $this->raw($bank['closed_period'] !== null ? "Last closed month: {$bank['closed_period']} (closed {$bank['closed_at']})" : 'Last closed month: none');
             }
             foreach ($data['retainers'] as $r) {
-                $this->raw('Retainer: '.$this->literal($r['label'])." - {$r['monthly_hours']}h".($r['monthly_fee'] !== null ? " / {$r['monthly_fee']}" : ''));
+                $this->raw("Retainer #{$r['id']}: ".$this->literal($r['label'])." - {$r['monthly_hours']}h".($r['monthly_fee'] !== null ? " / {$r['monthly_fee']}" : '')." (from {$r['effective_from']}".($r['effective_to'] !== null ? " to {$r['effective_to']}" : '').')');
             }
             $this->raw($data['latest_report'] ? "Latest report: {$data['latest_report']['period']} ({$data['latest_report']['status']})" : 'Latest report: none');
         }

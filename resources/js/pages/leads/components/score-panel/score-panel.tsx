@@ -1,8 +1,7 @@
-import { ChevronDown } from 'lucide-react';
-import * as React from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Checkbox } from '@/components/ui/checkbox';
+import { Stat } from '@/components/solo/primitives';
+import { Tile } from '@/components/solo/tile';
 import { useLeadLabel, type PipelineLabels } from '../../lib/labels';
 import { TierBadge } from '../tier-badge';
 
@@ -24,17 +23,10 @@ interface Props {
     thresholds: { gold_min: number; oak_min: number };
     /** Optional config-declared labels for factors / categories / routing. */
     labels?: PipelineLabels;
-    /**
-     * Collapsed-by-default mode for the record view: the header (score, tier,
-     * routing - the DECISION) stays visible; the factor checklist (the
-     * WORKING) expands on demand. Progressive disclosure - the conclusion is
-     * primary, its derivation secondary.
-     */
-    collapsible?: boolean;
 }
 
 /**
- * FIT / BEHAVIOUR / TRIGGER checkboxes. Points come from the server's copy of
+ * Figma: Punktacja. FIT / BEHAVIOUR / TRIGGER checkboxes. Points come from the server's copy of
  * the config map - never a duplicate table in the frontend - so a re-tuned
  * plan changes these labels without a code edit here.
  *
@@ -42,11 +34,9 @@ interface Props {
  * server's derivation stays the source of truth and is what the badge shows
  * once saved.
  */
-export function ScorePanel({ scoring, value, onChange, savedTier, savedRouting, dirty, thresholds, labels, collapsible = false }: Props) {
+export function ScorePanel({ scoring, value, onChange, savedTier, savedRouting, dirty, thresholds, labels }: Props) {
     const { t } = useTranslation();
     const label = useLeadLabel();
-    const [open, setOpen] = React.useState(!collapsible);
-    const showBody = !collapsible || open;
 
     const toggle = (category: string, factor: string, checked: boolean) => {
         const current = value[category] ?? [];
@@ -61,70 +51,47 @@ export function ScorePanel({ scoring, value, onChange, savedTier, savedRouting, 
         0,
     );
 
-    const headerInner = (
-        <>
-            <h2 className={styles.title}>{t('Score')}</h2>
-            <div className={styles.scoreLine}>
-                <span className={styles.total}>
-                    {liveTotal} {t('pts')}
-                </span>
+    return (
+        <Tile kind="plain">
+            <Stat
+                kind="tile"
+                label={t('Score')}
+                value={`${liveTotal} ${t('pts')}`}
+                sub={t('Hot ≥ {{gold}} · Warm {{oak}} - {{oakMax}} · Cold below', {
+                    gold: thresholds.gold_min,
+                    oak: thresholds.oak_min,
+                    oakMax: thresholds.gold_min - 1,
+                })}
+            />
+            <div className={styles.verdict}>
                 {dirty ? (
-                    // Don't show a stale tier next to edited checkboxes -
-                    // the tier is the server's call, so say so plainly.
-                    <span className={styles.pending}>{t('Save to update tier')}</span>
+                    // The tier is the server's call: no stale tier beside edited checkboxes.
+                    <span className={styles.routing}>{t('Save to update tier')}</span>
                 ) : (
                     <>
                         <TierBadge tier={savedTier} />
                         {savedRouting && <span className={styles.routing}>{label('routing', savedRouting, labels?.routing?.[savedRouting])}</span>}
                     </>
                 )}
-                {collapsible && <ChevronDown size={16} className={`${styles.chevron} ${open ? styles.chevronOpen : ''}`} />}
             </div>
-        </>
-    );
-
-    return (
-        <section className={styles.panel}>
-            {collapsible ? (
-                <button type="button" className={`${styles.header} ${styles.headerToggle}`} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-                    {headerInner}
-                </button>
-            ) : (
-                <div className={styles.header}>{headerInner}</div>
-            )}
-
-            {showBody && (
-                <div className={styles.categories}>
-                    {Object.entries(scoring).map(([category, factors]) => (
-                        <fieldset key={category} className={styles.category}>
-                            <legend className={styles.legend}>{label('category', category, labels?.categories?.[category])}</legend>
-                            {Object.entries(factors).map(([factor, points]) => {
-                                const id = `${category}-${factor}`;
-                                const checked = (value[category] ?? []).includes(factor);
-                                return (
-                                    <label key={factor} className={styles.factor} htmlFor={id}>
-                                        <Checkbox id={id} checked={checked} onCheckedChange={(c) => toggle(category, factor, c === true)} />
-                                        <span className={styles.factorLabel}>{label('factor', factor, labels?.factors?.[factor])}</span>
-                                        <span className={points < 0 ? styles.pointsNegative : styles.points}>
-                                            {points > 0 ? `+${points}` : points}
-                                        </span>
-                                    </label>
-                                );
-                            })}
-                        </fieldset>
-                    ))}
-                </div>
-            )}
-
-            {showBody && (
-                <p className={styles.hint}>
-                    {t('Hot ≥ {{gold}} · Warm {{oak}} - {{oakMax}} · Cold below', {
-                        gold: thresholds.gold_min,
-                        oak: thresholds.oak_min,
-                        oakMax: thresholds.gold_min - 1,
-                    })}
-                </p>
-            )}
-        </section>
+            <div className={styles.categories} data-fill="">
+                {Object.entries(scoring).map(([category, factors]) => (
+                    <fieldset key={category} className={styles.category}>
+                        <legend className={styles.legend}>{label('category', category, labels?.categories?.[category])}</legend>
+                        {Object.entries(factors).map(([factor, points]) => {
+                            const id = `${category}-${factor}`;
+                            const checked = (value[category] ?? []).includes(factor);
+                            return (
+                                <label key={factor} className={styles.factor} htmlFor={id}>
+                                    <input id={id} type="checkbox" checked={checked} onChange={(event) => toggle(category, factor, event.target.checked)} />
+                                    <span className={styles.factorLabel}>{label('factor', factor, labels?.factors?.[factor])}</span>
+                                    <span className={styles.points}>{points > 0 ? `+${points}` : String(points).replace('-', '−')}</span>
+                                </label>
+                            );
+                        })}
+                    </fieldset>
+                ))}
+            </div>
+        </Tile>
     );
 }

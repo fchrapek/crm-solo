@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\Account;
 use App\Models\Client;
 use App\Models\Project;
+use App\Models\Repository;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
@@ -39,7 +40,57 @@ final class ProjectPageTest extends TestCase
                 ->where('tasks.lanes.0.key', 'doing')
                 ->where('tasks.lanes.0.count', 1)
                 ->where('tasks.lanes.0.rows.0.name', 'Lightbox')
-                ->where('tasks.projects', [['id' => $site->id, 'name' => 'Galeria']]));
+                ->where('tasks.projects', [['id' => $site->id, 'name' => 'Galeria', 'open' => 1, 'is_private' => true]]));
+    }
+
+    public function test_the_page_knows_the_clients_projects_with_their_open_tasks_for_its_pills(): void
+    {
+        $account = Account::factory()->create();
+        $user = User::factory()->create(['account_id' => $account->id, 'owner' => true]);
+        $client = Client::factory()->create(['account_id' => $account->id]);
+        $site = Project::create(['account_id' => $account->id, 'client_id' => $client->id, 'name' => 'Galeria']);
+        $shop = Project::create(['account_id' => $account->id, 'client_id' => $client->id, 'name' => 'Sklep', 'trello_board_id' => 'board-1']);
+        Project::create(['account_id' => $account->id, 'client_id' => $client->id, 'name' => 'Archiwum', 'archived_at' => now()]);
+        Task::create(['project_id' => $site->id, 'name' => 'Lightbox', 'source' => 'manual', 'list_name' => 'Doing']);
+        Task::create(['project_id' => $shop->id, 'name' => 'Koszyk', 'source' => 'manual', 'list_name' => 'Doing']);
+        Task::create(['project_id' => $shop->id, 'name' => 'Platnosci', 'source' => 'manual', 'list_name' => 'To-Do']);
+        Task::create(['project_id' => $shop->id, 'name' => 'Stare', 'source' => 'manual', 'list_name' => 'Doing', 'finished_at' => now()]);
+
+        $this->actingAs($user)
+            ->get("/clients/{$client->id}/projects/{$site->id}")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('open_tasks_count', 3)
+                ->where('projects', fn ($projects) => collect($projects)->where('name', '!=', 'General')->values()->all() === [
+                    ['id' => $site->id, 'name' => 'Galeria', 'open' => 1, 'is_private' => true],
+                    ['id' => $shop->id, 'name' => 'Sklep', 'open' => 2, 'is_private' => false],
+                ])
+                ->where('tasks.done.count', 0));
+    }
+
+    public function test_the_page_lists_the_projects_repositories_and_its_month_close_settings(): void
+    {
+        $account = Account::factory()->create();
+        $user = User::factory()->create(['account_id' => $account->id, 'owner' => true]);
+        $client = Client::factory()->create(['account_id' => $account->id]);
+        $site = Project::create(['account_id' => $account->id, 'client_id' => $client->id, 'name' => 'Galeria', 'include_in_month_close' => true, 'backup_path' => 'kopie/galeria']);
+        $other = Project::create(['account_id' => $account->id, 'client_id' => $client->id, 'name' => 'Sklep']);
+        $repo = Repository::create(['project_id' => $site->id, 'name' => 'galeria', 'local_path' => '/Users/test/dev/galeria', 'remote_url' => 'https://github.com/example/galeria', 'provider' => 'github']);
+        Repository::create(['project_id' => $other->id, 'name' => 'sklep', 'local_path' => '/Users/test/dev/sklep', 'provider' => 'local']);
+
+        $this->actingAs($user)
+            ->get("/clients/{$client->id}/projects/{$site->id}")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('project.include_in_month_close', true)
+                ->where('project.backup_path', 'kopie/galeria')
+                ->where('project.repositories', [[
+                    'id' => $repo->id,
+                    'name' => 'galeria',
+                    'local_path' => '/Users/test/dev/galeria',
+                    'remote_url' => 'https://github.com/example/galeria',
+                    'provider' => 'github',
+                ]]));
     }
 
     public function test_another_accounts_project_answers_not_found(): void

@@ -6,6 +6,8 @@ namespace App\Models;
 
 use App\Casts\HumanizedText;
 use App\Services\Agent\AgentWriteRecorder;
+use App\Services\Time\PeriodSettled;
+use App\Services\Time\TimeEntryWriter;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -46,6 +48,8 @@ final class TimeEntry extends Model
     /**
      * Opens a running timer on a task; every start path (web, agent verbs, MCP) goes through here.
      * A $requestId names one start intent: sending it again returns the timer it opened instead of a second one.
+     *
+     * @throws PeriodSettled when today is settled for the task's client
      */
     public static function startFor(Task $task, string $source = self::SOURCE_MANUAL, ?string $description = null, bool $billable = true, ?string $requestId = null): self
     {
@@ -65,14 +69,7 @@ final class TimeEntry extends Model
             'billable' => $billable,
         ];
 
-        if ($requestId === null) {
-            return self::create($attributes);
-        }
-
-        return self::query()->createOrFirst(
-            ['account_id' => $attributes['account_id'], 'start_request_id' => $requestId],
-            $attributes,
-        );
+        return app(TimeEntryWriter::class)->start($attributes, $requestId);
     }
 
     /**

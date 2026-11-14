@@ -41,6 +41,16 @@ describe('MarkdownView', () => {
         expect(css).toMatch(/\.view :global\(\.task-list-item\) \{[^}]*list-style: none;/);
     });
 
+    test('a plain list gets its bullets and numbers back, below any caller style', async () => {
+        const html = renderToStaticMarkup(<MarkdownView>{'- Migracja strony\n- Kampania\n\n1. pierwszy\n2. drugi'}</MarkdownView>);
+        const css = await Bun.file(new URL('./markdown-view.module.css', import.meta.url)).text();
+
+        expect(html).toContain('<ul>\n<li>Migracja strony</li>');
+        expect(html).toContain('<ol>');
+        expect(css).toMatch(/\.view :where\(ul\) \{[^}]*list-style: disc;/);
+        expect(css).toMatch(/\.view :where\(ol\) \{[^}]*list-style: decimal;/);
+    });
+
     test('raw HTML in the source is never rendered', () => {
         const html = renderToStaticMarkup(<MarkdownView>{'Tekst <img src=x onerror=alert(1)> i <b>pogrubienie</b>'}</MarkdownView>);
 

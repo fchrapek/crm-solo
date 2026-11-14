@@ -7,6 +7,7 @@ namespace App\Services\Clients;
 use App\Models\Client;
 use App\Models\ClientFieldEvent;
 use App\Models\Contact;
+use App\Models\Project;
 use App\Services\Clients\Fields\ClientFieldsQuery;
 use App\Support\LocalCalendar;
 
@@ -38,6 +39,7 @@ final class ClientDetailsQuery
                 'address' => $client->address,
                 'postal_code' => $client->postal_code,
                 'city' => $client->city,
+                'region' => $client->region,
                 'country' => $client->country,
                 'cooperation_type' => $client->cooperation_type,
                 'month_close_type' => $client->month_close_type,
@@ -50,8 +52,25 @@ final class ClientDetailsQuery
                 'ssh_config' => $client->ssh_config,
                 'maintenance_invoice_description' => $client->maintenance_invoice_description,
                 'report_baseline_markdown' => $client->report_baseline_markdown,
+                'notes' => $client->notes,
                 'archived' => $client->trashed(),
             ],
+            'stage' => app(ClientJournalQuery::class)->stage($client),
+            'projects' => $client->projects()
+                ->where('account_id', $client->account_id)
+                ->whereNull('archived_at')
+                ->withCount('repositories')
+                ->orderBy('name')
+                ->orderBy('id')
+                ->get(['id', 'name', 'trello_board_id', 'include_in_month_close'])
+                ->map(fn (Project $project): array => [
+                    'id' => $project->id,
+                    'name' => $project->name,
+                    'is_private' => $project->trello_board_id === null,
+                    'include_in_month_close' => (bool) $project->include_in_month_close,
+                    'repositories' => (int) $project->repositories_count,
+                ])
+                ->all(),
             'documents' => $client->documents()
                 ->latest()
                 ->get()

@@ -140,6 +140,11 @@ final class Client extends Model
         return $this->hasMany(ClientMonthSettlementEvent::class)->orderByDesc('created_at')->orderByDesc('id');
     }
 
+    public function billedMonths(): HasMany
+    {
+        return $this->hasMany(ClientBilledMonth::class)->orderByDesc('period');
+    }
+
     public function monthCloseRuns(): HasMany
     {
         return $this->hasMany(MonthCloseRun::class)->orderByDesc('period');

@@ -22,6 +22,9 @@ export const task: TaskData = {
     due_date: '2026-10-28',
     due_day: '2026-10-28',
     is_overdue: false,
+    priority: null,
+    is_reportable: true,
+    parent_task_id: null,
     parent_task: null,
     child_tasks: [],
     has_trello_card: false,
@@ -107,6 +110,7 @@ export const activity: TaskActivityPage = {
             minutes: null,
             text: null,
             fields: ['done_when'],
+            entry: null,
         },
         {
             key: 'time-1',
@@ -118,6 +122,15 @@ export const activity: TaskActivityPage = {
             minutes: 38,
             text: 'Eksport tabel',
             fields: [],
+            entry: {
+                id: 1,
+                title: 'Eksport tabel',
+                description: null,
+                task_id: 42,
+                start_time: '2026-10-23T09:02:00Z',
+                end_time: '2026-10-23T09:40:00Z',
+                billable: true,
+            },
         },
         {
             key: 'note-1',
@@ -129,6 +142,7 @@ export const activity: TaskActivityPage = {
             minutes: null,
             text: 'Ceny w arkuszu są ostateczne.',
             fields: [],
+            entry: null,
         },
     ],
 };

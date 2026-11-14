@@ -30,7 +30,7 @@ final class Integration extends Model
             'features' => ['projects', 'tasks'],
             'auth_type' => 'api_key',
             'secret_fields' => ['api_key', 'trello_api_key'],
-            'settings_fields' => [],
+            'settings_fields' => ['skipped_lists'],
         ],
         'smsapi' => [
             'name' => 'SMSAPI',

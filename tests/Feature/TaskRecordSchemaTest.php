@@ -27,7 +27,7 @@ final class TaskRecordSchemaTest extends TestCase
     use RefreshDatabase;
 
     private const array TOP_LEVEL = [
-        'schema', 'id', 'name', 'state', 'finished_at', 'card_lane', 'due', 'is_overdue',
+        'schema', 'id', 'name', 'state', 'finished_at', 'reportable', 'card_lane', 'due', 'is_overdue',
         'client', 'project', 'source', 'description', 'checklists', 'comments', 'attachments',
         'links', 'brief', 'readiness', 'time', 'untrusted',
     ];
@@ -237,7 +237,7 @@ final class TaskRecordSchemaTest extends TestCase
         $this->assertIsBool($record['readiness']['ready']);
         $this->assertIsList($record['readiness']['missing']);
 
-        $this->assertSame(['minutes', 'running_timer'], array_keys($record['time']));
+        $this->assertSame(['minutes', 'reportable_minutes', 'running_timer', 'billed'], array_keys($record['time']));
         $this->assertIsInt($record['time']['minutes']);
         $this->assertNullOrKeys(['entry_id', 'started_at'], $record['time']['running_timer']);
 

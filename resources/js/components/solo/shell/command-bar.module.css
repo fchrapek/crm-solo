@@ -1,0 +1,230 @@
+/* Figma: CommandBar. Phone 56 high with the text face; from 768 px 88 high with the poster face. It scrolls with the page. */
+.wrap {
+    position: relative;
+    z-index: var(--z-20);
+    flex: none;
+}
+
+.bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: var(--shell-bar);
+    padding: 0 14px;
+    overflow: hidden;
+    border-radius: var(--role-radius-md);
+    background: var(--role-command-bar);
+    color: var(--role-command-bar-text);
+    cursor: text;
+}
+
+.bar:focus-within {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: 2px;
+}
+
+.glass {
+    flex: none;
+}
+
+.glass svg {
+    width: 20px;
+    height: 20px;
+}
+
+.tokens {
+    display: flex;
+    flex: 1 1 auto;
+    gap: var(--role-space-8);
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.tokens::-webkit-scrollbar {
+    display: none;
+}
+
+.level {
+    display: flex;
+    flex: none;
+}
+
+.token {
+    display: inline-flex;
+    align-items: center;
+    height: 36px;
+    padding: 0 var(--role-space-12);
+    border-radius: var(--role-radius-sm);
+    background: var(--role-token);
+    color: var(--role-token-text);
+    font: 600 var(--solo-text-control) / normal var(--solo-font-text);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+button.token {
+    border: 0;
+    cursor: pointer;
+}
+
+:is(a, button).token:is(:hover, [data-state='open']) {
+    box-shadow: inset 0 0 0 var(--role-stroke-outline) var(--role-command-bar-text);
+}
+
+.token:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-command-bar-text);
+    outline-offset: -2px;
+}
+
+.input {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--role-command-bar-text);
+    font: 600 var(--solo-mobile-body) / 21px var(--solo-font-text);
+    caret-color: var(--role-command-bar-text);
+}
+
+.input:focus {
+    outline: none;
+}
+
+.input::placeholder {
+    color: var(--role-command-bar-text);
+    opacity: 1;
+}
+
+.input::-webkit-search-cancel-button {
+    appearance: none;
+}
+
+/* with tokens a phone has no room for the field: it keeps the cursor target and shows once it has it */
+.wrap[data-placed] .input {
+    flex: 0 0 1px;
+    opacity: 0;
+}
+
+.key {
+    display: none;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border: var(--role-stroke-outline) solid var(--role-command-bar-text);
+    border-radius: var(--role-radius-xs);
+    background: none;
+    color: var(--role-command-bar-text);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    cursor: pointer;
+}
+
+button.key {
+    display: inline-flex;
+    width: var(--role-control);
+    height: var(--role-control);
+    margin-right: -10px;
+    padding: 0;
+    border: 0;
+}
+
+button.key:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-command-bar-text);
+    outline-offset: -2px;
+}
+
+.keyText {
+    display: none;
+}
+
+/* the page dims behind the open search; the bar and its panel stay above */
+.scrim {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: var(--role-overlay);
+}
+
+/* nothing typed yet: only the keys, which a phone has no use for */
+.panel[data-empty] {
+    display: none;
+}
+
+.panel {
+    position: absolute;
+    inset: calc(100% + var(--role-space-8)) 0 auto;
+    display: flex;
+    flex-direction: column;
+    max-height: min(70dvh, 560px);
+    padding: var(--role-space-4);
+    border-radius: var(--role-radius-lg);
+    background: var(--role-tile);
+    box-shadow: var(--role-shadow);
+    color: var(--role-text-primary);
+}
+
+@media (min-width: 768px) {
+    .bar {
+        gap: var(--role-space-16);
+        padding: 0 28px;
+        border-radius: var(--role-radius-xl);
+    }
+
+    .glass svg {
+        width: 24px;
+        height: 24px;
+    }
+
+    .tokens {
+        flex: 0 1 auto;
+    }
+
+    .token {
+        height: 40px;
+        padding: 0 14px;
+        font-size: var(--solo-text-row);
+    }
+
+    .input,
+    .wrap[data-placed] .input {
+        flex: 1 1 0;
+        opacity: 1;
+        font: 900 1.8125rem / 0.92 var(--solo-font-display);
+        font-stretch: 62%;
+    }
+
+    .wrap[data-placed] .input::placeholder {
+        color: var(--role-command-bar-text-muted);
+    }
+
+    .key,
+    button.key {
+        display: inline-flex;
+        width: auto;
+        height: auto;
+        margin-right: 0;
+        padding: 6px 10px;
+        border: var(--role-stroke-outline) solid var(--role-command-bar-text);
+    }
+
+    .keyText {
+        display: inline;
+    }
+
+    .keyIcon {
+        display: none;
+    }
+
+    .panel {
+        padding: var(--role-space-12);
+    }
+
+    .panel[data-empty] {
+        display: flex;
+        align-items: flex-end;
+        padding: var(--role-space-12) var(--role-space-24);
+    }
+}

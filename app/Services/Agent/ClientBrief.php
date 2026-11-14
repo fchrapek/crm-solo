@@ -57,6 +57,7 @@ final class ClientBrief
                 'list' => $task->list_name,
                 'due' => $task->dueDay(),
                 'overdue' => $task->isOverdue(),
+                'reportable' => (bool) $task->is_reportable,
                 'priority' => $task->priority ?? $task->ai_priority,
                 ...$task->completionState(),
                 ...TaskRecord::summary($task),
@@ -98,10 +99,14 @@ final class ClientBrief
                 ],
             ],
             'retainers' => $retainers->map(fn ($r) => [
+                'id' => $r->id,
                 'label' => $r->label,
                 'monthly_hours' => (float) $r->monthly_hours,
                 'monthly_fee' => $r->monthly_fee !== null ? (float) $r->monthly_fee : null,
                 'overage_hourly_rate' => $r->overage_hourly_rate !== null ? (float) $r->overage_hourly_rate : null,
+                'invoice_group' => $r->invoice_group,
+                'effective_from' => $r->effective_from->toDateString(),
+                'effective_to' => $r->effective_to?->toDateString(),
             ])->values(),
             'latest_report' => $latestReport ? [
                 'id' => $latestReport->id,

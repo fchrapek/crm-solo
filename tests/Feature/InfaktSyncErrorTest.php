@@ -60,7 +60,7 @@ final class InfaktSyncErrorTest extends TestCase
         ]);
 
         $account = Account::create(['name' => 'Acme']);
-        $user = User::factory()->for($account)->create();
+        $user = User::factory()->for($account)->create(['owner' => true]);
         Integration::create([
             'account_id' => $account->id,
             'provider' => 'infakt',

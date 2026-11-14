@@ -3,8 +3,8 @@ import i18next from 'i18next';
 
 import en from '../../../../../../lang/en.json';
 import pl from '../../../../../../lang/pl.json';
-import { activityLine, activitySentence, agentPrompt, dueText, liveMinutes, resourcesSummary, whenLabel } from './format';
-import type { ActivityRow, ResourceFile, ResourceLink, TaskResources } from './types';
+import { activityMeta, activityTitle, agentPrompt, dueText, fileSize, liveMinutes, whenLabel } from './format';
+import type { ActivityRow } from './types';
 
 const i18n = i18next.createInstance();
 await i18n.init({
@@ -29,6 +29,7 @@ function row(over: Partial<ActivityRow>): ActivityRow {
         minutes: null,
         text: null,
         fields: [],
+        entry: null,
         ...over,
     };
 }
@@ -73,54 +74,36 @@ describe('minutes on the page', () => {
     });
 });
 
-describe('Aktywność sentences', () => {
-    test('an agent writes in the third person, the owner is addressed', () => {
-        expect(activitySentence(row({ minutes: 38, text: 'odczyt arkusza i plan tabel.' }), 'pl', t)).toBe(
-            'Zapisał 38 min pracy: odczyt arkusza i plan tabel.',
-        );
-        expect(activitySentence(row({ actor: { kind: 'owner', name: null }, minutes: 120, text: 'nowe ceny.' }), 'pl', t)).toBe(
-            'Zapisano 2 h pracy: nowe ceny.',
-        );
-        expect(activitySentence(row({ actor: { kind: 'owner', name: null }, minutes: 14 }), 'pl', t)).toBe('Zapisano 14 min pracy.');
-        expect(activitySentence(row({ kind: 'finished', actor: { kind: 'owner', name: null } }), 'pl', t)).toBe('Oznaczono jako zrobione w CRM.');
-        expect(activitySentence(row({ kind: 'finished' }), 'pl', t)).toBe('Oznaczył jako zrobione w CRM.');
+describe('Aktywność rows', () => {
+    test('a title says what happened in a few words, the same for an agent and the owner', () => {
+        expect(activityTitle(row({ minutes: 38, text: 'odczyt arkusza' }), 'pl', t)).toBe('Czas: 38 min · odczyt arkusza');
+        expect(activityTitle(row({ actor: { kind: 'owner', name: null }, minutes: 120 }), 'pl', t)).toBe('Czas: 2 h');
+        expect(activityTitle(row({ kind: 'finished' }), 'pl', t)).toBe('Zrobione w CRM');
+        expect(activityTitle(row({ kind: 'reopened' }), 'pl', t)).toBe('Otwarte ponownie w CRM');
+        expect(activityTitle(row({ kind: 'task_created' }), 'pl', t)).toBe('Zadanie utworzone');
     });
 
-    test('brief changes name the fields in the language of the page, one field in the singular', () => {
-        expect(activitySentence(row({ kind: 'brief', fields: ['done_when', 'notes'] }), 'pl', t)).toBe('Zmienił pola briefu: Gotowe gdy i Notatki.');
-        expect(activitySentence(row({ kind: 'brief', fields: ['where'] }), 'pl', t)).toBe('Zmienił pole briefu: Gdzie.');
-        expect(activitySentence(row({ kind: 'brief', fields: ['where', 'notes'] }), 'en', tEn)).toBe('Changed the brief fields Where and Notes.');
+    test('brief and task changes name the fields in the language of the page', () => {
+        expect(activityTitle(row({ kind: 'brief', fields: ['done_when', 'notes'] }), 'pl', t)).toBe('Brief: Gotowe gdy, Notatki');
+        expect(activityTitle(row({ kind: 'brief', fields: ['where', 'notes'] }), 'en', tEn)).toBe('Brief: Where, Notes');
+        expect(activityTitle(row({ kind: 'task', fields: ['name', 'due'] }), 'pl', t)).toBe('Zadanie: nazwa, termin');
+        expect(activityTitle(row({ kind: 'note', text: 'brak cen stołów.' }), 'pl', t)).toBe('Notatka: brak cen stołów.');
     });
 
-    test('notes and task edits read as the design writes them', () => {
-        expect(activitySentence(row({ kind: 'note', text: 'brak cen stołów.' }), 'pl', t)).toBe('Notatka: brak cen stołów.');
-        expect(activitySentence(row({ kind: 'task', fields: ['name', 'due'] }), 'pl', t)).toBe('Zmienił zadanie: nazwa i termin.');
+    test('the end of a row names who and when, the owner as ty', () => {
+        expect(activityMeta(row({}), NOW, '2026-10-08', 'pl', t)).toBe('Codex · 12 min temu');
+        expect(activityMeta(row({ actor: { kind: 'owner', name: null }, at: '2026-10-01T07:05:00Z', day: '2026-10-01' }), NOW, '2026-10-08', 'pl', t)).toBe(
+            'ty · 01.10',
+        );
+        expect(activityMeta(row({ actor: { kind: 'person', name: 'Anna Nowak' } }), NOW, '2026-10-08', 'pl', t)).toBe('Anna Nowak · 12 min temu');
     });
 });
 
 describe('labels', () => {
-    test('a one-line activity row reads the sentence as its lower-case tail, without the full stop', () => {
-        expect(activityLine(row({ kind: 'brief', fields: ['where', 'notes'] }), 'pl', t)).toBe('zmienił pola briefu: Gdzie i Notatki');
-        expect(activityLine(row({ actor: { kind: 'owner', name: null }, minutes: 120 }), 'pl', t)).toBe('zapisano 2 h pracy');
-    });
-
-    test('Zasoby counts each kind with its Polish plural', () => {
-        const file = { id: 1, name: 'a.pdf', url: '/x', mime: 'application/pdf', size: 1, from: 'upload', is_image: false } satisfies ResourceFile;
-        const link = { id: 1, url: 'https://x.test', label: null, from: 'crm' } satisfies ResourceLink;
-        const resources: TaskResources = {
-            files: [file, { ...file, id: 2 }],
-            images: [
-                { ...file, id: 3, is_image: true },
-                { ...file, id: 4, is_image: true },
-            ],
-            links: [link, { ...link, id: 2 }],
-        };
-
-        expect(resourcesSummary(resources, t)).toBe('6 · 2 pliki, 2 obrazy, 2 linki');
-        expect(resourcesSummary({ files: Array.from({ length: 5 }, (_, i) => ({ ...file, id: i })), images: [], links: [link] }, t)).toBe(
-            '6 · 5 plików, 1 link',
-        );
-        expect(resourcesSummary({ files: [], images: [], links: [] }, t)).toBe('na razie brak');
+    test('a file size reads in the unit a person would use', () => {
+        expect(fileSize(815, 'pl')).toBe('815 B');
+        expect(fileSize(48_210, 'pl')).toBe('47 kB');
+        expect(fileSize(1_258_291, 'pl')).toBe('1,2 MB');
     });
 
     test('the due date reads without the year in the current one', () => {

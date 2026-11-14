@@ -59,8 +59,8 @@ final class ReportBillingSummaryEnforcedTest extends TestCase
         $this->assertStringNotContainsString('Bilans na start marca', $body);
         $this->assertStringContainsString('- Praca nad chatbotem.', $body);
         $this->assertStringEndsWith(
-            "## Podsumowanie rozliczeniowe\n\nBilans na start miesiąca: \u{2212}18h\n\nPula miesiąca: +25h\n\n"
-            ."Wykorzystano w miesiącu: 0h\n\nBilans na start kolejnego miesiąca: +7h\n",
+            "## Podsumowanie rozliczeniowe\n\n- Bilans na start miesiąca: \u{2212}18h\n- Pula miesiąca: +25h\n"
+            ."- Wykorzystano w miesiącu: 0h\n- Bilans na start kolejnego miesiąca: +7h\n",
             $body,
         );
     }

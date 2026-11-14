@@ -123,58 +123,6 @@ final class TrelloSyncTest extends TestCase
         $this->assertSame('Updated Board', Project::where('trello_board_id', 'board_dup')->first()->name);
     }
 
-    public function test_synced_tasks_carry_overdue_flag(): void
-    {
-        $client = Client::create([
-            'account_id' => $this->account->id,
-            'name' => 'Overdue Client',
-        ]);
-
-        $project = $client->ensureGeneralProject();
-
-        Task::create([
-            'project_id' => $project->id,
-            'name' => 'Overdue Task',
-            'list_name' => 'Backlog',
-            'priority' => 'high',
-            'is_completed' => false,
-            'due_date' => now()->subDays(2),
-        ]);
-
-        $this->actingAs($this->user)
-            ->get("/clients/{$client->id}/edit")
-            ->assertInertia(fn (Assert $assert) => $assert
-                ->has('projects.0.tasks', 1)
-                ->where('projects.0.tasks.0.is_overdue', true)
-            );
-    }
-
-    public function test_client_edit_shows_tasks_within_projects(): void
-    {
-        $client = Client::create([
-            'account_id' => $this->account->id,
-            'name' => 'Tasks Client',
-        ]);
-
-        $project = $client->ensureGeneralProject();
-
-        Task::create([
-            'project_id' => $project->id,
-            'name' => 'Build feature',
-            'list_name' => 'In Progress',
-            'is_completed' => false,
-        ]);
-
-        $this->actingAs($this->user)
-            ->get("/clients/{$client->id}/edit")
-            ->assertInertia(fn (Assert $assert) => $assert
-                ->has('projects', 1)
-                ->has('projects.0.tasks', 1)
-                ->where('projects.0.tasks.0.name', 'Build feature')
-                ->where('projects.0.tasks.0.list_name', 'In Progress')
-            );
-    }
-
     public function test_sync_extracts_priority_from_label_colors(): void
     {
         $integration = Integration::create([

@@ -102,7 +102,7 @@ final class TimeLogger
             'start_local' => $startLocal->format('Y-m-d H:i'),
             'end_local' => $endLocal->format('Y-m-d H:i'),
             'timezone' => $endLocal->format('T'),
-            'billable' => $entry->billable,
+            ...TaskBillingNotes::forTask($entry->task),
             'untrusted' => $external ? ['target'] : [],
         ];
     }

@@ -1,0 +1,48 @@
+.chip {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 10px;
+    border: var(--role-stroke-rule) solid var(--role-rule);
+    border-radius: var(--role-radius-full);
+    background: var(--role-tile);
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-meta) / 1 var(--solo-font-text);
+    white-space: nowrap;
+}
+
+.dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--role-radius-full);
+    background: var(--role-status-open);
+}
+
+.dot[data-status='waiting'] {
+    background: var(--role-status-waiting);
+}
+
+.dot[data-status='done'] {
+    background: var(--role-status-done);
+}
+
+.dot[data-status='agent'] {
+    background: var(--role-text-primary);
+}
+
+.dot[data-status='hot'] {
+    background: var(--role-text-primary);
+}
+
+.dot:is([data-status='warm'], [data-status='cold']) {
+    border: 3px solid var(--role-text-primary);
+    background: none;
+}
+
+.dot[data-status='cold'] {
+    border-width: 1px;
+    border-color: var(--role-text-secondary);
+}

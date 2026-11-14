@@ -2,18 +2,24 @@ import { describe, expect, test } from 'bun:test';
 
 const read = (path: string) => Bun.file(new URL(path, import.meta.url)).text();
 
-const VIEWS = [
+/** Views rebuilt on the redesign's tiles stand on TileGrid instead of the split. */
+const REBUILT = [
     [
         '../../pages/clients/components/client-overview/client-overview.module.css',
         '../../pages/clients/components/client-overview/client-overview.tsx',
     ],
+    ['../../pages/clients/components/client-tasks/client-tasks.module.css', '../../pages/clients/components/client-tasks/client-tasks.tsx'],
     ['../../pages/clients/components/client-journal/client-journal.module.css', '../../pages/clients/components/client-journal/client-journal.tsx'],
     ['../../pages/clients/components/client-billing/client-billing.module.css', '../../pages/clients/components/client-billing/client-billing.tsx'],
     ['../../pages/tasks/components/task-page/task-page.module.css', '../../pages/tasks/show.tsx'],
-    ['../../pages/clients/components/client-tasks/client-tasks.module.css', '../../pages/clients/components/client-tasks/client-tasks.tsx'],
+    ['../../pages/today/day.module.css', '../../pages/today/day.tsx'],
+    ['../../pages/today/day.module.css', '../../pages/today/summary.tsx'],
+    ['../../pages/today/day.module.css', '../../pages/today/plan.tsx'],
+    ['../../pages/today/day.module.css', '../../pages/today/week.tsx'],
+] as const;
+
+const VIEWS = [
     ['../../pages/today/today.module.css', '../../pages/today/index.tsx'],
-    ['../../pages/today/today.module.css', '../../pages/today/plan.tsx'],
-    ['../../pages/today/today.module.css', '../../pages/today/tasks.tsx'],
 ] as const;
 
 describe('split columns', () => {
@@ -34,8 +40,17 @@ describe('split columns', () => {
         expect(css).toContain('flex-flow: row wrap;');
     });
 
-    test("an order client's overview side column is a split side too", async () => {
-        expect(await read('../../pages/clients/components/client-overview/order-section.tsx')).toContain('splitSideClass');
+    test('a rebuilt view stands on the shared tile grid and sizes no column of its own', async () => {
+        const grid = await read('./tile.module.css');
+
+        expect(grid).toMatch(/@media \(min-width: 1100px\) \{\s*\.grid \{\s*grid-template-columns: minmax\(0, 1fr\) 380px;/);
+        for (const [cssPath, tsxPath] of REBUILT) {
+            const [css, tsx] = await Promise.all([read(cssPath), read(tsxPath)]);
+
+            expect(tsx).toContain('<TileGrid');
+            expect(tsx).not.toContain('splitClass');
+            expect(css).not.toMatch(/grid-template-columns|max-width: 38[04]px|flex: 0 1 \d+px/);
+        }
     });
 
     test('every two-column view uses the shared split and sizes no column of its own', async () => {

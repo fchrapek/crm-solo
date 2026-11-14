@@ -1,2 +1,2 @@
-export { BriefChipAction, ClientTasksTab, TasksActions } from './client-tasks';
-export type { ClientTasks } from './types';
+export { AgentsTile, ClientTasksTab, NewTaskAction, ProjectsTile, TasksActions, type TasksPart } from './client-tasks';
+export type { ClientTasks, TaskProject } from './types';

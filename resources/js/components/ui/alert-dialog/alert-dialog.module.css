@@ -146,7 +146,7 @@
 
 :global([data-day]) .title {
   font-size: var(--solo-heading-dialog);
-  font-weight: var(--solo-title-weight, 600);
+  font-weight: 600;
 }
 
 :global([data-day]) .description {
@@ -154,12 +154,15 @@
   font-size: var(--solo-text-sub);
 }
 
+/* Figma: ActionRow. Anuluj is the quiet button: no edge, the hover fill instead. */
 :global([data-day]) .footer {
-  gap: var(--solo-space-3);
+  --solo-pill-edge: transparent;
+  --solo-pill-edge-hover: transparent;
+  --solo-pill-weight: 600;
+  --solo-pill-hover: var(--role-hover);
+
+  gap: var(--solo-space-2);
 }
 
 /* Ink's shape, so it pairs with the Outline cancel, in the accent */
-:global([data-day]) .soloDestructive {
-  background: var(--solo-accent);
-  color: var(--solo-on-accent);
-}
+

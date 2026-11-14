@@ -32,7 +32,6 @@ final class LogTimeTool extends Tool
             'description' => ['nullable', 'string'],
             'title' => ['nullable', 'string'],
             'end' => ['nullable', 'string'],
-            'billable' => ['nullable', 'boolean'],
         ], [
             'minutes.required' => 'Pass how many minutes to log.',
             'minutes.min' => 'Minutes must be a positive whole number.',
@@ -47,7 +46,6 @@ final class LogTimeTool extends Tool
                 description: $validated['description'] ?? null,
                 title: $validated['title'] ?? null,
                 end: $validated['end'] ?? null,
-                billable: $validated['billable'] ?? true,
                 accountId: $this->identity()->account->id,
             ));
         } catch (ReferenceException $e) {
@@ -86,10 +84,6 @@ final class LogTimeTool extends Tool
 
             'end' => $schema->string()
                 ->description('When the work ended, as local wall-clock "YYYY-MM-DD HH:MM" in the CRM display timezone. Defaults to now.'),
-
-            'billable' => $schema->boolean()
-                ->description('Whether the time is billable.')
-                ->default(true),
         ];
     }
 }

@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
+use App\Models\Client;
 use App\Models\MessageRule;
 use App\Models\MessageTemplate;
 use App\Services\Messaging\MessageSettings;
 use App\Services\Messaging\SmsProviderRegistry;
+use App\Support\LocalCalendar;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,7 +19,7 @@ use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
-/** Ustawienia / Wiadomości SMS: templates, rules and how messages go out, through the service the verbs use. */
+/** Ustawienia / Wiadomości SMS: templates, rules and how messages go out, and the email templates, through the service the verbs use. */
 final class MessageSettingsController extends Controller
 {
     public function __construct(private readonly MessageSettings $settings) {}
@@ -49,6 +51,61 @@ final class MessageSettingsController extends Controller
         $this->refusable(fn () => $this->settings->deleteTemplate(Auth::user()->account_id, $key));
 
         return Redirect::back()->with('success', __('Template deleted'));
+    }
+
+    public function emailTemplates(): JsonResponse
+    {
+        return response()->json(['templates' => $this->settings->emailTemplates(Auth::user()->account_id)]);
+    }
+
+    public function storeEmailTemplate(Request $request): RedirectResponse
+    {
+        $validated = $request->validate($this->emailTemplateRules());
+        $accountId = Auth::user()->account_id;
+        $key = $this->freeKey(Str::slug(Str::ascii($validated['name'], 'pl'), '_'), fn (string $key): bool => MessageTemplate::query()->where('account_id', $accountId)->where('key', $key)->exists(), 'email_');
+
+        $this->refusable(fn () => $this->settings->template($accountId, $key, $validated['name'], $validated['body'], MessageTemplate::EMAIL, $validated['subject'], $validated['is_default'] ?? null), 'body');
+
+        return Redirect::back()->with('success', __('Settings saved'));
+    }
+
+    public function updateEmailTemplate(Request $request, string $key): RedirectResponse
+    {
+        $validated = $request->validate($this->emailTemplateRules());
+        $accountId = Auth::user()->account_id;
+        abort_unless(MessageTemplate::query()->where('account_id', $accountId)->where('channel', MessageTemplate::EMAIL)->where('key', $key)->exists(), 404);
+
+        $this->refusable(fn () => $this->settings->template($accountId, $key, $validated['name'], $validated['body'], MessageTemplate::EMAIL, $validated['subject'], $validated['is_default'] ?? null), 'body');
+
+        return Redirect::back()->with('success', __('Settings saved'));
+    }
+
+    public function destroyEmailTemplate(string $key): RedirectResponse
+    {
+        $this->refusable(fn () => $this->settings->deleteTemplate(Auth::user()->account_id, $key, MessageTemplate::EMAIL));
+
+        return Redirect::back()->with('success', __('Template deleted'));
+    }
+
+    /** The email filled from a real client and month of the account, for the editor's live preview; without a client, the newest summary email client. */
+    public function previewEmail(Request $request): JsonResponse
+    {
+        $accountId = Auth::user()->account_id;
+        $validated = $request->validate([
+            'subject' => ['required', 'string', 'max:200'],
+            'body' => ['required', 'string', 'max:10000'],
+            'client_id' => ['nullable', 'integer', Rule::exists('clients', 'id')->where('account_id', $accountId)->whereNull('deleted_at')],
+            'period' => ['nullable', 'string', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
+        ]);
+        $clients = Client::query()->where('account_id', $accountId);
+        $client = isset($validated['client_id'])
+            ? (clone $clients)->findOrFail($validated['client_id'])
+            : ((clone $clients)->where('report_mode', 'summary_email')->latest('updated_at')->first() ?? (clone $clients)->latest('updated_at')->first());
+        if ($client === null) {
+            return response()->json(null);
+        }
+
+        return response()->json($this->refusable(fn () => $this->settings->emailPreview($accountId, $validated['subject'], $validated['body'], $client, $validated['period'] ?? LocalCalendar::previousMonth()), 'body'));
     }
 
     public function storeRule(Request $request): RedirectResponse
@@ -121,10 +178,16 @@ final class MessageSettingsController extends Controller
         return [...$validated, 'at' => $validated['at'] ?? '', 'values' => $validated['values'] ?? []];
     }
 
-    /** A key from a name: the slug, then _2, _3 while taken. */
-    private function freeKey(string $base, callable $taken): string
+    /** @return array<string, list<string>> */
+    private function emailTemplateRules(): array
     {
-        $base = mb_substr(preg_match('/^[a-z]/', $base) ? $base : 'sms_'.$base, 0, 56);
+        return ['name' => ['required', 'string', 'max:100'], 'subject' => ['required', 'string', 'max:200'], 'body' => ['required', 'string', 'max:10000'], 'is_default' => ['sometimes', 'boolean']];
+    }
+
+    /** A key from a name: the slug, then _2, _3 while taken. */
+    private function freeKey(string $base, callable $taken, string $prefix = 'sms_'): string
+    {
+        $base = mb_substr(preg_match('/^[a-z]/', $base) ? $base : $prefix.$base, 0, 56);
         $key = $base;
         for ($n = 2; $taken($key); $n++) {
             $key = "{$base}_{$n}";

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Agent;
 
 use App\Console\Commands\ClientConfig;
+use App\Console\Commands\CrmBilled;
 use App\Console\Commands\CrmBrief;
 use App\Console\Commands\CrmClientAssign;
 use App\Console\Commands\CrmClientCreate;
@@ -13,6 +14,7 @@ use App\Console\Commands\CrmClientFields;
 use App\Console\Commands\CrmClientFieldSet;
 use App\Console\Commands\CrmClients;
 use App\Console\Commands\CrmClientSmsOptOut;
+use App\Console\Commands\CrmInvoiceDraft;
 use App\Console\Commands\CrmLeadCapture;
 use App\Console\Commands\CrmLeadStage;
 use App\Console\Commands\CrmMessageCancel;
@@ -28,9 +30,18 @@ use App\Console\Commands\CrmNote;
 use App\Console\Commands\CrmPlan;
 use App\Console\Commands\CrmProjectCreate;
 use App\Console\Commands\CrmReport;
+use App\Console\Commands\CrmReportCreate;
+use App\Console\Commands\CrmReportOpeningBalance;
+use App\Console\Commands\CrmReportRegenerate;
 use App\Console\Commands\CrmReports;
+use App\Console\Commands\CrmReportStatus;
+use App\Console\Commands\CrmReportUpdate;
+use App\Console\Commands\CrmRetainerEnd;
+use App\Console\Commands\CrmRetainerSet;
 use App\Console\Commands\CrmSearch;
+use App\Console\Commands\CrmSummaryEmailDraft;
 use App\Console\Commands\CrmTask;
+use App\Console\Commands\CrmTaskBilled;
 use App\Console\Commands\CrmTaskBrief;
 use App\Console\Commands\CrmTaskCreate;
 use App\Console\Commands\CrmTaskDone;
@@ -70,10 +81,18 @@ final class AgentAbilities
 
     public const string MESSAGES = 'write:messages';
 
+    public const string REPORTS = 'write:reports';
+
+    /** Infakt drafts only: nothing in the CRM issues, sends or marks an invoice paid. */
+    public const string INVOICE_DRAFTS = 'write:invoice-drafts';
+
+    /** Closing and reopening a month, billing settings, retainers and billed time. */
+    public const string BILLING = 'write:billing';
+
     /** Shorthand at issue time for every write group; it is never stored. */
     public const string WRITE = 'write';
 
-    public const array ALL = [self::READ, self::NOTES, self::TASKS, self::TIME, self::LEADS, self::MONTH_CLOSE, self::CLIENTS, self::MESSAGES];
+    public const array ALL = [self::READ, self::NOTES, self::TASKS, self::TIME, self::LEADS, self::MONTH_CLOSE, self::CLIENTS, self::MESSAGES, self::REPORTS, self::INVOICE_DRAFTS, self::BILLING];
 
     /**
      * Remote verb => [artisan command, write ability or null for read-only].
@@ -121,6 +140,17 @@ final class AgentAbilities
         'report' => ['crm:report', null],
         'reports' => ['crm:reports', null],
         'month-settle' => ['crm:month-settle', null],
+        'report-create' => ['crm:report-create', self::REPORTS],
+        'report-update' => ['crm:report-update', self::REPORTS],
+        'report-regenerate' => ['crm:report-regenerate', self::REPORTS],
+        'report-opening-balance' => ['crm:report-opening-balance', self::REPORTS],
+        'report-status' => ['crm:report-status', self::REPORTS],
+        'summary-email-draft' => ['crm:summary-email-draft', self::REPORTS],
+        'invoice-draft' => ['crm:invoice-draft', self::INVOICE_DRAFTS],
+        'retainer-set' => ['crm:retainer-set', self::BILLING],
+        'retainer-end' => ['crm:retainer-end', self::BILLING],
+        'billed' => ['crm:billed', null],
+        'task-billed' => ['crm:task-billed', self::BILLING],
     ];
 
     /** Artisan name => the command class, so the endpoint builds only the command it runs. */
@@ -166,6 +196,17 @@ final class AgentAbilities
         'crm:report' => CrmReport::class,
         'crm:reports' => CrmReports::class,
         'crm:month-settle' => CrmMonthSettle::class,
+        'crm:report-create' => CrmReportCreate::class,
+        'crm:report-update' => CrmReportUpdate::class,
+        'crm:report-regenerate' => CrmReportRegenerate::class,
+        'crm:report-opening-balance' => CrmReportOpeningBalance::class,
+        'crm:report-status' => CrmReportStatus::class,
+        'crm:summary-email-draft' => CrmSummaryEmailDraft::class,
+        'crm:invoice-draft' => CrmInvoiceDraft::class,
+        'crm:retainer-set' => CrmRetainerSet::class,
+        'crm:retainer-end' => CrmRetainerEnd::class,
+        'crm:billed' => CrmBilled::class,
+        'crm:task-billed' => CrmTaskBilled::class,
     ];
 
     /** MCP tool name => write ability or null for read-only. */
@@ -212,6 +253,18 @@ final class AgentAbilities
         'report' => null,
         'reports' => null,
         'month_settlement_preview' => null,
+        'report_create' => self::REPORTS,
+        'report_update' => self::REPORTS,
+        'report_regenerate' => self::REPORTS,
+        'report_opening_balance' => self::REPORTS,
+        'report_status' => self::REPORTS,
+        'summary_email_draft' => self::REPORTS,
+        'invoice_draft' => self::INVOICE_DRAFTS,
+        'retainer_set' => self::BILLING,
+        'retainer_end' => self::BILLING,
+        'billed_time' => null,
+        'task_billed' => null,
+        'task_billed_set' => self::BILLING,
     ];
 
     /**
@@ -262,7 +315,22 @@ final class AgentAbilities
         'report' => 'report',
         'reports' => 'reports',
         'month_settlement_preview' => 'month-settle',
+        'report_create' => 'report-create',
+        'report_update' => 'report-update',
+        'report_regenerate' => 'report-regenerate',
+        'report_opening_balance' => 'report-opening-balance',
+        'report_status' => 'report-status',
+        'summary_email_draft' => 'summary-email-draft',
+        'invoice_draft' => 'invoice-draft',
+        'retainer_set' => 'retainer-set',
+        'retainer_end' => 'retainer-end',
+        'billed_time' => 'billed',
+        'task_billed' => 'task-billed',
+        'task_billed_set' => 'task-billed',
     ];
+
+    /** task-billed with none of these only prints the task's two values, so it is a read. */
+    private const array TASK_BILLED_WRITE_OPTIONS = ['--hours', '--clear'];
 
     /** task-brief with none of these only prints the brief, so it is a read. */
     private const array TASK_BRIEF_WRITE_OPTIONS = ['--where', '--done-when', '--constraints', '--notes', '--confirm'];
@@ -318,6 +386,12 @@ final class AgentAbilities
         $write = self::VERBS[$verb][1];
         if ($verb === 'task-brief' && ! self::passesAnyOption($args, self::TASK_BRIEF_WRITE_OPTIONS)) {
             $write = null;
+        }
+        if ($verb === 'task-billed' && ! self::passesAnyOption($args, self::TASK_BILLED_WRITE_OPTIONS)) {
+            $write = null;
+        }
+        if ($verb === 'task-done' && self::passesAnyOption($args, ['--billed'])) {
+            return [self::READ, self::TASKS, self::BILLING];
         }
         if ($verb === 'plan' && self::onlyReadsThePlan($args)) {
             $write = null;

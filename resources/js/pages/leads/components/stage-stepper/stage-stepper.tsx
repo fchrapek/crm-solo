@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { useLeadLabel, type LabelMap } from '../../lib/labels';
 import styles from './stage-stepper.module.css';
@@ -13,36 +13,27 @@ interface Props {
 }
 
 /**
- * The pipeline as a clickable progress bar - moving stage is the primary verb
- * on a lead, so it lives in the header instead of a Select buried mid-form,
- * and the horizontal layout mirrors the kanban's spatial model.
+ * Figma: Options (track), Etap. The pipeline as a row of pills: moving stage is the primary verb on a lead, so it
+ * stands in the head, in the board's order.
  */
 export function StageStepper({ stages, current, stageLabels, onSelect, disabled }: Props) {
+    const { t } = useTranslation();
     const label = useLeadLabel();
-    const currentIndex = stages.indexOf(current);
 
     return (
-        <ol className={styles.stepper}>
-            {stages.map((stage, index) => {
-                const state = index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'upcoming';
-                const stateClass = state === 'done' ? styles.done : state === 'current' ? styles.current : styles.upcoming;
-
-                return (
-                    <li key={stage} className={styles.step}>
-                        <button
-                            type="button"
-                            className={`${styles.stepButton} ${stateClass}`}
-                            onClick={() => state !== 'current' && onSelect(stage)}
-                            disabled={disabled || state === 'current'}
-                            aria-current={state === 'current' ? 'step' : undefined}
-                        >
-                            {state === 'done' && <Check size={12} />}
-                            {label('stage', stage, stageLabels?.[stage])}
-                        </button>
-                        {index < stages.length - 1 && <span className={styles.connector} aria-hidden />}
-                    </li>
-                );
-            })}
-        </ol>
+        <div className={styles.track} role="group" aria-label={t('Stage')}>
+            {stages.map((stage) => (
+                <button
+                    key={stage}
+                    type="button"
+                    className={styles.step}
+                    onClick={() => stage !== current && onSelect(stage)}
+                    disabled={disabled && stage !== current}
+                    aria-pressed={stage === current}
+                >
+                    {label('stage', stage, stageLabels?.[stage])}
+                </button>
+            ))}
+        </div>
     );
 }

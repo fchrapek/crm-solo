@@ -1,45 +1,18 @@
-import AppLayout from '@/layouts/app-layout';
-import AuthLayout from '@/layouts/auth-layout';
+import { type PageWithPlace } from '@/components/solo/shell/place';
+import ShellLayout from '@/layouts/shell-layout';
 import React from 'react';
 
 export interface PageModule {
-    default: React.ComponentType & {
+    default: PageWithPlace & {
         layout?: (page: React.ReactNode) => React.ReactNode;
     };
 }
 
+/** Login and the waitlist splash stand alone; every other page goes through the shell, which shows a guest the page alone. */
+const isBarePage = (pageName: string) => pageName === 'auth/login' || pageName === 'auth/czesc';
+
 export function applyLayoutToPage(module: unknown, pageName: string): void {
-    const isAuthRoute =
-        pageName.toLowerCase().includes('login') ||
-        pageName.toLowerCase().includes('register') ||
-        pageName.toLowerCase().includes('password') ||
-        pageName.toLowerCase().includes('verification');
+    const page = (module as PageModule).default;
 
-    // Solo pages draw their own masthead and colour, and the error page is shown to guests while the app shell needs a signed-in user.
-    const isBarePage =
-        pageName.startsWith('today/') ||
-        pageName === 'clients/index' ||
-        pageName === 'clients/show' ||
-        pageName === 'tasks/show' ||
-        pageName === 'project-board/show' ||
-        pageName === 'clients/reports/edit' ||
-        pageName.startsWith('month-close/') ||
-        pageName === 'settings/index' ||
-        pageName === 'contacts/index' ||
-        pageName === 'messages/index' ||
-        pageName === 'auth/login' ||
-        pageName === 'auth/czesc' ||
-        pageName === 'error';
-
-    (module as PageModule).default.layout = (page: React.ReactNode) => {
-        if (isBarePage) {
-            return page;
-        }
-
-        if (isAuthRoute) {
-            return <AuthLayout>{page}</AuthLayout>;
-        }
-
-        return <AppLayout>{page}</AppLayout>;
-    };
+    page.layout = (content: React.ReactNode) => (isBarePage(pageName) ? content : <ShellLayout place={page.place}>{content}</ShellLayout>);
 }

@@ -2,10 +2,10 @@ import { ActionMenu, ActionMenuItem } from '@/components/solo/action-menu';
 import { BottomSheet } from '@/components/solo/bottom-sheet';
 import { fieldControl, SoloField, SoloInput } from '@/components/solo/field';
 import { ListRow } from '@/components/solo/list-row';
-import { SectionAction, SoloButton, touchTargetClass } from '@/components/solo/primitives';
-import { RailLine } from '@/components/solo/rail-line';
+import { SoloButton } from '@/components/solo/primitives';
+import { Row } from '@/components/solo/row';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
-import { SectionToggle } from '@/components/solo/section-toggle';
+import { Tile, TileHeader, TileRows } from '@/components/solo/tile';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { readXsrfToken } from '@/lib/json-request';
 import taskAttachments from '@/routes/task-attachments';
@@ -14,7 +14,7 @@ import { router } from '@inertiajs/react';
 import { type FormEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { resourcesSummary } from './format';
+import { fileSize } from './format';
 import styles from './task-page.module.css';
 import { LIVE_PROPS, type ResourceFile, type ResourceLink, type TaskResources } from './types';
 
@@ -127,9 +127,9 @@ function LinkDialog({ taskId, open, onOpenChange }: { taskId: number; open: bool
 type Removal = { kind: 'file'; item: ResourceFile } | { kind: 'link'; item: ResourceLink };
 
 /**
- * Figma: Zasoby (432:1181), Dodaj (425:1198); on phones Dodaj on the row opens
- * the Dodaj zasób sheet (440:6807). Uploads and links are the CRM's on a
- * card too; files pulled from the card and its link attachments are read only.
+ * Figma: Zadanie, the Zasoby tile (1094:40618), Dodaj zasób (1095:50622) and Dodaj link (1095:50855). Files, images
+ * and links as rows; Dodaj is a menu from 768 px and a sheet below it. Uploads and links are the CRM's on a card too;
+ * files pulled from the card and its link attachments are read only.
  */
 export function ResourcesSection({ taskId, resources }: { taskId: number; resources: TaskResources }) {
     const { t } = useTranslation();
@@ -177,71 +177,76 @@ export function ResourcesSection({ taskId, resources }: { taskId: number; resour
         }
     }
 
-    const empty = resources.files.length + resources.images.length + resources.links.length === 0;
-    const menu = (
-        <ActionMenu
-            trigger={
-                <SectionAction disabled={uploading} aria-haspopup="menu">
-                    {uploading ? t('Uploading…') : t('Add')}
-                </SectionAction>
+    const { i18n } = useTranslation();
+    const total = resources.files.length + resources.images.length + resources.links.length;
+    const addLabel = uploading ? t('Uploading…') : t('Add');
+    const fileMeta = (file: ResourceFile, kind: string) =>
+        `${kind} · ${file.from === 'trello' ? 'Trello' : fileSize(file.size, i18n.language)}`;
+    const fileRow = (file: ResourceFile, kind: string) => (
+        <Row
+            key={`file-${file.id}`}
+            title={
+                <a href={file.url} target="_blank" rel="noopener noreferrer" className={styles.resourceLink}>
+                    {file.name}
+                </a>
             }
-        >
-            <ActionMenuItem onSelect={() => add('file')}>{t('File')}</ActionMenuItem>
-            <ActionMenuItem onSelect={() => add('image')}>{t('Image')}</ActionMenuItem>
-            <ActionMenuItem onSelect={() => add('link')}>{t('Link')}</ActionMenuItem>
-        </ActionMenu>
+            meta={fileMeta(file, kind)}
+            action={file.from === 'upload' ? <RemoveButton label={file.name} onClick={() => setRemoval({ kind: 'file', item: file })} /> : undefined}
+        />
     );
 
     return (
         <>
-            <SectionToggle
-                label={t('Resources')}
-                summary={resourcesSummary(resources, t)}
-                phoneSummary={empty ? undefined : null}
-                extra={menu}
-                phoneExtra={
-                    <SectionAction className={touchTargetClass} disabled={uploading} onClick={() => setSheet(true)}>
-                        {uploading ? t('Uploading…') : t('Add')}
-                    </SectionAction>
-                }
-                empty={empty}
-            >
-                <ul className={styles.resources}>
-                    {resources.files.map((file) => (
-                        <RailLine key={`file-${file.id}`} className={styles.resourceLine}>
-                            <a href={file.url} target="_blank" rel="noopener noreferrer" className={styles.resourceLink}>
-                                {file.name}
-                            </a>
-                            {file.from === 'upload' && <RemoveButton label={file.name} onClick={() => setRemoval({ kind: 'file', item: file })} />}
-                        </RailLine>
-                    ))}
-                    {resources.images.length > 0 && (
-                        <li className={styles.images}>
-                            {resources.images.map((image) => (
-                                <figure key={`image-${image.id}`} className={styles.image}>
-                                    <a href={image.url} target="_blank" rel="noopener noreferrer" className={styles.thumbLink}>
-                                        <img src={image.url} alt={image.name} loading="lazy" className={styles.thumb} width={168} height={112} />
+            <Tile kind="list" aria-labelledby="task-resources">
+                <TileHeader
+                    label={<span id="task-resources">{t('Resources')}</span>}
+                    count={total === 0 ? t('none yet') : total}
+                    end={
+                        <>
+                            <span className={styles.wideOnly}>
+                                <ActionMenu
+                                    trigger={
+                                        <SoloButton variant="quiet" size="control" className={styles.headAction} disabled={uploading} aria-haspopup="menu">
+                                            {addLabel}
+                                        </SoloButton>
+                                    }
+                                >
+                                    <ActionMenuItem onSelect={() => add('file')}>{t('File')}</ActionMenuItem>
+                                    <ActionMenuItem onSelect={() => add('image')}>{t('Image')}</ActionMenuItem>
+                                    <ActionMenuItem onSelect={() => add('link')}>{t('Link')}</ActionMenuItem>
+                                </ActionMenu>
+                            </span>
+                            <span className={styles.phoneOnly}>
+                                <SoloButton variant="quiet" size="control" className={styles.headAction} disabled={uploading} onClick={() => setSheet(true)}>
+                                    {addLabel}
+                                </SoloButton>
+                            </span>
+                        </>
+                    }
+                />
+                {total > 0 && (
+                    <TileRows>
+                        {resources.files.map((file) => fileRow(file, t('file')))}
+                        {resources.images.map((image) => fileRow(image, t('image')))}
+                        {resources.links.map((link, index) => (
+                            <Row
+                                key={`link-${link.id ?? `card-${index}`}`}
+                                title={
+                                    <a href={link.url} target="_blank" rel="noopener noreferrer nofollow" className={styles.resourceLink}>
+                                        {linkText(link)}
                                     </a>
-                                    <figcaption className={styles.imageName}>
-                                        <span className={styles.imageLabel}>{image.name}</span>
-                                        {image.from === 'upload' && (
-                                            <RemoveButton label={image.name} onClick={() => setRemoval({ kind: 'file', item: image })} />
-                                        )}
-                                    </figcaption>
-                                </figure>
-                            ))}
-                        </li>
-                    )}
-                    {resources.links.map((link, index) => (
-                        <RailLine key={`link-${link.id ?? `card-${index}`}`} className={styles.resourceLine}>
-                            <a href={link.url} target="_blank" rel="noopener noreferrer nofollow" className={styles.resourceLink}>
-                                {linkText(link)}
-                            </a>
-                            {link.from === 'crm' && <RemoveButton label={linkText(link)} onClick={() => setRemoval({ kind: 'link', item: link })} />}
-                        </RailLine>
-                    ))}
-                </ul>
-            </SectionToggle>
+                                }
+                                meta={link.from === 'trello' ? `${t('link')} · Trello` : t('link')}
+                                action={
+                                    link.from === 'crm' ? (
+                                        <RemoveButton label={linkText(link)} onClick={() => setRemoval({ kind: 'link', item: link })} />
+                                    ) : undefined
+                                }
+                            />
+                        ))}
+                    </TileRows>
+                )}
+            </Tile>
 
             <input ref={fileInput} type="file" accept={FILE_TYPES} multiple hidden onChange={(event) => void onPick(event.target.files)} />
             <input ref={imageInput} type="file" accept={IMAGE_TYPES} multiple hidden onChange={(event) => void onPick(event.target.files)} />
@@ -275,8 +280,8 @@ function RemoveButton({ label, onClick }: { label: string; onClick: () => void }
     const { t } = useTranslation();
 
     return (
-        <button type="button" className={`${styles.remove} ${touchTargetClass}`} onClick={onClick} aria-label={t('Remove {{name}}', { name: label })}>
+        <SoloButton variant="quiet" size="control" className={styles.rowAction} onClick={onClick} aria-label={t('Remove {{name}}', { name: label })}>
             {t('Remove')}
-        </button>
+        </SoloButton>
     );
 }

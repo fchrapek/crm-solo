@@ -15,7 +15,7 @@ final class AccountFeature
 {
     public function handle(Request $request, Closure $next, string $feature): Response
     {
-        abort_unless((bool) $request->user()?->account->hasFeature($feature), 404);
+        abort_unless((bool) $request->user()?->account->shows($feature, $request->user()), 404);
 
         return $next($request);
     }

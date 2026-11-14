@@ -88,7 +88,10 @@ function AlertDialogAction({
     className,
     tone,
     ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Action> & { tone?: 'destructive' }) {
+}: React.ComponentProps<typeof AlertDialogPrimitive.Action> & {
+    /** Red on the older pages only; a Solo confirm is the ink button whatever it does, as the redesign has no red. */
+    tone?: 'destructive';
+}) {
     const solo = useInSoloSurface();
     const destructive = tone === 'destructive';
 
@@ -96,7 +99,7 @@ function AlertDialogAction({
         <AlertDialogPrimitive.Action
             className={
                 solo
-                    ? cn(soloButtonClass({ variant: 'ink', size: 'md' }), destructive && styles.soloDestructive, className)
+                    ? cn(soloButtonClass({ variant: 'ink', size: 'md' }), className)
                     : getButtonStyles({ variant: destructive ? 'destructive' : 'default', className })
             }
             {...props}

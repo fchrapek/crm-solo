@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { FormInput, FormLabel, FormMessage } from '@/components/form';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
+import { fieldControl, SoloField, SoloFieldRow, SoloInput, SoloTextarea } from '@/components/solo/field';
+import { Notice } from '@/components/solo/notice';
+import { SoloButton } from '@/components/solo/primitives';
+import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
+import { ResponsiveSelect } from '@/components/solo/responsive-select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { durationText } from '@/lib/dates';
+import { JsonRequestError, jsonRequest } from '@/lib/json-request';
 
 import styles from './time-entry-edit-dialog.module.css';
 
@@ -17,12 +21,6 @@ export interface TaskOption {
     name: string;
     project_name?: string | null;
 }
-
-const readXsrfToken = (): string => {
-    if (typeof document === 'undefined') return '';
-    const match = document.cookie.split(';').find((c) => c.trim().startsWith('XSRF-TOKEN='));
-    return match ? decodeURIComponent(match.split('=')[1]) : '';
-};
 
 export interface EditableTimeEntry {
     id: number;
@@ -43,7 +41,17 @@ interface Props {
     onSaved?: () => void;
 }
 
-/** Edit an existing TimeEntry: title, description, task, times and billable. */
+/** Whole minutes between two datetime-local values, or null while they do not make a span. */
+export function spanMinutes(start: string, end: string): number | null {
+    const minutes = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60_000);
+
+    return Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+}
+
+/**
+ * Figma: Edytuj wpis czasu (1095:47171). Title, description, task, times and billable of a logged entry, and Usuń
+ * wpis; a settled period refuses both and the dialog shows the server's reason.
+ */
 export function TimeEntryEditDialog({ open, onOpenChange, entry, tasks, onSaved }: Props) {
     const { t } = useTranslation();
     const [title, setTitle] = useState('');
@@ -53,7 +61,9 @@ export function TimeEntryEditDialog({ open, onOpenChange, entry, tasks, onSaved 
     const [endTime, setEndTime] = useState('');
     const [billable, setBillable] = useState(true);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [refusal, setRefusal] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
         if (!open || entry === null) {
@@ -66,159 +76,172 @@ export function TimeEntryEditDialog({ open, onOpenChange, entry, tasks, onSaved 
         setEndTime(entry.end_time ? isoToLocalInput(entry.end_time) : '');
         setBillable(entry.billable);
         setErrors({});
+        setRefusal(null);
     }, [open, entry]);
 
     if (entry === null) {
         return null;
     }
 
+    const failed = (error: unknown, fallback: string) => {
+        if (error instanceof JsonRequestError && Object.keys(error.errors).length > 0) {
+            setErrors(Object.fromEntries(Object.entries(error.errors).map(([key, value]) => [key, value[0] ?? ''])));
+        } else {
+            setRefusal(error instanceof JsonRequestError ? error.message : fallback);
+        }
+    };
+
     const submit = async () => {
         setSubmitting(true);
         setErrors({});
+        setRefusal(null);
         try {
-            const res = await fetch(`/time-entries/${entry.id}`, {
-                method: 'PUT',
-                credentials: 'same-origin',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-XSRF-TOKEN': readXsrfToken(),
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                body: JSON.stringify({
-                    title: title.trim() || null,
-                    description: description || null,
-                    task_id: taskId,
-                    start_time: localInputToIso(startTime),
-                    end_time: endTime ? localInputToIso(endTime) : null,
-                    billable,
-                }),
+            await jsonRequest(`/time-entries/${entry.id}`, 'PUT', {
+                title: title.trim() || null,
+                description: description || null,
+                task_id: taskId,
+                start_time: localInputToIso(startTime),
+                end_time: endTime ? localInputToIso(endTime) : null,
+                billable,
             });
-            if (!res.ok) {
-                const body = await res.json().catch(() => ({ message: t('Failed to save entry') }));
-                if (body?.errors) {
-                    const flat: Record<string, string> = {};
-                    for (const [key, value] of Object.entries(body.errors as Record<string, string[]>)) {
-                        flat[key] = value[0] ?? '';
-                    }
-                    setErrors(flat);
-                } else {
-                    toast.error(body.message ?? t('Failed to save entry'));
-                }
-                return;
-            }
             toast.success(t('Time entry saved'));
             onOpenChange(false);
             onSaved?.();
-        } catch {
-            toast.error(t('Failed to save entry'));
+        } catch (error) {
+            failed(error, t('Failed to save entry'));
         } finally {
             setSubmitting(false);
         }
     };
 
+    const destroy = async () => {
+        setSubmitting(true);
+        setRefusal(null);
+        try {
+            await jsonRequest(`/time-entries/${entry.id}`, 'DELETE');
+            toast.success(t('Time entry deleted'));
+            onOpenChange(false);
+            onSaved?.();
+        } catch (error) {
+            failed(error, t('Failed to delete entry'));
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const span = spanMinutes(startTime, endTime);
+
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>{t('Edit time entry')}</DialogTitle>
-                </DialogHeader>
-                <form
-                    onSubmit={(e) => {
-                        e.preventDefault();
-                        void submit();
-                    }}
-                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}
-                >
-                    <div>
-                        <FormLabel htmlFor="time-entry-title">{t('Title')}</FormLabel>
-                        <FormInput
-                            id="time-entry-title"
-                            type="text"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            maxLength={255}
-                            placeholder={t('Short label shown in the list')}
-                            error={errors.title}
-                        />
-                        <FormMessage error={errors.title} />
-                    </div>
-                    <div>
-                        <FormLabel htmlFor="time-entry-description">{t('Description')}</FormLabel>
-                        <Textarea
-                            id="time-entry-description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            maxLength={2000}
-                            rows={4}
-                            placeholder={t('Details shown when the entry is opened')}
-                            aria-invalid={errors.description ? true : undefined}
-                            style={{ resize: 'vertical' }}
-                        />
-                        <FormMessage error={errors.description} />
-                    </div>
-                    {tasks && tasks.length > 0 && (
-                        <div>
-                            <FormLabel htmlFor="time-entry-task">{t('Connected task')}</FormLabel>
-                            <Select
-                                value={taskId === null ? NO_TASK : String(taskId)}
-                                onValueChange={(v) => setTaskId(v === NO_TASK ? null : Number(v))}
-                            >
-                                <SelectTrigger id="time-entry-task" title={tasks.find((task) => task.id === taskId)?.name}>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={NO_TASK}>{t('No task')}</SelectItem>
-                                    {tasks.map((task) => (
-                                        <SelectItem key={task.id} value={String(task.id)}>
-                                            #{task.id} · {task.name}
-                                            {task.project_name ? ` (${task.project_name})` : ''}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    )}
-                    <div className={styles.timeRange}>
-                        <div>
-                            <FormLabel htmlFor="time-entry-start">{t('Start time')}</FormLabel>
-                            <FormInput
-                                id="time-entry-start"
-                                type="datetime-local"
-                                value={startTime}
-                                onChange={(e) => setStartTime(e.target.value)}
-                                required
-                                error={errors.start_time}
-                            />
-                            <FormMessage error={errors.start_time} />
-                        </div>
-                        <div>
-                            <FormLabel htmlFor="time-entry-end">{t('End time')}</FormLabel>
-                            <FormInput
-                                id="time-entry-end"
-                                type="datetime-local"
-                                value={endTime}
-                                onChange={(e) => setEndTime(e.target.value)}
-                                error={errors.end_time}
-                            />
-                            <FormMessage error={errors.end_time} />
-                        </div>
-                    </div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}>
-                        <input type="checkbox" checked={billable} onChange={(e) => setBillable(e.target.checked)} />
-                        {t('Billable')}
-                    </label>
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+        <>
+            <ResponsiveDialog
+                open={open}
+                onOpenChange={onOpenChange}
+                title={t('Edit time entry')}
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    void submit();
+                }}
+                fields
+                sheetAction="save"
+                saving={submitting}
+                footerClassName={styles.actions}
+                actions={(size) => (
+                    <>
+                        <SoloButton variant="pill" onClick={() => onOpenChange(false)} disabled={submitting}>
                             {t('Cancel')}
-                        </Button>
-                        <Button type="submit" disabled={submitting}>
+                        </SoloButton>
+                        <SoloButton type="submit" variant="ink" size={size} disabled={submitting}>
                             {submitting ? t('Saving…') : t('Save')}
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
+                        </SoloButton>
+                    </>
+                )}
+            >
+                {refusal !== null && (
+                    <Notice kind="lock" role="alert">
+                        {refusal}
+                    </Notice>
+                )}
+                <SoloField label={t('Title')} htmlFor="time-entry-title" error={errors.title}>
+                    <SoloInput
+                        {...fieldControl('time-entry-title', errors.title)}
+                        type="text"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        maxLength={255}
+                        placeholder={t('Short label shown in the list')}
+                        disabled={submitting}
+                    />
+                </SoloField>
+                <SoloField label={t('Description')} htmlFor="time-entry-description" error={errors.description}>
+                    <SoloTextarea
+                        {...fieldControl('time-entry-description', errors.description)}
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        maxLength={2000}
+                        rows={3}
+                        placeholder={t('Details shown when the entry is opened')}
+                        disabled={submitting}
+                    />
+                </SoloField>
+                {tasks && tasks.length > 0 && (
+                    <SoloField label={t('Connected task')} htmlFor="time-entry-task" error={errors.task_id}>
+                        <ResponsiveSelect
+                            label={t('Connected task')}
+                            value={taskId === null ? NO_TASK : String(taskId)}
+                            onValueChange={(v) => setTaskId(v === NO_TASK ? null : Number(v))}
+                            disabled={submitting}
+                            control={fieldControl('time-entry-task', errors.task_id)}
+                            options={[
+                                { value: NO_TASK, label: t('No task') },
+                                ...tasks.map((task) => ({
+                                    value: String(task.id),
+                                    label: task.project_name ? `${task.name} · ${task.project_name}` : task.name,
+                                })),
+                            ]}
+                        />
+                    </SoloField>
+                )}
+                <SoloFieldRow>
+                    <SoloField label={t('Start time')} htmlFor="time-entry-start" error={errors.start_time}>
+                        <SoloInput
+                            {...fieldControl('time-entry-start', errors.start_time)}
+                            type="datetime-local"
+                            value={startTime}
+                            onChange={(e) => setStartTime(e.target.value)}
+                            required
+                            disabled={submitting}
+                        />
+                    </SoloField>
+                    <SoloField label={t('End time')} htmlFor="time-entry-end" error={errors.end_time}>
+                        <SoloInput
+                            {...fieldControl('time-entry-end', errors.end_time)}
+                            type="datetime-local"
+                            value={endTime}
+                            onChange={(e) => setEndTime(e.target.value)}
+                            disabled={submitting}
+                        />
+                        {span !== null && <span className={styles.span}>{durationText(span, t)}</span>}
+                    </SoloField>
+                </SoloFieldRow>
+                <label className={styles.billable}>
+                    <Checkbox checked={billable} onCheckedChange={(checked) => setBillable(checked === true)} disabled={submitting} />
+                    {t('Billable')}
+                </label>
+                <div>
+                    <SoloButton variant="quiet" size="control" className={styles.remove} onClick={() => setDeleting(true)} disabled={submitting}>
+                        {t('Delete entry')}
+                    </SoloButton>
+                </div>
+            </ResponsiveDialog>
+            <ConfirmDialog
+                open={deleting}
+                onOpenChange={setDeleting}
+                title={t('Delete this entry?')}
+                description={t('The logged time goes with it.')}
+                confirmLabel={t('Delete')}
+                onConfirm={() => void destroy()}
+            />
+        </>
     );
 }
 

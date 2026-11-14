@@ -230,9 +230,9 @@ final class TodayTest extends TestCase
             );
     }
 
-    public function test_tick_untick_tick_on_a_recurring_pick_makes_one_successor(): void
+    public function test_tick_untick_tick_on_a_pick_leaves_it_done(): void
     {
-        $task = Task::create(['project_id' => $this->project->id, 'name' => 'Weekly backup', 'source' => 'manual', 'list_name' => 'To-Do', 'recurrence_period_days' => 7]);
+        $task = Task::create(['project_id' => $this->project->id, 'name' => 'Weekly backup', 'source' => 'manual', 'list_name' => 'To-Do']);
         $this->pick($task);
         $pick = DayPick::firstOrFail();
 
@@ -241,22 +241,6 @@ final class TodayTest extends TestCase
         $this->actingAs($this->user)->post("/day/picks/{$pick->id}/complete");
 
         $this->assertTrue($task->fresh()->isDone());
-        $this->assertSame(1, Task::where('parent_task_id', $task->id)->count());
-    }
-
-    public function test_a_retick_after_the_successor_was_finished_makes_no_second_one(): void
-    {
-        $task = Task::create(['project_id' => $this->project->id, 'name' => 'Weekly backup', 'source' => 'manual', 'list_name' => 'To-Do', 'recurrence_period_days' => 7]);
-        $this->pick($task);
-        $pick = DayPick::firstOrFail();
-
-        $this->actingAs($this->user)->post("/day/picks/{$pick->id}/complete");
-        $this->actingAs($this->user)->delete("/day/tasks/{$task->id}/complete");
-        $successor = Task::where('parent_task_id', $task->id)->sole();
-        $this->actingAs($this->user)->post("/day/tasks/{$successor->id}/complete");
-        $this->actingAs($this->user)->post("/day/picks/{$pick->id}/complete");
-
-        $this->assertSame(1, Task::where('parent_task_id', $task->id)->count());
     }
 
     public function test_untick_on_a_trello_card_clears_only_the_owners_finish(): void
@@ -597,6 +581,29 @@ final class TodayTest extends TestCase
 
         $this->actingAs($this->user)->get('/')
             ->assertInertia(fn (Assert $page) => $page->where('state', 'done'));
+    }
+
+    public function test_a_close_says_so_once_and_a_refused_one_does_not(): void
+    {
+        $this->actingAs($this->user)->post('/day/close')->assertSessionHas('success', 'Day closed.');
+        $this->actingAs($this->user)->delete('/day/close');
+
+        $task = $this->task();
+        $this->actingAs($this->user)->postJson("/tasks/{$task->id}/time-entries/start")->assertCreated();
+        $this->actingAs($this->user)->post('/day/close')->assertSessionMissing('success');
+    }
+
+    public function test_every_day_view_knows_whether_today_is_closed(): void
+    {
+        foreach (['/tydzien', '/jutro', '/zadania'] as $view) {
+            $this->actingAs($this->user)->get($view)->assertInertia(fn (Assert $page) => $page->where('closed', false));
+        }
+
+        $this->actingAs($this->user)->post('/day/close');
+
+        foreach (['/?widok=dzis', '/tydzien', '/jutro', '/zadania'] as $view) {
+            $this->actingAs($this->user)->get($view)->assertInertia(fn (Assert $page) => $page->where('closed', true));
+        }
     }
 
     public function test_starting_a_timer_reopens_a_closed_day(): void

@@ -45,7 +45,7 @@ final class TasksController extends Controller
             'due_date' => $validated['due_date'] ?? null,
             'priority' => $validated['priority'] ?? null,
             'parent_task_id' => $this->resolveParentTaskId($project, $validated['parent_task_id'] ?? null),
-            'is_reportable' => $validated['is_reportable'] ?? false,
+            'is_reportable' => $validated['is_reportable'] ?? null,
         ]);
 
         return back()->with('success', __('Task created.'));
@@ -107,7 +107,7 @@ final class TasksController extends Controller
         return response()->json(['deleted' => $task->id]);
     }
 
-    public function updateReportable(Request $request, Task $task): JsonResponse
+    public function updateReportable(Request $request, Task $task, TaskWriter $writer): JsonResponse
     {
         $this->authorizeTask($task);
 
@@ -115,7 +115,7 @@ final class TasksController extends Controller
             'is_reportable' => 'required|boolean',
         ]);
 
-        $task->update(['is_reportable' => $validated['is_reportable']]);
+        $writer->update($task, ['is_reportable' => (bool) $validated['is_reportable']]);
 
         return response()->json(['is_reportable' => $task->is_reportable]);
     }

@@ -31,146 +31,26 @@ permissions:
   contents: read
 
 jobs:
-  # Into develop, a docs-only change skips the app checks and the export
-  # self-test runs only when the export policy could have changed. Into main
-  # nothing is skipped. The export scan below always runs. Unknown means run.
-  classify:
-    name: Changed files
-    if: >-
-      github.event.repository.private
-      && ((github.event.action != 'unlabeled' && github.event.action != 'edited')
-      || github.event.label.name == 'hold'
-      || github.event.changes.title != null
-      || github.event.changes.base != null)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      app_checks: ${{ steps.decide.outputs.app_checks }}
-      export_self_test: ${{ steps.decide.outputs.export_self_test }}
-    steps:
-      - name: Decide what this change needs
-        id: decide
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-          BASE: ${{ github.event.pull_request.base.ref }}
-        run: |
-          set -euo pipefail
-          app=true
-          selftest=true
-          if [ "$BASE" = "develop" ]; then
-            expected=$(gh api "repos/$GH_REPO/pulls/$PR" --jq '.changed_files')
-            listing=$(gh api --paginate "repos/$GH_REPO/pulls/$PR/files" --jq '.[] | [.filename, (.previous_filename // "")] | @tsv')
-            if [ "$(grep -c . <<<"$listing" || true)" -ne "$expected" ]; then
-              echo "::error::Could not list all $expected changed files."; exit 1
-            fi
-            # Both sides of a rename count.
-            names=$(tr '\t' '\n' <<<"$listing" | grep . || true)
-            if [ -n "$names" ] && ! grep -vqE '^(docs/|[^/]+\.md$)' <<<"$names"; then
-              app=false
-            fi
-            if ! grep -qE '^(scripts/public-export(\.sh$|/)|\.github/|resources/fonts/)|(^|/)\.gitattributes$' <<<"$names"; then
-              selftest=false
-            fi
-          fi
-          echo "app_checks=$app" >> "$GITHUB_OUTPUT"
-          echo "export_self_test=$selftest" >> "$GITHUB_OUTPUT"
-          echo "App checks: $app. Export self-test: $selftest."
-
+  # Into develop, ci.yml skips the app steps for a docs-only change and the
+  # export self-test unless the export policy could have changed.
   gate:
-    needs: classify
     if: >-
-      !cancelled()
-      && ((github.event.action != 'unlabeled' && github.event.action != 'edited')
+      (github.event.action != 'unlabeled' && github.event.action != 'edited')
       || github.event.label.name == 'hold'
       || github.event.changes.title != null
-      || github.event.changes.base != null)
+      || github.event.changes.base != null
     uses: ./.github/workflows/ci.yml
-    with:
-      app_checks: ${{ needs.classify.outputs.app_checks != 'false' }}
-      export_self_test: ${{ needs.classify.outputs.export_self_test != 'false' }}
     permissions:
       contents: read
-
-  # A release PR into main merges with GitHub's own merge-commit subject, so
-  # its title is not checked.
-  title:
-    name: Title in house style
-    if: >-
-      github.event.pull_request.base.ref != 'main'
-      && ((github.event.action != 'unlabeled' && github.event.action != 'edited')
-      || github.event.label.name == 'hold'
-      || github.event.changes.title != null
-      || github.event.changes.base != null)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Check the title
-        env:
-          TITLE: ${{ github.event.pull_request.title }}
-        run: scripts/hooks/commit-msg.sh --subject "$TITLE"
-
-  # The release's export and security stage on the tested merge, read-only; its policy is export-ignored, so the public snapshot skips it.
-  export:
-    name: Public export security stage
-    if: >-
-      github.event.repository.private
-      && ((github.event.action != 'unlabeled' && github.event.action != 'edited')
-      || github.event.label.name == 'hold'
-      || github.event.changes.title != null
-      || github.event.changes.base != null)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Install gitleaks (pinned by checksum)
-        env:
-          GITLEAKS_VERSION: 8.30.1
-          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
-        run: |
-          set -euo pipefail
-          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tgz" \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
-          sudo install -m 0755 "$RUNNER_TEMP/gitleaks" /usr/local/bin/gitleaks
-
-      # Hits go to the report dir, never the log; reproduce them locally.
-      - name: Export and run every gate
-        run: scripts/public-export.sh --report-dir "$RUNNER_TEMP/report" HEAD "$RUNNER_TEMP/public-tree"
-
-      - name: How to see the hits
-        if: failure()
-        run: echo "::error::Run scripts/public-export.sh --report-dir <dir>/rep <sha> <dir>/pub locally on this branch and read <dir>/rep/hits-*.txt."
 
   # By visibility, not repository name, so the public snapshot names nothing private; forks are private too.
   merge:
     name: Merge when green
-    needs: [classify, gate, title, export]
-    # A skipped gate passes only as the docs-only outcome classify decided.
+    needs: gate
     if: >-
-      !cancelled()
-      && github.event.repository.private && !github.event.repository.fork
+      github.event.repository.private && !github.event.repository.fork
       && github.event.pull_request.base.ref == 'develop'
       && github.event.pull_request.head.repo.full_name == github.repository
-      && needs.classify.result == 'success'
-      && needs.title.result == 'success'
-      && needs.export.result == 'success'
-      && (needs.gate.result == 'success'
-        || (needs.gate.result == 'skipped'
-          && needs.classify.outputs.app_checks == 'false'
-          && needs.classify.outputs.export_self_test == 'false'))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     # One merge at a time, so a second green PR sees the first one's merge

@@ -23,7 +23,7 @@ final class BillingSummary
     private const LOCALES = ['pl', 'en'];
 
     /**
-     * Four plain lines: what rolled in, this period's pool, what was used,
+     * Four list items: what rolled in, this period's pool, what was used,
      * what rolls out. Plus one line when the agreed carry-over cap clipped
      * the balance, since those hours are gone and the client should see why.
      *
@@ -45,18 +45,14 @@ final class BillingSummary
         $lines = [
             '## '.__('Billing summary', [], $locale),
             '',
-            __($openLabel, [], $locale).': '.self::signedHours($opening),
-            '',
-            __($poolLabel, [], $locale).': '.self::signedHours($contracted),
-            '',
-            __($usedLabel, [], $locale).': '.self::signedHours(-$actual),
-            '',
-            __($closeLabel, [], $locale).': '.self::signedHours(HoursBank::closing($available, $actual)),
+            '- '.__($openLabel, [], $locale).': '.self::signedHours($opening),
+            '- '.__($poolLabel, [], $locale).': '.self::signedHours($contracted),
+            '- '.__($usedLabel, [], $locale).': '.self::signedHours(-$actual),
+            '- '.__($closeLabel, [], $locale).': '.self::signedHours(HoursBank::closing($available, $actual)),
         ];
 
         if ($forfeited > 0) {
-            $lines[] = '';
-            $lines[] = __('Hours above the agreed carry-over cap, not carried forward: :hours', [
+            $lines[] = '- '.__('Hours above the agreed carry-over cap, not carried forward: :hours', [
                 'hours' => self::formatHours($forfeited),
             ], $locale);
         }

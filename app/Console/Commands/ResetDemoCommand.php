@@ -23,7 +23,7 @@ use Throwable;
 final class ResetDemoCommand extends Command
 {
     /** Visitor uploads on the local disk; nothing else there is touched. */
-    private const UPLOAD_DIRECTORIES = ['task-attachments', 'client-documents'];
+    public const UPLOAD_DIRECTORIES = ['task-attachments', 'client-documents'];
 
     public function handle(): int
     {

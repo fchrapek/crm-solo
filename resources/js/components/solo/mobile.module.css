@@ -22,6 +22,16 @@
     height: 32px;
 }
 
+/* Figma A2f / Icon button Ghost: the pencil on a ledger row, the bare glyph with the row hover behind it. */
+.iconButton[data-icon='pencil'] {
+    border-color: transparent;
+    background: none;
+}
+
+.iconButton[data-icon='pencil']:hover {
+    background: var(--solo-hover);
+}
+
 /* A close or remove × is the bare glyph, as in the dialogs: no ring around it. */
 .iconButton[data-icon='close'] {
     border-color: transparent;
@@ -33,12 +43,37 @@
     color: var(--solo-fg);
 }
 
+.iconButton[data-look='quiet'] {
+    width: var(--role-control);
+    height: var(--role-control);
+    border-color: transparent;
+    background: none;
+    color: var(--role-text-primary);
+}
+
+.iconButton[data-look='quiet']:hover {
+    background: var(--role-hover);
+}
+
+.iconButton[data-look='outline'] {
+    width: var(--role-control);
+    height: var(--role-control);
+    border: 0;
+    background: none;
+    box-shadow: inset 0 0 0 var(--role-stroke-outline) var(--role-button-secondary-outline);
+    color: var(--role-text-primary);
+}
+
+.iconButton[data-look='outline']:hover {
+    background: var(--role-hover);
+}
+
 .iconButton:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline: 2px solid var(--solo-fg);
     outline-offset: 2px;
 }
 
-/* Mobile / Tab bar: phones only, the masthead takes over from 768 px */
+/* Figma: TabBar. Phones only, the rail takes over from 768 px; the active section wears the rail's cobalt field. */
 .tabBar {
     view-transition-name: solo-tab-bar;
     position: fixed;
@@ -46,10 +81,11 @@
     bottom: 0;
     z-index: var(--z-banner);
     display: flex;
-    padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
-    border-top: 1px solid var(--solo-rule);
-    background: var(--solo-header-bg, var(--solo-block, var(--solo-bg)));
-    color: var(--solo-fg);
+    padding: var(--role-space-8) env(safe-area-inset-right, 0px) calc(var(--role-space-8) + env(safe-area-inset-bottom, 0px))
+        env(safe-area-inset-left, 0px);
+    border-top: var(--role-stroke-rule) solid var(--role-rule);
+    background: var(--role-rail);
+    color: var(--role-text-primary);
 }
 
 .tab {
@@ -57,38 +93,43 @@
     flex: 1 1 0;
     flex-direction: column;
     align-items: center;
-    gap: var(--solo-space-1);
+    justify-content: center;
+    gap: 2px;
     min-width: 0;
-    height: var(--solo-tab-bar-height);
-    padding: var(--solo-space-3) 0 0;
+    height: 56px;
     border: 0;
     background: none;
-    color: var(--solo-fg-muted);
-    font: 500 var(--solo-mobile-tab-bar) / 12px var(--solo-font-text);
+    color: var(--role-text-secondary);
+    font: 600 var(--solo-text-label) / 1.3 var(--solo-font-text);
     text-decoration: none;
     white-space: nowrap;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
 }
 
-.tab svg {
+.tabField {
+    display: flex;
     flex: none;
-}
-
-/* the filled active glyph is Paper's; Lucide marks the active tab by colour and weight only */
-.tab :global(svg.lucide) {
-    fill: none;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 28px;
+    border-radius: var(--role-radius-full);
 }
 
 .tab[aria-current='page'] {
-    color: var(--solo-fg);
-    font-weight: 700;
+    color: var(--role-text-primary);
+}
+
+.tab[aria-current='page'] .tabField {
+    background: var(--role-selection);
+    color: var(--role-selection-text);
 }
 
 .tab:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
     outline-offset: -3px;
-    border-radius: var(--solo-radius-md);
+    border-radius: var(--role-radius-sm);
 }
 
 @media (min-width: 768px) {
@@ -224,7 +265,7 @@
 }
 
 .selectOptions [aria-pressed='true'] {
-    color: var(--solo-link, var(--solo-accent));
+    color: var(--solo-accent);
 }
 
 .sheetFields {
@@ -244,38 +285,6 @@
 
 @media (min-width: 768px) {
     .menuScrim {
-        display: none;
-    }
-}
-
-/* Mobile / Floating button */
-.fab {
-    position: fixed;
-    right: calc(var(--solo-space-4) + env(safe-area-inset-right, 0px));
-    bottom: var(--solo-tab-bar-clearance);
-    z-index: var(--z-banner);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: var(--solo-fab-height);
-    padding: 0 20px;
-    border: 0;
-    border-radius: var(--solo-radius-full);
-    background: var(--solo-primary, var(--solo-fg));
-    color: var(--solo-on-primary, var(--solo-bg));
-    font: 600 var(--solo-text-action) / 1.35 var(--solo-font-text);
-    text-decoration: none;
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.fab:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
-    outline-offset: 3px;
-}
-
-@media (min-width: 768px) {
-    .fab {
         display: none;
     }
 }
@@ -314,7 +323,7 @@ button.listRow:hover {
 }
 
 .listRow:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline: 2px solid var(--solo-fg);
     outline-offset: -2px;
 }
 
@@ -326,14 +335,14 @@ button.listRow:hover {
 .listText {
     display: flex;
     flex: 1 1 0;
-    flex-direction: var(--solo-list-flow, row);
-    align-items: var(--solo-list-align, center);
-    gap: var(--solo-list-gap, var(--solo-space-3));
+    flex-direction: row;
+    align-items: center;
+    gap: var(--solo-space-3);
     min-width: 0;
 }
 
 .listRow[data-size='large'] .listText {
-    gap: var(--solo-list-gap-large, var(--solo-space-3));
+    gap: var(--solo-space-3);
 }
 
 .listText[data-linked] {
@@ -364,28 +373,28 @@ button.listRow:hover {
 }
 
 .listTitleLink:focus-visible::after {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline: 2px solid var(--solo-fg);
     outline-offset: -2px;
 }
 
 .listTitleRow {
     display: flex;
     flex: 1 1 auto;
-    min-width: var(--solo-list-title-min, 45%);
+    min-width: 45%;
     align-items: center;
     gap: var(--solo-space-2);
 }
 
 .listTitle {
     min-width: 0;
-    font: 500 var(--solo-text-cell) / normal var(--solo-font-text);
+    font: 600 var(--solo-text-cell) / normal var(--solo-font-text);
     overflow-wrap: anywhere;
 }
 
 .listRow[data-size='large'] .listTitle {
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: var(--solo-list-wrap, nowrap);
+    white-space: nowrap;
 }
 
 .listRow[data-size='large'] .listTitle {
@@ -399,21 +408,19 @@ button.listRow:hover {
 .listMark {
     flex: none;
     color: var(--solo-accent);
-    font: 700 var(--solo-text-micro) / 13px var(--solo-font-text);
-    letter-spacing: var(--solo-label-tracking, 0.08em);
-    text-transform: var(--solo-label-case, uppercase);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
     white-space: nowrap;
 }
 
 .listSub {
     display: flex;
     flex: 0 1 auto;
-    flex-wrap: var(--solo-list-sub-wrap, nowrap);
+    flex-wrap: nowrap;
     align-items: center;
     min-width: 0;
-    max-width: var(--solo-list-sub-max, 45%);
-    margin-left: var(--solo-list-sub-push, auto);
-    white-space: var(--solo-list-wrap, nowrap);
+    max-width: 45%;
+    margin-left: auto;
+    white-space: nowrap;
     gap: 2px var(--solo-space-2);
     color: var(--solo-fg-muted);
     font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
@@ -436,7 +443,7 @@ button.listRow:hover {
     gap: 6px;
     min-width: 0;
     color: var(--solo-agent);
-    font: 400 var(--solo-mono-row) / 1.4 var(--solo-font-mono);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
     white-space: nowrap;
 }
 
@@ -462,7 +469,7 @@ button.listRow:hover {
 }
 
 .listValue {
-    font: 500 var(--solo-text-cell) / normal var(--solo-font-text);
+    font: 600 var(--solo-text-cell) / normal var(--solo-font-text);
     white-space: nowrap;
 }
 
@@ -477,7 +484,7 @@ button.listRow:hover {
     padding: 0;
     border: 0;
     background: none;
-    color: var(--solo-on-primary, var(--solo-bg));
+    color: var(--solo-bg);
     cursor: pointer;
 }
 
@@ -491,18 +498,18 @@ button.listRow:hover {
     justify-content: center;
     width: 20px;
     height: 20px;
-    border: var(--solo-check-width, 1.6px) solid var(--solo-check-border, var(--solo-fg));
+    border: 1.6px solid var(--solo-fg);
     border-radius: var(--solo-radius-sm);
-    background: var(--solo-control-bg, none);
+    background: none;
 }
 
 .check[data-checked] .checkBox {
-    border-color: var(--solo-primary, var(--solo-fg));
-    background: var(--solo-primary, var(--solo-fg));
+    border-color: var(--solo-fg);
+    background: var(--solo-fg);
 }
 
 .check:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline: 2px solid var(--solo-fg);
     outline-offset: -4px;
     border-radius: var(--solo-radius-md);
 }

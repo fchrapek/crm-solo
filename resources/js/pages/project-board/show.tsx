@@ -1,30 +1,33 @@
-import { Head, router, usePage } from '@inertiajs/react';
-import { type ReactNode, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-
-import FlashMessages from '@/components/flash-messages';
-import { ActionMenuItem } from '@/components/solo/action-menu';
-import { AgentChip, HeaderAction, RecordHeader, useInHeaderMenu } from '@/components/solo/client-header';
+import { ActionMenu, ActionMenuItem } from '@/components/solo/action-menu';
+import { Chip } from '@/components/solo/chip';
+import { HeaderAction, useInHeaderMenu } from '@/components/solo/client-header';
 import { IconButton } from '@/components/solo/icon-button';
 import { KvRow } from '@/components/solo/kv-row';
-import { LiveLine } from '@/components/solo/live-line';
-import { Masthead } from '@/components/solo/masthead';
-import { SectionAction, SectionHead } from '@/components/solo/primitives';
+import { SoloButton } from '@/components/solo/primitives';
+import { RecordFrame } from '@/components/solo/record-frame';
+import { Row } from '@/components/solo/row';
+import { RowMenu } from '@/components/solo/row-menu';
+import { type PlaceResolver } from '@/components/solo/shell/place';
 import { SoloSurface } from '@/components/solo/surface';
-import { SoloToaster } from '@/components/solo/toaster';
+import { Tile, TileHeader, TileNote, TileRows } from '@/components/solo/tile';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Icon } from '@/components/ui/icon';
 import { useNow } from '@/hooks/use-now';
 import { capitalize, inMonth, minutesSince } from '@/lib/dates';
 import { hoursText, localeOf } from '@/lib/hours-text';
-import { type ClientTasks, ClientTasksTab } from '@/pages/clients/components/client-tasks';
+import { type ClientTasks, ClientTasksTab, NewTaskAction, type TaskProject } from '@/pages/clients/components/client-tasks';
+import { homePath } from '@/pages/clients/components/client-tasks/format';
 import { ConnectTrelloDialog } from '@/pages/clients/components/connect-trello-dialog';
 import { ListMappingDialog } from '@/pages/clients/components/list-mapping-dialog';
 import { ProjectFormDialog } from '@/pages/clients/components/project-form-dialog';
+import { type RepositoryDialogValues, RepositoryFormDialog } from '@/pages/clients/components/repository-form-dialog';
+import { projectPlace } from '@/pages/clients/place';
 import clients from '@/routes/clients';
 import projectBoard from '@/routes/project-board';
 import { type SharedData } from '@/types';
+import { Head, router, usePage } from '@inertiajs/react';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import styles from './show.module.css';
 
 interface ProjectData {
@@ -43,12 +46,16 @@ interface ProjectData {
     month_minutes: number;
     /** An agent's timer running on one of the project's tasks. */
     live_agent: { agent: string; started_at: string } | null;
+    repositories: RepositoryDialogValues[];
 }
 
 interface ProjectPageProps {
     client: { id: number; name: string; short_name: string };
     project: ProjectData;
     tasks: ClientTasks;
+    /** The client's live projects with their open tasks, and the open tasks of the whole client: the page's pills. */
+    projects: TaskProject[];
+    open_tasks_count: number;
     trelloEnabled: boolean;
     trelloActions: boolean;
     [key: string]: unknown;
@@ -56,55 +63,57 @@ interface ProjectPageProps {
 
 type Dialog = 'edit' | 'connect' | 'mapping' | 'disconnect' | 'delete' | null;
 
-/** Figma: Projekt (770:56830; phones 849:21156). The Zadania lanes for one project, the Projekt column beside them. */
+/**
+ * Figma: Projekt (1091:23179, phone 1091:23482). The Zadania groups for one project; beside them the project's
+ * facts and its repositories. The client's other projects are the page's pills.
+ */
 export default function ProjectPage() {
     const { client, project, tasks, trelloEnabled, trelloActions } = usePage<SharedData & ProjectPageProps>().props;
     const { t } = useTranslation();
     const [dialog, setDialog] = useState<Dialog>(null);
-    const open = (next: Dialog) => () => setDialog(next);
-    const back = { href: clients.show({ client: client.id, tab: 'dziennik' }).url, label: client.short_name };
-    const actions = <ProjectActions project={project} trelloEnabled={trelloEnabled} trelloActions={trelloActions} onOpen={setDialog} />;
+    const [creating, setCreating] = useState(false);
+    const canCreate = tasks.projects.length > 0;
+    const zadania = clients.show({ client: client.id, tab: 'zadania' }).url;
     const now = useNow(15_000);
     const agent = project.live_agent;
     const agentMinutes = agent !== null && now !== null ? minutesSince(agent.started_at, now) : null;
 
     return (
-        <SoloSurface className={styles.page} day="paper">
+        <SoloSurface day="paper">
             <Head title={project.name} />
-            <div className={styles.frame}>
-                <Masthead current="clients" />
-                <main>
-                    <RecordHeader
-                        size="poster"
-                        back={back}
-                        trail={[
-                            { label: t('Clients'), href: clients.index().url },
-                            { label: client.short_name, href: back.href },
-                            { label: project.name },
-                        ]}
-                        title={project.name}
-                        menu={actions}
-                        chip={
-                            agent !== null && agentMinutes !== null ? (
-                                <AgentChip>{t('{{agent}} · {{minutes}} min', { agent: agent.agent, minutes: agentMinutes })}</AgentChip>
-                            ) : undefined
-                        }
-                        live={
-                            agent !== null && agentMinutes !== null ? (
-                                <LiveLine>{t('{{agent}} working · {{minutes}} min', { agent: agent.agent, minutes: agentMinutes })}</LiveLine>
-                            ) : undefined
-                        }
-                    />
-                    <ClientTasksTab
-                        clientId={client.id}
-                        tasks={tasks}
-                        laneHref={(lane) => projectBoard.show({ client: client.id, project: project.id }, { query: { wszystkie: lane } }).url}
-                        bottomAction
-                        side={<ProjectSection project={project} trelloActions={trelloActions} actions={actions} onEdit={open('edit')} />}
-                    />
-                </main>
-            </div>
-
+            <main className={styles.page}>
+                <RecordFrame
+                    title={project.name}
+                    chip={
+                        agent !== null && agentMinutes !== null ? (
+                            <Chip status="agent">{t('{{agent}} working · {{minutes}} min', { agent: agent.agent, minutes: agentMinutes })}</Chip>
+                        ) : undefined
+                    }
+                    actions={
+                        <ProjectActions
+                            project={project}
+                            trelloEnabled={trelloEnabled}
+                            trelloActions={trelloActions}
+                            onOpen={setDialog}
+                            onCreate={canCreate ? () => setCreating(true) : undefined}
+                        />
+                    }
+                    main={canCreate ? <NewTaskAction onCreate={() => setCreating(true)} /> : undefined}
+                />
+                <ClientTasksTab
+                    clientId={client.id}
+                    tasks={tasks}
+                    creating={creating}
+                    onCreatingChange={setCreating}
+                    partHref={(part) => projectBoard.show({ client: client.id, project: project.id }, { query: { wszystkie: part } }).url}
+                    side={
+                        <>
+                            <ProjectTile project={project} onEdit={() => setDialog('edit')} />
+                            <RepositoriesTile projectId={project.id} repositories={project.repositories} />
+                        </>
+                    }
+                />
+            </main>
             <ProjectFormDialog
                 open={dialog === 'edit'}
                 onOpenChange={(next) => setDialog(next ? 'edit' : null)}
@@ -143,29 +152,35 @@ export default function ProjectPage() {
                 description={t('All tasks in this project will be deleted permanently. This cannot be undone.')}
                 confirmLabel={t('Delete project')}
                 variant="destructive"
-                onConfirm={() => router.delete(`/projects/${project.id}`, { onSuccess: () => router.visit(back.href) })}
+                onConfirm={() => router.delete(`/projects/${project.id}`, { onSuccess: () => router.visit(zadania) })}
             />
-            <FlashMessages toaster={<SoloToaster />} />
         </SoloSurface>
     );
 }
 
-/** Synchronizuj, Mapowanie list, Odłącz or Połącz z Trello, Usuń projekt: menu items in the phone •••, a ••• menu beside Edytuj on desktop. */
+ProjectPage.place = projectPlace satisfies PlaceResolver<ProjectPageProps>;
+
+/**
+ * From 768 px: Synchronizuj, the "more" menu and Nowe zadanie. A phone has Nowe zadanie as its main button, so its
+ * "more" menu holds Edytuj, Synchronizuj and the rest.
+ */
 function ProjectActions({
     project,
     trelloEnabled,
     trelloActions,
     onOpen,
+    onCreate,
 }: {
     project: ProjectData;
     trelloEnabled: boolean;
     trelloActions: boolean;
     onOpen: (dialog: Dialog) => void;
+    onCreate?: () => void;
 }) {
     const { t } = useTranslation();
     const inMenu = useInHeaderMenu();
     const sync = () => router.post(`/projects/${project.id}/sync-trello`, {}, { preserveScroll: true });
-
+    const synced = !project.is_private && trelloActions;
     const items = (
         <>
             {inMenu && (
@@ -173,7 +188,7 @@ function ProjectActions({
                     {t('Edit project')}
                 </HeaderAction>
             )}
-            {!project.is_private && trelloActions && (
+            {synced && (
                 <>
                     {inMenu && (
                         <HeaderAction icon={<Icon name="refresh" size={16} />} onClick={sync}>
@@ -204,18 +219,15 @@ function ProjectActions({
             )}
         </>
     );
-
     if (inMenu) return items;
+    const hasMenu = synced || project.is_private;
 
     return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <IconButton icon="more" size="sm" label={t('Project actions')} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={8} collisionPadding={16}>
-                {items}
-            </DropdownMenuContent>
-        </DropdownMenu>
+        <>
+            {synced && <HeaderAction onClick={sync}>{t('Synchronize')}</HeaderAction>}
+            {hasMenu && <ActionMenu trigger={<IconButton icon="more" look="outline" label={t('Project actions')} />}>{items}</ActionMenu>}
+            {onCreate !== undefined && <NewTaskAction onCreate={onCreate} />}
+        </>
     );
 }
 
@@ -227,42 +239,26 @@ function syncedText(synced: Date, locale: string, t: ReturnType<typeof useTransl
     return sameDay ? t('today {{time}}', { time }) : `${synced.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' })} ${time}`;
 }
 
-function ProjectSection({
-    project,
-    trelloActions,
-    actions,
-    onEdit,
-}: {
-    project: ProjectData;
-    trelloActions: boolean;
-    actions: ReactNode;
-    onEdit: () => void;
-}) {
+/** Figma: Tile · Projekt. The project's facts: its board, the last sync, this month's hours, the month-close flag and the backup folder. */
+function ProjectTile({ project, onEdit }: { project: ProjectData; onEdit: () => void }) {
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);
     const synced = project.synced_at !== null ? new Date(project.synced_at) : null;
 
     return (
-        <>
-            <SectionHead
-                kind="body"
+        <Tile kind="plain">
+            <TileHeader
                 label={t('Project')}
-                action={
-                    <span className={styles.actions}>
-                        {!project.is_private && trelloActions && (
-                            <SectionAction onClick={() => router.post(`/projects/${project.id}/sync-trello`, {}, { preserveScroll: true })}>
-                                {t('Synchronize')}
-                            </SectionAction>
-                        )}
-                        <SectionAction onClick={onEdit}>{t('Edit')}</SectionAction>
-                        <span className={styles.wideOnly}>{actions}</span>
-                    </span>
+                end={
+                    <SoloButton variant="secondary" size="control" onClick={onEdit}>
+                        {t('Edit')}
+                    </SoloButton>
                 }
             />
             <dl className={styles.facts}>
-                <KvRow layout="ledger" label="Trello">
+                <KvRow layout="tile" label="Trello">
                     {project.trello_url !== null && !project.is_private ? (
-                        <a href={project.trello_url} target="_blank" rel="noopener noreferrer" className={styles.link}>
+                        <a href={project.trello_url} target="_blank" rel="noopener noreferrer">
                             {t('connected')} ↗
                         </a>
                     ) : (
@@ -270,15 +266,115 @@ function ProjectSection({
                     )}
                 </KvRow>
                 {synced !== null && (
-                    <KvRow layout="ledger" label={t('Synchronization')}>
+                    <KvRow layout="tile" label={t('Synchronization')}>
                         {syncedText(synced, locale, t)}
                     </KvRow>
                 )}
-                <KvRow layout="ledger" label={t('Hours')}>
+                <KvRow layout="tile" label={t('Hours')}>
                     {t('{{hours}} h {{when}}', { hours: hoursText(project.month_minutes / 60, locale), when: inMonth(project.month, t) })}
                 </KvRow>
+                <KvRow layout="tile" label={t('In the month close')}>
+                    {project.include_in_month_close ? t('Yes') : t('No')}
+                </KvRow>
+                {project.backup_path && (
+                    <KvRow layout="tile" label={t('Backup folder')}>
+                        {project.backup_path}
+                    </KvRow>
+                )}
             </dl>
-            {project.description && <p className={styles.description}>{capitalize(project.description)}</p>}
-        </>
+            {project.description && <TileNote className={styles.description}>{capitalize(project.description)}</TileNote>}
+        </Tile>
     );
+}
+
+/** Figma: Tile / list · Repozytoria. The working copies an agent reads from: add, edit and unlink, with the way to the remote. */
+function RepositoriesTile({ projectId, repositories }: { projectId: number; repositories: RepositoryDialogValues[] }) {
+    const { t } = useTranslation();
+    const [editing, setEditing] = useState<RepositoryDialogValues | 'new' | null>(null);
+    const [unlinking, setUnlinking] = useState<number | null>(null);
+
+    return (
+        <Tile kind="list">
+            <TileHeader
+                label={t('Repositories')}
+                count={repositories.length}
+                end={
+                    <SoloButton variant="secondary" size="control" onClick={() => setEditing('new')}>
+                        {t('Add')}
+                    </SoloButton>
+                }
+            />
+            {repositories.map((repo) => (
+                <div key={repo.id} className={styles.repo}>
+                    <Row
+                        as="div"
+                        title={repo.name}
+                        meta={repo.provider}
+                        action={
+                            <SoloButton
+                                variant="quiet"
+                                size="control"
+                                aria-label={`${t('Edit repository')}: ${repo.name}`}
+                                onClick={() => setEditing(repo)}
+                            >
+                                {t('Edit')}
+                            </SoloButton>
+                        }
+                        more={
+                            <RowMenu name={repo.name}>
+                                <ActionMenuItem onSelect={() => setUnlinking(repo.id)}>{t('Unlink repository')}</ActionMenuItem>
+                            </RowMenu>
+                        }
+                    />
+                    {(repo.local_path || repo.remote_url) && (
+                        <dl className={styles.repoFacts}>
+                            {repo.local_path && (
+                                <KvRow layout="tile" label={t('Local path')}>
+                                    <span title={repo.local_path}>{homePath(repo.local_path)}</span>
+                                </KvRow>
+                            )}
+                            {repo.remote_url && (
+                                <KvRow layout="tile" label={t('Remote URL')}>
+                                    <a href={repo.remote_url} target="_blank" rel="noopener noreferrer">
+                                        {remoteName(repo.remote_url)} ↗
+                                    </a>
+                                </KvRow>
+                            )}
+                        </dl>
+                    )}
+                </div>
+            ))}
+            {repositories.length === 0 && (
+                <TileRows>
+                    <Row rule={false} title={<span className={styles.empty}>{t('No repository paths yet.')}</span>} />
+                </TileRows>
+            )}
+            <RepositoryFormDialog
+                open={editing !== null}
+                onOpenChange={(next) => !next && setEditing(null)}
+                projectId={projectId}
+                initial={editing !== null && editing !== 'new' ? editing : undefined}
+            />
+            <ConfirmDialog
+                open={unlinking !== null}
+                onOpenChange={(next) => !next && setUnlinking(null)}
+                title={t('Unlink repository')}
+                description={t('Unlink this repository from the project?')}
+                confirmLabel={t('Unlink')}
+                variant="destructive"
+                onConfirm={() => {
+                    if (unlinking !== null) router.delete(`/repositories/${unlinking}`, { preserveScroll: true });
+                    setUnlinking(null);
+                }}
+            />
+        </Tile>
+    );
+}
+
+/** "owner/name" of a remote, as the hosts print it. */
+export function remoteName(url: string): string {
+    return url
+        .replace(/^[a-z+]+:\/\/[^/]+\/|^git@[^:]+:/, '')
+        .replace(/\.git$/, '')
+        .replace(/\/$/, '');
 }

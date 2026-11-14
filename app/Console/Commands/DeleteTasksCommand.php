@@ -8,6 +8,7 @@ use App\Console\Attributes\AccountScope;
 use App\Console\Commands\Concerns\AgentConsoleOutput;
 use App\Console\Commands\Concerns\ResolvesProjectAndClient;
 use App\Models\Task;
+use App\Services\Tasks\TaskWriter;
 use App\Services\Time\PeriodSettled;
 use Illuminate\Console\Command;
 use RuntimeException;
@@ -29,7 +30,7 @@ final class DeleteTasksCommand extends Command
 
     protected $description = 'Mass-delete (or archive) tasks on a project. Without filters, targets ALL tasks on the project.';
 
-    public function handle(): int
+    public function handle(TaskWriter $writer): int
     {
         $accountId = $this->actingAccountId();
         if ($accountId === null) {
@@ -79,6 +80,13 @@ final class DeleteTasksCommand extends Command
             return self::SUCCESS;
         }
 
+        $cards = (clone $query)->whereNotNull('trello_card_id')->pluck('id');
+        if ($cards->isNotEmpty()) {
+            $this->error("{$cards->count()} of the {$count} tasks are Trello cards, which change on the board only: #".$cards->implode(', #').'. Nothing was changed.');
+
+            return self::FAILURE;
+        }
+
         $action = $this->option('archive-only') ? 'archive' : 'DELETE';
         $filterDesc = $filters === [] ? 'ALL tasks (no filters)' : implode(', ', $filters);
         $summary = "{$action} {$count} tasks on project #{$project->id} \"{$project->name}\" — filter: {$filterDesc}";
@@ -90,8 +98,9 @@ final class DeleteTasksCommand extends Command
         }
 
         if ($this->option('archive-only')) {
-            $affected = $query->whereNull('archived_at')->update(['archived_at' => now()]);
-            $this->info("Archived {$affected} tasks.");
+            $open = $query->whereNull('archived_at')->get();
+            $open->each(fn (Task $task) => $writer->setArchived($task, true));
+            $this->info("Archived {$open->count()} tasks.");
         } else {
             // One by one so Task::deleting runs: subtasks and time entries are detached, attachment files removed.
             $affected = 0;
@@ -100,7 +109,7 @@ final class DeleteTasksCommand extends Command
                     $task->delete();
                     $affected++;
                 } catch (PeriodSettled $settled) {
-                    $this->warn("#{$task->id} \"{$task->name}\" kept: ".$settled->deleteRefusal());
+                    $this->warn("#{$task->id} kept: ".$settled->deleteRefusal());
                 }
             }
             $this->info("Deleted {$affected} tasks. Their time entries stay, detached from the task.");

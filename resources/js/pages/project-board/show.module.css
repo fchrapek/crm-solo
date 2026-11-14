@@ -1,54 +1,42 @@
+/* Figma: Projekt. The frame, then the tiles; the tiles are parts. */
 .page {
-    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-12);
+    min-width: 0;
 }
 
-.frame {
-    max-width: var(--solo-grid-max);
-    margin: 0 auto;
-    padding-inline: var(--solo-grid-margin);
-    padding-bottom: var(--solo-tab-bar-clearance);
-}
-
-.actions {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--solo-space-5);
-}
-
-.wideOnly {
-    display: none;
-}
-
-.facts {
+.facts,
+.repoFacts {
+    display: flex;
+    flex-direction: column;
     margin: 0;
-    padding: var(--solo-block-pad, 0);
-    border-radius: var(--solo-block-radius, 0);
-    background: var(--solo-block, none);
 }
 
-.description {
-    margin: 0;
-    padding: var(--solo-space-3) var(--solo-head-inset, 0) 0;
-    color: var(--solo-fg-muted);
-    font: 400 var(--solo-text-sub) / 1.45 var(--solo-font-text);
-}
-
-.link {
-    color: var(--solo-fg);
-    text-decoration: none;
-}
-
-.link:hover {
+.facts a,
+.repoFacts a {
+    color: inherit;
     text-decoration: underline;
     text-underline-offset: 3px;
 }
 
-@media (min-width: 768px) {
-    .frame {
-        padding-bottom: var(--solo-space-8);
-    }
+.description {
+    color: var(--role-text-primary);
+    font-size: var(--solo-text-control);
+}
 
-    .wideOnly {
-        display: inline-flex;
+/* a repository's facts line up with its row's text */
+.repoFacts {
+    padding: 0 var(--role-space-12) var(--role-space-8);
+}
+
+.empty {
+    color: var(--role-text-secondary);
+    font-weight: 400;
+}
+
+@media (min-width: 768px) {
+    .page {
+        gap: var(--shell-gap);
     }
 }

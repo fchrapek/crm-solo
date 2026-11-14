@@ -1,87 +1,25 @@
-/* Phone first: Ustawienia list and tab screens (Figma 473:7725 and on); from 768 px the nav column beside the tab. */
-.page {
-    min-height: 100vh;
+/* Figma: Ustawienia. Phone first: /settings is the list of sections; from 768 px it is Konto, and the tabs are the shell's pills. */
+.page,
+.hub {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-12);
 }
 
-.frame {
-    max-width: var(--solo-grid-max);
-    margin: 0 auto;
-    padding-inline: var(--solo-grid-margin);
-    padding-bottom: 72px;
+.hub {
+    padding-top: var(--role-space-8);
 }
 
-.sectionList {
-    margin: 0;
-    padding: var(--solo-block-pad, 0);
-    border-top: 1px solid var(--solo-rule);
-    border-radius: var(--solo-block-radius, 0);
-    background: var(--solo-block, none);
-    list-style: none;
-}
-
-.columns[data-index] {
+.tab[data-index] {
     display: none;
-}
-
-.sectionNav {
-    display: none;
-}
-
-.main {
-    min-width: 0;
 }
 
 @media (min-width: 768px) {
-    .sectionList {
+    .hub {
         display: none;
     }
 
-    .columns,
-    .columns[data-index] {
-        display: grid;
-        grid-template-columns: 180px minmax(0, 1fr);
-        gap: var(--solo-space-6);
-        align-items: start;
-        padding-top: 40px;
-    }
-
-    .sectionNav {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: var(--solo-nav-gap, var(--solo-space-row));
-    }
-
-    .sectionNavItem {
-        padding: var(--solo-nav-pad, 0 0 5px);
-        border-radius: var(--solo-nav-radius, 0);
-        color: var(--solo-fg-muted);
-        font: 500 var(--solo-nav-size, var(--solo-text-nav)) / 1.35 var(--solo-font-text);
-        text-decoration: none;
-    }
-
-    .sectionNavItem:hover,
-    .sectionNavItem[aria-current='page'] {
-        color: var(--solo-fg);
-    }
-
-    .sectionNavItem[aria-current='page'] {
-        font-weight: 600;
-        background: var(--solo-nav-active, none);
-        box-shadow: inset 0 calc(-1 * var(--solo-nav-line, 2px)) 0 currentColor;
-    }
-
-    .sectionNavItem:focus-visible {
-        outline: 2px solid var(--solo-focus, var(--solo-fg));
-        outline-offset: 4px;
-        border-radius: var(--solo-radius-sm);
-    }
-}
-
-@media (min-width: 1100px) {
-    .columns,
-    .columns[data-index] {
-        grid-template-columns: var(--solo-subnav-column, 220px) minmax(0, 1fr);
-        gap: var(--solo-subnav-gap, 64px);
+    .tab[data-index] {
+        display: block;
     }
 }

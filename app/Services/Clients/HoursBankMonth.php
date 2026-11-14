@@ -6,7 +6,10 @@ namespace App\Services\Clients;
 
 use Carbon\CarbonImmutable;
 
-/** Used hours come from the month's closure, else the governing report's actual_hours, else reportable time; logged hours are every entry. */
+/**
+ * Used hours come from the month's closure, else the governing report's actual_hours, else billed time (the sum of the
+ * month's task figures); logged hours are every entry.
+ */
 final readonly class HoursBankMonth
 {
     public const string SOURCE_CLOSURE = 'closure';
@@ -14,6 +17,8 @@ final readonly class HoursBankMonth
     public const string SOURCE_REPORT = 'report';
 
     public const string SOURCE_ENTRIES = 'entries';
+
+    public const string SOURCE_BILLED = 'billed';
 
     public function __construct(
         public string $period,
@@ -28,6 +33,7 @@ final readonly class HoursBankMonth
         public ?int $closureId = null,
         public ?CarbonImmutable $closedAt = null,
         public bool $outsideBank = false,
+        public ?BilledMonth $billed = null,
     ) {}
 
     public function isClosed(): bool
@@ -61,11 +67,11 @@ final readonly class HoursBankMonth
     }
 
     /**
-     * @return array{period: string, has_retainer: bool, contracted: ?float, carried: float, cap: ?float, available: float, used: float, remaining: float, logged: float, report_id: ?int, report_status: ?string}
+     * @return array<string, mixed>
      */
     public function toArray(): array
     {
-        return [
+        $figures = [
             'period' => $this->period,
             'has_retainer' => $this->hasRetainer(),
             'contracted' => $this->contractedHours,
@@ -78,5 +84,7 @@ final readonly class HoursBankMonth
             'report_id' => $this->reportId,
             'report_status' => $this->reportStatus,
         ];
+
+        return $this->billed !== null ? [...$figures, 'billed_time' => $this->billed->toSnapshot()] : $figures;
     }
 }

@@ -67,15 +67,14 @@ final class ProjectsTest extends TestCase
         ]);
 
         $this->actingAs($this->user)
-            ->get("/clients/{$client->id}/edit")
+            ->get("/clients/{$client->id}/zadania")
             ->assertInertia(fn (Assert $assert) => $assert
-                ->component('clients/edit')
-                ->has('projects', 2)
-                ->where('projects.0.name', 'General')
-                ->where('projects.1.name', 'Test Project')
-                ->where('projects.1.tasks_count', 2)
-                ->where('projects.1.completed_tasks_count', 1)
-                ->has('projects.1.tasks', 2)
+                ->component('clients/show')
+                ->has('tasks.projects', 2)
+                ->where('tasks.projects.0.name', 'General')
+                ->where('tasks.projects.1.name', 'Test Project')
+                ->where('tasks.projects.1.open', 1)
+                ->where('tasks.done.count', 1)
             );
     }
 
@@ -87,11 +86,11 @@ final class ProjectsTest extends TestCase
         ]);
 
         $this->actingAs($this->user)
-            ->get("/clients/{$client->id}/edit")
+            ->get("/clients/{$client->id}/zadania")
             ->assertInertia(fn (Assert $assert) => $assert
-                ->has('projects', 1)
-                ->where('projects.0.name', 'General')
-                ->where('projects.0.is_private', true)
+                ->has('tasks.projects', 1)
+                ->where('tasks.projects.0.name', 'General')
+                ->where('tasks.projects.0.is_private', true)
             );
     }
 

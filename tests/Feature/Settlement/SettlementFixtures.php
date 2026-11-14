@@ -56,10 +56,14 @@ trait SettlementFixtures
         ]);
     }
 
-    protected function report(string $month, float $opening, ?float $contracted, float $actual, string $status = ClientReport::STATUS_DRAFT, ?Client $client = null, ?string $start = null, ?string $end = null, ?float $cap = null, string $type = ClientReport::PERIOD_MONTH): ClientReport
+    /** $backed states the fixture task's figure at $actual, so the month's task sum is the report's hours, as a real finalize or close needs. */
+    protected function report(string $month, float $opening, ?float $contracted, float $actual, string $status = ClientReport::STATUS_DRAFT, ?Client $client = null, ?string $start = null, ?string $end = null, ?float $cap = null, string $type = ClientReport::PERIOD_MONTH, bool $backed = false): ClientReport
     {
         $first = Carbon::parse($month.'-01');
         $client ??= $this->client;
+        if ($backed) {
+            \App\Models\TaskBilledMonth::query()->updateOrCreate(['task_id' => $this->task->id, 'client_id' => $client->id, 'period' => $month], ['billed_minutes' => (int) round($actual * 60)]);
+        }
 
         return ClientReport::create([
             'account_id' => $client->account_id,
