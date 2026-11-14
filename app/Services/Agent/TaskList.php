@@ -51,7 +51,7 @@ final class TaskList
             ->when($project !== null, fn (Builder $q) => $q->where('tasks.project_id', $project->id))
             ->when($search !== '', fn (Builder $q) => $q->where('tasks.name', 'like', '%'.addcslashes($search, '\\%_').'%'))
             ->when($status === 'open', fn (Builder $q) => $q->open())
-            ->when($status === 'done', fn (Builder $q) => $q->where(fn (Builder $done) => $done->whereNotNull('tasks.finished_at')->orWhere('tasks.is_completed', true)));
+            ->when($status === 'done', fn (Builder $q) => $q->work()->where(fn (Builder $done) => $done->whereNotNull('tasks.finished_at')->orWhere('tasks.is_completed', true)));
 
         $status === 'done'
             ? $query->orderByRaw('COALESCE(tasks.finished_at, tasks.updated_at) DESC')

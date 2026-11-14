@@ -11,11 +11,14 @@ use App\Models\Integration;
 use App\Models\MessageRule;
 use App\Models\MessageTemplate;
 use App\Models\OutboundMessage;
+use App\Models\Project;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\Agent\AgentAbilities;
 use App\Services\Clients\Fields\ClientFieldDefinitions;
+use App\Services\Integrations\Trello\TrelloListMapper;
 use App\Services\Leads\LeadVocabulary;
+use App\Services\Messaging\MailDelivery;
 use App\Services\Messaging\MessageSettings;
 use App\Services\Messaging\SmsapiProvider;
 use App\Support\LocalCalendar;
@@ -36,7 +39,10 @@ use Inertia\Response;
  */
 final class SettingsController extends Controller
 {
-    public const array TABS = ['konto', 'wyglad', 'leady', 'pola-klienta', 'sms', 'integracje', 'agenci'];
+    public const array TABS = ['konto', 'wyglad', 'leady', 'pola-klienta', 'sms', 'email', 'integracje', 'agenci'];
+
+    /** A member's own settings; every other tab configures the account. */
+    public const array MEMBER_TABS = ['konto', 'wyglad'];
 
     public function index(): Response
     {
@@ -53,6 +59,8 @@ final class SettingsController extends Controller
         if ($tab === 'agenci') {
             Gate::authorize('manage-agent-tokens');
         }
+        abort_unless(in_array($tab, self::MEMBER_TABS, true) || Gate::allows('manage-account'), 404);
+        abort_if($tab === 'email' && ! Auth::user()->account->hasFeature('billing'), 404);
 
         return Inertia::render('settings/index', [
             'tab' => $tab,
@@ -62,6 +70,7 @@ final class SettingsController extends Controller
                 'leady' => ['leadgen' => $this->leadgen()],
                 'pola-klienta' => ['client_fields' => $this->clientFields(), 'reserved_field_keys' => ClientFieldDefinition::RESERVED_KEYS],
                 'sms' => $this->messages(),
+                'email' => $this->emails(),
                 'integracje' => $this->integrations(),
                 'agenci' => $this->agents(),
                 default => [],
@@ -170,7 +179,7 @@ final class SettingsController extends Controller
 
         return [
             'sending' => [...app(MessageSettings::class)->sendingOf($account), 'smsapi_connected' => SmsapiProvider::connected($account) !== null],
-            'templates' => MessageTemplate::query()->where('account_id', $account->id)->orderBy('id')->get()
+            'templates' => MessageTemplate::query()->where('account_id', $account->id)->where('channel', MessageTemplate::SMS)->orderBy('id')->get()
                 ->map(fn (MessageTemplate $template): array => [
                     'key' => $template->key,
                     'name' => $template->name,
@@ -195,6 +204,21 @@ final class SettingsController extends Controller
     }
 
     /** @return array<string, mixed> */
+    private function emails(): array
+    {
+        $live = app(MailDelivery::class)->mode() === MailDelivery::LIVE;
+
+        return [
+            'email_templates' => app(MessageSettings::class)->emailTemplates(Auth::user()->account_id),
+            'email_sending' => [
+                'live' => $live,
+                'from' => $live ? (string) config('mail.from.address') : null,
+                'bcc' => Auth::user()->email,
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
     private function integrations(): array
     {
         if (config('app.demo')) {
@@ -203,9 +227,14 @@ final class SettingsController extends Controller
 
         $account = Auth::user()->account;
         $stored = $account->integrations()->get()->keyBy('provider');
-        $boards = $account->projects()->whereNotNull('trello_board_id')->whereNull('archived_at')->count();
+        $boardProjects = $account->projects()->whereNotNull('trello_board_id')->whereNull('archived_at')->get(['id', 'settings']);
+        $boards = $boardProjects->count();
+        $seenLists = collect(TrelloListMapper::uniqueNames($boardProjects->flatMap(fn (Project $project): array => array_column($project->settings['trello_lists'] ?? [], 'name'))))
+            ->sort(fn (string $a, string $b): int => strcasecmp($a, $b))
+            ->values()
+            ->all();
 
-        $integrations = collect(Integration::PROVIDERS)->map(function (array $config, string $provider) use ($stored, $boards): array {
+        $integrations = collect(Integration::PROVIDERS)->map(function (array $config, string $provider) use ($stored, $boards, $seenLists): array {
             /** @var Integration|null $integration */
             $integration = $stored->get($provider);
             $settings = $integration?->settings ?? [];
@@ -222,6 +251,8 @@ final class SettingsController extends Controller
                 'last_sync_error' => $integration?->last_sync_error,
                 'client_conflicts' => array_values($settings['client_conflicts'] ?? []),
                 'boards' => $provider === 'trello' ? $boards : null,
+                'skipped_lists' => $provider === 'trello' ? TrelloListMapper::uniqueNames($settings['skipped_lists'] ?? []) : null,
+                'seen_lists' => $provider === 'trello' ? $seenLists : null,
                 'syncs' => $config['syncs'] ?? true,
             ];
         })->values();
@@ -307,6 +338,7 @@ final class SettingsController extends Controller
             'users' => $account->users()->count(),
             'client_fields' => ClientFieldDefinition::query()->where('account_id', $account->id)->whereNull('archived_at')->count(),
             'message_rules' => MessageRule::query()->where('account_id', $account->id)->where('enabled', true)->count(),
+            'email_templates' => MessageTemplate::query()->where('account_id', $account->id)->where('channel', MessageTemplate::EMAIL)->count(),
             'default_sources' => count($leadgen['default_sources']),
             'custom_sources' => count($leadgen['custom_sources']),
             'connected' => config('app.demo') ? [] : $account->integrations()->get()

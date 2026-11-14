@@ -1,8 +1,7 @@
-import { router } from '@inertiajs/react';
-import { Building2 } from 'lucide-react';
+import { Link, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 
-import { KanbanBoard, KanbanCard, type KanbanLane } from '@/components/ui/kanban-board';
+import { KanbanBoard, type KanbanLane } from '@/components/ui/kanban-board';
 import leads from '@/routes/leads';
 import { useLeadLabel, type LabelMap } from '../../lib/labels';
 import { TierBadge } from '../tier-badge';
@@ -99,34 +98,22 @@ export function LeadKanban({ leads: initialLeads, stages, stageLabels, sourceLab
                 getCardId={(lead) => lead.id}
                 onMove={handleMove}
                 laneMinHeight={300}
-                renderCard={(lead) => {
-                    const chips = [];
-                    if (lead.company) {
-                        chips.push({ label: lead.company, tone: 'project' as const, icon: <Building2 size={12} /> });
-                    }
-                    if (brandLabels) {
-                        chips.push({ label: brandLabels[lead.pipeline] ?? lead.pipeline, tone: 'repository' as const });
-                    }
-                    chips.push({ label: label('source', lead.source, sourceLabels?.[lead.source]), tone: 'label' as const });
-                    if (lead.client_name) {
-                        chips.push({ label: lead.client_name, tone: 'trello' as const });
-                    }
-
-                    return (
-                        <KanbanCard
-                            title={lead.name}
-                            // The whole card is the click target (KanbanCard
-                            // href) - no ⋮ menu: its only action would repeat
-                            // the click the card already owns.
-                            href={leads.edit(lead.id).url}
-                            chips={chips}
-                            // Tier reads before anything else on a card: it is
-                            // the answer to "who gets my minutes today".
-                            badge={<TierBadge tier={lead.tier} total={lead.score_total} />}
-                            subtitle={lead.email ?? lead.phone ?? null}
-                        />
-                    );
-                }}
+                renderCard={(lead) => (
+                    // The whole card is the click target: a "more" menu would only repeat the click the card already owns.
+                    <Link href={leads.edit(lead.id).url} className={styles.card} draggable={false}>
+                        <span className={styles.name}>{lead.name}</span>
+                        {lead.company && <span className={styles.company}>{lead.company}</span>}
+                        <span className={styles.foot}>
+                            {/* Tier reads before anything else: it is the answer to "who gets my minutes today". */}
+                            <TierBadge tier={lead.tier} total={lead.score_total} />
+                            <span className={styles.meta}>
+                                {[brandLabels ? (brandLabels[lead.pipeline] ?? lead.pipeline) : null, label('source', lead.source, sourceLabels?.[lead.source]), lead.client_name]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                            </span>
+                        </span>
+                    </Link>
+                )}
             />
         </div>
     );

@@ -1,23 +1,24 @@
-import { Head, router, usePage } from '@inertiajs/react';
-import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
-import React, { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-
-import { TableContainer } from '@/components/table-container';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { usePageActions } from '@/contexts/page-context';
-import { type Currency, useFormatters } from '@/lib/format';
+import { KvRow } from '@/components/solo/kv-row';
+import { ListTable, ListTableCell, ListTableHead, ListTableRow } from '@/components/solo/list-table';
+import { Stat } from '@/components/solo/primitives';
+import { RecordFrame } from '@/components/solo/record-frame';
+import { Pills } from '@/components/solo/shell/pills';
+import { type PlaceLinkPill, type PlaceResolver } from '@/components/solo/shell/place';
+import { SoloSurface } from '@/components/solo/surface';
+import { Tile, TileGrid, TileHeader, TileInset, TileNote } from '@/components/solo/tile';
+import { capitalize, monthGenitive, monthMark, monthName } from '@/lib/dates';
+import { localeOf } from '@/lib/hours-text';
 import clients from '@/routes/clients';
 import revenue from '@/routes/revenue';
-import { BreadcrumbItem, SharedData } from '@/types';
-
+import { type SharedData } from '@/types';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { useTranslation } from 'react-i18next';
+import { moneyOf } from '../clients/components/client-billing/format';
 import styles from './index.module.css';
 
-type Metric = 'net' | 'gross';
+export type Metric = 'net' | 'gross';
 
-interface RevenueClientRow {
+export interface RevenueClientRow {
     client_key: string | number;
     client_id: number | null;
     name: string;
@@ -46,7 +47,7 @@ interface Summary {
     basis: string;
 }
 
-interface TrendPoint {
+export interface TrendPoint {
     month: string;
     net: number;
     gross: number;
@@ -59,213 +60,280 @@ interface Filters {
     to: string;
 }
 
-interface FxInfo {
-    base: string;
-    rates: Record<string, number>;
-}
-
 interface RevenuePageProps extends SharedData {
     filters: Filters;
     summary: Summary;
     clients: RevenueClientRow[];
     trend: TrendPoint[];
-    fx: FxInfo;
+    fx: { base: string; rates: Record<string, number> };
 }
 
-const PERIOD_KEYS: Record<string, string> = {
+export const PERIODS = ['this_month', 'this_quarter', 'ytd', 'last_12_months'] as const;
+
+const PERIOD_LABEL: Record<string, string> = {
     this_month: 'This month',
     this_quarter: 'This quarter',
     ytd: 'Year to date',
     last_12_months: 'Last 12 months',
+    custom: 'Custom period',
 };
 
-// Monochrome ramp (dark → light slate) so bars stay distinguishable without colour.
-const CHART_COLORS = ['#1f2937', '#374151', '#4b5563', '#6b7280', '#8b919b', '#a1a7b0', '#c2c7ce', '#d8dce1'];
+const KEEP = { preserveState: true, preserveScroll: true, replace: true };
 
+/** Net unless the URL asks for gross (`?kwoty=brutto`): the server sends both, so the choice is the page's own. */
+export function metricOf(url: string): Metric {
+    return new URLSearchParams(url.split('?')[1] ?? '').get('kwoty') === 'brutto' ? 'gross' : 'net';
+}
+
+export function revenueUrl(filters: Pick<Filters, 'period' | 'basis'>, metric: Metric): string {
+    return revenue.index({
+        query: { period: filters.period, ...(filters.basis === 'cash' ? { basis: 'cash' } : {}), ...(metric === 'gross' ? { kwoty: 'brutto' } : {}) },
+    }).url;
+}
+
+/** "+12 %", "−10 %", or null when there is no earlier period to compare with. */
+export function trendText(value: number | null, locale: string): string | null {
+    if (value === null) {
+        return null;
+    }
+    const rounded = Math.round(value);
+
+    return `${rounded > 0 ? '+' : rounded < 0 ? '−' : ''}${Math.abs(rounded).toLocaleString(locale)}\u00a0%`;
+}
+
+/** Each bar's height as a share of the tallest month. */
+export function trendBars(trend: TrendPoint[], metric: Metric): { month: string; value: number; share: number }[] {
+    const top = Math.max(0, ...trend.map((point) => point[metric]));
+
+    return trend.map((point) => ({ month: point.month, value: point[metric], share: top > 0 ? point[metric] / top : 0 }));
+}
+
+/** Figma: Przychody (1095:48739, phone 1095:49147). Invoiced or paid revenue of a period from the Infakt mirror: the total, its concentration, the months and the clients. */
 export default function Index() {
-    const { t } = useTranslation();
-    const { setBreadcrumbs } = usePageActions();
-    const { money } = useFormatters();
-    const { filters, summary, clients: clientRows, trend, fx } = usePage<RevenuePageProps>().props;
+    const { t, i18n } = useTranslation();
+    const locale = localeOf(i18n.language);
+    const page = usePage<RevenuePageProps>();
+    const { filters, summary, clients: rows, trend, fx } = page.props;
+    const metric = metricOf(page.url);
+    const currency = summary.currency;
+    const money = (value: number, cents = true) => moneyOf(value, currency, locale, cents);
+    const percent = (value: number) => `${value.toLocaleString(locale)}\u00a0%`;
 
-    const [metric, setMetric] = React.useState<Metric>('net');
-
-    const breadcrumbs: BreadcrumbItem[] = React.useMemo(() => [{ title: 'Finances', href: revenue.index().url }], []);
-    useEffect(() => {
-        setBreadcrumbs(breadcrumbs);
-    }, [breadcrumbs, setBreadcrumbs]);
-
-    const currency = summary.currency as Currency;
-
-    function applyFilter(patch: Partial<Filters>) {
-        router.get(
-            window.location.pathname,
-            { period: filters.period, basis: filters.basis, ...patch },
-            { replace: true, preserveState: true, preserveScroll: true },
-        );
-    }
-
-    const fxNote = Object.entries(fx.rates)
-        .map(([cur, rate]) => t('{{cur}} converted at {{rate}}', { cur, rate }))
-        .join(' · ');
-
-    const total = metric === 'net' ? summary.total_net : summary.total_gross;
-    const avg = metric === 'net' ? summary.avg_per_client_net : summary.avg_per_client_gross;
-    const top3 = metric === 'net' ? summary.top3_share_net : summary.top3_share_gross;
-    const totalTrend = metric === 'net' ? summary.trend_net : summary.trend_gross;
-
-    const chartData = clientRows.slice(0, 8).map((c, i) => ({
-        name: c.name.length > 22 ? `${c.name.slice(0, 21)}…` : c.name,
-        value: metric === 'net' ? c.net : c.gross,
-        fill: CHART_COLORS[i % CHART_COLORS.length],
-    }));
+    const total = summary[`total_${metric}`];
+    const other = metric === 'net' ? summary.total_gross : summary.total_net;
+    const top3 = summary[`top3_share_${metric}`];
+    const top = rows.slice(0, 3);
+    const trendLine = trendText(summary[`trend_${metric}`], locale);
+    const bars = trendBars(trend, metric);
+    const peak = bars.reduce<(typeof bars)[number] | null>((best, bar) => (best === null || bar.value > best.value ? bar : best), null);
+    const running = new Date().toISOString().slice(0, 7);
+    const fxNote = Object.entries(fx.rates).map(([cur, rate]) => t('{{cur}} converted at {{rate}}', { cur, rate: rate.toLocaleString(locale) }));
+    const range = `${capitalize(monthName(filters.from.slice(0, 7), locale))} ${filters.from.slice(0, 4)} ${t('to')} ${monthGenitive(filters.to.slice(0, 7), locale)} ${filters.to.slice(0, 4)}`;
+    const basisPill = (basis: string, label: string): PlaceLinkPill => ({
+        label,
+        href: revenueUrl({ ...filters, basis }, metric),
+        active: filters.basis === basis,
+        visit: KEEP,
+    });
+    const metricPill = (value: Metric, label: string): PlaceLinkPill => ({
+        label,
+        href: revenueUrl(filters, value),
+        active: metric === value,
+        visit: KEEP,
+    });
 
     return (
-        <>
-            <Head title={t('Finances')} />
-
-            <div className="pageContainer">
-                <div className={styles.controls}>
-                    <Select value={filters.period} onValueChange={(v) => applyFilter({ period: v })}>
-                        <SelectTrigger className={styles.control}>
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {Object.entries(PERIOD_KEYS).map(([value, label]) => (
-                                <SelectItem key={value} value={value}>
-                                    {t(label)}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-
-                    <div className={styles.toggleGroup} role="group">
-                        <button type="button" data-active={filters.basis === 'accrual'} onClick={() => applyFilter({ basis: 'accrual' })}>
-                            {t('Invoiced')}
-                        </button>
-                        <button type="button" data-active={filters.basis === 'cash'} onClick={() => applyFilter({ basis: 'cash' })}>
-                            {t('Paid')}
-                        </button>
+        <SoloSurface day="paper">
+            <Head title={t('Revenue')} />
+            <main className={styles.page}>
+                <RecordFrame
+                    title={t('Revenue')}
+                    noteKind="line"
+                    note={[
+                        range,
+                        t(filters.basis === 'cash' ? 'revenue_note_paid' : 'revenue_note_invoiced'),
+                        t(metric).toLocaleLowerCase(locale),
+                        ...fxNote,
+                    ].join(' · ')}
+                />
+                <div className={styles.filters}>
+                    <div className={styles.filter}>
+                        <span className={styles.caption}>{t('revenue_basis')}</span>
+                        <Pills label={t('revenue_basis')} items={[basisPill('accrual', t('Invoiced')), basisPill('cash', t('Paid'))]} />
                     </div>
-
-                    <div className={styles.toggleGroup} role="group">
-                        <button type="button" data-active={metric === 'net'} onClick={() => setMetric('net')}>
-                            {t('Net')}
-                        </button>
-                        <button type="button" data-active={metric === 'gross'} onClick={() => setMetric('gross')}>
-                            {t('Gross')}
-                        </button>
-                    </div>
-
-                    {fxNote && <span className={styles.fxNote}>{fxNote}</span>}
-                </div>
-
-                <div className={styles.kpiGrid}>
-                    <KpiCard label={t('Total revenue')} value={money(total, currency)} trend={totalTrend} />
-                    <KpiCard label={t('Invoices')} value={String(summary.invoice_count)} />
-                    <KpiCard label={t('Clients')} value={String(summary.client_count)} />
-                    <KpiCard label={t('Avg per client')} value={money(avg, currency)} />
-                    <KpiCard label={t('Top 3 concentration')} value={`${top3}%`} />
-                </div>
-
-                <div className={styles.chartGrid}>
-                    <div className={styles.chartCard}>
-                        <p className={styles.chartTitle}>{t('Revenue by client')}</p>
-                        <ResponsiveContainer width="100%" height={260}>
-                            <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 16 }}>
-                                <CartesianGrid horizontal={false} stroke="var(--color-border)" />
-                                <XAxis type="number" tickFormatter={(v) => money(v, currency)} fontSize={11} stroke="var(--color-muted-foreground)" />
-                                <YAxis type="category" dataKey="name" width={140} fontSize={11} stroke="var(--color-muted-foreground)" />
-                                <Tooltip formatter={(v: number) => money(v, currency)} />
-                                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                                    {chartData.map((entry, i) => (
-                                        <Cell key={i} fill={entry.fill} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-
-                    <div className={styles.chartCard}>
-                        <p className={styles.chartTitle}>{t('Monthly trend')}</p>
-                        <ResponsiveContainer width="100%" height={260}>
-                            <LineChart data={trend} margin={{ left: 8, right: 16 }}>
-                                <CartesianGrid stroke="var(--color-border)" />
-                                <XAxis dataKey="month" fontSize={11} stroke="var(--color-muted-foreground)" />
-                                <YAxis tickFormatter={(v) => money(v, currency)} fontSize={11} width={80} stroke="var(--color-muted-foreground)" />
-                                <Tooltip formatter={(v: number) => money(v, currency)} />
-                                <Line type="monotone" dataKey={metric} stroke="var(--color-foreground)" strokeWidth={2} dot={false} />
-                            </LineChart>
-                        </ResponsiveContainer>
+                    <div className={styles.filter}>
+                        <span className={styles.caption}>{t('revenue_amounts')}</span>
+                        <Pills label={t('revenue_amounts')} items={[metricPill('net', t('Net')), metricPill('gross', t('Gross'))]} />
                     </div>
                 </div>
-
-                <TableContainer>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>{t('Client')}</TableHead>
-                            <TableHead className={styles.numCol}>{t('Revenue')}</TableHead>
-                            <TableHead className={styles.numCol}>{t('Share')}</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {clientRows.map((c) => {
-                            const value = metric === 'net' ? c.net : c.gross;
-                            const share = metric === 'net' ? c.share_net : c.share_gross;
-                            return (
-                                <TableRow
-                                    key={c.client_key}
-                                    className={c.client_id ? styles.clickableRow : undefined}
-                                    onClick={() => c.client_id && router.visit(clients.show({ client: c.client_id, tab: 'przeglad' }).url)}
-                                >
-                                    <TableCell>{c.name}</TableCell>
-                                    <TableCell className={styles.numCol}>{money(value, currency)}</TableCell>
-                                    <TableCell className={styles.numCol}>{share}%</TableCell>
-                                </TableRow>
-                            );
-                        })}
-                        {clientRows.length === 0 && (
-                            <TableRow>
-                                <TableCell colSpan={3} className="emptyCell">
-                                    {t('No revenue in this period.')}
-                                </TableCell>
-                            </TableRow>
+                <TileGrid>
+                    <Tile kind="plain">
+                        <Stat
+                            kind="tile"
+                            label={t('Total revenue')}
+                            value={money(Math.round(total), false)}
+                            sub={[
+                                t(metric).toLocaleLowerCase(locale),
+                                trendLine !== null ? t('revenue_trend_prior', { change: trendLine }) : t('No comparable prior period'),
+                            ].join(' · ')}
+                        />
+                    </Tile>
+                    <Tile kind="plain">
+                        <Stat
+                            kind="tile"
+                            label={t('Top 3 concentration')}
+                            value={percent(top3)}
+                            sub={top.length > 0 ? top.map((row) => row.name).join(', ') : undefined}
+                        />
+                        {top.length > 0 && (
+                            <div className={styles.split} data-fill="" aria-hidden="true">
+                                {top.map((row) => (
+                                    <span key={row.client_key} className={styles.splitPart} style={{ flexGrow: row[`share_${metric}`] }} />
+                                ))}
+                                <span style={{ flexGrow: Math.max(0, 100 - top3) }} />
+                            </div>
                         )}
-                    </TableBody>
-                </TableContainer>
-            </div>
-        </>
+                    </Tile>
+                </TileGrid>
+                <TileGrid>
+                    <Tile kind="plain">
+                        <TileHeader
+                            label={t('Monthly trend')}
+                            end={
+                                peak !== null && peak.value > 0 ? (
+                                    <span className={styles.caption}>
+                                        {t('revenue_trend_peak', {
+                                            month: monthName(peak.month, locale),
+                                            value: money(Math.round(peak.value), false),
+                                        })}
+                                    </span>
+                                ) : undefined
+                            }
+                        />
+                        {bars.length === 0 ? (
+                            <TileNote>{t('No revenue in this period.')}</TileNote>
+                        ) : (
+                            <ol className={styles.chart} data-fill="" aria-label={t('Monthly trend')}>
+                                {bars.map((bar) => (
+                                    <li key={bar.month} className={styles.bar} data-running={bar.month === running ? '' : undefined}>
+                                        <span className={styles.barTrack}>
+                                            <span className={styles.barFill} style={{ height: `${Math.max(bar.share * 100, 1)}%` }} title={money(bar.value)}>
+                                                <span className={styles.barValue}>{(bar.value / 1000).toLocaleString(locale, { maximumFractionDigits: 1 })}</span>
+                                            </span>
+                                        </span>
+                                        <span className={styles.barLabel}>{monthMark(bar.month, locale).toLocaleLowerCase(locale)}</span>
+                                    </li>
+                                ))}
+                            </ol>
+                        )}
+                        {bars.length > 0 && (
+                            <TileNote>
+                                {t('revenue_chart_note', { currency })}
+                                {bars.some((bar) => bar.month === running) &&
+                                    ` ${t('revenue_chart_running', { month: capitalize(monthName(running, locale)) })}`}
+                            </TileNote>
+                        )}
+                    </Tile>
+                    <Tile kind="plain">
+                        <TileHeader label={t('revenue_period_figures')} />
+                        <dl className={styles.facts}>
+                            <KvRow layout="tile" label={t('Invoices')}>
+                                {summary.invoice_count}
+                            </KvRow>
+                            <KvRow layout="tile" label={t('Clients')}>
+                                {summary.client_count}
+                            </KvRow>
+                            <KvRow layout="tile" label={t('Avg per client')}>
+                                {money(summary[`avg_per_client_${metric}`])}
+                            </KvRow>
+                            <KvRow layout="tile" label={metric === 'net' ? t('Gross') : t('Net')}>
+                                {money(other)}
+                            </KvRow>
+                        </dl>
+                        <TileNote>{t('revenue_source_note')}</TileNote>
+                    </Tile>
+                </TileGrid>
+                <Tile kind="list">
+                    <TileHeader label={t('Revenue by client')} count={rows.length > 0 ? rows.length : undefined} />
+                    {rows.length === 0 ? (
+                        <TileInset>
+                            <TileNote>{t('No revenue in this period.')}</TileNote>
+                        </TileInset>
+                    ) : (
+                        <TileInset className={styles.tableInset}>
+                            <ListTable label={t('Revenue by client')}>
+                                <thead>
+                                    <tr>
+                                        <ListTableHead>{t('The client')}</ListTableHead>
+                                        <ListTableHead align="end" wide>
+                                            {t('Share')}
+                                        </ListTableHead>
+                                        <ListTableHead align="end" wide>
+                                            {t('Invoices')}
+                                        </ListTableHead>
+                                        <ListTableHead align="end">{t('Revenue')}</ListTableHead>
+                                        <ListTableHead align="end" narrow>
+                                            {t('Share')}
+                                        </ListTableHead>
+                                        <ListTableHead wide>{t('revenue_change')}</ListTableHead>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rows.map((row) => {
+                                        const change = trendText(row[`trend_${metric}`], locale);
+
+                                        return (
+                                            <ListTableRow key={row.client_key}>
+                                                <ListTableCell kind="title">
+                                                    {row.client_id !== null ? (
+                                                        <Link
+                                                            href={clients.show({ client: row.client_id, tab: 'rozliczenia' }).url}
+                                                            className={styles.plainLink}
+                                                        >
+                                                            {row.name}
+                                                        </Link>
+                                                    ) : (
+                                                        row.name
+                                                    )}
+                                                </ListTableCell>
+                                                <ListTableCell kind="number" align="end" wide>
+                                                    {percent(row[`share_${metric}`])}
+                                                </ListTableCell>
+                                                <ListTableCell kind="number" align="end" wide>
+                                                    {row.invoice_count}
+                                                </ListTableCell>
+                                                <ListTableCell kind="number" align="end">
+                                                    {money(row[metric])}
+                                                </ListTableCell>
+                                                <ListTableCell kind="number" align="end" narrow tone="muted">
+                                                    {percent(row[`share_${metric}`])}
+                                                </ListTableCell>
+                                                <ListTableCell kind="meta" wide>
+                                                    {change ?? t('revenue_trend_new')}
+                                                </ListTableCell>
+                                            </ListTableRow>
+                                        );
+                                    })}
+                                </tbody>
+                            </ListTable>
+                        </TileInset>
+                    )}
+                </Tile>
+            </main>
+        </SoloSurface>
     );
 }
 
-function KpiCard({ label, value, trend }: { label: string; value: string; trend?: number | null }) {
-    return (
-        <div className={styles.kpiCard}>
-            <p className={styles.kpiLabel}>{label}</p>
-            <p className={styles.kpiValue}>{value}</p>
-            {trend !== undefined && (
-                <div className={styles.kpiTrend}>
-                    <TrendBadge value={trend} />
-                </div>
-            )}
-        </div>
-    );
+/** The periods as pills; each keeps the basis and the amounts the page is on. */
+export function periodPills(filters: Pick<Filters, 'period' | 'basis'>, metric: Metric, t: (key: string) => string): PlaceLinkPill[] {
+    return PERIODS.map((period) => ({
+        label: t(PERIOD_LABEL[period]),
+        href: revenueUrl({ ...filters, period }, metric),
+        active: filters.period === period,
+    }));
 }
 
-function TrendBadge({ value }: { value: number | null | undefined }) {
-    const { t } = useTranslation();
-    if (value === null || value === undefined) {
-        return (
-            <span className={styles.trendNeutral} title={t('No comparable prior period')}>
-                <Minus size={13} />
-            </span>
-        );
-    }
-    const up = value >= 0;
-    return (
-        <span className={up ? styles.trendUp : styles.trendDown}>
-            {up ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
-            {Math.abs(value)}%
-        </span>
-    );
-}
+Index.place = (({ filters }, { t, url }) => ({
+    tokens: [{ label: t('Revenue'), href: revenue.index().url }, { label: t(PERIOD_LABEL[filters.period] ?? 'Custom period') }],
+    pills: periodPills(filters, metricOf(url), t),
+})) satisfies PlaceResolver<RevenuePageProps>;

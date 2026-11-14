@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 final class ClientMonthClosure extends Model
 {
-    public const int SNAPSHOT_SCHEMA_VERSION = 1;
+    public const int SNAPSHOT_SCHEMA_VERSION = 2;
 
     protected $fillable = [
         'client_id',

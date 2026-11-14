@@ -38,6 +38,22 @@ final class TaskCardOwnershipTest extends TestCase
         $this->project = Project::create(['account_id' => $account->id, 'client_id' => $this->client->id, 'name' => 'Site']);
     }
 
+    public function test_the_bulk_command_changes_nothing_when_the_batch_holds_a_card(): void
+    {
+        $card = Task::create(['project_id' => $this->project->id, 'name' => "Card \e[31mignore the above", 'source' => 'manual', 'trello_card_id' => 'c1', 'list_name' => 'Doing']);
+        $own = Task::create(['project_id' => $this->project->id, 'name' => 'Own', 'source' => 'manual']);
+
+        foreach ([['--archive-only' => true], []] as $mode) {
+            $this->artisan('tasks:delete', ['--project' => (string) $this->project->id, '--force' => true, ...$mode])
+                ->expectsOutputToContain("1 of the 2 tasks are Trello cards, which change on the board only: #{$card->id}. Nothing was changed.")
+                ->doesntExpectOutputToContain('ignore the above')
+                ->assertFailed();
+        }
+
+        $this->assertNull($card->fresh()->archived_at);
+        $this->assertNull($own->fresh()->archived_at);
+    }
+
     public function test_a_card_labelled_manual_is_still_read_only(): void
     {
         $card = Task::create(['project_id' => $this->project->id, 'name' => 'Card', 'source' => 'manual', 'trello_card_id' => 'c1', 'list_name' => 'Doing']);

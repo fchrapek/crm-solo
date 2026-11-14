@@ -1,30 +1,38 @@
-import { Head, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { MarkdownDiff } from '@/components/markdown-diff';
+import { MarkdownView } from '@/components/markdown-view';
+import { ActionMenu, ActionMenuItem } from '@/components/solo/action-menu';
+import { Chip } from '@/components/solo/chip';
+import { useInHeaderMenu } from '@/components/solo/client-header';
+import { SoloField, SoloInput } from '@/components/solo/field';
+import { IconButton } from '@/components/solo/icon-button';
+import { KvRow } from '@/components/solo/kv-row';
+import { Notice } from '@/components/solo/notice';
+import { SoloButton, SoloButtonLink } from '@/components/solo/primitives';
+import { RecordFrame } from '@/components/solo/record-frame';
+import { Row } from '@/components/solo/row';
+import { type PlaceResolver } from '@/components/solo/shell/place';
+import { SoloSurface } from '@/components/solo/surface';
+import { Tile, TileActions, TileGrid, TileHeader, TileInset, TileNote, TileRows, TileStack } from '@/components/solo/tile';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Icon } from '@/components/ui/icon';
+import { InfoHint } from '@/components/ui/info-hint';
+import { MarkdownTextarea } from '@/components/ui/markdown-textarea';
+import { capitalize, monthLocative, monthName, shortDate } from '@/lib/dates';
+import { hoursText, localeOf } from '@/lib/hours-text';
+import clientReports from '@/routes/client-reports';
+import clients from '@/routes/clients';
+import { Head, router, usePage } from '@inertiajs/react';
+import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import FlashMessages from '@/components/flash-messages';
-import { MarkdownDiff } from '@/components/markdown-diff';
-import { MarkdownView } from '@/components/markdown-view';
-import { ActionMenuItem } from '@/components/solo/action-menu';
-import { RecordHeader, useInHeaderMenu } from '@/components/solo/client-header';
-import { IconButton } from '@/components/solo/icon-button';
-import { KvRow } from '@/components/solo/kv-row';
-import { Masthead } from '@/components/solo/masthead';
-import { BodyLink, SectionAction, SectionHead } from '@/components/solo/primitives';
-import { splitClass, splitMainClass, splitSideClass } from '@/components/solo/split';
-import { SoloSurface } from '@/components/solo/surface';
-import { SoloToaster } from '@/components/solo/toaster';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Icon } from '@/components/ui/icon';
-import { MarkdownTextarea } from '@/components/ui/markdown-textarea';
-import { monthLocative, monthName, shortDate } from '@/lib/dates';
-import { hoursText, localeOf } from '@/lib/hours-text';
-import clients from '@/routes/clients';
-
+import { billedTip } from '../components/client-billing/billed-format';
+import { BilledTimeDialog } from '../components/client-billing/billed-time-dialog';
+import { monthUrl } from '../components/client-billing/format';
+import type { BilledFigures } from '../components/client-billing/types';
+import { afterBilledSave } from './billed-save';
 import styles from './edit.module.css';
-import { StatusAction, statusLabelKey, statusLine, type Confirm, type ReportStatus } from './status-actions';
+import { isEditing, modeUrl, StatusAction, statusChip, statusLabelKey, statusLine, type Confirm, type ReportStatus } from './status-actions';
 
 interface ReportData {
     id: number;
@@ -35,6 +43,10 @@ interface ReportData {
     actual_hours: number;
     opening_balance_hours: number | null;
     rollover_cap_hours: number | null;
+    /** Both values of the month while the client has billed time on. */
+    billed: BilledFigures | null;
+    /** An earlier month's figures changed under this draft: it regenerates before it can be finalized or its month closed. */
+    needs_recalculation: boolean;
     currency: string | null;
     composer_key: string;
     body_markdown: string;
@@ -55,7 +67,7 @@ interface Composer {
 
 interface Revision {
     id: number;
-    reason: 'update' | 'regenerate' | 'finalize' | 'sent' | 'reopen' | 'opening_balance';
+    reason: 'update' | 'regenerate' | 'finalize' | 'sent' | 'reopen' | 'opening_balance' | 'billed_hours';
     status_before: ReportStatus;
     finalized_at_before: string | null;
     sent_at_before: string | null;
@@ -77,17 +89,20 @@ interface Props {
 
 const RECENT_REVISIONS = 3;
 
+/** The mode pills change the place, not the page: the text in the editor stays as it is. */
+const KEEP = { preserveState: true, preserveScroll: true, replace: true };
+
 /**
- * Figma: Raport klienta / Dokument (558:9974), option A: the text for the client first, Wysyłka, Godziny and Aktywność
- * beside it; phones 584:12911 with the ••• menu (585:13030). Every write keeps the version guard of the text it was based on.
+ * Figma: Raport (1092:25793, phone 1092:25989). The text for the client first, with Wysyłka, Godziny and Aktywność
+ * beside it; Podgląd and Edytuj are the page's pills. Every write keeps the version guard of the text it was based on.
  */
 export default function ReportEdit({ client, report, composers, revisions }: Props) {
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);
+    const editing = isEditing(usePage().url);
     // The text in the editor travels with the version it was based on: a save sends that
     // version, so the server refuses text written against a report that has since changed.
     const [draft, setDraft] = useState(() => draftFrom(report));
-    const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
     // The editor is read-only while a balance save is in flight, because the reply replaces its text.
     const [savingBalance, setSavingBalance] = useState(false);
@@ -95,8 +110,11 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
     const [confirm, setConfirm] = useState<Confirm>(null);
     const [allRevisions, setAllRevisions] = useState(false);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
+    const [billedOpen, setBilledOpen] = useState(false);
     const [opening, setOpening] = useState<string>(report.opening_balance_hours != null ? String(report.opening_balance_hours) : '');
 
+    const base = clientReports.edit([client.id, report.id]).url;
+    const show = (edit: boolean) => router.get(modeUrl(base, edit), {}, KEEP);
     const isDirty = draft.body !== draft.base;
     // Another tab (or a refused write's reply) has moved the stored report past this text.
     const isStale = draft.version !== report.version;
@@ -136,7 +154,7 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
         // edits travel with it and the editor takes back the body it stored.
         setSavingBalance(true);
         router.patch(
-            `/clients/${client.id}/reports/${report.id}/opening-balance`,
+            clientReports.openingBalance([client.id, report.id]).url,
             isDirty
                 ? { opening_balance_hours: value, body_markdown: draft.body, version: draft.version }
                 : { opening_balance_hours: value, version: draft.version },
@@ -147,7 +165,7 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
     function save() {
         setSaving(true);
         router.put(
-            `/clients/${client.id}/reports/${report.id}`,
+            clientReports.update([client.id, report.id]).url,
             { body_markdown: draft.body, version: draft.version },
             {
                 preserveScroll: true,
@@ -156,8 +174,8 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
                 onFinish: () => setSaving(false),
                 onSuccess: (page) => {
                     if (adopt(page)) {
-                        setEditing(false);
                         toast.success(t('Report saved.'));
+                        show(false);
                     }
                 },
             },
@@ -169,7 +187,7 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
         setRegenerating(true);
         // A hand-written report's key ('manual') has no composer behind it, so the server picks its default.
         const runnable = composers.some((c) => c.key === report.composer_key);
-        router.post(`/clients/${client.id}/reports/${report.id}/regenerate`, runnable ? { composer_key: report.composer_key } : {}, {
+        router.post(clientReports.regenerate([client.id, report.id]).url, runnable ? { composer_key: report.composer_key } : {}, {
             preserveScroll: true,
             preserveState: true,
             onFinish: () => setRegenerating(false),
@@ -182,251 +200,297 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
     }
 
     // Status changes toast through the server's flash, which also says when nothing changed or the move was refused.
-    function transition(action: 'finalize' | 'mark-sent' | 'reopen') {
+    function transition(action: 'finalize' | 'markSent' | 'reopen') {
         setConfirm(null);
-        router.post(`/clients/${client.id}/reports/${report.id}/${action}`, {}, { preserveScroll: true });
+        router.post(clientReports[action]([client.id, report.id]).url, {}, { preserveScroll: true });
     }
 
     function cancelEdit() {
         setDraft((current) => ({ ...current, body: current.base }));
-        setEditing(false);
+        show(false);
     }
 
     function copyMarkdown() {
         void navigator.clipboard.writeText(draft.body).then(() => toast.success(t('Copied markdown to clipboard.')));
     }
 
-    const month = report.period_type === 'month' ? monthName(report.period_start.slice(0, 7), locale) : null;
+    const period = report.period_start.slice(0, 7);
+    const month = report.period_type === 'month' ? monthName(period, locale) : null;
     const title = month !== null ? `${t('Report')} ${month}` : t('Week of {{date}}', { date: shortDate(report.period_start, locale) });
-    const period = `${shortDate(report.period_start, locale)} ${t('to')} ${shortDate(report.period_end, locale)}`;
+    const dates = `${shortDate(report.period_start, locale)} ${t('to')} ${shortDate(report.period_end, locale)}`;
     const status = statusLine(report, locale, t);
-    const billing = clients.show({ client: client.id, tab: 'rozliczenia' }).url;
+    const chip = statusChip(report, locale, t);
+    const billing = monthUrl(client.id, period);
     const shown = allRevisions ? revisions : revisions.slice(0, RECENT_REVISIONS);
+    const composer = composers.find((candidate) => candidate.key === report.composer_key)?.label ?? report.composer_key;
+    const frozen = report.billed !== null && report.status !== 'draft';
 
     const menu = (
-        <ReportMenu status={report.status} regenerating={regenerating} onEdit={() => setEditing(true)} onConfirm={setConfirm} onCopy={copyMarkdown} />
+        <ReportMenu
+            status={report.status}
+            regenerating={regenerating}
+            onEdit={() => show(true)}
+            onConfirm={setConfirm}
+            onCopy={copyMarkdown}
+        />
     );
 
     return (
-        <SoloSurface className={styles.page} day="paper">
+        <SoloSurface day="paper">
             <Head title={`${title} - ${client.name}`} />
-            <div className={styles.frame}>
-                <Masthead current="clients" />
-                <main>
-                    <RecordHeader
-                        size="poster"
-                        back={{ href: billing, label: client.short_name }}
-                        trail={[
-                            { label: t('Clients'), href: clients.index().url },
-                            { label: `${client.short_name} · ${t('Billing')}`, href: billing },
-                        ]}
-                        title={title}
-                        menu={menu}
-                    >
-                        <div className={styles.metaRow}>
-                            <p className={styles.meta}>{[status, period].join(' · ')}</p>
-                            <div className={styles.headerActions}>
-                                <StatusAction status={report.status} onConfirm={setConfirm} />
-                                {menu}
-                            </div>
-                        </div>
-                    </RecordHeader>
+            <main className={styles.page}>
+                <div className={styles.frame}>
+                    <RecordFrame
+                        title={t('Report')}
+                        noteKind="line"
+                        note={[month !== null ? `${capitalize(month)} ${period.slice(0, 4)}` : null, status, dates].filter(Boolean).join(' · ')}
+                        actions={menu}
+                        main={<StatusAction status={report.status} onConfirm={setConfirm} />}
+                    />
+                </div>
+                <TileGrid>
+                    <TileStack>
+                        <Tile kind="plain" className={styles.text}>
+                            <TileHeader label={t('Text for the client')} end={<span className={styles.caption}>{editing ? t('report_mode_editing') : t('Preview')}</span>} />
+                            {isStale && (
+                                <>
+                                    <Notice kind="warn" role="status">
+                                        {t('This report changed after your text was loaded, so it cannot be saved over the newer version.')}
+                                    </Notice>
+                                    <SoloButton variant="secondary" size="control" onClick={loadCurrent}>
+                                        {t('Load the current text')}
+                                    </SoloButton>
+                                </>
+                            )}
+                            {editing ? (
+                                <div className={styles.editor} data-fill="">
+                                    <MarkdownTextarea
+                                        value={draft.body}
+                                        onChange={(body) => setDraft((current) => ({ ...current, body }))}
+                                        rows={24}
+                                        disabled={savingBalance}
+                                    />
+                                    <div className={styles.editorActions}>
+                                        <SoloButton variant="quiet" size="control" onClick={cancelEdit} disabled={saving}>
+                                            {t('Cancel')}
+                                        </SoloButton>
+                                        <SoloButton variant="primary" size="control" onClick={save} disabled={!isDirty || saving || savingBalance}>
+                                            {saving ? t('Saving…') : t('Save')}
+                                        </SoloButton>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className={styles.document} data-fill="">
+                                    <MarkdownView>{draft.body}</MarkdownView>
+                                </div>
+                            )}
+                            <TileNote className={styles.footnote}>
+                                {report.billed !== null
+                                    ? t('The CRM adds the hours summary from billed time.')
+                                    : t('The CRM adds the hours summary from the time entries.')}
+                            </TileNote>
+                        </Tile>
+                    </TileStack>
 
-                    <div className={`${splitClass} ${styles.body}`}>
-                        <section className={splitMainClass}>
-                            <SectionHead
-                                kind="body"
-                                label={t('Text for the client')}
-                                action={
-                                    <span className={styles.switch} role="tablist" aria-label={t('Text for the client')}>
-                                        <button
-                                            type="button"
-                                            role="tab"
-                                            aria-selected={editing}
-                                            className={styles.switchTab}
-                                            onClick={() => setEditing(true)}
-                                        >
-                                            {t('Edit')}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            role="tab"
-                                            aria-selected={!editing}
-                                            className={styles.switchTab}
-                                            onClick={() => setEditing(false)}
-                                        >
-                                            {t('Preview')}
-                                        </button>
-                                    </span>
+                    <TileStack as="aside" className={styles.side}>
+                        <Tile kind="plain">
+                            <TileHeader label={t('Delivery')} end={<Chip status={chip.status}>{chip.label}</Chip>} />
+                            <dl className={styles.list}>
+                                <KvRow layout="tile" label={t('Status')}>
+                                    {status}
+                                </KvRow>
+                                <KvRow layout="tile" label={t('Period')}>
+                                    {dates}
+                                </KvRow>
+                                <KvRow layout="tile" label={t('Composer')}>
+                                    {composer}
+                                </KvRow>
+                            </dl>
+                            {report.needs_recalculation && (
+                                <>
+                                    <Notice kind="warn">{t('report_tile_stale')}</Notice>
+                                    <TileActions>
+                                        <SoloButton variant="primary" size="control" disabled={regenerating} onClick={() => setConfirm('regenerate')}>
+                                            {regenerating ? t('Regenerating…') : t('Regenerate')}
+                                        </SoloButton>
+                                    </TileActions>
+                                </>
+                            )}
+                        </Tile>
+
+                        <Tile kind="plain">
+                            <TileHeader
+                                label={t('Hours')}
+                                end={
+                                    report.billed !== null && report.status === 'draft' ? (
+                                        <SoloButton variant="secondary" size="control" aria-haspopup="dialog" onClick={() => setBilledOpen(true)}>
+                                            {t('Change')}
+                                        </SoloButton>
+                                    ) : frozen ? (
+                                        <span className={styles.caption}>{t('read only')}</span>
+                                    ) : undefined
                                 }
                             />
-                            {isStale && (
-                                <p className={styles.stale}>
-                                    {t('This report changed after your text was loaded, so it cannot be saved over the newer version.')}{' '}
-                                    <button type="button" className={styles.inlineAction} onClick={loadCurrent}>
-                                        {t('Load the current text')}
-                                    </button>
-                                </p>
-                            )}
-                            <div className={styles.textBlock}>
-                                {editing ? (
-                                    <div className={styles.editor}>
-                                        <MarkdownTextarea
-                                            value={draft.body}
-                                            onChange={(body) => setDraft((current) => ({ ...current, body }))}
-                                            rows={24}
-                                            disabled={savingBalance}
-                                        />
-                                        <div className={styles.editorActions}>
-                                            <SectionAction onClick={cancelEdit} disabled={saving}>
-                                                {t('Cancel')}
-                                            </SectionAction>
-                                            <button
-                                                type="button"
-                                                className={styles.save}
-                                                onClick={save}
-                                                disabled={!isDirty || saving || savingBalance}
-                                            >
-                                                {saving ? t('Saving…') : t('Save')}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className={styles.document}>
-                                        <MarkdownView>{draft.body}</MarkdownView>
-                                    </div>
-                                )}
-                                <p className={styles.footnote}>{t('The CRM adds the hours summary from the time entries.')}</p>
+                            <div data-fill="">
+                                <SoloField label={t('Opening balance (h)')} htmlFor="report-opening">
+                                    <SoloInput
+                                        id="report-opening"
+                                        type="number"
+                                        step="0.5"
+                                        inputMode="decimal"
+                                        value={opening}
+                                        placeholder="0"
+                                        onChange={(e) => setOpening(e.target.value)}
+                                        onBlur={saveOpening}
+                                        disabled={savingBalance}
+                                    />
+                                </SoloField>
                             </div>
-                        </section>
-
-                        <aside className={`${splitSideClass} ${styles.side}`}>
-                            <section>
-                                <SectionHead kind="body" label={t('Delivery')} meta={t(statusLabelKey(report.status)).toLocaleLowerCase(locale)} />
-                                <dl className={styles.list}>
-                                    <KvRow layout="ledger" label={t('Status')}>
-                                        {status}
-                                    </KvRow>
-                                    <KvRow layout="ledger" label={t('Period')}>
-                                        {period}
-                                    </KvRow>
-                                </dl>
-                            </section>
-
-                            <section>
-                                <SectionHead kind="body" label={t('Hours')} meta={month ?? undefined} />
-                                <dl className={styles.list}>
-                                    <KvRow layout="ledger" label={t('Opening balance')}>
-                                        <input
-                                            type="number"
-                                            step="0.5"
-                                            inputMode="decimal"
-                                            className={styles.balanceInput}
-                                            value={opening}
-                                            placeholder="0"
-                                            onChange={(e) => setOpening(e.target.value)}
-                                            onBlur={saveOpening}
-                                            aria-label={t('Opening balance')}
-                                            disabled={savingBalance}
-                                        />
-                                    </KvRow>
-                                    <KvRow layout="ledger" label={t('Package')} tone={report.contracted_hours === null ? 'muted' : undefined}>
-                                        {report.contracted_hours !== null ? hours(report.contracted_hours) : t('None')}
-                                    </KvRow>
-                                    <KvRow layout="ledger" label={t('Available')}>
-                                        {hours(availableNum)}
-                                    </KvRow>
-                                    <KvRow layout="ledger" label={t('Used')}>
+                            <dl className={styles.list}>
+                                <KvRow layout="tile" label={t('Package')} tone={report.contracted_hours === null ? 'muted' : undefined}>
+                                    {report.contracted_hours !== null ? hours(report.contracted_hours) : t('None')}
+                                </KvRow>
+                                <KvRow layout="tile" label={t('Available')}>
+                                    {hours(availableNum)}
+                                </KvRow>
+                                {report.billed !== null ? (
+                                    <>
+                                        <KvRow layout="tile" label={t('Real time')}>
+                                            {hours(report.billed.real)}
+                                        </KvRow>
+                                        <KvRow layout="tile" label={t('Billed time')}>
+                                            <span className={styles.billedValue}>
+                                                {billedTip(report.billed, locale, t) !== null && (
+                                                    <InfoHint label={t('Your figure')}>{billedTip(report.billed, locale, t)}</InfoHint>
+                                                )}
+                                                {hours(report.actual_hours)}
+                                            </span>
+                                        </KvRow>
+                                    </>
+                                ) : (
+                                    <KvRow layout="tile" label={t('Used')}>
                                         {hours(report.actual_hours)}
                                     </KvRow>
-                                    <KvRow
-                                        layout="ledger"
-                                        label={
-                                            month !== null
-                                                ? t('Balance after {{month}}', { month: monthLocative(report.period_start.slice(0, 7), t) })
-                                                : t('Closing balance')
-                                        }
-                                        tone={closingNum < 0 ? 'accent' : undefined}
-                                    >
-                                        {hours(closingNum, true)}
-                                    </KvRow>
-                                </dl>
-                                {forfeitedNum > 0 && (
-                                    <p className={styles.note}>
-                                        {t('{{hours}} over the {{cap}} cap', {
-                                            hours: hours(forfeitedNum),
-                                            cap: hours(report.rollover_cap_hours ?? 0),
-                                        })}
-                                    </p>
                                 )}
-                                <BodyLink href={billing} className={styles.more}>
-                                    {t('Hours bank in Billing')} →
-                                </BodyLink>
-                            </section>
+                                <KvRow
+                                    layout="tile"
+                                    total
+                                    label={month !== null ? t('Balance after {{month}}', { month: monthLocative(period, t) }) : t('Closing balance')}
+                                    tone={closingNum < 0 ? 'over' : undefined}
+                                >
+                                    {hours(closingNum, true)}
+                                </KvRow>
+                            </dl>
+                            {forfeitedNum > 0 && (
+                                <TileNote>
+                                    {t('{{hours}} over the {{cap}} cap', {
+                                        hours: hours(forfeitedNum),
+                                        cap: hours(report.rollover_cap_hours ?? 0),
+                                    })}
+                                </TileNote>
+                            )}
+                            {frozen && <Notice kind="lock">{report.status === 'sent' ? t('billed_report_locked_sent') : t('billed_report_locked_finalized')}</Notice>}
+                            <SoloButtonLink variant="quiet" size="control" href={billing}>
+                                {t('Hours bank in Billing')} →
+                            </SoloButtonLink>
+                        </Tile>
 
-                            <section>
-                                <SectionHead kind="body" label={t('Activity')} />
-                                {revisions.length === 0 ? (
-                                    <p className={styles.empty}>{t('No changes yet.')}</p>
-                                ) : (
-                                    <ul className={styles.revisions}>
-                                        {shown.map((r) => {
-                                            const i = revisions.indexOf(r);
-                                            // The body after this change is the body before the newer one, or the current body for the newest.
-                                            const after = i === 0 ? (report.body_markdown ?? '') : (revisions[i - 1].body_markdown_before ?? '');
-                                            const before = r.body_markdown_before ?? '';
-                                            const canDiff =
-                                                (r.reason === 'update' || r.reason === 'regenerate' || r.reason === 'opening_balance') &&
-                                                before !== after;
-                                            const open = expanded.has(r.id);
+                        <Tile kind="list">
+                            <TileHeader
+                                label={t('Activity')}
+                                count={revisions.length > 0 ? revisions.length : undefined}
+                                end={
+                                    revisions.length > RECENT_REVISIONS && !allRevisions ? (
+                                        <span className={styles.caption}>{t('report_recent', { count: RECENT_REVISIONS })}</span>
+                                    ) : undefined
+                                }
+                            />
+                            {revisions.length === 0 ? (
+                                <TileInset>
+                                    <TileNote>{t('No changes yet.')}</TileNote>
+                                </TileInset>
+                            ) : (
+                                <TileRows>
+                                    {shown.map((r, index) => {
+                                        const i = revisions.indexOf(r);
+                                        // The body after this change is the body before the newer one, or the current body for the newest.
+                                        const after = i === 0 ? (report.body_markdown ?? '') : (revisions[i - 1].body_markdown_before ?? '');
+                                        const before = r.body_markdown_before ?? '';
+                                        const canDiff =
+                                            (r.reason === 'update' || r.reason === 'regenerate' || r.reason === 'opening_balance' || r.reason === 'billed_hours') &&
+                                            before !== after;
+                                        const open = expanded.has(r.id);
 
-                                            return (
-                                                <li key={r.id} className={styles.revision}>
-                                                    <p className={styles.revisionMeta}>
-                                                        {shortDate(r.created_on, locale)}
-                                                        {r.user && ` · ${r.user.name}`}
-                                                    </p>
-                                                    <p className={styles.revisionText}>
-                                                        {t(reasonLabelKey(r.reason))},{' '}
-                                                        {t('was {{status}}', {
-                                                            status: t(statusLabelKey(r.status_before)).toLocaleLowerCase(locale),
-                                                        })}
-                                                    </p>
-                                                    {canDiff && (
-                                                        <button
-                                                            type="button"
-                                                            className={styles.inlineAction}
-                                                            aria-expanded={open}
-                                                            onClick={() => setExpanded((current) => toggled(current, r.id))}
-                                                        >
-                                                            {open ? t('Hide changes') : t('Show changes')}
-                                                        </button>
-                                                    )}
-                                                    {open && canDiff && (
-                                                        <div className={styles.diff}>
-                                                            <MarkdownDiff before={before} after={after} />
-                                                        </div>
-                                                    )}
-                                                </li>
-                                            );
-                                        })}
-                                    </ul>
-                                )}
-                                {revisions.length > RECENT_REVISIONS && (
-                                    <button
-                                        type="button"
-                                        className={`${styles.inlineAction} ${styles.more}`}
-                                        onClick={() => setAllRevisions((all) => !all)}
-                                    >
+                                        return (
+                                            <Fragment key={r.id}>
+                                                <Row
+                                                    rule={index > 0}
+                                                    wrap
+                                                    title={
+                                                        <>
+                                                            {t(reasonLabelKey(r.reason))}{' '}
+                                                            <InfoHint label={t('Details')}>
+                                                                {[r.user?.name, t('was {{status}}', { status: t(statusLabelKey(r.status_before)).toLocaleLowerCase(locale) })]
+                                                                    .filter(Boolean)
+                                                                    .join(' · ')}
+                                                            </InfoHint>
+                                                        </>
+                                                    }
+                                                    meta={shortDate(r.created_on, locale)}
+                                                    action={
+                                                        canDiff ? (
+                                                            <SoloButton
+                                                                variant="secondary"
+                                                                size="control"
+                                                                aria-expanded={open}
+                                                                aria-label={open ? t('Hide changes') : t('Show changes')}
+                                                                onClick={() => setExpanded((current) => toggled(current, r.id))}
+                                                            >
+                                                                {t('Changes')}
+                                                            </SoloButton>
+                                                        ) : undefined
+                                                    }
+                                                />
+                                                {open && canDiff && (
+                                                    <li className={styles.diff}>
+                                                        <MarkdownDiff before={before} after={after} />
+                                                    </li>
+                                                )}
+                                            </Fragment>
+                                        );
+                                    })}
+                                </TileRows>
+                            )}
+                            {revisions.length > RECENT_REVISIONS && (
+                                <TileInset>
+                                    <SoloButton variant="quiet" size="control" onClick={() => setAllRevisions((all) => !all)}>
                                         {allRevisions ? t('Recent only') : t('Whole history')} →
-                                    </button>
-                                )}
-                            </section>
-                        </aside>
-                    </div>
-                </main>
-            </div>
+                                    </SoloButton>
+                                </TileInset>
+                            )}
+                        </Tile>
+                    </TileStack>
+                </TileGrid>
+            </main>
 
+            {report.billed !== null && (
+                <BilledTimeDialog
+                    clientId={client.id}
+                    period={period}
+                    open={billedOpen}
+                    onOpenChange={setBilledOpen}
+                    onSaved={(page) => {
+                        const fresh = (page.props as unknown as Props).report;
+                        setDraft((current) => afterBilledSave(current, fresh).draft);
+                    }}
+                    onReopen={(locked) => {
+                        setBilledOpen(false);
+                        if (locked.closure_id === null) {
+                            setConfirm('reopen');
+                        }
+                    }}
+                />
+            )}
             <ConfirmDialog
                 open={confirm === 'regenerate'}
                 onOpenChange={(open) => !open && setConfirm(null)}
@@ -453,7 +517,7 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
                 title={t('Mark the report as sent?')}
                 description={t('Records today as the day the report went to the client. Reopening it as a draft clears that date.')}
                 confirmLabel={t('Mark as sent')}
-                onConfirm={() => transition('mark-sent')}
+                onConfirm={() => transition('markSent')}
             />
             <ConfirmDialog
                 open={confirm === 'reopen'}
@@ -471,16 +535,15 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
                 confirmLabel={t('Delete')}
                 onConfirm={() => {
                     setConfirm(null);
-                    router.delete(`/clients/${client.id}/reports/${report.id}`);
+                    router.delete(clientReports.destroy([client.id, report.id]).url);
                 }}
                 variant="destructive"
             />
-            <FlashMessages toaster={<SoloToaster />} />
         </SoloSurface>
     );
 }
 
-/** Figma: Menu / ••• raport (206:4986): Edytuj treść, Przegeneruj, Kopiuj markdown, Drukuj, Cofnij do szkicu, Usuń raport. */
+/** The report's "more": in the frame the forward step stands beside it as the ink button; a phone's menu holds everything else. */
 function ReportMenu({
     status,
     regenerating,
@@ -499,7 +562,6 @@ function ReportMenu({
 
     const items = (
         <>
-            {inMenu && <StatusAction status={status} onConfirm={onConfirm} />}
             <ActionMenuItem icon={<Icon name="pencil" size={16} />} onSelect={onEdit}>
                 {t('Edit text')}
             </ActionMenuItem>
@@ -524,14 +586,10 @@ function ReportMenu({
     if (inMenu) return items;
 
     return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <IconButton icon="more" size="sm" label={t('More actions')} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={8} collisionPadding={16}>
-                {items}
-            </DropdownMenuContent>
-        </DropdownMenu>
+        <>
+            <StatusAction status={status} onConfirm={onConfirm} />
+            <ActionMenu trigger={<IconButton icon="more" look="outline" label={t('More actions')} />}>{items}</ActionMenu>
+        </>
     );
 }
 
@@ -569,5 +627,25 @@ function reasonLabelKey(reason: Revision['reason']): string {
             return 'Reopened';
         case 'opening_balance':
             return 'Balance changed';
+        case 'billed_hours':
+            return 'Billed hours changed';
     }
 }
+
+ReportEdit.place = (({ client, report }, { t, url, locale }) => {
+    const period = report.period_start.slice(0, 7);
+    const base = clientReports.edit([client.id, report.id]).url;
+    const editing = isEditing(url);
+
+    return {
+        tokens: [
+            { label: client.short_name, href: clients.show({ client: client.id, tab: 'przeglad' }).url },
+            { label: capitalize(monthName(period, locale)), href: monthUrl(client.id, period) },
+            { label: t('Report') },
+        ],
+        pills: [
+            { label: t('Preview'), href: modeUrl(base, false), active: !editing, visit: KEEP },
+            { label: t('Edit'), href: modeUrl(base, true), active: editing, visit: KEEP },
+        ],
+    };
+}) satisfies PlaceResolver<Props>;

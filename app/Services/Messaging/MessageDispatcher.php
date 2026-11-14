@@ -8,6 +8,7 @@ use App\Models\ClientFieldDefinition;
 use App\Models\ClientFieldEvent;
 use App\Models\OutboundMessage;
 use App\Services\Humanizer;
+use App\Support\LocalCalendar;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -96,6 +97,11 @@ final class MessageDispatcher
 
         $to = (string) PhoneNumber::e164($client->phone);
         $provider = $this->providers->for($client->account);
+        if ($provider->key() !== 'simulator' && $this->sentToday($message->account_id) >= (int) config('services.smsapi.daily_cap')) {
+            Log::warning('SMS daily cap reached', ['account_id' => $message->account_id]);
+
+            return $this->finish($message, OutboundMessage::FAILED, ['error' => 'daily_cap: the account reached its limit of real messages for today']);
+        }
         $message->forceFill(['to' => $to, 'body' => $body, 'provider' => $provider->key()])->save();
 
         try {
@@ -111,6 +117,13 @@ final class MessageDispatcher
             'error' => $result->error !== null ? mb_substr($result->error, 0, 255) : null,
             'sent_at' => $result->status === OutboundMessage::FAILED ? null : now(),
         ]);
+    }
+
+    /** Real messages the account sent since local midnight. */
+    private function sentToday(int $accountId): int
+    {
+        return OutboundMessage::query()->where('account_id', $accountId)->where('status', OutboundMessage::SENT)
+            ->where('sent_at', '>=', LocalCalendar::dayRange(LocalCalendar::today())[0])->count();
     }
 
     private function fieldArchived(OutboundMessage $message): bool

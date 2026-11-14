@@ -32,7 +32,6 @@ final class LogTimeCommand extends Command
                             {--desc= : Description (defaults to the task name, or "Ad-hoc work")}
                             {--title= : Short label shown in the Time list}
                             {--end= : End time in local (display) time; default now. start = end − minutes}
-                            {--not-billable : Mark the entry non-billable (default: billable)}
                             {--account= : Account ID; must be the acting account (kept for scripts that pass it)}';
 
     protected $description = 'Log a manual time entry from the CLI (mirrors the UI). Target with exactly one of --task / --client / --project.';
@@ -55,7 +54,6 @@ final class LogTimeCommand extends Command
                 description: $this->stringOption('desc'),
                 title: $this->stringOption('title'),
                 end: $this->stringOption('end'),
-                billable: ! $this->option('not-billable'),
             );
         } catch (ReferenceException $e) {
             return $this->referenceFailure($e);
@@ -71,8 +69,10 @@ final class LogTimeCommand extends Command
 
         $this->raw("✓ #{$result['entry_id']} · {$result['minutes']} min ({$hours}h)");
         $this->fenced(['Target: '.$this->literal($result['target'])]);
-        $this->line('  '.$result['start_local'].' → '.mb_substr((string) $result['end_local'], -5).' '.$result['timezone']
-            .($result['billable'] ? ' · billable' : ' · non-billable'));
+        $this->line('  '.$result['start_local'].' → '.mb_substr((string) $result['end_local'], -5).' '.$result['timezone']);
+        foreach ($result['warnings'] as $warning) {
+            $this->raw('WARNING '.$warning);
+        }
 
         return self::SUCCESS;
     }

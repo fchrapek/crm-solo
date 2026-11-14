@@ -1,95 +1,163 @@
-import { EmptyBlock, SectionHead } from '@/components/solo/primitives';
+import { BottomSheet } from '@/components/solo/bottom-sheet';
+import { Chip } from '@/components/solo/chip';
+import { SoloButton, SoloButtonLink } from '@/components/solo/primitives';
+import { Row } from '@/components/solo/row';
+import { Tile, TileActions, TileHeader, TileInset, TileNote, TileRows } from '@/components/solo/tile';
+import { useSoloWide } from '@/components/solo/use-solo-wide';
+import { TimeEntryEditDialog, type EditableTimeEntry } from '@/components/time-entry-edit-dialog';
+import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { minutesSince } from '@/lib/dates';
 import tasks from '@/routes/tasks';
-import { Link } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { activityLine, actorName, whenLabel } from './format';
+import { activityMeta, activityTitle } from './format';
 import styles from './task-page.module.css';
-import type { ActivityRow, LiveAgent, TaskActivityPage, TaskClock } from './types';
+import { LIVE_PROPS, type ActivityRow, type LiveAgent, type TaskActivityPage, type TaskClock } from './types';
 
-/** Figma: the agent line on top of Aktywność while an agent's timer runs on the task. */
-function LiveRow({ live, now }: { live: LiveAgent; now: number }) {
+/** The rows the tile shows; the server sends as many, or every row while the whole history is open. */
+export const PREVIEW_ROWS = 3;
+
+/** Figma: the agent chip of Aktywność while an agent's timer runs on the task. */
+function LiveChip({ live, now }: { live: LiveAgent; now: number }) {
     const { t } = useTranslation();
 
     return (
-        <li className={styles.live} title={live.description ?? undefined}>
-            <span className={styles.liveMark} aria-hidden="true" />
-            <span className={styles.liveText}>
-                {t('{{agent}} working · {{minutes}} min', { agent: live.agent, minutes: minutesSince(live.started_at, now) })}
-            </span>
-        </li>
+        <span title={live.description ?? undefined}>
+            <Chip status="agent">{t('{{agent}} working · {{minutes}} min', { agent: live.agent, minutes: minutesSince(live.started_at, now) })}</Chip>
+        </span>
     );
 }
 
-/** One line: when and who in the meta tone, then what happened, cut with an ellipsis unless the whole history is open. */
-function Entry({ row, now, clock, locale }: { row: ActivityRow; now: number; clock: TaskClock; locale: string }) {
+interface RowsProps {
+    rows: ActivityRow[];
+    now: number;
+    clock: TaskClock;
+    locale: string;
+    /** Given in the whole history: a logged time row offers Edytuj. */
+    onEdit?: (entry: EditableTimeEntry) => void;
+}
+
+function Rows({ rows, now, clock, locale, onEdit }: RowsProps) {
     const { t } = useTranslation();
-    const sentence = activityLine(row, locale, t);
 
     return (
-        <li className={styles.entry}>
-            <p className={styles.entryLine} title={sentence}>
-                <span className={styles.entryMeta}>
-                    {whenLabel(row, now, clock.today, locale, t)} · {actorName(row.actor, t)} ·{' '}
-                </span>
-                {sentence}
-            </p>
-        </li>
+        <TileRows className={styles.entries}>
+            {rows.map((row) => {
+                const entry = row.entry;
+
+                return (
+                    <Row
+                        key={row.key}
+                        wrap
+                        title={activityTitle(row, locale, t)}
+                        meta={activityMeta(row, now, clock.today, locale, t)}
+                        action={
+                            onEdit !== undefined && entry !== null ? (
+                                <SoloButton variant="quiet" size="control" className={styles.rowAction} onClick={() => onEdit(entry)}>
+                                    {t('Edit')}
+                                </SoloButton>
+                            ) : undefined
+                        }
+                    />
+                );
+            })}
+        </TileRows>
     );
 }
 
-/**
- * Figma: Aktywność (770:56741; phones 849:20996): the live agent line, the latest entries (three, one on phones), then
- * Cała historia, which opens every row in place.
- */
-export function ActivitySection({
-    taskId,
-    activity,
-    full = false,
-    live,
-    clock,
-    now,
-    locale,
-}: {
+/** Figma: Cała historia (1095:50081): a dialog from 768 px, a sheet below it. */
+function HistoryDialog({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
+    const { t } = useTranslation();
+    const wide = useSoloWide();
+    const onOpenChange = (next: boolean) => !next && onClose();
+
+    if (!wide) {
+        return (
+            <BottomSheet open={open} onOpenChange={onOpenChange} title={t('Whole history')}>
+                {open && children}
+            </BottomSheet>
+        );
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent size="wide" aria-describedby={undefined}>
+                <DialogHeader>
+                    <DialogTitle>{t('Whole history')}</DialogTitle>
+                </DialogHeader>
+                <DialogBody>{children}</DialogBody>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+interface ActivitySectionProps {
     taskId: number;
     activity: TaskActivityPage;
-    /** The whole history is open: every row, each one wrapping. */
+    /** The whole history is open (`?historia`): every row, in the dialog. */
     full?: boolean;
     live: LiveAgent | null;
     clock: TaskClock;
     now: number;
     locale: string;
-}) {
+}
+
+/**
+ * Figma: Zadanie, the Aktywność tile (1094:40618) and Cała historia (1095:50081). The agent chip while an agent works,
+ * the latest three entries, then the whole history in a dialog, where a logged time row opens its edit form.
+ */
+export function ActivitySection({ taskId, activity, full = false, live, clock, now, locale }: ActivitySectionProps) {
     const { t } = useTranslation();
-    const rows = activity.rows;
-    const empty = rows.length === 0 && live === null;
-    // Collapsed entries are one line each, so any row may hide the end of its text.
-    const cut = !full && rows.length > 0;
+    const [editing, setEditing] = useState<EditableTimeEntry | null>(null);
+    const preview = activity.rows.slice(0, PREVIEW_ROWS);
+    const close = () =>
+        router.get(tasks.show(taskId).url, {}, { only: ['activity'], preserveScroll: true, preserveState: true, replace: true });
 
     return (
-        <section className={styles.activity} aria-labelledby="task-activity">
-            <SectionHead kind="body" label={<span id="task-activity">{t('Activity')}</span>} />
-            {empty ? (
-                <EmptyBlock>{t('No activity yet.')}</EmptyBlock>
+        <Tile kind="list" aria-labelledby="task-activity">
+            <TileHeader
+                label={<span id="task-activity">{t('Activity')}</span>}
+                end={live !== null ? <LiveChip live={live} now={now} /> : undefined}
+            />
+            {preview.length === 0 ? (
+                <TileInset>
+                    <TileNote>{t('No activity yet.')}</TileNote>
+                </TileInset>
             ) : (
-                <ul className={styles.entries} data-full={full || undefined}>
-                    {live !== null && <LiveRow live={live} now={now} />}
-                    {rows.map((row) => (
-                        <Entry key={row.key} row={row} now={now} clock={clock} locale={locale} />
-                    ))}
-                </ul>
+                <Rows rows={preview} now={now} clock={clock} locale={locale} />
             )}
-            {(activity.more || cut) && (
-                <Link
-                    href={tasks.show(taskId, { query: { historia: 1 } }).url}
-                    only={['activity']}
-                    preserveScroll
-                    preserveState
-                    className={styles.historyLink}
-                >
-                    {t('Whole history')} →
-                </Link>
+            {preview.length > 0 && (
+                <TileActions className={styles.historyAction}>
+                    <SoloButtonLink
+                        href={tasks.show(taskId, { query: { historia: 1 } }).url}
+                        only={['activity']}
+                        preserveScroll
+                        preserveState
+                        replace
+                        variant="secondary"
+                        size="control"
+                    >
+                        {t('Whole history')}
+                    </SoloButtonLink>
+                </TileActions>
             )}
-        </section>
+            <HistoryDialog open={full} onClose={close}>
+                <div className={styles.history}>
+                    {live !== null && (
+                        <div className={styles.historyLive}>
+                            <LiveChip live={live} now={now} />
+                        </div>
+                    )}
+                    <Rows rows={activity.rows} now={now} clock={clock} locale={locale} onEdit={setEditing} />
+                </div>
+            </HistoryDialog>
+            <TimeEntryEditDialog
+                open={editing !== null}
+                onOpenChange={(open) => !open && setEditing(null)}
+                entry={editing}
+                onSaved={() => router.reload({ only: LIVE_PROPS })}
+            />
+        </Tile>
     );
 }

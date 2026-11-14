@@ -32,7 +32,8 @@ final class CardFinishReconciler
      * under the row lock and with the same rules as a sync. The lane comes
      * from the list the card is on now and the mapping as saved now, both read
      * under the lock, so a card a sync moved meanwhile gets its new list's
-     * lane. The card did not move, so this can fill a finish but never clear one.
+     * lane. The card did not move, so this can fill a finish but never clear one;
+     * a card in a skipped column is no work, so it gets neither.
      */
     public static function remap(Task $card): void
     {
@@ -48,7 +49,7 @@ final class CardFinishReconciler
             $isCompleted = $current->trello_due_complete === null
                 ? ($lane === TrelloListMapper::LANE_DONE || (bool) $current->is_completed)
                 : self::isCompleted($lane, (bool) $current->trello_due_complete);
-            $owner = self::ownerChanges($current, $current->trello_list_id, $lane, $isCompleted, CardMove::unknown());
+            $owner = $current->trello_skipped ? [] : self::ownerChanges($current, $current->trello_list_id, $lane, $isCompleted, CardMove::unknown());
             $current->fill(['list_name' => $lane, 'is_completed' => $isCompleted, ...$owner])->save();
             $card->setRawAttributes($current->getAttributes(), true);
         });
@@ -75,7 +76,8 @@ final class CardFinishReconciler
      * The owner-layer attributes to write with the card, from the row as it
      * is now (read under its lock).
      *
-     * - Fill: the first time a card is seen turning completed.
+     * - Fill: the first time a card is seen turning completed, or seen completed
+     *   as it leaves a skipped column (its completion there was no work).
      * - Clear: the card is not completed, sits on an active list it moved to,
      *   and that move (its last list-change action on Trello) came after the
      *   finish by more than MOVE_SKEW_SECONDS. The agent board's Done goes
@@ -90,7 +92,7 @@ final class CardFinishReconciler
         if (! self::needsMoveCheck($current, $listId, $lane, $isCompleted)) {
             $changes = $current->trello_move_pending_at !== null ? ['trello_move_pending_at' => null] : [];
 
-            return $current->finished_at === null && $isCompleted && ! $current->is_completed
+            return $current->finished_at === null && $isCompleted && (! $current->is_completed || $current->trello_skipped)
                 ? [...$changes, 'finished_at' => now()]
                 : $changes;
         }

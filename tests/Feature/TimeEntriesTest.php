@@ -10,7 +10,6 @@ use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 final class TimeEntriesTest extends TestCase
@@ -143,7 +142,7 @@ final class TimeEntriesTest extends TestCase
         $this->assertSame(210, (int) $total);
     }
 
-    public function test_imported_clockify_entries_still_list_on_the_client_page(): void
+    public function test_imported_clockify_entries_still_list_in_the_clients_journal(): void
     {
         $user = User::factory()->create([
             'account_id' => $this->account->id,
@@ -164,13 +163,11 @@ final class TimeEntriesTest extends TestCase
             'duration_minutes' => 60,
         ])->save();
 
-        $this->actingAs($user)
-            ->get("/clients/{$client->id}/edit")
-            ->assertOk()
-            ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('timeEntries.data.0.source', 'clockify')
-                ->where('timeEntries.data.0.duration_minutes', 60)
-                ->missing('timeEntries.data.0.is_in_clockify')
-                ->missing('clockifyEnabled'));
+        $props = $this->actingAs($user)->get("/clients/{$client->id}/dziennik")->assertOk()->viewData('page')['props'];
+
+        $this->assertSame([60], array_column($props['journal_work']['rows'], 'minutes'));
+        $this->assertSame('Pulled before the removal', $props['journal_work']['rows'][0]['entry']['description']);
+        $this->assertArrayNotHasKey('is_in_clockify', $props['journal_work']['rows'][0]['entry']);
+        $this->assertArrayNotHasKey('clockifyEnabled', $props);
     }
 }

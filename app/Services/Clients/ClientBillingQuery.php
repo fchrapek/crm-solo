@@ -9,9 +9,16 @@ use App\Models\ClientMonthClosure;
 use App\Models\ClientReport;
 use App\Models\ClientRetainer;
 use App\Models\Invoice;
+use App\Models\MonthCloseRun;
+use App\Models\MonthCloseStep;
+use App\Services\Integrations\InfaktDrafting;
+use App\Services\Messaging\SummaryEmails;
+use App\Services\Reports\ReportComposerRegistry;
 use App\Support\LocalCalendar;
 use Closure;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\MergeProp;
 
@@ -21,28 +28,55 @@ final class ClientBillingQuery
 
     public const int INVOICE_ROWS = 5;
 
+    public const int ORDER_MONTHS = 6;
+
+    public const int ORDER_REPORTS = 12;
+
     public function __construct(
         private readonly HoursBank $bank,
         private readonly SettlementPolicy $policy,
         private readonly ClientBillingMode $mode,
         private readonly ClientOrderSummary $order,
+        private readonly InfaktDrafting $drafting,
+        private readonly BilledTime $billed,
+        private readonly ClientInvoiceList $invoiceList,
+        private readonly ReportComposerRegistry $composers,
     ) {}
+
+    /** The month in the URL when it is a month up to the one in progress, else the month the client owes next. */
+    public static function shownPeriod(?string $month, ClientSettlementState $state): string
+    {
+        return $month !== null && LocalCalendar::isMonth($month) && $month <= $state->currentPeriod ? $month : $state->activePeriod;
+    }
 
     /**
      * The ledger pages by "Starsze": a partial reload of billing_ledger with the next page, whose rows the client appends.
      *
      * @param  string|null  $ledgerPage  the `next` of the ledger page shown last
      * @param  string|null  $mode  the billing mode when the caller already read it
-     * @return array{billing: Closure, billing_ledger?: MergeProp}
+     * @param  string|null  $month  the month the screen shows (YYYY-MM); the active month when missing or not a month up to now
+     * @param  string|null  $invoiceYear  the invoice list's year, `all` or `last12`
+     * @param  string|null  $invoiceMonth  the invoice list's month within its year
+     * @return array{billing: Closure, billing_invoices: Closure, billing_ledger?: MergeProp, billing_emails?: Closure, billing_month?: Closure}
      */
-    public function props(Client $client, ?string $ledgerPage = null, ?string $mode = null): array
+    public function props(Client $client, ?string $ledgerPage = null, ?string $mode = null, ?string $month = null, ?string $invoiceYear = null, ?string $invoiceMonth = null): array
     {
+        $invoices = fn (): array => $this->invoiceList->props($client, $invoiceYear, $invoiceMonth);
+
         if (($mode ?? $this->mode->of($client)) === ClientBillingMode::ORDER) {
-            return ['billing' => fn (): array => [
-                'mode' => ClientBillingMode::ORDER,
-                'invoices' => $this->invoices($client),
-                'order' => $this->order->props($client),
-            ]];
+            return [
+                'billing' => fn (): array => [
+                    'mode' => ClientBillingMode::ORDER,
+                    'billed_months' => $this->billedMonths($client),
+                    'invoices' => $this->invoices($client),
+                    'order' => $this->order->props($client),
+                    'reports' => $this->reportList($client),
+                    'report_period' => LocalCalendar::previousMonth(),
+                    'composers' => $this->composerOptions(),
+                    'currency' => $client->currency ?? 'PLN',
+                ],
+                'billing_invoices' => $invoices,
+            ];
         }
 
         $state = $this->bank->settlement($client);
@@ -51,7 +85,123 @@ final class ClientBillingQuery
         return [
             'billing' => fn (): array => $this->summary($client, $state),
             'billing_ledger' => Inertia::merge(fn (): array => $this->ledger($client, $state, $page))->append('rows', 'key'),
+            'billing_emails' => fn (): ?array => app(SummaryEmails::class)->monthsFor($client, Auth::user()),
+            'billing_month' => fn (): array => $this->month($client, self::shownPeriod($month, $state)),
+            'billing_invoices' => $invoices,
         ];
+    }
+
+    /**
+     * One month as the screen shows it: both values per task (what the billed time dialog reads), its report, the
+     * invoices booked in it and its checklist.
+     *
+     * @return array<string, mixed>
+     */
+    private function month(Client $client, string $period): array
+    {
+        [$start] = SettlementPolicy::monthDates($period);
+        $today = LocalCalendar::todayDate();
+        $report = $this->billed->governingReport($client, $period);
+
+        return [
+            'period' => $period,
+            'figures' => $this->billed->figures($client, $period),
+            'report' => $report !== null ? [
+                'id' => $report->id,
+                'status' => $report->status,
+                'sent_on' => $report->sentOn(),
+                'generated_on' => $report->generated_at?->copy()->setTimezone(LocalCalendar::timezone())->toDateString(),
+                'needs_recalculation' => (bool) $report->needs_recalculation,
+                'composer_key' => $report->composer_key,
+            ] : null,
+            'invoices' => $client->invoices()
+                ->where(DB::raw(Invoice::ACCRUAL_DATE_SQL), '>=', $start)
+                // Up to the next month's first day: a date stored with a time still falls inside its month.
+                ->where(DB::raw(Invoice::ACCRUAL_DATE_SQL), '<', LocalCalendar::nextMonth($period).'-01')
+                ->reorder()
+                ->orderByDesc('id')
+                ->get()
+                ->map(fn (Invoice $invoice): array => ClientInvoiceList::row($invoice, $today))
+                ->values()
+                ->all(),
+            'checklist' => $this->checklist($client, $period),
+            'composers' => $this->composerOptions(),
+        ];
+    }
+
+    /**
+     * The month's close checklist: its run once started, else what starting last month's would seed.
+     *
+     * @return array{done: int, total: int}|null
+     */
+    private function checklist(Client $client, string $period): ?array
+    {
+        $run = $client->monthCloseRuns()
+            ->reorder()
+            ->where('period', $period)
+            ->withCount(['steps', 'steps as resolved_count' => fn ($q) => $q->where('state', '!=', MonthCloseStep::STATE_PENDING)])
+            ->first();
+        if ($run !== null) {
+            return ['done' => (int) $run->resolved_count, 'total' => (int) $run->steps_count];
+        }
+        if ($period !== LocalCalendar::previousMonth() || $client->month_close_type === null || ! $client->include_in_month_close) {
+            return null;
+        }
+
+        return ['done' => 0, 'total' => count(MonthCloseRun::stepTemplateFor($client))];
+    }
+
+    /** @return list<array{key: string, label: string}> */
+    private function composerOptions(): array
+    {
+        return collect($this->composers->all())->map(fn ($composer): array => ['key' => $composer->key(), 'label' => $composer->label()])->values()->all();
+    }
+
+    /**
+     * A client without a retainer has no month tiles to hold a report, so its reports are a list, newest first.
+     *
+     * @return list<array{id: int, period: string, status: string}>
+     */
+    private function reportList(Client $client): array
+    {
+        return $client->reports()
+            ->orderByDesc('period_start')
+            ->orderByDesc('id')
+            ->limit(self::ORDER_REPORTS)
+            ->get(['id', 'client_id', 'period_start', 'status'])
+            ->map(fn (ClientReport $report): array => [
+                'id' => $report->id,
+                'period' => $report->period_start->format('Y-m'),
+                'status' => $report->status,
+            ])
+            ->all();
+    }
+
+    /**
+     * A client without a retainer has no ledger, so its months in both values stand alone: the last ORDER_MONTHS with
+     * time or a report, newest first.
+     *
+     * @return list<array{period: string, billed: array<string, mixed>, billed_editable: bool}>
+     */
+    private function billedMonths(Client $client): array
+    {
+        $current = LocalCalendar::currentMonth();
+        $periods = LocalCalendar::monthsBetween(LocalCalendar::monthFrom($current)->subMonthsNoOverflow(self::ORDER_MONTHS - 1)->format('Y-m'), LocalCalendar::nextMonth($current));
+        $rows = [];
+        foreach (array_reverse($periods) as $period) {
+            $month = $this->bank->month($client, $period);
+            $billed = $month->billed;
+            if ($billed === null || ($billed->realMinutes === 0 && $billed->tasks === [] && $month->reportId === null)) {
+                continue;
+            }
+            $rows[] = [
+                'period' => $period,
+                'billed' => $billed->toArray(),
+                'billed_editable' => ! $month->isClosed() && in_array($month->reportStatus, [null, ClientReport::STATUS_DRAFT], true),
+            ];
+        }
+
+        return $rows;
     }
 
     /** @return array<string, mixed> */
@@ -82,6 +232,7 @@ final class ClientBillingQuery
             'waiting_report' => $this->waitingReport($reports),
             'retainer' => $this->retainer($client),
             'invoices' => $this->invoices($client),
+            'invoice_drafts' => $this->drafting->monthState($client),
         ];
     }
 
@@ -145,6 +296,9 @@ final class ClientBillingQuery
             'reopen_refusal' => $this->policy->refusalForLaterReport($blocker),
             // The report the refusal names, so the phone's blocked sheet can open it.
             'reopen_blocker' => $blocker !== null ? ['report_id' => $blocker->id, 'period' => $blocker->period_start->format('Y-m')] : null,
+            'billed' => $row->month?->billed?->toArray(),
+            // The pencil: a month whose billed figure may still change, before the dialog reads the full rules.
+            'billed_editable' => $row->month?->billed !== null && $closure === null && ($report === null || $report->status === ClientReport::STATUS_DRAFT),
         ];
     }
 
@@ -216,20 +370,7 @@ final class ClientBillingQuery
             ->orderByDesc('id')
             ->limit(self::INVOICE_ROWS)
             ->get()
-            ->map(fn (Invoice $invoice): array => [
-                'id' => $invoice->id,
-                'number' => $invoice->number,
-                'status' => $invoice->status,
-                'currency' => $invoice->currency ?? 'PLN',
-                'net' => (float) ($invoice->net_price / 100),
-                'gross' => (float) ($invoice->gross_price / 100),
-                'invoice_date' => $invoice->invoice_date?->toDateString(),
-                'sale_date' => $invoice->sale_date?->toDateString(),
-                'payment_date' => $invoice->payment_date?->toDateString(),
-                'paid_date' => $invoice->paid_date?->toDateString(),
-                'overdue' => $invoice->isOverdueOn($today),
-                'external_url' => $invoice->infaktUrl(),
-            ])
+            ->map(fn (Invoice $invoice): array => ClientInvoiceList::row($invoice, $today))
             ->values()
             ->all();
 

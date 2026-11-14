@@ -1,0 +1,236 @@
+.tile {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border-radius: var(--role-radius-lg);
+    background: var(--role-tile);
+    color: var(--role-text-primary);
+}
+
+.list {
+    padding: var(--role-space-4);
+}
+
+.plain,
+.timer {
+    gap: var(--role-space-12);
+    align-items: flex-start;
+    padding: var(--role-space-16);
+}
+
+.timer {
+    background: var(--role-tile-timer);
+    color: var(--role-text-on-colour);
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--role-space-12);
+    min-height: 28px;
+}
+
+.list > .header {
+    padding: var(--role-space-12) var(--role-space-12) var(--role-space-8);
+}
+
+.headerStart {
+    display: flex;
+    align-items: baseline;
+    gap: var(--role-space-8);
+    min-width: 0;
+}
+
+.label {
+    margin: 0;
+    font: 400 var(--solo-heading-group) / 1.3 var(--solo-font-text);
+}
+
+.count,
+.headerEnd {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.timer :is(.count, .headerEnd) {
+    color: inherit;
+}
+
+.headerEnd {
+    display: flex;
+    flex: none;
+    align-items: center;
+}
+
+.group {
+    display: flex;
+    position: relative;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--role-space-12);
+    min-height: 28px;
+    padding: var(--role-space-32) var(--role-space-12) var(--role-space-8);
+}
+
+/* the same rule as between rows, so a group reads as a list that starts under its name */
+.group::after {
+    position: absolute;
+    right: var(--role-space-12);
+    bottom: 0;
+    left: var(--role-space-12);
+    height: var(--role-stroke-rule);
+    background: var(--role-rule);
+    content: '';
+}
+
+.plain > .group::after,
+.group[data-flush]::after {
+    right: 0;
+    left: 0;
+}
+
+.group[data-current]::after {
+    background: var(--role-selection);
+}
+
+.group:first-child,
+.header + .group {
+    padding-top: var(--role-space-12);
+}
+
+.plain > .group,
+.group[data-flush] {
+    padding: 0;
+}
+
+.plain > .group {
+    align-self: stretch;
+}
+
+.groupStart {
+    min-width: 0;
+}
+
+/* inline, so the note follows the last word of a label that wraps */
+.groupLabel {
+    display: inline;
+    margin: 0;
+    color: var(--role-text-primary);
+    font: 400 var(--solo-heading-group) / 1.3 var(--solo-font-text);
+    overflow-wrap: anywhere;
+}
+
+.group[data-size='compact'] .groupLabel {
+    font-size: var(--solo-heading-group-compact);
+}
+
+.group[data-current] .groupLabel,
+.group[data-current] .groupCurrent {
+    color: var(--role-selection);
+}
+
+.groupNote,
+.groupEnd {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.groupNote,
+.groupCurrent {
+    margin-left: var(--role-space-8);
+    white-space: nowrap;
+}
+
+.groupCurrent {
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.groupEnd {
+    display: flex;
+    flex: none;
+    align-items: center;
+}
+
+/* the heading's own line is the first row's rule */
+.group + .rows > :first-child::before {
+    content: none;
+}
+
+.rows {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.inset {
+    padding: var(--role-space-12);
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--role-space-8);
+}
+
+.actions > * {
+    flex: 1 1 0;
+}
+
+.list > .actions {
+    padding: var(--role-space-12);
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--role-space-12);
+    align-items: start;
+}
+
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-12);
+    min-width: 0;
+}
+
+.note {
+    margin: 0;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+/* a plain tile's children stretch unless they are buttons */
+.plain > :is(dl, ul, .header, .note, [data-fill]) {
+    align-self: stretch;
+}
+
+@media (min-width: 768px) {
+    .grid,
+    .stack {
+        gap: var(--shell-gap);
+    }
+
+    .list {
+        padding: var(--role-space-12);
+    }
+
+    .plain,
+    .timer {
+        gap: var(--role-space-16);
+        padding: var(--role-space-24);
+    }
+
+    .actions > * {
+        flex: none;
+    }
+}
+
+@media (min-width: 1100px) {
+    .grid {
+        grid-template-columns: minmax(0, 1fr) 380px;
+    }
+}

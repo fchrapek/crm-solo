@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # The checks CI runs before anything deploys, runnable locally in one command.
-# .github/workflows/ci.yml calls this script per job, so the two cannot drift.
+# .github/workflows/ci.yml calls each part of this script, so the two cannot drift.
 #
 # Usage:  scripts/check.sh [php|js|audit|all]     (default: all)
 #

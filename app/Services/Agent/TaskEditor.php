@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace App\Services\Agent;
 
 use App\Models\Project;
+use App\Models\Task;
+use App\Models\TaskBilledMonth;
+use App\Services\Clients\BilledTime;
+use App\Services\Clients\ClientFinancialLock;
 use App\Services\Integrations\Trello\TrelloListMapper;
 use App\Services\Tasks\TaskCompletion;
 use App\Services\Tasks\TaskWriter;
@@ -53,7 +57,7 @@ final class TaskEditor
             'description' => $this->description($input['description'] ?? null),
             'list_name' => $list,
             'due_date' => $due,
-            'is_reportable' => (bool) ($input['reportable'] ?? false),
+            'is_reportable' => isset($input['reportable']) ? (bool) $input['reportable'] : null,
         ]);
 
         return ['task' => TaskRecord::listItem($task->fresh(['project.client']) ?? $task)];
@@ -112,6 +116,18 @@ final class TaskEditor
         if ($changes === [] && $archive === null && ! $reopen && ! $moveTime) {
             throw AgentRefusal::invalid('Nothing to change: pass name, description, due, list, project, reportable, archive, unarchive, reopen or move time.');
         }
+        $toClient = isset($changes['project_id']) ? $project->client_id : $task->project?->client_id;
+        if ($moveTime && BilledTime::figuresWouldMove($task, $toClient !== null ? (int) $toClient : null) && app(AgentCallContext::class)->missing([AgentAbilities::BILLING]) !== []) {
+            throw new AgentRefusal('missing_ability', 'Moving this task\'s time also moves its billed figures, which needs the '.AgentAbilities::BILLING.' ability.');
+        }
+        if ($moveTime && $toClient !== null) {
+            $to = (int) $toClient;
+            $clash = TaskBilledMonth::query()->where('task_id', $task->id)->where('client_id', '!=', $to)
+                ->whereIn('period', TaskBilledMonth::query()->select('period')->where('task_id', $task->id)->where('client_id', $to))->pluck('period')->unique()->values()->all();
+            if ($clash !== []) {
+                throw AgentRefusal::invalid("Task #{$task->id} has billed figures on both clients for ".implode(', ', $clash).': clear one with task-billed first, then move the time.', ['periods' => $clash]);
+            }
+        }
 
         try {
             $this->writer->guardCard($task, [...array_keys($changes), ...($archive !== null ? ['archived'] : [])]);
@@ -145,7 +161,7 @@ final class TaskEditor
         }
 
         try {
-            $time = $moveTime ? $this->time->followTask($task->fresh() ?? $task) : ['moved' => [], 'skipped' => []];
+            [$time, $stayedBilled] = $moveTime ? $this->moveTimeAndFigures($task->fresh() ?? $task) : [['moved' => [], 'skipped' => []], []];
         } catch (TimeEntryChanged) {
             throw AgentRefusal::invalid('A time entry changed while its time was moving: run the same edit again to move the rest.');
         }
@@ -169,6 +185,7 @@ final class TaskEditor
                     'id' => (int) $skip['entry']->id,
                     ...array_diff_key(AgentRefusal::periodSettled($skip['settled'])->toPayload(), ['error' => true]),
                 ], $time['skipped']),
+                'billed_stayed' => $stayedBilled,
             ] : [],
             'changed' => array_values(array_map(fn (string $key): string => match ($key) {
                 'list_name' => 'list',
@@ -178,6 +195,19 @@ final class TaskEditor
                 default => $key,
             }, $changed)),
         ];
+    }
+
+    /**
+     * The task's time and its billed figures move in one transaction under every client involved, so neither can settle in between.
+     *
+     * @return array{0: array{moved: list<mixed>, skipped: list<array<string, mixed>>}, 1: list<string>}
+     */
+    private function moveTimeAndFigures(Task $task): array
+    {
+        $to = $task->project?->client_id;
+        $clients = array_values(array_unique([...BilledTime::clientsOfTask($task), ...($to !== null ? [(int) $to] : [])]));
+
+        return app(ClientFinancialLock::class)->clients($clients, fn (): array => [$this->time->followTask($task), app(BilledTime::class)->followTask($task)]);
     }
 
     /**

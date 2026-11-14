@@ -1,6 +1,10 @@
+import { Chip, type ChipStatus } from '@/components/solo/chip';
 import { KvRow } from '@/components/solo/kv-row';
-import { SectionAction, SoloButton } from '@/components/solo/primitives';
+import { Notice } from '@/components/solo/notice';
+import { SoloButton, soloButtonClass } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
+import { Row } from '@/components/solo/row';
+import { TileRows } from '@/components/solo/tile';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { InfoHint } from '@/components/ui/info-hint';
 import { shortDate } from '@/lib/dates';
@@ -8,7 +12,7 @@ import { localeOf } from '@/lib/hours-text';
 import clients from '@/routes/clients';
 import messages from '@/routes/messages';
 import { Link, router } from '@inertiajs/react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import styles from './client-fields.module.css';
 import type { MessageRow, MessageStatus } from './types';
@@ -68,9 +72,14 @@ export function ResendAction({ message, className }: { message: Pick<MessageRow,
 
     return (
         <>
-            <SectionAction className={className} disabled={busy} onClick={() => (message.may_have_gone_out ? setAsking(true) : send())}>
+            <button
+                type="button"
+                className={className ?? soloButtonClass({ variant: 'quiet', size: 'control' })}
+                disabled={busy}
+                onClick={() => (message.may_have_gone_out ? setAsking(true) : send())}
+            >
                 {t('Send again')}
-            </SectionAction>
+            </button>
             {message.may_have_gone_out && (
                 <ConfirmDialog
                     open={asking}
@@ -90,22 +99,36 @@ export function ResendAction({ message, className }: { message: Pick<MessageRow,
     );
 }
 
+const CHIP: Record<MessageStatus, ChipStatus> = {
+    pending: 'waiting',
+    sending: 'waiting',
+    sent: 'done',
+    simulated: 'done',
+    failed: 'agent',
+    cancelled: 'open',
+    skipped: 'open',
+    superseded: 'open',
+};
+
 /**
- * Figma: Pilot / SMS row (604:3720). The time, the client when the list spans
- * clients, the text on one line, the status; a row opens its details, where a
- * scheduled one can be cancelled.
+ * Figma: SMS · kolejka, the row (1094:43607). The time, the text that opens the details, the client when the list
+ * spans clients, the status as a chip. A failed text has the ink dot and its reason on a line of its own: there is
+ * no error red. With manage the row carries its one action: Anuluj on a scheduled text, Wyślij ponownie on a failed one.
  */
 export function MessageList({
     rows,
     withClient = false,
     withDay = true,
     stacked = false,
+    manage = true,
 }: {
     rows: MessageRow[];
     withClient?: boolean;
     withDay?: boolean;
-    /** Keeps the phone layout (text under the time) in a narrow column. */
+    /** The row is in a narrow column: the text wraps. */
     stacked?: boolean;
+    /** False for a member, who may read the queue but not change it. */
+    manage?: boolean;
 }) {
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);
@@ -115,48 +138,65 @@ export function MessageList({
 
     return (
         <>
-            <ul className={styles.messages} data-stacked={stacked || undefined}>
-                {rows.map((row) => (
-                    <li key={row.id} className={styles.message} data-status={row.held ? 'held' : row.status}>
-                        <span className={styles.mark} aria-hidden="true" />
-                        <span className={styles.when}>{withDay ? `${shortDate(row.day, locale)}, ${row.time}` : row.time}</span>
-                        {withClient && <span className={styles.client}>{row.client}</span>}
-                        <button type="button" className={styles.body} onClick={() => setOpen(row)}>
-                            {row.body ?? row.template ?? t('Text message')}
-                        </button>
-                        <span className={styles.status}>
-                            {label(row)}
-                            {row.held && (
-                                <>
-                                    {' '}
-                                    <InfoHint>
-                                        {t('SMS to this client are off. It goes out only if they are turned back on before its sending time.')}
-                                    </InfoHint>
-                                </>
-                            )}
-                            {row.status === 'failed' && (
-                                <>
-                                    {' '}
-                                    <InfoHint label={t('Why it failed')}>{reason(row)}</InfoHint>
-                                </>
-                            )}
-                        </span>
-                        {row.status === 'pending' && (
-                            <SectionAction className={styles.cancel} onClick={() => setOpen(row)}>
-                                {t('Cancel')}
-                            </SectionAction>
+            <TileRows>
+                {rows.map((row, index) => (
+                    <Fragment key={row.id}>
+                        <Row
+                            rule={index > 0}
+                            wrap={stacked}
+                            stack={!stacked}
+                            time={withDay ? `${shortDate(row.day, locale)}, ${row.time}` : row.time}
+                            title={
+                                <button
+                                    type="button"
+                                    className={styles.body}
+                                    data-status={row.held ? 'held' : row.status}
+                                    onClick={() => setOpen(row)}
+                                >
+                                    {row.body ?? row.template ?? t('Text message')}
+                                </button>
+                            }
+                            wideMeta={withClient ? row.client : undefined}
+                            chip={
+                                <Chip status={row.held ? 'open' : CHIP[row.status]}>
+                                    {label(row)}
+                                    {row.held && (
+                                        <>
+                                            {' '}
+                                            <InfoHint>
+                                                {t(
+                                                    'SMS to this client are off. It goes out only if they are turned back on before its sending time.',
+                                                )}
+                                            </InfoHint>
+                                        </>
+                                    )}
+                                </Chip>
+                            }
+                            action={
+                                !manage ? undefined : row.status === 'pending' ? (
+                                    <SoloButton variant="quiet" size="control" onClick={() => setOpen(row)}>
+                                        {t('Cancel')}
+                                    </SoloButton>
+                                ) : row.status === 'failed' ? (
+                                    <ResendAction message={row} />
+                                ) : undefined
+                            }
+                        />
+                        {row.status === 'failed' && (
+                            <li className={styles.reason}>
+                                <Notice kind="warn">{reason(row)}</Notice>
+                            </li>
                         )}
-                        {row.status === 'failed' && <ResendAction message={row} className={`${styles.cancel} ${styles.resend}`} />}
-                    </li>
+                    </Fragment>
                 ))}
-            </ul>
-            <MessageDialog message={open} onClose={() => setOpen(null)} />
+            </TileRows>
+            <MessageDialog message={open} manage={manage} onClose={() => setOpen(null)} />
         </>
     );
 }
 
 /** Figma: SMS zaplanowany (sheet z Anuluj), 607:6040. A failed one is sent again from here (the sheet is the confirmation) or cancelled. */
-function MessageDialog({ message, onClose }: { message: MessageRow | null; onClose: () => void }) {
+function MessageDialog({ message, manage, onClose }: { message: MessageRow | null; manage: boolean; onClose: () => void }) {
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);
     const label = useStatusLabel();
@@ -164,8 +204,8 @@ function MessageDialog({ message, onClose }: { message: MessageRow | null; onClo
     const [shown, setShown] = useState(message);
     if (message !== null && message !== shown) setShown(message);
     const current = message ?? shown;
-    const pending = current?.status === 'pending';
-    const failed = current?.status === 'failed';
+    const pending = manage && current?.status === 'pending';
+    const failed = manage && current?.status === 'failed';
 
     const cancel = () => current !== null && router.post(messages.cancel(current.id).url, {}, { preserveScroll: true, onSuccess: () => onClose() });
 
@@ -224,13 +264,13 @@ function MessageDialog({ message, onClose }: { message: MessageRow | null; onClo
                                 {current.template}
                             </KvRow>
                         )}
-                        {pending && (
+                        {current.status === 'pending' && (
                             <KvRow label={t('Valid until')} layout="split">
                                 {shortDate(current.expires.slice(0, 10), locale)}, {current.expires.slice(11)}
                             </KvRow>
                         )}
-                        {failed && (
-                            <KvRow label={t('Reason')} layout="column" tone="accent">
+                        {current.status === 'failed' && (
+                            <KvRow label={t('Reason')} layout="column">
                                 {reason(current)}
                             </KvRow>
                         )}

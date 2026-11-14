@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { MonthCard, type MonthData, type TileState } from './month-card';
+import { MonthCalendar, MonthCard, type MonthData, type TileState } from './month-card';
 
 const DESKTOP = { viewport: { value: 'desktop', isRotated: false } };
 
@@ -55,3 +55,13 @@ export const WithDate: Story = { args: { date: '2026-10-23' } };
 export const OnDone: Story = { args: { month: october('stamped', { 14: 'open' }) }, globals: { ...DESKTOP, day: 'done' } };
 
 export const OnTimer: Story = { globals: { ...DESKTOP, day: 'timer' } };
+
+/** The redesign's number tile on Dziś: closed weekdays over all weekdays, one mark per weekday, on every width. */
+export const Tile: Story = { args: { month: october('today'), look: 'tile' }, globals: {} };
+
+/** Figma: Cały miesiąc. Day cells in their states: closed, open, today, ahead, and weekends bare; the popover and the phone sheet show this. */
+export const WholeMonth: Story = {
+    args: { month: october('today', { 14: 'open', 20: 'open' }) },
+    globals: {},
+    render: (args) => <MonthCalendar month={args.month} />,
+};

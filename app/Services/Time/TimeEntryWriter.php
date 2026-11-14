@@ -6,12 +6,14 @@ namespace App\Services\Time;
 
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TaskBilledMonth;
 use App\Models\TimeEntry;
 use App\Services\Agent\TimeEntryRecord;
 use App\Services\Clients\ClientFinancialLock;
 use App\Services\Clients\SettlementPolicy;
 use Carbon\CarbonInterface;
 use Closure;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
@@ -49,6 +51,37 @@ final class TimeEntryWriter
 
             return TimeEntry::create($attributes);
         });
+    }
+
+    /**
+     * Opens a running timer. Finalizing a report and closing a month refuse while a timer runs in their period,
+     * under this same client lock, so a timer that starts on an open day can always be stopped.
+     *
+     * @param  array<string, mixed>  $attributes  a full TimeEntry row without an end
+     * @param  ?string  $requestId  names one start intent: sent again, it returns the timer it opened
+     *
+     * @throws PeriodSettled
+     */
+    public function start(array $attributes, ?string $requestId): TimeEntry
+    {
+        $client = isset($attributes['client_id']) ? (int) $attributes['client_id'] : null;
+        $intent = ['account_id' => $attributes['account_id'], 'start_request_id' => $requestId];
+        $opened = fn (): ?TimeEntry => $requestId !== null ? TimeEntry::query()->where($intent)->first() : null;
+
+        if (($replay = $opened()) !== null) {
+            return $replay;
+        }
+
+        try {
+            return $this->lock->clients($client !== null ? [$client] : [], function () use ($attributes, $client, $requestId): TimeEntry {
+                $this->refuseSettled([[$client, Carbon::instance($attributes['start_time'])]]);
+
+                return TimeEntry::create([...$attributes, 'start_request_id' => $requestId]);
+            });
+        } catch (UniqueConstraintViolationException $e) {
+            // The same request won a race: read it after the rollback, since the transaction's snapshot cannot see it.
+            return $opened() ?? throw $e;
+        }
     }
 
     /**
@@ -131,6 +164,7 @@ final class TimeEntryWriter
         $tasks = Task::query()->whereIn('project_id', $projects->pluck('id'))->select('id');
         $clients = $projects->pluck('client_id')
             ->merge(TimeEntry::query()->whereIn('task_id', $tasks)->distinct()->pluck('client_id'))
+            ->merge(TaskBilledMonth::query()->whereIn('task_id', $tasks)->distinct()->pluck('client_id'))
             ->filter()->map(fn ($id): int => (int) $id)->unique()->values()->all();
 
         $this->lock->clients($clients, fn () => $projects->each(fn (Project $project) => $project->delete()));

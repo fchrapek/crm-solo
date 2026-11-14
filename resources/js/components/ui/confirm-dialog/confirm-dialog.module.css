@@ -7,3 +7,8 @@
 .icon {
     color: var(--color-warning);
 }
+
+/* Figma: a confirm on the redesign is its title and one sentence, with no warning mark */
+:global([data-day]) .icon {
+    display: none;
+}

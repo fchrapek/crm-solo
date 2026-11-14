@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { Retainer } from './retainer-chip';
+import type { Retainer } from './types';
 import { draftOf, errorsNeedMore, invalidNumbers, retainerPayload } from './retainer-dialog';
 
 const stored: Retainer = {

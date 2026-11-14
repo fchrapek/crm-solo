@@ -17,7 +17,6 @@ type Story = StoryObj<typeof meta>;
 
 export const Single: Story = {};
 
-/** Paper draws Fluent, Boring SaaS Lucide: switch the theme in the toolbar. */
 export const Every: Story = {
     render: () => (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))', gap: 'var(--solo-space-3)' }}>

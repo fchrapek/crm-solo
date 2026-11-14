@@ -1,11 +1,4 @@
-/* The /czesc splash: the login screen's frame (login.module.css) plus these few pieces. Not final, Figma first. */
-.lede {
-    margin: 0;
-    font-size: var(--solo-text-row);
-    font-weight: 500;
-    line-height: 1.4;
-}
-
+/* The /czesc splash: the login screen's frame (login.module.css) plus these few pieces. */
 /* Off-screen rather than display:none, which some bots skip. */
 .honeypot {
     position: absolute;
@@ -17,18 +10,30 @@
 
 .signIn {
     margin: 0;
-    font-size: var(--solo-text-action);
-    font-weight: 500;
+    font: 400 var(--solo-text-control) / 1.3 var(--solo-font-text);
+    text-align: center;
+}
+
+@media (min-width: 768px) {
+    .signIn {
+        text-align: left;
+    }
 }
 
 .signIn a {
+    margin-left: var(--role-space-8);
     color: inherit;
-    font-weight: 700;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.signIn a:hover {
     text-decoration: underline;
     text-underline-offset: 3px;
 }
 
 .signIn a:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline: var(--role-stroke-focus) solid currentColor;
     outline-offset: 3px;
 }

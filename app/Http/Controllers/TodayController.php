@@ -94,6 +94,7 @@ final class TodayController extends Controller
 
         return Inertia::render('today/week', [
             'today' => $this->planner->today()->toDateString(),
+            'closed' => $this->planner->isClosed($account, $this->planner->today()),
             'week' => $next ? 'next' : 'this',
             'maxPicks' => DayPlanner::MAX_PICKS,
             'month' => $this->planner->month($account, $this->planner->today()),
@@ -114,6 +115,7 @@ final class TodayController extends Controller
 
         return Inertia::render('today/tasks', [
             'closed' => $this->planner->isClosed($account, $this->planner->today()),
+            'today' => $this->planner->today()->toDateString(),
             'date' => $date->toDateString(),
             'target' => match ($date->toDateString()) {
                 $this->planner->today()->toDateString() => 'today',
@@ -218,7 +220,7 @@ final class TodayController extends Controller
     {
         $this->planner->close($this->accountId(), $this->planner->today());
 
-        return to_route('dashboard');
+        return to_route('dashboard')->with('success', __('Day closed.'));
     }
 
     public function reopen(): RedirectResponse

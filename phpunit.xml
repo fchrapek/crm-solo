@@ -55,6 +55,11 @@
         <env name="DB_CONNECTION" value="sqlite" force="true"/>
         <env name="DB_DATABASE" value=":memory:" force="true"/>
         <env name="MAIL_MAILER" value="array"/>
+        <!-- A test that needs a redirect or live sending sets it itself. -->
+        <env name="MAIL_ALWAYS_TO" value="" force="true"/>
+        <env name="MAIL_LIVE_SEND" value="false" force="true"/>
+        <!-- A local SSR build would send every page render to a server tests never start. -->
+        <env name="INERTIA_SSR_ENABLED" value="false" force="true"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

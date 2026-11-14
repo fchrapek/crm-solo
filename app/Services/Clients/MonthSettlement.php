@@ -85,6 +85,7 @@ final class MonthSettlement
             'source' => $snapshot['source'],
             'report_status' => $snapshot['report_status'],
             'entries' => $snapshot['entries'],
+            ...(isset($snapshot['billed_time']) ? ['billed_time' => $snapshot['billed_time']] : []),
             'hash' => $preview['hash'],
             'refusal' => $preview['refusal'],
         ];
@@ -192,23 +193,26 @@ final class MonthSettlement
             return __('Close :month first.', ['month' => LocalCalendar::monthName($state->activePeriod)]);
         }
 
-        [$from, $to] = LocalCalendar::monthRange($period);
+        // No lower bound: a closure freezes its month and every one before it.
         $running = TimeEntry::query()
             ->where('client_id', $client->id)
             ->whereNull('end_time')
-            ->where('start_time', '>=', $from)
-            ->where('start_time', '<', $to)
+            ->where('start_time', '<', LocalCalendar::monthRange($period)[1])
             ->exists();
         if ($running) {
             return __('Stop the timer running for :month first.', ['month' => LocalCalendar::monthName($period)]);
         }
 
+        $report = app(BilledTime::class)->governingReport($client, $period);
+
         return $this->policy->earlierFlaggedRefusal($client, SettlementPolicy::monthDates(LocalCalendar::nextMonth($period))[0])
-            ?? $this->policy->laterReportRefusal($client, SettlementPolicy::monthDates($period)[1]);
+            ?? $this->policy->laterReportRefusal($client, SettlementPolicy::monthDates($period)[1])
+            ?? ($report !== null ? app(BilledTime::class)->taskSumRefusal($client, $report) : null);
     }
 
     /**
-     * The month's figures as they stand: a governing whole-month report's, whatever its status, else live reportable time.
+     * The month's figures as they stand: a governing whole-month report's, whatever its status, else live billed time
+     * when the client has it on, else live reportable time.
      * Hours are rounded to 2 places; null means not applicable.
      *
      * @return array<string, mixed>
@@ -225,13 +229,7 @@ final class MonthSettlement
             $cap = isset($last?->snapshot['cap']) ? (float) $last->snapshot['cap'] : $cap;
         }
 
-        [$from, $to] = LocalCalendar::monthRange($period);
-        $entries = round((int) TimeEntry::query()
-            ->where('client_id', $client->id)
-            ->where('start_time', '>=', $from)
-            ->where('start_time', '<', $to)
-            ->reportable()
-            ->sum('duration_minutes') / 60, 2);
+        $entries = BilledTime::hours(BilledTime::realMinutes($client->id, $period));
 
         $opening = round($month->openingBalanceHours, 2);
         $used = round($month->usedHours, 2);
@@ -242,7 +240,7 @@ final class MonthSettlement
             'schema_version' => ClientMonthClosure::SNAPSHOT_SCHEMA_VERSION,
             'period' => $period,
             'eligible' => true,
-            'source' => $fromReport ? HoursBankMonth::SOURCE_REPORT : HoursBankMonth::SOURCE_ENTRIES,
+            'source' => $month->source === HoursBankMonth::SOURCE_CLOSURE ? HoursBankMonth::SOURCE_ENTRIES : $month->source,
             'report_id' => $fromReport ? $month->reportId : null,
             'report_status' => $fromReport ? $month->reportStatus : null,
             'contracted' => $contracted !== null ? round($contracted, 2) : null,
@@ -255,6 +253,7 @@ final class MonthSettlement
             'entries' => $entries,
             'logged' => round($month->loggedHours, 2),
             ...($month->outsideBank ? ['outside_bank' => true] : []),
+            ...($month->billed !== null ? ['billed_time' => $month->billed->toSnapshot()] : []),
         ];
     }
 

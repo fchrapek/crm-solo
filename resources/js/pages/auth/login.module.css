@@ -1,160 +1,223 @@
-/* Login v1: the full wordmark in paper on vermilion (Figma: Logowanie · vermilion). */
+/* Logowanie and Lista oczekujących: one layout in two colours. The page is the colour; on a phone the wordmark, the dog and the form stack, from 768 px the words and the form keep the left and the dog fills the right, cut by the edges. */
 .page {
-    min-height: 100vh;
-    display: grid;
+    --auth-text: var(--role-command-bar-text);
+    --auth-text-muted: var(--role-command-bar-text-muted);
+    --auth-ground-text: var(--role-text-primary);
+
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    padding: var(--role-space-24) var(--shell-margin) var(--role-space-32);
+    overflow: hidden;
+    background: var(--role-command-bar);
+    color: var(--auth-text);
+    font-family: var(--solo-font-text);
 }
 
-.frame {
-    width: 100%;
-    max-width: var(--solo-grid-max);
-    margin: 0 auto;
-    padding-inline: var(--solo-grid-margin);
-    padding-block: var(--solo-space-7);
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    column-gap: var(--solo-grid-gutter);
-    row-gap: var(--solo-space-7);
-    align-items: center;
+.page[data-tone='vermilion'] {
+    --auth-text: var(--role-text-on-colour);
+    --auth-text-muted: var(--role-text-on-colour);
+
+    background: var(--role-tile-timer);
+}
+
+.column {
+    display: flex;
+    position: relative;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--role-space-16);
 }
 
 .brand {
-    grid-column: 1 / span 7;
-    display: grid;
-    gap: var(--solo-space-5);
-}
-
-.eyebrow {
-    margin: 0;
-    font-size: var(--solo-text-eyebrow);
-    font-weight: 500;
-    color: var(--solo-fg-muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--role-space-8);
+    text-align: center;
 }
 
 .wordmark {
-    width: 100%;
+    display: block;
+    width: 176px;
+    max-width: 100%;
     height: auto;
-    color: var(--solo-fg);
+}
+
+.claim {
+    margin: 0;
+    font: 400 var(--solo-text-control) / 1.3 var(--solo-font-text);
+}
+
+/* the drawing's empty band above and below the dog scales with the dog, so the margins that eat it do too */
+.dog {
+    --auth-dog-size: min(132vw, 62dvh);
+
+    display: block;
+    flex: none;
+    align-self: center;
+    width: var(--auth-dog-size);
+    margin-block: calc(var(--auth-dog-size) * -0.15) calc(var(--auth-dog-size) * -0.19);
+    aspect-ratio: 1;
+}
+
+/* The page's colour is the surface here: labels and messages are its text; the fields and the main button are white with ink in both appearances, and the focus line is ink so it shows on a white field. */
+.main {
+    --solo-fg: var(--auth-text);
+    --solo-fg-muted: var(--auth-text);
+    --solo-field-bg: var(--auth-text);
+    --solo-field-fg: var(--solo-ink);
+    --solo-field-border: transparent;
+    --role-button-primary: var(--auth-text);
+    --role-button-primary-text: var(--solo-ink);
+    --role-outline: var(--auth-text);
+    --role-focus-ring: var(--solo-ink);
+    --role-text-primary: var(--auth-text);
+
+    display: flex;
+    position: relative;
+    flex-direction: column;
+    gap: var(--role-space-12);
+}
+
+.words {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-12);
+}
+
+/* a notice keeps its own ground, so it keeps the ink that reads on it */
+.main p[data-fill] {
+    --role-text-primary: var(--auth-ground-text);
+}
+
+/* a field is white here: its error edge and its focus line are ink, never the page's white text */
+.main input {
+    --role-text-primary: var(--solo-ink);
+}
+
+.main h1 {
+    font-size: var(--solo-poster-record);
+    text-align: center;
+}
+
+.lede {
+    margin: 0;
+    font: 400 var(--solo-mobile-body) / 1.35 var(--solo-font-text);
+    text-align: center;
 }
 
 .form {
-    grid-column: 9 / span 4;
-    display: grid;
-    gap: 18px;
-    padding: var(--solo-panel-pad, 0);
-    border: var(--solo-card-width, 0) solid var(--solo-card-border, transparent);
-    border-radius: var(--solo-card-radius, 0);
-    background: var(--solo-card, none);
-    box-shadow: var(--solo-card-shadow, none);
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-16);
 }
 
-.title {
-    margin: 0;
-    font-family: var(--solo-font-display);
-    font-stretch: var(--solo-display-stretch, 62%);
-    font-weight: var(--solo-display-weight, 900);
-    font-size: var(--solo-display-title);
-    line-height: var(--solo-caps-leading);
-    letter-spacing: var(--solo-display-tracking, -0.01em);
-    text-transform: var(--solo-display-case, uppercase);
-}
-
-.field {
-    display: grid;
-    gap: var(--solo-space-2);
-    font-size: 0.875rem;
-    font-weight: 600;
-}
-
-.field input {
-    height: 48px;
-    padding-inline: var(--solo-space-4);
-    border: var(--solo-field-width, 1px) solid var(--solo-field-border);
-    border-radius: var(--solo-radius-lg);
-    background: var(--solo-field-bg);
-    color: var(--solo-field-fg);
-    font: 500 var(--solo-text-row) / 1 var(--solo-font-text);
-}
-
-.field input:focus-visible,
-.remember input:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
-    outline-offset: 3px;
+/* The field grows by default (a dialog row); in this column it keeps its own height. */
+.form > * {
+    flex: none;
 }
 
 .remember {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
-    font-size: var(--solo-text-action);
-    font-weight: 500;
+    align-self: flex-start;
+    gap: var(--role-space-12);
+    min-height: var(--role-control);
+    font: 400 var(--solo-text-control) / 1.3 var(--solo-font-text);
     cursor: pointer;
 }
 
 .remember input {
-    appearance: none;
     display: grid;
-    place-items: center;
-    width: 18px;
-    height: 18px;
+    flex: none;
+    width: 20px;
+    height: 20px;
     margin: 0;
-    border: var(--solo-check-width, 2px) solid var(--solo-check-border, var(--solo-fg));
-    border-radius: var(--solo-radius-sm);
-    background: var(--solo-control-bg, none);
+    border: 0;
+    border-radius: var(--role-radius-xs);
+    background: var(--auth-text);
     cursor: pointer;
-}
-
-.remember input:checked {
-    border-color: var(--solo-primary, var(--solo-fg));
-    background: var(--solo-primary, var(--solo-fg));
+    appearance: none;
+    place-items: center;
 }
 
 .remember input:checked::after {
     content: '✓';
-    color: var(--solo-on-primary, var(--solo-on-accent));
-    font-size: 12px;
-    font-weight: 700;
+    color: var(--solo-ink);
+    font-size: 13px;
+    font-weight: 600;
     line-height: 1;
 }
 
+.remember input:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--auth-text);
+    outline-offset: 2px;
+}
+
 .turnstile {
-    display: grid;
-    gap: var(--solo-space-2);
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-8);
+    min-height: 65px;
 }
 
-.error {
-    font-size: var(--solo-text-meta);
-    font-weight: 600;
-    color: var(--solo-error, var(--solo-fg));
-}
+@media (min-width: 768px) {
+    .page {
+        padding: var(--role-space-48) var(--shell-margin);
+    }
 
-.status {
-    margin: 0;
-    font-size: var(--solo-text-action);
-    font-weight: 500;
-}
+    /* the app's column: the words and the form stand at its bottom left, the dog fills its right and runs past the page's edges */
+    .column {
+        justify-content: flex-end;
+        gap: var(--role-space-24);
+        width: 100%;
+        max-width: 1040px;
+        margin-inline: auto;
+        padding-bottom: 12dvh;
+    }
 
-.demoHint {
-    display: grid;
-    gap: var(--solo-space-1);
-    padding: var(--solo-space-3) var(--solo-space-4);
-    border: var(--solo-field-width, 1px) solid var(--solo-line-quiet, var(--solo-rule));
-    border-radius: var(--solo-field-radius, var(--solo-radius-md));
-    background: var(--solo-band, none);
-    font-size: var(--solo-text-meta);
-}
-
-@media (max-width: 1100px) {
     .brand {
-        grid-column: 1 / -1;
+        align-items: flex-start;
+        gap: var(--role-space-12);
+        width: 360px;
+        text-align: left;
     }
 
-    .form {
-        grid-column: 1 / span 7;
+    .page[data-titled] .brand {
+        display: none;
     }
-}
 
-@media (max-width: 640px) {
-    .form {
-        grid-column: 1 / -1;
+    .wordmark {
+        width: 300px;
+    }
+
+    .claim {
+        font-size: var(--solo-text-row);
+    }
+
+    /* the ear starts about a fifth into the drawing: on a narrow or short window the dog moves right so it never covers the words */
+    .dog {
+        --auth-dog-size: min(104vw, 172dvh);
+
+        position: absolute;
+        bottom: -46dvh;
+        left: max(3%, 360px + var(--role-space-48) - 0.18 * var(--auth-dog-size));
+        width: var(--auth-dog-size);
+        margin: 0;
+    }
+
+    .main {
+        width: 360px;
+    }
+
+    .main h1 {
+        font-size: var(--solo-poster-heading);
+        text-align: left;
+    }
+
+    .lede {
+        font-size: var(--solo-text-row);
+        text-align: left;
     }
 }

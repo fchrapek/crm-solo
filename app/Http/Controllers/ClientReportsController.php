@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\ClientReport;
 use App\Models\ClientReportRevision;
+use App\Services\Clients\HoursBank;
 use App\Services\Reports\ReportComposerRegistry;
 use App\Services\Reports\ReportStatusTransition;
 use App\Services\Reports\ReportTransitionResult;
@@ -63,6 +64,7 @@ final class ClientReportsController extends Controller
             Carbon::parse($data['period_end']),
             App::getLocale(),
             $data['composer_key'] ?? null,
+            by: Auth::user(),
         );
 
         return match ($result->outcome) {
@@ -265,12 +267,29 @@ final class ClientReportsController extends Controller
             'body_markdown' => $report->body_markdown,
             'version' => $report->version(),
             'status' => $report->status,
+            'needs_recalculation' => (bool) $report->needs_recalculation,
             'generated_at' => $report->generated_at?->toIso8601String(),
             'finalized_at' => $report->finalized_at?->toIso8601String(),
             'sent_at' => $report->sent_at?->toIso8601String(),
             'sent_on' => $report->sentOn(),
             'finalized_on' => $report->finalized_at?->copy()->setTimezone(LocalCalendar::timezone())->toDateString(),
             'generated_on' => $report->generated_at?->copy()->setTimezone(LocalCalendar::timezone())->toDateString(),
+            'billed' => $this->billedOf($report),
         ];
+    }
+
+    /**
+     * Both values of the report's month, as the hours bank reads them.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function billedOf(ClientReport $report): ?array
+    {
+        $client = Client::withTrashed()->find($report->client_id);
+        if ($client === null || ! $report->coversWholeMonth()) {
+            return null;
+        }
+
+        return app(HoursBank::class)->month($client, $report->period_start->format('Y-m'))->billed?->toArray();
     }
 }

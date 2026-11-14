@@ -1,152 +1,65 @@
-.page {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-    padding: 1rem;
-    max-width: 720px;
-    min-width: 0;
-}
-
-.titleRow {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-
-.title {
-    font-size: 1.5rem;
-    font-weight: 600;
-    margin: 0 0 0.5rem;
-}
-
-.chips {
-    display: flex;
-    gap: 0.375rem;
-    flex-wrap: wrap;
-}
-
-.chip,
-.chipMuted,
-.chipLink {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.125rem 0.5rem;
-    border-radius: 999px;
-    font-size: 0.75rem;
-    background: var(--color-muted);
-    color: var(--color-foreground);
-}
-
-.chipMuted {
-    color: var(--color-muted-foreground);
-}
-
-.chipLink {
-    text-decoration: none;
-    color: var(--color-foreground);
-}
-
-.chipLink:hover {
-    text-decoration: underline;
-}
-
-.headerActions {
-    display: flex;
-    gap: 0.5rem;
-}
-
 .form {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    max-width: 720px;
-    padding: 1rem 0;
+    gap: var(--role-space-16);
 }
 
-.row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
+/* a field's own height: SoloField grows by default, for a dialog row */
+.form > * {
+    flex: none;
 }
 
-@media (max-width: 640px) {
-    .row {
-        grid-template-columns: 1fr;
-    }
-}
-
-.field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.375rem;
+.title {
+    margin: 0;
+    font: 600 var(--solo-heading-dialog) / 1.2 var(--solo-font-text);
 }
 
 .hint {
-    font-size: 0.75rem;
-    color: var(--color-muted-foreground);
     margin: 0;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
 }
 
-.readOnly {
-    font-size: 0.875rem;
-    padding: 0.5rem 0;
-    margin: 0;
+/* Figma: Options (track) */
+.track {
+    display: flex;
+    flex-wrap: wrap;
+    align-self: flex-start;
+    gap: var(--role-space-4);
+    max-width: 100%;
+    padding: var(--role-space-4);
+    border-radius: var(--role-radius-xl);
+    background: var(--role-page);
 }
 
-.error {
-    font-size: 0.75rem;
-    color: var(--color-destructive);
-    margin: 0;
+.option {
+    height: var(--role-control);
+    padding: 0 var(--role-space-16);
+    border: 0;
+    border-radius: var(--role-radius-full);
+    background: none;
+    color: var(--role-text-primary);
+    font: 600 var(--solo-text-control) / normal var(--solo-font-text);
+    cursor: pointer;
+}
+
+.option:hover:not([aria-pressed='true']) {
+    background: var(--role-hover);
+}
+
+.option[aria-pressed='true'] {
+    background: var(--role-selection);
+    color: var(--role-selection-text);
+}
+
+.option:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: 2px;
 }
 
 .actions {
     display: flex;
-    gap: 0.5rem;
-}
-
-.timeline {
-    border-top: 1px solid var(--color-border);
-    padding-top: 1rem;
-}
-
-.sectionTitle {
-    font-size: 1rem;
-    font-weight: 600;
-    margin: 0 0 0.75rem;
-}
-
-.events {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-
-.event {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-    border-left: 2px solid var(--color-border);
-    padding-left: 0.75rem;
-}
-
-.eventStage {
-    font-size: 0.875rem;
-    font-weight: 500;
-}
-
-.eventMeta {
-    font-size: 0.75rem;
-    color: var(--color-muted-foreground);
-}
-
-.eventNote {
-    font-size: 0.8125rem;
-    margin: 0.25rem 0 0;
-    white-space: pre-wrap;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--role-space-8);
 }

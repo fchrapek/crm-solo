@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Services\Day\DayPlanner;
 use App\Services\I18NextTranslationsLoader;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -18,7 +19,10 @@ final class HandleInertiaRequests extends Middleware
      */
     protected $rootView = 'app';
 
-    public function __construct(private readonly I18NextTranslationsLoader $translationsLoader) {}
+    public function __construct(
+        private readonly I18NextTranslationsLoader $translationsLoader,
+        private readonly DayPlanner $planner,
+    ) {}
 
     public function version(Request $request): ?string
     {
@@ -43,12 +47,12 @@ final class HandleInertiaRequests extends Middleware
                         'account' => [
                             'id' => $request->user()->account->id,
                             'name' => $request->user()->account->name,
-                            'is_test' => $request->user()->account->is_test,
-                            'features' => $request->user()->account->features(),
+                            'features' => $request->user()->account->features($request->user()),
                         ],
                     ] : null,
                 ];
             },
+            'timer' => fn () => $this->runningTimer($request),
             'locale' => fn () => $locale,
             'translations' => ! $request->inertia() ? [
                 $locale => [
@@ -71,6 +75,28 @@ final class HandleInertiaRequests extends Middleware
                     'syncUuid' => $request->session()->get('syncUuid'),
                 ];
             }),
+        ];
+    }
+
+    /**
+     * The newest running timer, for the shell's rail chip and phone strip.
+     *
+     * @return array{id: int, started_at: string|null, task: string|null, client: string|null}|null
+     */
+    private function runningTimer(Request $request): ?array
+    {
+        $user = $request->user();
+        if ($user === null) {
+            return null;
+        }
+
+        $entry = $this->planner->running($user->account_id);
+
+        return $entry === null ? null : [
+            'id' => $entry->id,
+            'started_at' => $entry->start_time?->toIso8601String(),
+            'task' => $entry->task?->name ?? $entry->description,
+            'client' => $entry->client?->name,
         ];
     }
 }

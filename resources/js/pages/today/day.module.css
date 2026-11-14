@@ -1,0 +1,246 @@
+/* Figma: Dziś. Phone: the heading on the page, then the tiles 12 apart; from 768 px the heading moves into the day's tile; from 1100 px the side column stands beside it. */
+.day {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-12);
+    min-width: 0;
+}
+
+.heading {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: var(--role-space-8);
+}
+
+.meta {
+    margin: 0;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+/* under a tile's top the first row has no line above it */
+.picks > :first-child::before {
+    content: none;
+}
+
+/* a phone shows the running time in the row and in the strip, never a third time */
+.timerTile {
+    display: none;
+}
+
+.closed {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--role-control);
+}
+
+.error {
+    margin: 0;
+    color: var(--role-text-primary);
+    font: 600 var(--solo-text-control) / 1.4 var(--solo-font-text);
+}
+
+/* Figma: Podsumowanie. The heading on the page, four number tiles (two by two until 1100 px), then the plan and the side tiles. */
+.summary {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-12);
+    min-width: 0;
+}
+
+.summaryHead {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: var(--role-space-8) 0 var(--role-space-4);
+}
+
+.stats {
+    --solo-display-stat: 1.875rem;
+
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--role-space-12);
+}
+
+.stats > * {
+    flex: 1 1 calc(50% - var(--role-space-12));
+}
+
+.line {
+    color: var(--role-text-primary);
+    font-size: var(--solo-text-control);
+}
+
+.headPills {
+    display: flex;
+    min-width: 0;
+    padding-top: var(--role-space-4);
+}
+
+.headPills > nav {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Wszystkie zadania: what is picked and hidden, then the list's own actions; Gotowe ends the row */
+.listHead {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-8);
+    min-width: 0;
+}
+
+.listActions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--role-space-4);
+    margin-inline-start: -18px;
+}
+
+.listDone {
+    margin-inline-start: auto;
+}
+
+.pool {
+    max-width: 640px;
+}
+
+.moreRow {
+    padding-block: 0 var(--role-space-8);
+}
+
+.moreAction {
+    margin-inline-start: -18px;
+}
+
+/* the quiet button at a row's end sits with its text near the row's edge */
+.rowAction {
+    margin-inline: -10px -12px;
+}
+
+/* a phone: the close button takes the row and the state stands under it */
+.close {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.closeStatus {
+    display: flex;
+    flex: none;
+    align-items: center;
+    min-height: 24px;
+}
+
+.close > .closeStatus {
+    flex: none;
+}
+
+.statusLine {
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.planButton {
+    align-self: stretch;
+}
+
+@media (min-width: 768px) {
+    .day {
+        gap: 0;
+        padding: var(--role-space-12);
+        border-radius: var(--role-radius-lg);
+        background: var(--role-tile);
+    }
+
+    .heading {
+        gap: var(--role-space-8);
+        padding: var(--role-space-20) var(--role-space-12) var(--role-space-8);
+    }
+
+    .day .dayList {
+        padding: 0;
+        border-radius: 0;
+        background: none;
+    }
+
+    .picks > :first-child::before {
+        content: '';
+    }
+
+    .timerTile {
+        display: flex;
+    }
+
+    .phoneOnly {
+        display: none;
+    }
+
+    .closed {
+        justify-content: flex-start;
+    }
+
+    .summary {
+        gap: var(--shell-gap);
+    }
+
+    .summaryHead {
+        padding: var(--role-space-8) var(--role-space-12) 0;
+    }
+
+    .stats {
+        --solo-display-stat: 2.75rem;
+
+        gap: var(--shell-gap);
+    }
+
+    .stats > * {
+        flex-basis: calc(50% - var(--shell-gap));
+    }
+
+    .close {
+        flex-direction: row;
+        align-items: center;
+        gap: var(--role-space-12);
+    }
+
+    .planButton {
+        align-self: flex-start;
+    }
+
+    .headPills {
+        padding-top: var(--role-space-8);
+    }
+
+    .listHead {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--role-space-16);
+        max-width: 640px;
+    }
+
+    .listActions {
+        flex: none;
+        margin-inline-start: 0;
+    }
+
+    .listDone {
+        margin-inline-start: var(--role-space-8);
+    }
+}
+
+@media (min-width: 1100px) {
+    .stats {
+        --solo-display-stat: 3.625rem;
+
+        flex-wrap: nowrap;
+    }
+
+    .stats > * {
+        flex-basis: 0;
+    }
+}

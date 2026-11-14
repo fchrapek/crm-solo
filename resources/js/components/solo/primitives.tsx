@@ -3,10 +3,13 @@ import { Link, type InertiaLinkProps } from '@inertiajs/react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import styles from './primitives.module.css';
 
-/** pill is the secondary action (soloPillClass) and has one size. */
+/**
+ * pill is the secondary action (soloPillClass) and has one size. Size control is the redesign's Button (Figma: Button):
+ * 40 px, 44 on phones, with primary, secondary, quiet, stop and on-colour; the other sizes are the earlier look.
+ */
 type ButtonLook = {
-    variant?: 'primary' | 'ghost' | 'text' | 'ink' | 'outline' | 'stop' | 'pill';
-    size?: 'sm' | 'md' | 'lg' | 'touch';
+    variant?: 'primary' | 'secondary' | 'quiet' | 'on-colour' | 'ghost' | 'text' | 'ink' | 'outline' | 'stop' | 'pill';
+    size?: 'sm' | 'md' | 'lg' | 'touch' | 'control';
     block?: boolean;
 };
 
@@ -14,7 +17,10 @@ type ButtonLook = {
 export const soloPillClass = styles.pill;
 
 export const soloButtonClass = ({ variant = 'primary', size = 'md', block }: ButtonLook) =>
-    (variant === 'pill' ? [styles.pill, block ? styles.block : ''] : [styles.button, styles[variant], styles[size], block ? styles.block : ''])
+    (variant === 'pill'
+        ? [styles.pill, block ? styles.block : '']
+        : [styles.button, styles[variant === 'on-colour' ? 'onColour' : variant], styles[size], block ? styles.block : '']
+    )
         .filter(Boolean)
         .join(' ');
 
@@ -25,7 +31,7 @@ export const touchTargetClass = styles.touchTarget;
 export function SoloButton({ variant, size, block, className, children, ...rest }: ButtonLook & ButtonHTMLAttributes<HTMLButtonElement>) {
     return (
         <button type="button" className={[soloButtonClass({ variant, size, block }), className].filter(Boolean).join(' ')} {...rest}>
-            {variant === 'stop' && <Icon name="stop" size={16} filled />}
+            {variant === 'stop' && size !== 'control' && <Icon name="stop" size={16} filled />}
             {children}
         </button>
     );
@@ -109,13 +115,49 @@ export function EmptyBlock({ className, children }: { className?: string; childr
     );
 }
 
-/** The page headline: a weekday (never the date number) or a page name at the Heading size; display is for the moment screens (GOTOWE., 404). */
-export function Poster({ size = 'heading', children }: { size?: 'heading' | 'display'; children: ReactNode }) {
-    return <h1 className={size === 'display' ? `${styles.poster} ${styles.posterDisplay}` : styles.poster}>{children}</h1>;
+/** A record name past this many characters steps down one size. */
+export const POSTER_LONG = 60;
+
+/**
+ * The page headline: a weekday (never the date number) or a page name at the Heading size; display is for the moment
+ * screens (GOTOWE., 404); record is one size below Heading for a task's name, shown whole, and a name past 60
+ * characters one step smaller. Capitals come from CSS, the text keeps its case.
+ */
+export function Poster({ size = 'heading', title, children }: { size?: 'heading' | 'display' | 'record'; title?: string; children: ReactNode }) {
+    const record = size === 'record';
+    const long = record && typeof children === 'string' && children.length > POSTER_LONG;
+    const look = [styles.poster, size === 'display' ? styles.posterDisplay : '', record ? styles.posterRecord : '', long ? styles.posterLong : ''];
+
+    return (
+        <h1 className={look.filter(Boolean).join(' ')} title={title} data-long={long ? '' : undefined}>
+            {children}
+        </h1>
+    );
+}
+
+interface StatProps {
+    value: ReactNode;
+    label: ReactNode;
+    /** tile is the redesign's Stat (Figma: Stat): the caps label above the figure and one caption line under it. */
+    kind?: 'row' | 'tile';
+    /** One caption line, tile only. */
+    sub?: ReactNode;
+    /** over: the figure is past its limit; on-colour: inside the timer tile. */
+    tone?: 'neutral' | 'over' | 'on-colour';
 }
 
 /** Figma: A2f / Stat, one size everywhere. */
-export function Stat({ value, label }: { value: ReactNode; label: ReactNode }) {
+export function Stat({ value, label, kind = 'row', sub, tone = 'neutral' }: StatProps) {
+    if (kind === 'tile') {
+        return (
+            <div className={styles.tileStat} data-tone={tone}>
+                <span className={styles.tileStatLabel}>{label}</span>
+                <span className={styles.statValue}>{value}</span>
+                {sub !== undefined && <span className={styles.tileStatSub}>{sub}</span>}
+            </div>
+        );
+    }
+
     return (
         <div className={styles.stat}>
             <span className={styles.statValue}>{value}</span>

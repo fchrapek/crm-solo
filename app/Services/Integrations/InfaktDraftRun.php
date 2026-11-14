@@ -57,6 +57,9 @@ final class InfaktDraftRun
     /** @var array<int, string> per group, Infakt invoices that may be its lost draft, for the owner to check */
     private array $leads = [];
 
+    /** @var array<int, array<string, mixed>> per group, where its draft comes from, recorded on the row */
+    private array $origins = [];
+
     public function __construct(private readonly InfaktService $infakt) {}
 
     /**
@@ -83,24 +86,29 @@ final class InfaktDraftRun
     }
 
     /**
+     * @param  array<int, array{invoice: array<string, mixed>}>|null  $groups  drafts built elsewhere (a copy of a real invoice); default: from the retainer
+     * @param  array<int, array{source: string, source_invoice_uuid?: ?string, source_invoice_number?: ?string, project_ids: list<int>}>|null  $origins  per group
      * @return list<array{group: int, outcome: string, payload: array<string, mixed>, task_reference: ?string, message: ?string}>
      *
      * @throws InfaktApiException when Infakt rejects a request (422); groups before it stay recorded
      * @throws RuntimeException when an answer is uncertain, or Infakt holds an invoice for the month this CRM never asked for
      */
-    public function run(Client $client, Carbon $periodMonth, bool $resendUnconfirmed = false): array
+    public function run(Client $client, Carbon $periodMonth, bool $resendUnconfirmed = false, ?array $groups = null, ?array $origins = null): array
     {
-        $groups = $this->infakt->maintenanceInvoiceGroups($client, $periodMonth);
+        $groups ??= $this->infakt->maintenanceInvoiceGroups($client, $periodMonth);
+        $this->origins = $origins ?? array_map(
+            fn (array $projectIds): array => ['source' => InfaktDraftRequest::SOURCE_RETAINER, 'project_ids' => $projectIds],
+            InfaktService::invoiceGroupProjects($client, $periodMonth),
+        );
+        foreach ($groups as $payload) {
+            InfaktService::assertDraftOnly($payload);
+        }
         $period = $periodMonth->format('Y-m');
 
         $this->leads = [];
 
         // Each step reads the rows again: a step before it, or another run, may have moved them.
-        foreach ($this->requests($client, $period) as $request) {
-            if ($request->status === InfaktDraftRequest::STATUS_SUBMITTED && $request->task_reference !== null) {
-                $this->recordTaskState($request, $request->task_reference, $this->infakt->draftTaskState($request->task_reference));
-            }
-        }
+        $this->confirmSubmitted($client, $period);
 
         if ($this->requests($client, $period)->contains(fn (InfaktDraftRequest $r): bool => $r->isLost())) {
             $this->adoptDraftsFoundInInfakt($client, $period, $groups);
@@ -117,6 +125,16 @@ final class InfaktDraftRun
         }
 
         return $results;
+    }
+
+    /** Asks Infakt about every draft of the month it was still building; a read only, guarded per attempt. */
+    public function confirmSubmitted(Client $client, string $period): void
+    {
+        foreach ($this->requests($client, $period) as $request) {
+            if ($request->status === InfaktDraftRequest::STATUS_SUBMITTED && $request->task_reference !== null) {
+                $this->recordTaskState($request, $request->task_reference, $this->infakt->draftTaskState($request->task_reference));
+            }
+        }
     }
 
     /**
@@ -210,6 +228,7 @@ final class InfaktDraftRun
                 'client_id' => $client->id,
                 'period' => $period,
                 'invoice_group' => $group,
+                ...$this->origin($group),
                 'status' => InfaktDraftRequest::STATUS_SENDING,
                 'attempt' => 1,
                 'lease_expires_at' => now()->addMinutes(self::LEASE_MINUTES),
@@ -237,6 +256,7 @@ final class InfaktDraftRun
             ->where('status', $request->status)
             ->when($request->status === InfaktDraftRequest::STATUS_SENDING, fn ($q) => $q->where('lease_expires_at', '<', now()))
             ->update([
+                ...$this->origin($request->invoice_group, encoded: true),
                 'status' => InfaktDraftRequest::STATUS_SENDING,
                 'attempt' => $request->attempt + 1,
                 'lease_expires_at' => now()->addMinutes(self::LEASE_MINUTES),
@@ -248,6 +268,22 @@ final class InfaktDraftRun
             ]);
 
         return $taken === 1 ? [$request->id, $request->attempt + 1] : null;
+    }
+
+    /**
+     * @return array{source: string, source_invoice_uuid: ?string, source_invoice_number: ?string, project_ids: mixed}
+     */
+    private function origin(int $group, bool $encoded = false): array
+    {
+        $origin = $this->origins[$group] ?? [];
+        $projects = $origin['project_ids'] ?? null;
+
+        return [
+            'source' => $origin['source'] ?? InfaktDraftRequest::SOURCE_RETAINER,
+            'source_invoice_uuid' => $origin['source_invoice_uuid'] ?? null,
+            'source_invoice_number' => $origin['source_invoice_number'] ?? null,
+            'project_ids' => $encoded && $projects !== null ? json_encode($projects) : $projects,
+        ];
     }
 
     /**

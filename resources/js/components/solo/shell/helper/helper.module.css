@@ -1,0 +1,331 @@
+/*
+ * Figma: Helper. Phone: a 56 px button that ends the page in the flow and scrolls with it, so it never covers a row. From
+ * 768 px it floats 16 px from the bottom right, and its hint shows only while the dog is pointed at or focused.
+ */
+.helper {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: var(--role-space-4);
+    margin: var(--role-space-8) calc(var(--shell-margin) + env(safe-area-inset-right, 0px)) 0;
+    pointer-events: none;
+}
+
+.helper > * {
+    pointer-events: auto;
+}
+
+.dog {
+    position: relative;
+    display: block;
+    flex: none;
+}
+
+.dog img {
+    display: block;
+}
+
+.dog[data-fluid],
+.dog[data-fluid] img {
+    width: 100%;
+    height: 100%;
+}
+
+.button {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border: var(--role-stroke-outline) solid var(--role-outline);
+    border-radius: var(--role-radius-full);
+    background: var(--role-rail);
+    cursor: pointer;
+}
+
+.button:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: 2px;
+}
+
+.wideDog,
+.hint {
+    display: none;
+}
+
+.title {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--role-space-12);
+}
+
+.talk {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--role-space-12);
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.said {
+    max-width: 280px;
+    margin: 0;
+    padding: 10px 14px;
+    border: var(--role-stroke-outline) solid var(--role-outline);
+    border-radius: var(--role-radius-md);
+    background: var(--role-rail);
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-control) / 1.25 var(--solo-font-text);
+}
+
+.mine {
+    align-self: flex-end;
+    border-color: var(--role-button-primary);
+    background: var(--role-button-primary);
+    color: var(--role-button-primary-text);
+}
+
+.ideas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--role-space-8);
+}
+
+.inert {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.example {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    gap: var(--role-space-8);
+}
+
+.exampleLabel,
+.progress {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.progress {
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.cards,
+.steps {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    gap: var(--role-space-8);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.card,
+.link,
+.steps {
+    border: var(--role-stroke-rule) solid var(--role-rule);
+    border-radius: var(--role-radius-md);
+    background: var(--role-tile);
+}
+
+.card,
+.link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--role-space-12);
+    padding: var(--role-space-12);
+}
+
+.cardText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.cardTitle,
+.link {
+    color: var(--role-text-primary);
+    font: 600 var(--solo-text-control) / 1.3 var(--solo-font-text);
+}
+
+.cardReason,
+.note,
+.plain {
+    margin: 0;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.35 var(--solo-font-text);
+}
+
+.link {
+    text-decoration: none;
+}
+
+.link:hover {
+    background: var(--role-hover);
+}
+
+.link:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: 2px;
+}
+
+.steps {
+    padding: var(--role-space-12);
+}
+
+.step {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--role-space-8);
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-control) / 1.3 var(--solo-font-text);
+}
+
+.step[data-state='done'] {
+    color: var(--role-text-primary);
+}
+
+.step[data-state='current'] {
+    color: var(--role-text-primary);
+    font-weight: 600;
+}
+
+.step svg {
+    flex: none;
+}
+
+.field {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--role-space-8);
+    margin-top: var(--role-space-12);
+    padding: 4px 4px 4px 18px;
+    border: var(--role-stroke-rule) solid var(--role-rule);
+    border-radius: var(--role-radius-full);
+    background: var(--role-tile);
+}
+
+.input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-control) / normal var(--solo-font-text);
+}
+
+.input::placeholder {
+    color: var(--role-text-secondary);
+    opacity: 1;
+}
+
+.send {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--role-radius-full);
+    background: var(--role-page);
+    color: var(--role-text-secondary);
+}
+
+@media (min-width: 768px) {
+    .helper {
+        position: fixed;
+        right: var(--role-space-16);
+        bottom: var(--role-space-16);
+        z-index: var(--z-40);
+        margin: 0;
+    }
+
+    .button {
+        width: 88px;
+        height: 88px;
+        border: 0;
+        background: none;
+    }
+
+    .phoneDog {
+        display: none;
+    }
+
+    .wideDog {
+        display: block;
+    }
+
+    .helper:hover .hint,
+    .helper:focus-within .hint {
+        display: flex;
+    }
+
+    .hint {
+        position: relative;
+        order: -1;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--role-space-12);
+        width: 296px;
+        padding: var(--role-space-16) 18px;
+        border: var(--role-stroke-outline) solid var(--role-outline);
+        border-radius: var(--role-radius-lg);
+        background: var(--role-rail);
+        color: var(--role-text-primary);
+    }
+
+    /* bridges the gap to the dog, so the pointer can travel to the hint's button without the hint closing */
+    .hint::after {
+        position: absolute;
+        inset: 0 auto 0 100%;
+        width: var(--role-space-4);
+        content: '';
+    }
+
+    .hintText {
+        margin: 0;
+        font: 400 var(--solo-text-control) / 1.25 var(--solo-font-text);
+    }
+
+    .window {
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + var(--role-space-8));
+        display: flex;
+        flex-direction: column;
+        width: 380px;
+        max-height: min(620px, 100dvh - 120px);
+        padding: var(--role-space-16);
+        border: var(--role-stroke-outline) solid var(--role-outline);
+        border-radius: var(--role-radius-lg);
+        background: var(--role-tile);
+        box-shadow: var(--role-shadow);
+        color: var(--role-text-primary);
+    }
+
+    .head {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: var(--role-space-12);
+        font: 600 var(--solo-text-row) / 1.35 var(--solo-font-text);
+    }
+
+    .head .title {
+        flex: 1 1 auto;
+    }
+}

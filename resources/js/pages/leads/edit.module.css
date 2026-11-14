@@ -1,266 +1,61 @@
-.page {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-5);
-    padding: var(--spacing-4);
-    min-width: 0;
-}
-
-.header {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-4);
-}
-
-.titleRow {
+/* Figma: Leady · karta leada. The head tile: the lead's name with its "more" menu, its chips, then the stage. */
+.head {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: var(--spacing-4);
-    flex-wrap: wrap;
-}
-
-.titleBlock {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-2);
+    gap: var(--role-space-12);
 }
 
 .title {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-semibold);
+    min-width: 0;
+    margin: 0;
+    font: 600 var(--solo-heading-task) / 1.15 var(--solo-font-text);
+    overflow-wrap: anywhere;
 }
 
 .chips {
     display: flex;
-    align-items: center;
     flex-wrap: wrap;
-    gap: var(--spacing-2);
-}
-
-.chip,
-.chipMuted,
-.chipLink {
-    display: inline-flex;
     align-items: center;
-    gap: var(--spacing-1);
-    padding: 0.0625rem var(--spacing-2);
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
-    border: 1px solid var(--color-border);
+    gap: var(--role-space-8);
 }
 
-.chip {
-    color: var(--color-foreground);
+.meta,
+.saved {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.3 var(--solo-font-text);
 }
 
-.chipMuted {
-    color: var(--color-muted-foreground);
+.clientLink {
+    color: var(--role-text-primary);
+    font: 600 var(--solo-text-meta) / 1.3 var(--solo-font-text);
+    text-underline-offset: 3px;
 }
 
-.chipLink {
-    color: var(--color-brand);
-    text-decoration: none;
-    border-color: color-mix(in srgb, var(--color-brand) 40%, transparent);
+.clientLink:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--role-radius-xs);
 }
 
-.chipLink:hover {
-    background-color: var(--color-brand-soft);
-}
-
-.savedFlash {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--spacing-1);
-    font-size: var(--font-size-xs);
-    color: var(--color-success);
-    opacity: 0;
-    transition: opacity var(--duration-200) var(--ease-in-out);
-}
-
-.savedFlashVisible {
-    opacity: 1;
-}
-
-.headerActions {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-2);
-}
-
-.columns {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 20rem;
-    gap: var(--spacing-5);
-    align-items: start;
-}
-
-@media (max-width: 900px) {
-    .columns {
-        grid-template-columns: minmax(0, 1fr);
-    }
-}
-
-.main,
-.rail {
+.fields {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-4);
-    min-width: 0;
+    gap: var(--role-space-12);
 }
 
-.card {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-3);
-    padding: var(--spacing-4);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    background-color: var(--color-card);
+/* a field's own height: SoloField grows by default, for a dialog row */
+.fields > * {
+    flex: none;
 }
 
-.sectionTitle {
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
-}
-
-.field {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-1-5);
-}
-
-.fieldWithAction {
+.withAction {
     display: flex;
     align-items: center;
-    gap: var(--spacing-2);
+    gap: var(--role-space-8);
 }
 
-.fieldWithAction > :first-child {
+.withAction > input {
     flex: 1;
     min-width: 0;
-}
-
-.fieldAction {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--color-border);
-    color: var(--color-brand);
-}
-
-.fieldAction:hover {
-    background-color: var(--color-brand-soft);
-}
-
-.readOnly {
-    font-size: var(--font-size-sm);
-    margin-block: 0;
-}
-
-.hint {
-    font-size: var(--font-size-xs);
-    color: var(--color-muted-foreground);
-    margin-block: 0;
-}
-
-.error {
-    font-size: var(--font-size-xs);
-    color: var(--color-destructive);
-    margin-block: 0;
-}
-
-.events {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-3);
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.event {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-0-5);
-    padding-left: var(--spacing-3);
-    border-left: 2px solid var(--color-border);
-}
-
-.eventStage {
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-}
-
-.eventMeta {
-    font-size: var(--font-size-xs);
-    color: var(--color-muted-foreground);
-}
-
-.eventNote {
-    font-size: var(--font-size-sm);
-    color: var(--color-muted-foreground);
-    margin-block: 0;
-    white-space: pre-wrap;
-}
-
-.eventRow {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--spacing-2);
-}
-
-.eventDelete {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    background: none;
-    padding: var(--spacing-0-5);
-    border-radius: var(--radius-sm);
-    color: var(--color-muted-foreground);
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity var(--duration-150) var(--ease-in-out);
-}
-
-.event:hover .eventDelete,
-.eventDelete:focus-visible {
-    opacity: 1;
-}
-
-.eventDelete:hover {
-    color: var(--color-destructive);
-    background-color: var(--color-destructive-soft);
-}
-
-.eventsToggle {
-    align-self: flex-start;
-    border: none;
-    background: none;
-    padding: 0;
-    font-size: var(--font-size-xs);
-    color: var(--color-brand);
-    cursor: pointer;
-}
-
-.eventsToggle:hover {
-    text-decoration: underline;
-}
-
-.metaBlock {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-0-5);
-    padding-top: var(--spacing-2);
-    border-top: 1px solid var(--color-border);
-}
-
-.metaLine {
-    font-size: var(--font-size-xs);
-    color: var(--color-muted-foreground);
 }

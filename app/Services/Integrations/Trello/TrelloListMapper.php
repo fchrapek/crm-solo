@@ -101,4 +101,56 @@ final class TrelloListMapper
     {
         return in_array($name, self::CANONICAL_LANES, true);
     }
+
+    /** A column name as the owner would write it: trimmed, inner spaces collapsed. */
+    public static function tidyName(string $name): string
+    {
+        return (string) preg_replace('/\s+/u', ' ', mb_trim($name));
+    }
+
+    /** The key two column names share when they are the same column to the owner. */
+    public static function nameKey(string $name): string
+    {
+        return mb_strtolower(self::tidyName($name));
+    }
+
+    /**
+     * Column names tidied, blanks dropped, case-insensitive duplicates kept once (first spelling wins).
+     *
+     * @param  iterable<mixed>  $names
+     * @return list<string>
+     */
+    public static function uniqueNames(iterable $names): array
+    {
+        $unique = [];
+        foreach ($names as $name) {
+            if (! is_string($name) || self::tidyName($name) === '') {
+                continue;
+            }
+            $unique[self::nameKey($name)] ??= self::tidyName($name);
+        }
+
+        return array_values($unique);
+    }
+
+    /**
+     * The ids of a board's lists whose names the owner skips (Ustawienia · Integracje · Trello).
+     *
+     * @param  array<int, array{id?: string, name?: string}>  $trelloLists
+     * @param  array<mixed>  $skippedNames
+     * @return list<string>
+     */
+    public static function skippedListIds(array $trelloLists, array $skippedNames): array
+    {
+        $skipped = array_map(self::nameKey(...), self::uniqueNames($skippedNames));
+        if ($skipped === []) {
+            return [];
+        }
+
+        return collect($trelloLists)
+            ->filter(fn ($list): bool => isset($list['id'], $list['name']) && in_array(self::nameKey((string) $list['name']), $skipped, true))
+            ->map(fn (array $list): string => (string) $list['id'])
+            ->values()
+            ->all();
+    }
 }

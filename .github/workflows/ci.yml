@@ -2,21 +2,13 @@ name: CI
 
 # The gate. pr.yml calls it for every pull request and the build workflows
 # call it as their first job, so nothing is merged, built or deployed from a
-# commit that fails it. Each job runs one part of scripts/check.sh, the same
-# script `composer run check` runs locally; the audit rule is written there.
+# commit that fails it. One job, because Actions bills every job rounded up
+# to a whole minute. The app steps run the parts of scripts/check.sh, the
+# same script `composer run check` runs locally; the audit rule is written there.
 
-# Both inputs default to the full gate; only pr.yml narrows them, and an
-# unset or unreadable value runs everything.
 on:
   workflow_dispatch:
   workflow_call:
-    inputs:
-      app_checks:
-        type: boolean
-        default: true
-      export_self_test:
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -30,133 +22,75 @@ env:
   SESSION_DRIVER: array
 
 jobs:
-  php:
-    name: PHP (pint, tests)
-    if: format('{0}', inputs.app_checks) != 'false'
+  gate:
+    name: Gate
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      # Depth 2: a pull request runs on its merge commit, whose first parent is the base.
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
-          php-version: '8.4'
-          extensions: bcmath, calendar, intl, mbstring, pcntl, pdo_sqlite, posix, sqlite3, zip
-          coverage: none
-          tools: composer:v2
+          fetch-depth: 2
+          persist-credentials: false
 
-      - name: Locate the Composer cache
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+      # Into develop in the private repository, a docs-only change skips the app steps and the export
+      # self-test runs only when the export policy could have changed. Every
+      # other run, and any doubt, runs everything.
+      - name: Decide what this change needs
+        id: classify
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+          PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          set -euo pipefail
+          app=true
+          selftest=true
+          workflows=true
+          if [ "$PRIVATE" = "true" ] && [ "$EVENT" = "pull_request" ] && [ "$BASE" = "develop" ] \
+            && [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3 ] \
+            && names=$(git diff --no-renames --name-only HEAD^1 HEAD); then
+            if [ -n "$names" ] && ! grep -vqE '^(docs/|[^/]+\.md$)' <<<"$names"; then
+              app=false
+            fi
+            if ! grep -qE '^(scripts/public-export(\.sh$|/)|\.github/|resources/fonts/)|(^|/)\.gitattributes$' <<<"$names"; then
+              selftest=false
+            fi
+            if ! grep -q '^\.github/' <<<"$names"; then
+              workflows=false
+            fi
+          fi
+          {
+            echo "app_checks=$app"
+            echo "selftest=$selftest"
+            echo "workflows=$workflows"
+          } >> "$GITHUB_OUTPUT"
+          echo "App checks: $app. Export self-test: $selftest. Workflow lint: $workflows."
 
-      - name: Cache Composer downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-${{ runner.os }}-
+      # A release PR into main merges with GitHub's own merge-commit subject, so its title is not checked.
+      - name: Title in house style
+        if: github.event_name == 'pull_request' && github.event.pull_request.base.ref != 'main'
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: scripts/hooks/commit-msg.sh --subject "$TITLE"
 
-      - name: Install PHP dependencies
-        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Lint the workflows (actionlint, pinned by checksum)
+        if: steps.classify.outputs.workflows == 'true'
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          curl -sSfL -o "$RUNNER_TEMP/actionlint.tgz" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  $RUNNER_TEMP/actionlint.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/actionlint.tgz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" .github/workflows/*.yml
 
-      - name: Prepare the environment file
-        run: cp .env.example .env && php artisan key:generate
-
-      - name: Pint and tests
-        run: scripts/check.sh php
-
-  js:
-    name: JS (types, ESLint, tokens, build)
-    if: format('{0}', inputs.app_checks) != 'false'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      # PHP is here for Wayfinder, which generates the route helpers from the
-      # Laravel routes before TypeScript can check the imports.
-      - name: Set up PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
-        with:
-          php-version: '8.4'
-          extensions: bcmath, calendar, intl, mbstring, pcntl, pdo_sqlite, posix, sqlite3, zip
-          coverage: none
-          tools: composer:v2
-
-      - name: Locate the Composer cache
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Composer downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-${{ runner.os }}-
-
-      - name: Install PHP dependencies
-        run: composer install --no-interaction --no-progress --prefer-dist
-
-      - name: Prepare the environment file
-        run: cp .env.example .env && php artisan key:generate
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: '1.3.14'
-
-      - name: Cache Bun downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-
-      - name: Install JS dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Types, ESLint, token linter, JS tests, build
-        run: scripts/check.sh js
-
-  audit:
-    name: Dependency audits
-    if: format('{0}', inputs.app_checks) != 'false'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
-        with:
-          php-version: '8.4'
-          coverage: none
-          tools: composer:v2
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: '1.3.14'
-
-      # Both audits read the lock files; nothing is installed.
-      - name: Composer and bun audits
-        run: scripts/check.sh audit
-
-  # The export policy is export-ignored, so this job has nothing to run in the public snapshot.
-  export-gate:
-    name: Public export gate self-test
-    if: github.event.repository.private && format('{0}', inputs.export_self_test) != 'false'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
+      # The export policy is export-ignored, so the public snapshot skips every export step.
       - name: Install gitleaks (pinned by checksum)
+        if: github.event.repository.private && (github.event_name == 'pull_request' || steps.classify.outputs.selftest == 'true')
         env:
           GITLEAKS_VERSION: 8.30.1
           GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
@@ -168,5 +102,76 @@ jobs:
           tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
           sudo install -m 0755 "$RUNNER_TEMP/gitleaks" /usr/local/bin/gitleaks
 
-      - name: Plant a leak per gate and expect each to fail
+      # The release's export and security stage on the tested merge; hits go to the report dir, never the log.
+      - name: Public export security stage
+        id: export
+        if: github.event.repository.private && github.event_name == 'pull_request'
+        run: scripts/public-export.sh --report-dir "$RUNNER_TEMP/report" HEAD "$RUNNER_TEMP/public-tree"
+
+      - name: How to see the export hits
+        if: failure() && steps.export.outcome == 'failure'
+        run: echo "::error::Run scripts/public-export.sh --report-dir <dir>/rep <sha> <dir>/pub locally on this branch and read <dir>/rep/hits-*.txt."
+
+      - name: Public export gate self-test
+        if: github.event.repository.private && steps.classify.outputs.selftest == 'true'
         run: scripts/public-export.sh --self-test
+
+      - name: Set up PHP
+        if: steps.classify.outputs.app_checks == 'true'
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          extensions: bcmath, calendar, intl, mbstring, pcntl, pdo_sqlite, posix, sqlite3, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Locate the Composer cache
+        if: steps.classify.outputs.app_checks == 'true'
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer downloads
+        if: steps.classify.outputs.app_checks == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install PHP dependencies
+        if: steps.classify.outputs.app_checks == 'true'
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Prepare the environment file
+        if: steps.classify.outputs.app_checks == 'true'
+        run: cp .env.example .env && php artisan key:generate
+
+      - name: Set up Bun
+        if: steps.classify.outputs.app_checks == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: '1.3.14'
+
+      - name: Cache Bun downloads
+        if: steps.classify.outputs.app_checks == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install JS dependencies
+        if: steps.classify.outputs.app_checks == 'true'
+        run: bun install --frozen-lockfile
+
+      - name: Pint and PHP tests
+        if: steps.classify.outputs.app_checks == 'true'
+        run: scripts/check.sh php
+
+      - name: Wayfinder, types, ESLint, token linter, JS tests, build
+        if: steps.classify.outputs.app_checks == 'true'
+        run: scripts/check.sh js
+
+      - name: Composer and bun audits
+        if: steps.classify.outputs.app_checks == 'true'
+        run: scripts/check.sh audit

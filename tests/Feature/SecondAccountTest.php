@@ -184,7 +184,7 @@ final class SecondAccountTest extends TestCase
     public function test_server_configuration_shows_only_to_the_operator_accounts_owner(): void
     {
         $member = User::factory()->create(['account_id' => $this->operator->account_id, 'owner' => false]);
-        $this->actingAs($member)->get('/settings/integracje')->assertOk()->assertInertia(fn (Assert $page) => $page->where('server', null));
+        $this->actingAs($member)->get('/settings/integracje')->assertNotFound();
 
         $this->actingAs($this->pilot)->get('/settings/integracje')->assertOk()->assertInertia(fn (Assert $page) => $page->where('server', null));
         $this->actingAs($this->operator)->get('/settings/integracje')->assertOk()->assertInertia(fn (Assert $page) => $page->whereType('server', 'array'));

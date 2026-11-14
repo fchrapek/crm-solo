@@ -1,5 +1,5 @@
 import { ActionMenuItem } from '@/components/solo/action-menu';
-import { useInHeaderMenu } from '@/components/solo/client-header';
+import { useInHeaderMenu, useInRecordFrame } from '@/components/solo/client-header';
 import { IconButton } from '@/components/solo/icon-button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Icon } from '@/components/ui/icon';
@@ -14,12 +14,29 @@ export function setClientPinned(clientId: number, pinned: boolean): void {
 export function PinMenuAction({ clientId, pinned }: { clientId: number; pinned: boolean }) {
     const { t } = useTranslation();
     const inHeaderMenu = useInHeaderMenu();
+    const inFrame = useInRecordFrame();
 
     if (inHeaderMenu) {
         return (
             <ActionMenuItem icon={<Icon name="pin" size={16} filled />} onSelect={() => setClientPinned(clientId, !pinned)}>
                 {t(pinned ? 'Unpin from the list' : 'Pin on the list')}
             </ActionMenuItem>
+        );
+    }
+
+    if (inFrame) {
+        const label = t(pinned ? 'Unpin from the list' : 'Pin on the list');
+
+        return (
+            <IconButton
+                icon="pin"
+                look="outline"
+                filled={pinned}
+                aria-pressed={pinned}
+                label={label}
+                title={label}
+                onClick={() => setClientPinned(clientId, !pinned)}
+            />
         );
     }
 

@@ -66,6 +66,7 @@ const company: ClientDetails = {
     address: 'ul. Stolarska 12',
     postal_code: '90-410',
     city: 'Łódź',
+    region: null,
     country: 'PL',
     cooperation_type: 'retainer',
     month_close_type: 'maintenance',
@@ -78,6 +79,7 @@ const company: ClientDetails = {
     ssh_config: null,
     maintenance_invoice_description: null,
     report_baseline_markdown: null,
+    notes: null,
     archived: false,
 };
 
@@ -126,6 +128,7 @@ describe('the Dane forms on a phone', () => {
             'currency',
             'segment',
             'cooperation',
+            'region',
             'notes',
         ]);
         expect(textOf(html)).toContain('Polska');
@@ -194,18 +197,21 @@ describe('Dane for a private person on a phone (347:5178)', () => {
         expect(html).toContain('href="mailto:jan.nowak@example.com"');
     });
 
-    test('a company lists its contacts as rows to their records on phones, beside the desktop list', () => {
+    test('a company lists its contacts as rows that open their records, with the address beside the name from 768 px', () => {
         const contacts = [{ id: 11, name: 'Marek Dąbek', email: 'marek@meble-przykladowe.test', phone: null, position: null }];
         const markup = renderToStaticMarkup(<DetailsTab client={header} details={company} contacts={contacts} dialog={null} onDialogChange={noop} />);
 
         expect(markup).toContain('href="mailto:marek@meble-przykladowe.test"');
-        expect(markup).toMatch(/<a[^>]*href="\/contacts\/11\/edit"[^>]*>.*Marek Dąbek.*marek@meble-przykladowe\.test/);
-        expect(textOf(markup)).toContain('Kontakty · 1');
+        expect(markup).toMatch(/<a[^>]*href="\/contacts\/11\/edit"[^>]*>Marek Dąbek<\/a>/);
+        expect(markup).toMatch(
+            /<a[^>]*aria-label="Edytuj: Marek Dąbek"[^>]*href="\/contacts\/11\/edit"|<a[^>]*href="\/contacts\/11\/edit"[^>]*aria-label="Edytuj: Marek Dąbek"/,
+        );
+        expect(textOf(markup)).toContain('Kontakty1');
         expect(textOf(markup)).toContain('731-198-20-45');
     });
 });
 
-describe('the Dane ••• menu (347:5037)', () => {
+describe('the Dane "more" menu on a phone', () => {
     test('Edytuj dane firmy then Nowy kontakt, only in the phone menu', () => {
         expect(detailsActionOrder(true)).toEqual(['details', 'contact']);
         expect(detailsActionOrder(false)).toEqual([]);
@@ -288,19 +294,20 @@ describe('what the client form sends', () => {
         segment: '',
         hourly_rate: '165',
         notes: 'z formularza',
+        region: 'mazowieckie',
     };
 
     test('editing a client that is not hourly sends no rate, so a stored rate survives a phone change', async () => {
         const { clientPayload } = await import('./client-details-dialog');
 
-        expect(clientPayload(draft, false)).not.toHaveProperty('hourly_rate');
-        expect(clientPayload({ ...draft, cooperation_type: 'hourly' }, false)).toHaveProperty('hourly_rate', '165');
+        expect(clientPayload(draft)).not.toHaveProperty('hourly_rate');
+        expect(clientPayload({ ...draft, cooperation_type: 'hourly' })).toHaveProperty('hourly_rate', '165');
     });
 
-    test('notes go along on create only', async () => {
+    test('notes and the region go along on an edit too, so they can be changed after the client exists', async () => {
         const { clientPayload } = await import('./client-details-dialog');
 
-        expect(clientPayload(draft, true)).toHaveProperty('notes', 'z formularza');
-        expect(clientPayload(draft, false)).not.toHaveProperty('notes');
+        expect(clientPayload(draft)).toHaveProperty('notes', 'z formularza');
+        expect(clientPayload(draft)).toHaveProperty('region', 'mazowieckie');
     });
 });

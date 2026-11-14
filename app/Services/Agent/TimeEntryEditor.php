@@ -68,12 +68,12 @@ final class TimeEntryEditor
         $timed = $minutes !== null || $this->filled($input['start'] ?? null) || $this->filled($input['end'] ?? null);
 
         if ($changes === [] && ! $timed) {
-            throw AgentRefusal::invalid('Nothing to change: pass minutes, start, end, task, description, title, billable or not billable.');
+            throw AgentRefusal::invalid('Nothing to change: pass minutes, start, end, task, description or title.');
         }
 
         if ($timed) {
             if ($entry->end_time === null) {
-                throw AgentRefusal::invalid("Entry #{$entry->id} is running: stop it first (timer-stop {$entry->id}), then change its time. Task, description, title and billable change while it runs.", ['field' => 'minutes']);
+                throw AgentRefusal::invalid("Entry #{$entry->id} is running: stop it first (timer-stop {$entry->id}), then change its time. Task, description and title change while it runs.", ['field' => 'minutes']);
             }
             [$changes['start'], $changes['end']] = $this->times($entry, $minutes, $input['start'] ?? null, $input['end'] ?? null);
         }

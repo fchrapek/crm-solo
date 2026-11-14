@@ -2,17 +2,18 @@ import { Head, useForm } from '@inertiajs/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { usePageActions } from '@/contexts/page-context';
+import { fieldControl, labelId, SoloField, SoloFieldRow, SoloInput, SoloTextarea } from '@/components/solo/field';
+import { SoloButton, SoloButtonLink } from '@/components/solo/primitives';
+import { ResponsiveSelect } from '@/components/solo/responsive-select';
+import { type PlaceResolver } from '@/components/solo/shell/place';
+import { SoloSurface } from '@/components/solo/surface';
+import { Tile, TileGrid, TileHeader, TileNote, TileStack } from '@/components/solo/tile';
 import leads from '@/routes/leads';
-import { BreadcrumbItem, SharedData } from '@/types';
+import { SharedData } from '@/types';
 
 import styles from './form.module.css';
 import { useLeadLabel, type LabelMap, type PipelineLabels } from './lib/labels';
+import { leadPlace } from './place';
 
 interface PipelineMeta {
     key: string;
@@ -29,10 +30,10 @@ interface CreatePageProps extends SharedData {
     pipeline: string;
 }
 
+/** Figma: Leady · Zarejestruj leada (1094:36131, phone 1094:36361). */
 export default function Create({ pipelines, sources, source_labels, pipeline }: CreatePageProps) {
     const { t } = useTranslation();
     const label = useLeadLabel();
-    const { setBreadcrumbs } = usePageActions();
 
     const { data, setData, post, processing, errors } = useForm({
         pipeline: pipeline || pipelines[0]?.key || '',
@@ -44,101 +45,88 @@ export default function Create({ pipelines, sources, source_labels, pipeline }: 
         notes: '',
     });
 
-    const breadcrumbs: BreadcrumbItem[] = React.useMemo(
-        () => [
-            { title: 'Leads', href: leads.index().url },
-            { title: 'Capture lead', href: leads.create().url },
-        ],
-        [],
-    );
-    React.useEffect(() => {
-        setBreadcrumbs(breadcrumbs);
-    }, [breadcrumbs, setBreadcrumbs]);
-
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
         post(leads.store().url);
     };
 
     return (
-        <>
+        <SoloSurface day="paper">
             <Head title={t('Capture lead')} />
+            <TileGrid>
+                <TileStack>
+                    <Tile kind="plain">
+                        <form className={styles.form} onSubmit={submit} data-fill="">
+                            <h1 className={styles.title}>{t('Capture lead')}</h1>
 
-            <form className={styles.form} onSubmit={submit}>
-                <div className={styles.field}>
-                    <Label htmlFor="pipeline">{t('Brand')}</Label>
-                    <Select value={data.pipeline} onValueChange={(v) => setData('pipeline', v)}>
-                        <SelectTrigger id="pipeline">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {pipelines.map((p) => (
-                                <SelectItem key={p.key} value={p.key}>
-                                    {label('pipeline', p.key, p.label)}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    {errors.pipeline && <p className={styles.error}>{errors.pipeline}</p>}
-                    <p className={styles.hint}>{t('The funnel cannot be changed after capture.')}</p>
-                </div>
+                            {pipelines.length > 1 && (
+                                <SoloField label={t('Brand')} htmlFor="pipeline" error={errors.pipeline}>
+                                    <div className={styles.track} role="group" aria-labelledby={labelId('pipeline')}>
+                                        {pipelines.map((p) => (
+                                            <button key={p.key} type="button" className={styles.option} aria-pressed={data.pipeline === p.key} onClick={() => setData('pipeline', p.key)}>
+                                                {label('pipeline', p.key, p.label)}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className={styles.hint}>{t('The funnel cannot be changed after capture.')}</p>
+                                </SoloField>
+                            )}
 
-                <div className={styles.field}>
-                    <Label htmlFor="source">{t('Source')}</Label>
-                    <Select value={data.source} onValueChange={(v) => setData('source', v)}>
-                        <SelectTrigger id="source">
-                            <SelectValue placeholder={t('Where did this lead come from?')} />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {sources.map((source) => (
-                                <SelectItem key={source} value={source}>
-                                    {label('source', source, source_labels?.[source])}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    {errors.source && <p className={styles.error}>{errors.source}</p>}
-                    {/* The plan's hard rule, surfaced where the choice is made
-                        rather than as an error after the fact. */}
-                    <p className={styles.hint}>{t('Set once, at capture - an untagged channel does not exist. This cannot be edited later.')}</p>
-                </div>
+                            <SoloField label={t('Source')} htmlFor="source" error={errors.source}>
+                                <ResponsiveSelect
+                                    label={t('Source')}
+                                    value={data.source}
+                                    onValueChange={(value) => setData('source', value)}
+                                    options={sources.map((source) => ({ value: source, label: label('source', source, source_labels?.[source]) }))}
+                                    placeholder={t('Where did this lead come from?')}
+                                    control={fieldControl('source', errors.source)}
+                                />
+                                {/* The plan's hard rule, said where the choice is made rather than as an error after the fact. */}
+                                <p className={styles.hint}>{t('Set once, at capture - an untagged channel does not exist. This cannot be edited later.')}</p>
+                            </SoloField>
 
-                <div className={styles.field}>
-                    <Label htmlFor="name">{t('Name')}</Label>
-                    <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
-                    {errors.name && <p className={styles.error}>{errors.name}</p>}
-                </div>
+                            <SoloFieldRow>
+                                <SoloField label={t('Name')} htmlFor="name" error={errors.name}>
+                                    <SoloInput {...fieldControl('name', errors.name)} value={data.name} onChange={(e) => setData('name', e.target.value)} />
+                                </SoloField>
+                                <SoloField label={t('Company')} htmlFor="company" error={errors.company}>
+                                    <SoloInput {...fieldControl('company', errors.company)} value={data.company} onChange={(e) => setData('company', e.target.value)} />
+                                </SoloField>
+                            </SoloFieldRow>
 
-                <div className={styles.field}>
-                    <Label htmlFor="company">{t('Company')}</Label>
-                    <Input id="company" value={data.company} onChange={(e) => setData('company', e.target.value)} />
-                    {errors.company && <p className={styles.error}>{errors.company}</p>}
-                </div>
+                            <SoloFieldRow>
+                                <SoloField label={t('Email')} htmlFor="email" error={errors.email}>
+                                    <SoloInput {...fieldControl('email', errors.email)} type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} />
+                                </SoloField>
+                                <SoloField label={t('Phone')} htmlFor="phone" error={errors.phone}>
+                                    <SoloInput {...fieldControl('phone', errors.phone)} value={data.phone} onChange={(e) => setData('phone', e.target.value)} />
+                                </SoloField>
+                            </SoloFieldRow>
 
-                <div className={styles.row}>
-                    <div className={styles.field}>
-                        <Label htmlFor="email">{t('Email')}</Label>
-                        <Input id="email" type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} />
-                        {errors.email && <p className={styles.error}>{errors.email}</p>}
-                    </div>
-                    <div className={styles.field}>
-                        <Label htmlFor="phone">{t('Phone')}</Label>
-                        <Input id="phone" value={data.phone} onChange={(e) => setData('phone', e.target.value)} />
-                        {errors.phone && <p className={styles.error}>{errors.phone}</p>}
-                    </div>
-                </div>
+                            <SoloField label={t('Notes')} htmlFor="notes" error={errors.notes}>
+                                <SoloTextarea {...fieldControl('notes', errors.notes)} rows={4} value={data.notes} onChange={(e) => setData('notes', e.target.value)} />
+                            </SoloField>
 
-                <div className={styles.field}>
-                    <Label htmlFor="notes">{t('Notes')}</Label>
-                    <Textarea id="notes" rows={4} value={data.notes} onChange={(e) => setData('notes', e.target.value)} />
-                </div>
-
-                <div className={styles.actions}>
-                    <Button type="submit" disabled={processing}>
-                        {t('Capture lead')}
-                    </Button>
-                </div>
-            </form>
-        </>
+                            <div className={styles.actions}>
+                                <SoloButton type="submit" size="control" disabled={processing}>
+                                    {t('Capture lead')}
+                                </SoloButton>
+                                <SoloButtonLink href={leads.index().url} variant="quiet" size="control">
+                                    {t('Cancel')}
+                                </SoloButtonLink>
+                            </div>
+                        </form>
+                    </Tile>
+                </TileStack>
+                <TileStack as="aside">
+                    <Tile kind="plain">
+                        <TileHeader label={t('What happens next')} />
+                        <TileNote>{t('lead_capture_note')}</TileNote>
+                    </Tile>
+                </TileStack>
+            </TileGrid>
+        </SoloSurface>
     );
 }
+
+Create.place = ((_props, context) => leadPlace(context.t('New lead'), context)) satisfies PlaceResolver<CreatePageProps>;

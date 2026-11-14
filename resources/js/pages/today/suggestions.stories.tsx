@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Suggestions } from './plan';
 import { suggestions } from './story-fixtures';
 
-/** Figma: Plan jutro, Propozycje: List rows with + Jutro, then the way to the full list. */
+/** Figma: Jutro, Propozycje: rows with Na jutro, then the way to the full list. */
 const meta = {
     title: 'Dziś/Propozycje',
     component: Suggestions,

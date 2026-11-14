@@ -1,12 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { DayStatus } from './index';
+import { DayStatus } from './summary';
 
-/** Figma: A2f / Day status, under the month card on Podsumowanie (Surface=Done). */
+/** Figma: Podsumowanie, the day's state beside the close button. */
 const meta = {
-    title: 'Solo/Day status',
+    title: 'Dziś/Podsumowanie status',
     component: DayStatus,
     args: { closed: true, running: false },
-    globals: { day: 'done' },
     decorators: [
         (Story) => (
             <div style={{ maxWidth: 380 }}>

@@ -68,8 +68,8 @@ describe('ClientOverviewTab', () => {
     test('a quiet client says nothing is waiting and counts every logged hour', () => {
         const html = render(quiet);
         expect(html).toContain('Nic nie czeka.');
-        expect(html).toContain('Nic w toku →');
-        expect(html).toContain('Nic nowego od 28.09 →');
+        expect(html).toContain('Nic w toku');
+        expect(html).toContain('Nic nowego od 28.09');
         expect(html).toContain('4,25 h');
         expect(html).toContain('Bez abonamentu');
         expect(html).not.toContain('Bilans na');
@@ -78,11 +78,11 @@ describe('ClientOverviewTab', () => {
     test('the Figma state reads as the frame does', () => {
         const html = render(busy);
         expect(html).toContain('Raport za wrzesień');
-        expect(html).toContain('href="/clients/7/edit#reports"');
+        expect(html).toContain('href="/clients/7/rozliczenia?miesiac=2026-09"');
         expect(html).toContain('Wygeneruj');
         expect(html).toContain('Zamknięcie września, 0 z 15');
         expect(html).toContain('href="/month-close?period=2026-09"');
-        expect(html).toContain('12 w toku →');
+        expect(html).toContain('12 w toku');
         expect(html).toContain('href="/clients/7/zadania"');
         expect(html).toContain('4 nowe od 28.09');
         expect(html).toContain('href="/clients/7/dziennik"');
@@ -272,35 +272,33 @@ describe('Czeka na ciebie for an order client', () => {
     });
 });
 
-describe('Przegląd on phones', () => {
+describe('Przegląd hours tile', () => {
     const behind: ClientOverview = { ...busy, settlement: { active_period: '2026-09', current_period: '2026-10', open_behind: true } };
 
-    test('the balance is the poster, in vermilion when negative, and bilans na opens the Godziny sheet, which stays unmounted', () => {
+    test('the figure is the hours worked, and the balance closes the ledger, over the limit when negative', () => {
         const html = render(busy);
 
-        expect(html).toMatch(/<p[^>]*data-tone="over"[^>]*>[−-]16,0 h<\/p>/);
-        expect(html).toMatch(/<button type="button"[^>]*aria-haspopup="dialog"[^>]*>bilans na październik<span[^>]*data-icon="chevron-right"><svg/);
-        expect(html).not.toContain('Godziny · wrzesień');
-        expect(html.indexOf('data-tone="over"')).toBeLessThan(html.indexOf('bilans na październik'));
+        expect(html).toMatch(/Godziny · wrzesień<\/span><span[^>]*>36,5 h<\/span>/);
+        expect(html).toMatch(/Bilans na październik<\/dt><dd[^>]*data-tone="over"[^>]*>[−-]16,0 h<\/dd>/);
+        expect(html).not.toContain('aria-haspopup="dialog"');
     });
 
-    test('an open month adds the note and the outlined Zamknij miesiąc for phones beside the desktop action', () => {
+    test('an open month adds the note and one Zamknij miesiąc under the ledger', () => {
         const html = render(behind);
-        const closeButtons = [...html.matchAll(/<button[^>]*>Zamknij miesiąc<\/button>/g)];
 
         expect(html).toContain('Jest już październik · wrzesień jeszcze otwarty');
-        expect(closeButtons).toHaveLength(2);
-        expect(html.indexOf('jeszcze otwarty')).toBeGreaterThan(html.indexOf('bilans na październik'));
+        expect([...html.matchAll(/<button[^>]*>Zamknij miesiąc<\/button>/g)]).toHaveLength(1);
+        expect(html.indexOf('jeszcze otwarty')).toBeGreaterThan(html.indexOf('Bilans na październik'));
     });
 
     test('a positive balance reads in ink', () => {
         const html = render({ ...busy, hours: { ...busy.hours!, used: 6.5, remaining: 14 } });
 
-        expect(html).toMatch(/<p[^>]*>\+14,0 h<\/p>/);
+        expect(html).toMatch(/<dd[^>]*>\+14,0 h<\/dd>/);
         expect(html).not.toMatch(/data-tone="over"[^>]*>\+14/);
     });
 
-    test('an order client gets Zlecenie with no balance link, and its task waits with a phone Start beside the desktop one', () => {
+    test('an order client gets Zlecenie with no balance, and its task waits with one Start', () => {
         const html = render({
             ...quiet,
             hours: null,
@@ -311,38 +309,25 @@ describe('Przegląd on phones', () => {
 
         expect(html).toContain('Zlecenie');
         expect(html).toContain('>w trakcie<');
-        expect(html).not.toContain('bilans na');
+        expect(html).not.toContain('Bilans na');
         expect(html).not.toContain('Zamknij miesiąc');
-        expect([...html.matchAll(/<button[^>]*>(?:<span[^>]*data-icon="play"><svg.*?<\/svg><\/span>)?Start<\/button>/g)]).toHaveLength(2);
-        expect(html).toMatch(/<button[^>]*><span[^>]*data-icon="play"><svg[^>]*>.*?<\/svg><\/span>Start<\/button>/);
+        expect([...html.matchAll(/<button[^>]*>Start<\/button>/g)]).toHaveLength(1);
     });
 
-    test('a waiting row with a link is one row target on a phone, named by its title', () => {
+    test('a waiting row that only leads somewhere is a link, and a button stays where it does something', () => {
         const html = render(busy);
-        const [, titleId] = html.match(/<span[^>]*id="([^"]+)"[^>]*>Raport za wrzesień<\/span>/) ?? [];
 
-        expect(titleId).toBeDefined();
-        expect(html).toContain(`aria-labelledby="${titleId}"`);
+        expect(html).toMatch(/Raport za wrzesień<\/span><a[^>]*href="\/clients\/7\/rozliczenia\?miesiac=2026-09"[^>]*>Wygeneruj<\/a>/);
+        expect(html).toMatch(/<a[^>]*href="\/month-close\?period=2026-09"[^>]*>Zamknięcie września, 0 z 15<\/a>/);
+        expect(html).toMatch(/<a[^>]*href="\/clients\/7\/zadania"[^>]*>12 w toku<\/a>/);
+        expect(html).not.toContain('>Otwórz<');
     });
 
-    test('the ••• menu leads with Generuj raport, then Kopiuj and the pin; an order client has no report', () => {
-        expect(overviewActionOrder(true, 'retainer')).toEqual(['report', 'copy', 'pin']);
+    test('a phone keeps Kopiuj as its main button, so the "more" menu holds Generuj raport and the pin; an order client has no report', () => {
+        expect(overviewActionOrder(true, 'retainer')).toEqual(['report', 'pin']);
         expect(overviewActionOrder(false, 'retainer')).toEqual(['copy', 'report', 'pin']);
-        expect(overviewActionOrder(true, 'order')).toEqual(['copy', 'pin']);
+        expect(overviewActionOrder(true, 'order')).toEqual(['pin']);
         expect(overviewActionOrder(false, 'order')).toEqual(['copy', 'pin']);
-    });
-});
-
-describe('Przegląd phone rules', () => {
-    test('an empty Czeka na ciebie keeps the top rule the rows have on a phone and drops it from 768 px', async () => {
-        const css = await Bun.file(new URL('./client-overview.module.css', import.meta.url)).text();
-        const [phone, desktop] = css.split('@media (min-width: 768px)');
-
-        expect(phone).toMatch(
-            /\.main \.waiting,\s*\.main \.empty,\s*\.hours > \.ledger \{\s*border-top: var\(--solo-head-rule, 1px\) solid var\(--solo-rule\);/,
-        );
-        expect(desktop).toMatch(/\.main \.waiting,\s*\.main \.empty,\s*\.hours > \.ledger \{\s*border-top: 0;/);
-        expect(render(quiet)).toMatch(/<p[^>]*>Nic nie czeka\.<\/p>/);
     });
 });
 
@@ -390,5 +375,15 @@ describe('Przegląd SMS for an account with client fields', () => {
         expect(waiting).toContain('aria-label="Dlaczego się nie udało"');
         expect(waiting).toContain('Wyślij ponownie');
         expect(waiting).not.toContain('Invalid phone number');
+    });
+
+    test('a member sees the failed and the scheduled text without Wyślij ponownie or Anuluj; the owner has both', () => {
+        const member = renderToStaticMarkup(<ClientOverviewTab clientId={7} overview={card} manage={false} />);
+
+        expect(member).toContain('Nieudany SMS: Potwierdzenie');
+        expect(member).toContain('Wizja jutro o 10:00.');
+        expect(member).not.toContain('Wyślij ponownie');
+        expect(member).not.toContain('>Anuluj<');
+        expect(render(card)).toContain('>Anuluj<');
     });
 });

@@ -1,8 +1,8 @@
 import { fieldControl, SoloField, SoloTextarea } from '@/components/solo/field';
 import { KvRow } from '@/components/solo/kv-row';
-import { SectionAction, SoloButton, touchTargetClass } from '@/components/solo/primitives';
+import { SoloButton } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
-import { SectionToggle } from '@/components/solo/section-toggle';
+import { Tile, TileHeader, TileNote } from '@/components/solo/tile';
 import tasks from '@/routes/tasks';
 import { router } from '@inertiajs/react';
 import { type FormEvent, useState } from 'react';
@@ -13,26 +13,18 @@ import type { BriefField, TaskBriefData } from './types';
 
 const FIELDS: BriefField[] = ['where', 'done_when', 'constraints', 'notes'];
 
-function BriefSummary({ brief, now, today, locale }: { brief: TaskBriefData; now: number; today: string; locale: string }) {
+type Change = NonNullable<TaskBriefData['last_change']>;
+
+/** "zmieniono dziś 11:20 · Codex": when the brief last changed and, unless it was the owner, who did it. */
+function BriefChange({ change, now, today, locale }: { change: Change; now: number; today: string; locale: string }) {
     const { t } = useTranslation();
-    const change = brief.last_change;
-    const count = t('{{count}} fields', { count: brief.filled });
-    if (change === null) {
-        return <>{brief.filled === 0 ? t('empty') : count}</>;
-    }
     const when = whenLabel(change, now, today, locale, t);
 
-    return (
+    return change.actor.kind === 'owner' ? (
+        <>{t('you changed {{when}}', { when })}</>
+    ) : (
         <>
-            {count} ·{' '}
-            {change.actor.kind === 'owner' ? (
-                t('you changed {{when}}', { when })
-            ) : (
-                <>
-                    <span className={change.actor.kind === 'agent' ? styles.agentName : undefined}>{actorName(change.actor, t)}</span>{' '}
-                    {t('changed {{when}}', { when })}
-                </>
-            )}
+            {t('you changed {{when}}', { when })} · {actorName(change.actor, t)}
         </>
     );
 }
@@ -119,7 +111,10 @@ function blank(brief: TaskBriefData): Record<BriefField, string> {
     };
 }
 
-/** Figma: Brief dla agenta (425:1171; phones 440:6985): the four fields, written by agents and by the owner here. */
+/**
+ * Figma: Zadanie, the Brief dla agenta tile (1094:40618; empty 1094:41102): the four fields, written by agents and by
+ * the owner in the dialog, and who changed them last.
+ */
 export function BriefSection({
     taskId,
     brief,
@@ -137,33 +132,29 @@ export function BriefSection({
     const [editing, setEditing] = useState(false);
 
     return (
-        <>
-            <SectionToggle
-                label={t('Brief for the agent')}
-                summary={<BriefSummary brief={brief} now={now} today={today} locale={locale} />}
-                phoneSummary={brief.filled === 0 ? t('empty') : t('{{count}} fields', { count: brief.filled })}
-                extra={<SectionAction onClick={() => setEditing(true)}>{t('Edit')}</SectionAction>}
-                phoneExtra={
-                    brief.filled === 0 ? (
-                        <SectionAction className={touchTargetClass} onClick={() => setEditing(true)}>
-                            {t('Edit')}
-                        </SectionAction>
-                    ) : undefined
+        <Tile kind="plain" aria-labelledby="task-brief">
+            <TileHeader
+                label={<span id="task-brief">{t('Brief for the agent')}</span>}
+                count={brief.filled === 0 ? t('empty') : t('{{count}} fields', { count: brief.filled })}
+                end={
+                    <SoloButton variant="quiet" size="control" className={styles.headAction} onClick={() => setEditing(true)}>
+                        {t('Edit')}
+                    </SoloButton>
                 }
-                empty={brief.filled === 0}
-            >
-                <dl className={styles.briefList}>
-                    {FIELDS.map((field) => (
-                        <KvRow key={field} label={briefFieldLabel(field, t)} tone={brief.fields[field] === null ? 'muted' : undefined}>
-                            {brief.fields[field] ?? t('not set')}
-                        </KvRow>
-                    ))}
-                </dl>
-                <button type="button" className={styles.phoneAction} onClick={() => setEditing(true)}>
-                    {t('Edit brief')}
-                </button>
-            </SectionToggle>
+            />
+            <dl className={styles.briefList}>
+                {FIELDS.map((field) => (
+                    <KvRow key={field} layout="field" label={briefFieldLabel(field, t)} tone={brief.fields[field] === null ? 'muted' : undefined}>
+                        {brief.fields[field] ?? t('not set')}
+                    </KvRow>
+                ))}
+            </dl>
+            {brief.last_change !== null && (
+                <TileNote>
+                    <BriefChange change={brief.last_change} now={now} today={today} locale={locale} />
+                </TileNote>
+            )}
             <BriefDialog taskId={taskId} brief={brief} open={editing} onOpenChange={setEditing} />
-        </>
+        </Tile>
     );
 }

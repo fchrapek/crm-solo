@@ -1,15 +1,17 @@
-import { ActionMenuLink } from '@/components/solo/action-menu';
-import { HeaderAction, RecordHeader, type TrailItem } from '@/components/solo/client-header';
-import { Icon } from '@/components/ui/icon';
+import { Chip } from '@/components/solo/chip';
+import { Poster, SoloButton } from '@/components/solo/primitives';
+import { type PlaceResolver } from '@/components/solo/shell/place';
+import { Tile } from '@/components/solo/tile';
 import clients from '@/routes/clients';
 import day from '@/routes/day';
-import projectBoard from '@/routes/project-board';
 import tasks from '@/routes/tasks';
 import { Link, router } from '@inertiajs/react';
-import { Fragment, type ReactNode, useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { clientToken } from '../../../clients/place';
 import { agentPrompt, dueText } from './format';
+import { TaskMenu } from './task-menu';
 import styles from './task-page.module.css';
 import type { TaskData } from './types';
 
@@ -28,33 +30,39 @@ export async function copyAgentPrompt(
     }
 }
 
-function CopyForAgent({ taskId }: { taskId: number }) {
+export function useCopyForAgent(taskId: number) {
     const { t } = useTranslation();
 
-    async function copy() {
+    return async () => {
         if (await copyAgentPrompt(agentPrompt(taskId, t))) {
             toast.success(t('Copied'));
         } else {
             toast.error(t('Could not copy to the clipboard.'));
         }
-    }
-
-    return (
-        <HeaderAction onClick={copy} icon={<Icon name="copy" size={16} />}>
-            {t('Copy for the agent')}
-        </HeaderAction>
-    );
+    };
 }
 
-/** Figma: Zadanie · timer liczy (922:21795): one click puts the task on today; a picked task says so. */
+/** One click puts the task on today; a picked task says so. */
 function PickToday({ task }: { task: TaskData }) {
     const { t } = useTranslation();
 
-    if (task.is_done) return null;
-    if (task.picked_today) return <HeaderAction disabled>{t('Picked')}</HeaderAction>;
+    if (task.is_done || task.is_archived) return null;
+    if (task.picked_today) {
+        return (
+            <SoloButton variant="secondary" size="control" disabled>
+                {t('Picked')}
+            </SoloButton>
+        );
+    }
 
     return (
-        <HeaderAction onClick={() => router.post(day.picks.store().url, { task_id: task.id }, { preserveScroll: true })}>{t('For today')}</HeaderAction>
+        <SoloButton
+            variant="secondary"
+            size="control"
+            onClick={() => router.post(day.picks.store().url, { task_id: task.id }, { preserveScroll: true })}
+        >
+            {t('For today')}
+        </SoloButton>
     );
 }
 
@@ -68,7 +76,10 @@ function DoneAction({ task }: { task: TaskData }) {
         if (!task.can_unfinish) return null;
 
         return (
-            <HeaderAction
+            <SoloButton
+                variant="secondary"
+                size="control"
+                className={styles.mainAction}
                 disabled={busy}
                 onClick={() => {
                     setBusy(true);
@@ -76,42 +87,39 @@ function DoneAction({ task }: { task: TaskData }) {
                 }}
             >
                 {task.has_trello_card ? t('Undo done in the CRM') : t('Mark as not done')}
-            </HeaderAction>
+            </SoloButton>
         );
     }
 
     return (
-        <HeaderAction
+        <SoloButton
+            size="control"
+            className={styles.mainAction}
             disabled={busy}
-            icon={<Icon name="check" size={16} />}
             onClick={() => {
                 setBusy(true);
                 router.post(day.tasks.complete(task.id).url, {}, options);
             }}
         >
             {task.has_trello_card ? t('Mark done in the CRM') : t('Mark done')}
-        </HeaderAction>
+        </SoloButton>
     );
 }
 
-/** Figma: A2f / Task meta (823:59547): "<project> · do <due> · Trello ↗", the same line on phones; the actions from 768 px. */
+/** The line under the title: client, project, due day (vermilion once overdue), the parent task, Trello for a card. */
 export function TaskMeta({ task, today, locale }: { task: TaskData; today: string; locale: string }) {
     const { t } = useTranslation();
     const due = task.due_day !== null ? dueText(task.due_day, today, locale, t) : null;
     const parts = [
+        task.client !== null ? <span key="client">{task.client.short_name}</span> : null,
         task.project !== null ? <span key="project">{task.project.name}</span> : null,
         due !== null ? (
             <span key="due" data-overdue={task.is_overdue || undefined}>
-                {due}
+                {task.is_overdue ? t('{{due}}, overdue', { due }) : due}
             </span>
         ) : null,
-        task.finished_at !== null ? (
-            <span key="done">{t('done in the CRM')}</span>
-        ) : task.is_done && task.has_trello_card ? (
-            <span key="done">{t('card completed')}</span>
-        ) : null,
         task.parent_task !== null ? (
-            <Link key="parent" href={tasks.show(task.parent_task.id).url} className={styles.parentLink}>
+            <Link key="parent" href={tasks.show(task.parent_task.id).url} className={styles.metaLink}>
                 {t('Parent: {{name}}', { name: task.parent_task.name })}
             </Link>
         ) : null,
@@ -134,49 +142,64 @@ export function TaskMeta({ task, today, locale }: { task: TaskData; today: strin
     );
 }
 
-/** Figma: Zadanie header (770:56741): the trail down to this task; phones keep the back bar and the ••• menu (849:20996). */
-export function TaskHeader({ task, today, locale, children }: { task: TaskData; today: string; locale: string; children?: ReactNode }) {
+/** The state the whole task is in, above its title. */
+function StateChip({ task }: { task: TaskData }) {
     const { t } = useTranslation();
-    const client = task.client;
-    const clientHref = client ? clients.show({ client: client.id, tab: 'zadania' }).url : null;
-    const back = client && clientHref ? { href: clientHref, label: client.short_name } : { href: clients.index().url, label: t('Clients') };
-    const trail: TrailItem[] = [
-        { label: t('Clients'), href: clients.index().url },
-        ...(client && clientHref ? [{ label: client.short_name, href: clientHref }] : []),
-        ...(client && task.project !== null
-            ? [{ label: task.project.name, href: projectBoard.show({ client: client.id, project: task.project.id }).url }]
-            : []),
-        { label: task.name, clip: true },
-    ];
+
+    if (task.is_archived) return <Chip status="open">{t('Archived')}</Chip>;
+    if (task.finished_at !== null) return <Chip status="done">{t('done in the CRM')}</Chip>;
+    if (task.is_done && task.has_trello_card) return <Chip status="done">{t('card completed')}</Chip>;
+
+    return null;
+}
+
+/**
+ * Figma: Zadanie, the head tile (1094:40618, phone 1094:40855; done 1094:41505). The title, the meta line and the
+ * actions; on a phone the main button takes the row and Kopiuj dla agenta moves into "more".
+ */
+export function TaskHeader({
+    task,
+    today,
+    locale,
+    parentOptions,
+}: {
+    task: TaskData;
+    today: string;
+    locale: string;
+    parentOptions?: { id: number; name: string }[];
+}) {
+    const { t } = useTranslation();
+    const copy = useCopyForAgent(task.id);
+    const chip = StateChip({ task });
 
     return (
-        <RecordHeader
-            size="poster"
-            back={back}
-            trail={trail}
-            title={task.name}
-            menu={
-                <>
-                    <PickToday task={task} />
-                    <CopyForAgent taskId={task.id} />
-                    <DoneAction task={task} />
-                    {task.trello_url !== null && task.has_trello_card && (
-                        <ActionMenuLink external href={task.trello_url} icon={<span aria-hidden="true">↗</span>}>
-                            {t('Card in Trello')}
-                        </ActionMenuLink>
-                    )}
-                </>
-            }
-        >
-            <div className={styles.metaRow}>
+        <Tile kind="plain" as="div" className={styles.head}>
+            {chip}
+            <div className={styles.headText}>
+                <Poster size="record">{task.name}</Poster>
                 <TaskMeta task={task} today={today} locale={locale} />
-                <div className={styles.headerActions}>
-                    <PickToday task={task} />
-                    <CopyForAgent taskId={task.id} />
-                    <DoneAction task={task} />
-                </div>
             </div>
-            {children}
-        </RecordHeader>
+            <div className={styles.headActions}>
+                <DoneAction task={task} />
+                <PickToday task={task} />
+                <SoloButton variant="secondary" size="control" className={styles.wideOnly} onClick={copy}>
+                    {t('Copy for the agent')}
+                </SoloButton>
+                <TaskMenu task={task} parentOptions={parentOptions} onCopy={copy} />
+            </div>
+        </Tile>
     );
 }
+
+/** The task's place: its client, Zadania, then the task itself. */
+export const taskPlace = (({ task }, { t }) => ({
+    tokens: [
+        ...(task.client
+            ? [
+                  clientToken(task.client, 'zadania', t),
+                  { label: t('Tasks'), href: clients.show({ client: task.client.id, tab: 'zadania' }).url },
+              ]
+            : []),
+        { label: task.name },
+    ],
+})) satisfies PlaceResolver<{ task: TaskData }>;

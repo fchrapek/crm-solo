@@ -6,9 +6,9 @@ import { initReactI18next } from 'react-i18next';
 import { minutesSince, shortDate } from '@/lib/dates';
 import en from '../../../../../../lang/en.json';
 import pl from '../../../../../../lang/pl.json';
-import { AgentsSheetBody, ClientTasksTab, laneChoices, PhoneTaskRow, tasksActionOrder, TasksActions } from './client-tasks';
-import { homePath, initialLane, withTicked } from './format';
-import type { ClientTaskRow, ClientTasks, OrderTasks } from './types';
+import { AgentsTile, ClientTasksTab, elapsedText, ProjectsTile, TaskLine, tasksActionOrder } from './client-tasks';
+import { homePath, withTicked } from './format';
+import type { ClientTaskRow, ClientTasks, OrderTasks, RetainerTasks } from './types';
 
 await i18next.use(initReactI18next).init({
     lng: 'pl',
@@ -19,6 +19,7 @@ await i18next.use(initReactI18next).init({
 const row = (id: number, extra: Partial<ClientTaskRow> = {}): ClientTaskRow => ({
     task_id: id,
     name: `Zadanie ${id}`,
+    project: 'Site',
     done: false,
     can_untick: false,
     due: null,
@@ -29,7 +30,7 @@ const row = (id: number, extra: Partial<ClientTaskRow> = {}): ClientTaskRow => (
     ...extra,
 });
 
-const tasks: ClientTasks = {
+const tasks: RetainerTasks = {
     mode: 'retainer',
     expanded: null,
     lanes: [
@@ -37,82 +38,134 @@ const tasks: ClientTasks = {
         { key: 'testing', count: 0, rows: [] },
         { key: 'todo', count: 1, rows: [row(6)] },
     ],
-    projects: [{ id: 3, name: 'Site' }],
+    done: { count: 0, rows: [] },
+    projects: [{ id: 3, name: 'Site', open: 13, is_private: true }],
+    reportable_by_default: true,
     repositories: [{ path: '/Users/test/Sites/site', project: 'Site' }],
 };
 
+const text = (html: string) => html.replace(/<[^>]+>/g, '');
+
 describe('ClientTasksTab', () => {
-    test('the switch names each lane with its count and opens on Doing', () => {
-        const html = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={tasks} />);
+    const html = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={tasks} />);
 
-        expect(html).toContain('W toku · 12');
-        expect(html).toContain('Testy · 0');
-        expect(html).toContain('Do zrobienia · 1');
-        expect(html).toMatch(/aria-selected="true"[^>]*>W toku · 12/);
+    test('every lane shows at once as a group with its count, in the order of the board', () => {
+        const heads = [...html.matchAll(/<h2[^>]*>([^<]+)<\/h2><span[^>]*>(\d+)<\/span>/g)].map(([, label, count]) => [label, Number(count)]);
+
+        expect(heads.slice(0, 3)).toEqual([
+            ['W toku', 12],
+            ['Testy', 0],
+            ['Do zrobienia', 1],
+        ]);
+        expect(html).not.toContain('role="tablist"');
     });
 
-    test('five rows then a link to the rest of the lane', () => {
-        const html = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={tasks} />);
-
-        expect(html).toContain('7 więcej →');
-        expect(html).toContain('/clients/9/zadania?wszystkie=doing');
+    test('five rows then the row that opens the rest of the lane with a partial reload', () => {
+        expect(html).toMatch(/<a[^>]*href="\/clients\/9\/zadania\?wszystkie=doing"[^>]*>Wszystkie w toku<\/a><\/span><span[^>]*>7 więcej<\/span>/);
+        expect(html).not.toContain('wszystkie=todo');
     });
 
-    test('a row shows its due date, the agent at work, Stop for the owners timer, else Start', () => {
-        const html = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={tasks} />);
-
-        expect(html).toContain(`>${shortDate('2026-10-30', 'pl-PL', new Date().getFullYear())}<`);
-        expect(html).toContain('>claude<');
-        expect(html).toContain('>Stop<');
-        // the desktop rows and the phone rows both render; CSS shows one
-        expect(html.match(/>Start</g)?.length).toBe(6);
+    test('a row opens its task, shows its due date and project, the agent at work, Stop for the owners timer, else Start', () => {
+        expect(html).toContain('href="/tasks/1"');
+        expect(html).toContain('30.10');
+        expect(text(html)).toContain('claude pracuje');
+        expect(html.match(/>Stop</g)).toHaveLength(1);
+        expect(html.match(/>Start</g)).toHaveLength(4);
+        expect(html).toMatch(/<span[^>]*>Site<\/span>/);
     });
 
-    test('the rail lists repository paths under the home folder as ~', () => {
-        const html = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={tasks} />);
-
-        expect(html).toContain('Dla agentów');
-        expect(html).toContain('~/Sites/site');
-        expect(html).not.toContain('month-close-site');
-    });
-
-    test('an empty lane, no paths and no project say so and offer no new task', () => {
-        const bare: ClientTasks = {
-            mode: 'retainer',
-            expanded: null,
-            lanes: tasks.lanes.map((l) => ({ ...l, count: 0, rows: [] })),
-            projects: [],
-            repositories: [],
-        };
-        const html = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={bare} />);
-
+    test('an empty lane says so, and a client without done tasks has no Zrobione group', () => {
         expect(html).toContain('Brak zadań na tej liście.');
-        expect(html).toContain('Brak ścieżek repozytoriów.');
-        expect(html).not.toContain('Nowe zadanie');
+        expect(html).not.toContain('Zrobione');
     });
 
-    test('the expanded lane is the one the switch opens on', () => {
-        const html = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={{ ...tasks, expanded: 'todo' }} />);
+    test('the expanded lane sends every row and so has no row for the rest', () => {
+        const all: ClientTasks = { ...tasks, expanded: 'todo', lanes: [tasks.lanes[0], tasks.lanes[1], { key: 'todo', count: 1, rows: [row(6)] }] };
 
-        expect(html).toMatch(/aria-selected="true"[^>]*>Do zrobienia · 1/);
-        expect(html).toContain('Zadanie 6');
-        expect(html).not.toContain('Zadanie 1<');
+        expect(renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={all} />)).not.toContain('Wszystkie do zrobienia');
+    });
+
+    test('a project page sends the rest of a lane to its own address', () => {
+        const project = renderToStaticMarkup(
+            <ClientTasksTab clientId={9} tasks={tasks} partHref={(part) => `/clients/9/projects/3?wszystkie=${part}`} side={<p>Projekt</p>} />,
+        );
+
+        expect(project).toContain('href="/clients/9/projects/3?wszystkie=doing"');
+        expect(project).toContain('<p>Projekt</p>');
+        expect(project).not.toContain('Dla agentów');
+    });
+});
+
+describe('done tasks', () => {
+    const done: RetainerTasks = {
+        ...tasks,
+        done: {
+            count: 13,
+            rows: [
+                { ...row(20, { name: 'Poprawka stopki', done: true, can_untick: true }), done_on: '2026-10-24', minutes: 70 },
+                { ...row(21, { name: 'Karta z Trello', done: true, can_untick: false }), done_on: '2026-10-22', minutes: 0 },
+            ],
+        },
+    };
+    const html = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={done} />);
+
+    test('Zrobione follows the lanes with its count, each row with its time, day and project', () => {
+        expect(html).toMatch(/<h2[^>]*>Zrobione<\/h2><span[^>]*>13<\/span>/);
+        expect(html.indexOf('Zrobione')).toBeGreaterThan(html.indexOf('Do zrobienia'));
+        expect(text(html)).toContain('Poprawka stopki1 h 10 min24.10 · Site');
+    });
+
+    test('a task the CRM ticked can be unticked, a card done on its board cannot', () => {
+        expect(html).toMatch(/<button[^>]*aria-label="Oznacz jako niezrobione: Poprawka stopki"[^>]*aria-pressed="true"(?![^>]*disabled)/);
+        expect(html).toMatch(/<button[^>]*aria-label="Gotowe: Karta z Trello"[^>]*disabled=""/);
+    });
+
+    test('the rest of the done tasks open with the same partial reload as a lane', () => {
+        expect(html).toMatch(/href="\/clients\/9\/zadania\?wszystkie=done"[^>]*>Wszystkie zrobione<\/a><\/span><span[^>]*>11 więcej<\/span>/);
+    });
+});
+
+describe('the side tiles', () => {
+    test('Projekty lists every project with its open tasks and whether a board stands behind it, and opens its page', () => {
+        const html = renderToStaticMarkup(
+            <ProjectsTile
+                clientId={9}
+                projects={[
+                    { id: 3, name: 'Strona WWW', open: 16, is_private: false },
+                    { id: 4, name: 'Galeria', open: 9, is_private: true },
+                ]}
+            />,
+        );
+
+        expect(html).not.toContain('aria-current');
+        expect(html).toMatch(/href="\/clients\/9\/projects\/3"[^>]*>Strona WWW<\/a><\/span><span[^>]*>16<\/span><span[^>]*>Trello<\/span>/);
+        expect(html).toMatch(/href="\/clients\/9\/projects\/4"[^>]*>Galeria<\/a><\/span><span[^>]*>9<\/span><span[^>]*>prywatny<\/span>/);
+        expect(html).toMatch(/<button[^>]*>Nowy projekt<\/button>/);
+    });
+
+    test('Dla agentów lists repository paths under the home folder as ~ and copies the command', () => {
+        const html = renderToStaticMarkup(<AgentsTile clientId={9} repositories={tasks.repositories} />);
+
+        expect(html).toContain('~/Sites/site');
+        expect(html).toContain('title="/Users/test/Sites/site"');
+        expect(html).toMatch(/<button[^>]*title="crm brief 9"[^>]*>Skopiuj polecenie dla agenta<\/button>/);
+        expect(renderToStaticMarkup(<AgentsTile clientId={9} repositories={[]} />)).toContain('Brak ścieżek repozytoriów.');
     });
 });
 
 describe('live state', () => {
     const lane = (rows: ClientTaskRow[]): ClientTasks => ({
         ...tasks,
-        lanes: [{ key: 'doing', count: rows.length, rows }, tasks.lanes[1], tasks.lanes[2]],
+        lanes: [{ key: 'doing', count: rows.length, rows }, tasks.lanes[1], { key: 'todo', count: 0, rows: [] }],
     });
 
     test('an agent timer stopped elsewhere gives the row its Start back on the next refresh', () => {
         const before = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={lane([row(1, { agent_live: true })])} />);
         const after = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={lane([row(1, { agent_live: false })])} />);
 
-        expect(before).toContain('>claude<');
+        expect(before).toContain('claude pracuje');
         expect(before).not.toContain('>Start<');
-        expect(after).not.toContain('>claude<');
+        expect(after).not.toContain('claude pracuje');
         expect(after).toContain('>Start<');
     });
 
@@ -120,7 +173,7 @@ describe('live state', () => {
         const html = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={lane([row(1, { agent_live: true, running_id: 5 })])} />);
 
         expect(html).toContain('>Stop<');
-        expect(html).not.toContain('>claude<');
+        expect(html).not.toContain('>Start<');
     });
 });
 
@@ -147,7 +200,6 @@ describe('withTicked', () => {
         const html = renderToStaticMarkup(
             <ClientTasksTab clientId={9} tasks={{ ...tasks, lanes: [{ key: 'doing', count: 1, rows }, tasks.lanes[1], tasks.lanes[2]] }} />,
         );
-        expect(html).not.toContain('>claude<');
         expect(html).not.toContain('claude pracuje');
         expect(html.match(/>Start</g)?.length).toBe(2);
         expect(withTicked('doing', [row(4, { agent_live: true, running_id: 3 })], agentTicked)[0]).toMatchObject({
@@ -203,22 +255,6 @@ describe('format', () => {
         expect(homePath('/var/www/site')).toBe('/var/www/site');
         expect(homePath('/Users/you')).toBe('~');
     });
-
-    test('the switch opens on the expanded lane, else the first with tasks, else Doing', () => {
-        const lanes = [
-            { key: 'doing', count: 0 },
-            { key: 'testing', count: 2 },
-            { key: 'todo', count: 1 },
-        ];
-        expect(initialLane(lanes, null)).toBe('testing');
-        expect(initialLane(lanes, 'todo')).toBe('todo');
-        expect(
-            initialLane(
-                lanes.map((l) => ({ ...l, count: 0 })),
-                null,
-            ),
-        ).toBe('doing');
-    });
 });
 
 describe('ClientTasksTab for an order', () => {
@@ -226,7 +262,7 @@ describe('ClientTasksTab for an order', () => {
         mode: 'order',
         expanded: null,
         open: {
-            count: 2,
+            count: 12,
             rows: [
                 row(1, { name: 'Raport z audytu', due: '2026-10-09' }),
                 row(2, { name: 'Przekazanie raportu', due: '2026-10-14', running_id: 40 }),
@@ -237,106 +273,61 @@ describe('ClientTasksTab for an order', () => {
             rows: [{ ...row(3, { name: 'Pomiary i termowizja', done: true, can_untick: true }), done_on: '2026-09-29', minutes: 240 }],
         },
         time: { hours: 10, count: 9, rows: [{ id: 5, date: '2026-10-05', label: 'Raport z audytu', minutes: 90 }] },
-        projects: [{ id: 3, name: 'Audyt' }],
+        projects: [{ id: 3, name: 'Audyt', open: 12, is_private: true }],
         repositories: [],
+        reportable_by_default: false,
     };
     const html = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={order} />);
-    const text = html.replace(/<[^>]+>/g, '');
 
-    test('one list of open tasks, no lane switch, with Start and Stop', () => {
-        expect(text).toContain('Zadania · 9');
-        expect(html).not.toContain('role="tablist"');
-        expect(text).toContain('Raport z audytu');
-        expect(html).toMatch(/<button[^>]*>Start<\/button>/);
-        expect(html).toMatch(/<button[^>]*>Stop<\/button>/);
-        expect(text).toContain('Nowe zadanie');
+    test('one list of open tasks, no lanes, with Start and Stop and the row that opens the rest', () => {
+        expect(html).toMatch(/<h2[^>]*>Zadania<\/h2><span[^>]*>12<\/span>/);
+        expect(html).not.toContain('W toku');
+        expect(html).toContain('>Start<');
+        expect(html).toContain('>Stop<');
+        expect(html).toMatch(/wszystkie=open"[^>]*>Wszystkie otwarte<\/a><\/span><span[^>]*>10 więcej<\/span>/);
     });
 
     test('the done group reads its count, day and time, and links to the rest', () => {
-        expect(text).toContain('Zrobione · 7');
-        expect(text).toContain('Pomiary i termowizja');
-        expect(text).toContain('29.09');
-        expect(text).toContain('4 h');
-        expect(html).toContain('/clients/9/zadania?wszystkie=done');
+        expect(html).toMatch(/<h2[^>]*>Zrobione<\/h2><span[^>]*>7<\/span>/);
+        expect(text(html)).toContain('Pomiary i termowizja4 h29.09 · Site');
+        expect(html).toContain('wszystkie=done');
     });
 
-    test('the rail lists the order time instead of the agent rail', () => {
-        expect(text).toContain('Czas · 10,0 h');
-        expect(text).toContain('05.10 · Raport z audytu');
-        expect(text).toContain('1 h 30 min');
-        expect(html).toContain('/clients/9/zadania?wszystkie=time');
-        expect(text).not.toContain('Dla agentów');
-    });
-
-    test('on phones the same list, Zrobione and time read as touch rows with rows that open each whole part', () => {
-        expect(html.match(/aria-label="Oznacz jako zrobione"/g)?.length).toBe(4);
-        expect(html).toContain('aria-label="Oznacz jako niezrobione"');
-        expect(text).toContain('Wszystkie zrobione');
-        expect(text).toContain('Wszystkie wpisy czasu');
-        expect(text).not.toContain('Wszystkie otwarte');
-        expect(html).toMatch(/<button type="button" data-solo-fab=""[^>]*>Nowe zadanie<\/button>/);
+    test('the side tile lists the order time instead of projects and agents', () => {
+        expect(text(html)).toContain('Czas · 10,0 h');
+        expect(text(html)).toContain('05.10 · Raport z audytu1 h 30');
+        expect(html).toContain('wszystkie=time');
+        expect(html).not.toContain('Dla agentów');
+        expect(html).not.toContain('Projekty');
     });
 });
 
-describe('Zadania on phones', () => {
+describe('a task row', () => {
     const t = i18next.t.bind(i18next);
     const noop = () => undefined;
-    const phoneRow = (r: ClientTaskRow, sub?: string) =>
+    const line = (r: ClientTaskRow) =>
         renderToStaticMarkup(
             <ul>
-                <PhoneTaskRow row={r} sub={sub} pending={false} onTick={noop} onUntick={noop} onStart={noop} onStop={noop} />
+                <TaskLine row={r} locale="pl-PL" pending={false} onTick={noop} onUntick={noop} onStart={noop} onStop={noop} />
             </ul>,
         );
 
-    test('the lane picker names each lane with its count, marks the current one and keeps the expanded lane', () => {
-        expect(laneChoices(tasks.lanes, 'doing', t)).toEqual([
-            { key: 'doing', label: 'W toku · 12', selected: true },
-            { key: 'testing', label: 'Testy · 0', selected: false },
-            { key: 'todo', label: 'Do zrobienia · 1', selected: false },
-        ]);
-        expect(renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={tasks} />)).toContain('aria-label="Wybierz listę: W toku · 12"');
-        expect(renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={{ ...tasks, expanded: 'todo' }} />)).toContain(
-            'aria-label="Wybierz listę: Do zrobienia · 1"',
-        );
-    });
+    test('an idle row has its tick, the title that opens the task, Start, and Na dziś behind "more"', () => {
+        const html = line(row(1));
 
-    test('a lane cut at five rows ends with the row that opens the whole lane, the same partial reload as desktop', () => {
-        const html = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={tasks} />);
-
-        expect(html).toContain('Wszystkie w toku');
-        expect(html.match(/href="\/clients\/9\/zadania\?wszystkie=doing"/g)?.length).toBe(2);
-        expect(renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={{ ...tasks, expanded: 'todo' }} />)).not.toContain('Wszystkie do zrobienia');
-    });
-
-    test('a row title opens the task page beside its checkbox and Start, on the phone rows and the desktop rows alike', () => {
-        const html = phoneRow(row(1, { due: '2026-10-30' }), '30.10');
-
+        expect(html).toMatch(/<button type="button"[^>]*aria-label="Oznacz jako zrobione: Zadanie 1"[^>]*aria-pressed="false"/);
         expect(html).toMatch(/<a[^>]*href="\/tasks\/1"[^>]*>Zadanie 1<\/a>/);
-        expect(html).toMatch(/<button[^>]*aria-label="Oznacz jako zrobione"/);
-        expect(html).toContain('Start</button>');
-        expect(
-            renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={tasks} />).match(
-                /<a[^>]*href="\/tasks\/1"[^>]*>(<span>)?Zadanie 1(<\/span>)?<\/a>/g,
-            ),
-        ).toHaveLength(2);
-    });
-
-    test('an idle row has a 44 px checkbox and Start, nothing else', () => {
-        const html = phoneRow(row(1, { due: '2026-10-30' }), '30.10');
-
-        expect(html).toContain('aria-label="Oznacz jako zrobione"');
-        expect(html).toContain('aria-pressed="false"');
-        expect(html).toContain('>30.10<');
-        expect(html).toContain('Start</button>');
-        expect(html).not.toContain('Stop');
+        expect(html.match(/<button[^>]*>Start<\/button>/g)).toHaveLength(1);
+        expect(html).toContain('aria-label="Więcej akcji: Zadanie 1"');
+        expect(html).not.toContain('>Stop<');
     });
 
     test('the owners running timer gives the row Stop, never Start, and the agent mark is not the owners', () => {
-        const html = phoneRow(row(1, { running_id: 77, running_since: '2026-10-05T09:18:00+00:00' }));
+        const html = line(row(1, { running_id: 5, running_since: '2026-10-05T09:18:00+00:00' }));
 
-        expect(html).toContain('Stop</button>');
-        expect(html).not.toContain('Start');
-        expect(html).not.toContain('claude pracuje');
+        expect(html).toContain('>Stop<');
+        expect(html).not.toContain('>Start<');
+        expect(html).not.toContain('claude');
     });
 
     test('the elapsed time is whole minutes since the start and never negative', () => {
@@ -344,53 +335,40 @@ describe('Zadania on phones', () => {
 
         expect(minutesSince(since, Date.parse('2026-10-05T10:00:59Z'))).toBe(42);
         expect(minutesSince(since, Date.parse('2026-10-05T09:17:00Z'))).toBe(0);
+        expect(elapsedText({ running_id: 5, running_since: since }, Date.parse('2026-10-05T10:00:59Z'), t)).toBe('42 min');
+        expect(elapsedText({ running_id: null, running_since: null }, Date.parse('2026-10-05T10:00:59Z'), t)).toBeNull();
     });
 
-    test('an agent at work shows the live mark and opens the task instead of offering Start', () => {
-        const html = phoneRow(row(4, { agent_live: true }), '09.10');
+    test('an agent at work is named on every width and the row offers no Start', () => {
+        const html = line(row(1, { agent_live: true }));
 
         expect(html).toContain('claude pracuje');
-        expect(html).toContain('href="/tasks/4"');
-        expect(html).toContain('aria-label="Otwórz zadanie"');
-        expect(html).not.toContain('Start');
+        expect(html).not.toContain('>Start<');
     });
 
-    test('a ticked row can be unticked when the CRM can take it back, and offers no timer', () => {
-        const ticked = phoneRow(row(2, { done: true, can_untick: true }));
-        const boardDone = phoneRow(row(3, { done: true, can_untick: false }));
-
-        expect(ticked).toContain('aria-pressed="true"');
-        expect(ticked).toContain('aria-label="Oznacz jako niezrobione"');
-        expect(ticked).not.toContain('Start');
-        expect(boardDone).toContain('disabled=""');
+    test('a picked task says so beside its project', () => {
+        expect(text(line(row(1, { picked: true })))).toContain('Site · Wybrane');
+        expect(text(line(row(1)))).not.toContain('Wybrane');
     });
 
-    test('Nowe zadanie floats on phones; no project, no button', () => {
-        const html = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={tasks} />);
+    test('a ticked row can be unticked when the CRM can take it back, and offers no timer or menu', () => {
+        const html = line(row(1, { done: true, can_untick: true }));
 
-        expect(html).toMatch(/<button type="button" data-solo-fab=""[^>]*>Nowe zadanie<\/button>/);
-        expect(renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={{ ...tasks, projects: [] }} />)).not.toContain('data-solo-fab');
+        expect(html).toMatch(/<button[^>]*aria-label="Oznacz jako niezrobione: Zadanie 1"[^>]*aria-pressed="true"/);
+        expect(html).not.toContain('>Start<');
+        expect(html).not.toContain('Więcej akcji');
+        expect(line(row(1, { done: true, can_untick: false }))).toMatch(/aria-label="Gotowe: Zadanie 1"[^>]*disabled=""/);
+    });
+});
+
+describe('the actions of Zadania', () => {
+    test('from 768 px the agent command stands beside Nowe zadanie; a phone keeps Nowe zadanie as its button and the two copies behind "more"', () => {
+        expect(tasksActionOrder(false, true)).toEqual(['brief', 'new']);
+        expect(tasksActionOrder(true, true)).toEqual(['brief', 'copy']);
     });
 
-    test('the ••• menu opens Dla agentów and copies the context; desktop keeps the brief chip', () => {
-        expect(tasksActionOrder(true)).toEqual(['agents', 'copy']);
-        expect(tasksActionOrder(false)).toEqual(['brief']);
-        expect(renderToStaticMarkup(<TasksActions clientId={9} onOpenAgents={noop} />)).toContain('crm brief 9');
-    });
-
-    test('the Dla agentów sheet leads with the brief to copy, then the repository paths', () => {
-        const html = renderToStaticMarkup(<AgentsSheetBody clientId={9} repositories={tasks.repositories} />);
-
-        expect(html).toContain('aria-label="Skopiuj polecenie dla agenta: crm brief 9"');
-        expect(html.indexOf('crm brief 9')).toBeLessThan(html.indexOf('~/Sites/site'));
-        expect(html).not.toContain('month-close-site');
-        expect(renderToStaticMarkup(<AgentsSheetBody clientId={9} repositories={[]} />)).toContain('Brak ścieżek repozytoriów.');
-    });
-
-    test('the desktop rail stays and the sheet content waits for the menu', () => {
-        const html = renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={tasks} />);
-
-        expect(html.match(/~\/Sites\/site/g)?.length).toBe(1);
-        expect(html).not.toContain('crm brief 9');
+    test('a client without a project offers no new task', () => {
+        expect(tasksActionOrder(false, false)).toEqual(['brief']);
+        expect(renderToStaticMarkup(<ClientTasksTab clientId={9} tasks={{ ...tasks, projects: [] }} creating />)).not.toContain('role="dialog"');
     });
 });

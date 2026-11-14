@@ -1,0 +1,163 @@
+/* Figma: Podsumowanie za … (993:29609, sheet 994:32245): recipient rows, tabs and the rendered email. Phones first. */
+
+.block {
+    margin: 0;
+    padding: var(--solo-block-pad, 0);
+    border-radius: var(--solo-block-radius, 0);
+    background: var(--solo-block, none);
+    list-style: none;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: var(--solo-space-4);
+    min-height: 56px;
+    padding: var(--solo-space-3) var(--solo-row-inset, var(--solo-space-3));
+}
+
+.row + .row {
+    border-top: 1px solid var(--solo-rule);
+}
+
+.check {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--solo-fg);
+}
+
+/* phones: the address is the row title, the name does not fit beside it */
+.name {
+    display: none;
+}
+
+.address {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--solo-fg);
+    font: 400 var(--solo-mobile-body) / 1.35 var(--solo-font-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tabs {
+    display: flex;
+    gap: var(--solo-space-6);
+}
+
+.tab {
+    padding: 0 0 var(--solo-space-2);
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: none;
+    color: var(--solo-fg-muted);
+    font: 600 var(--solo-text-nav) / 1.35 var(--solo-font-text);
+    cursor: pointer;
+}
+
+.tab[aria-selected='true'] {
+    border-bottom-color: var(--solo-fg);
+    color: var(--solo-fg);
+    font-weight: 600;
+}
+
+.tab:focus-visible {
+    outline: 2px solid var(--solo-fg);
+    outline-offset: 3px;
+}
+
+.bareField > label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.rendered {
+    display: flex;
+    flex-direction: column;
+    gap: var(--solo-space-2);
+    padding: var(--solo-space-3) var(--solo-head-inset, var(--solo-space-4));
+    border-radius: var(--solo-block-radius, var(--solo-radius-lg));
+    background: var(--solo-block, none);
+    color: var(--solo-fg);
+    font: 400 var(--solo-mobile-body) / 1.45 var(--solo-font-text);
+}
+
+.subject {
+    margin: 0;
+    font-weight: 600;
+}
+
+.quiet {
+    margin: 0;
+    color: var(--solo-fg-muted);
+    font: 400 var(--solo-text-sub) / 1.4 var(--solo-font-text);
+}
+
+.error {
+    margin: 0;
+    color: var(--solo-error);
+    font: 400 var(--solo-text-sub) / 1.4 var(--solo-font-text);
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--solo-space-3);
+}
+
+.actions > [data-start] {
+    margin-right: auto;
+}
+
+.wideOnly {
+    display: none;
+}
+
+.phoneOnly {
+    display: flex;
+}
+
+@media (min-width: 768px) {
+    .name {
+        display: block;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        color: var(--solo-fg);
+        font: 400 var(--solo-text-field) / normal var(--solo-font-text);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .address {
+        flex: none;
+        color: var(--solo-fg-muted);
+        font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    }
+
+    .rendered {
+        font-size: var(--solo-text-action);
+    }
+
+    .wideOnly {
+        display: inline-flex;
+    }
+
+    .phoneOnly {
+        display: none;
+    }
+}
+
+.fieldAction {
+    display: flex;
+    justify-content: flex-end;
+}

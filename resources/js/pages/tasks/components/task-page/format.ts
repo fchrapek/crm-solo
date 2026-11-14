@@ -1,6 +1,6 @@
 import { durationText, minutesSince, runningMinutesToday, shortDate } from '@/lib/dates';
 import type { TFunction } from 'i18next';
-import type { ActivityRow, Actor, BriefField, Stamp, TaskResources, TaskTime } from './types';
+import type { ActivityRow, Actor, BriefField, Stamp, TaskTime } from './types';
 
 const HOUR_MS = 60 * 60_000;
 
@@ -48,65 +48,6 @@ export function briefFieldLabel(field: BriefField, t: TFunction): string {
 
 const TASK_FIELD = ['name', 'description', 'due', 'list', 'project', 'archive', 'priority', 'parent', 'reportable'] as const;
 
-function joined(items: string[], locale: string): string {
-    return new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }).format(items);
-}
-
-/** One sentence for an Aktywność row: the agent's in the third person, the owner's addressed to them. */
-export function activitySentence(row: ActivityRow, locale: string, t: TFunction): string {
-    const own = row.actor.kind === 'owner';
-
-    switch (row.kind) {
-        case 'time': {
-            const time = durationText(row.minutes ?? 0, t);
-            if (row.text) {
-                return own
-                    ? t('You logged {{time}} of work: {{text}}', { time, text: row.text })
-                    : t('Logged {{time}} of work: {{text}}', { time, text: row.text });
-            }
-
-            return own ? t('You logged {{time}} of work.', { time }) : t('Logged {{time}} of work.', { time });
-        }
-        case 'note':
-            return t('Note: {{text}}', { text: row.text ?? '' });
-        case 'brief': {
-            const fields = row.fields.filter((f): f is BriefField => f in BRIEF_LABEL).map((f) => briefFieldLabel(f, t));
-
-            return t('Changed the brief: {{fields}}.', { count: fields.length, fields: joined(fields, locale) });
-        }
-        case 'task': {
-            const fields = row.fields.filter((f) => (TASK_FIELD as readonly string[]).includes(f)).map((f) => t(`task_field_${f}`));
-
-            return t('Changed the task: {{fields}}.', { fields: joined(fields, locale) });
-        }
-        case 'task_created':
-            return t('Created the task.');
-        case 'finished':
-            return own ? t('You marked it done in the CRM.') : t('Marked it done in the CRM.');
-        case 'reopened':
-            return own ? t('You reopened it in the CRM.') : t('Reopened it in the CRM.');
-    }
-}
-
-/** The sentence as the tail of a one-line row: "12 min temu · Codex · zmienił pola briefu". */
-export function activityLine(row: ActivityRow, locale: string, t: TFunction): string {
-    const sentence = activitySentence(row, locale, t).replace(/\.$/, '');
-
-    return sentence.charAt(0).toLocaleLowerCase(locale) + sentence.slice(1);
-}
-
-/** "6 · 2 pliki, 2 obrazy, 2 linki"; only the kinds there are. */
-export function resourcesSummary(resources: TaskResources, t: TFunction): string {
-    const parts = [
-        resources.files.length > 0 ? t('{{count}} files', { count: resources.files.length }) : null,
-        resources.images.length > 0 ? t('{{count}} images', { count: resources.images.length }) : null,
-        resources.links.length > 0 ? t('{{count}} links', { count: resources.links.length }) : null,
-    ].filter((part): part is string => part !== null);
-    const total = resources.files.length + resources.images.length + resources.links.length;
-
-    return total === 0 ? t('none yet') : `${total} · ${parts.join(', ')}`;
-}
-
 /** About four lines on a phone; a longer description is clamped there behind Więcej. */
 const LONG_CHARS = 200;
 const LONG_LINES = 4;
@@ -123,4 +64,53 @@ export function dueText(day: string, today: string, locale: string, t: TFunction
 /** What "Kopiuj dla agenta" puts on the clipboard: the task's id and the verb that opens it. */
 export function agentPrompt(taskId: number, t: TFunction): string {
     return t('Work on task {{id}} from CRM Solo (crm task {{id}})', { id: taskId });
+}
+
+/** A history row's title: what happened in a few words, "Czas: 42 min · Tabele kuchni". */
+export function activityTitle(row: ActivityRow, locale: string, t: TFunction): string {
+    switch (row.kind) {
+        case 'time': {
+            const time = t('Time: {{time}}', { time: durationText(row.minutes ?? 0, t) });
+
+            return row.text ? `${time} · ${row.text}` : time;
+        }
+        case 'note':
+            return t('Note: {{text}}', { text: row.text ?? '' });
+        case 'brief':
+            return t('Brief: {{fields}}', {
+                fields: row.fields
+                    .filter((f): f is BriefField => f in BRIEF_LABEL)
+                    .map((f) => briefFieldLabel(f, t))
+                    .join(', '),
+            });
+        case 'task':
+            return t('Task: {{fields}}', {
+                fields: row.fields
+                    .filter((f) => (TASK_FIELD as readonly string[]).includes(f))
+                    .map((f) => t(`task_field_${f}`))
+                    .join(', '),
+            });
+        case 'task_created':
+            return t('Task created');
+        case 'finished':
+            return t('Done in the CRM');
+        case 'reopened':
+            return t('Reopened in the CRM');
+    }
+}
+
+/** Who and when at a history row's end: "ty · 10:15", "Codex · 26.10". */
+export function activityMeta(row: ActivityRow, now: number, today: string, locale: string, t: TFunction): string {
+    const who = row.actor.kind === 'owner' ? t('you') : actorName(row.actor, t);
+
+    return `${who} · ${whenLabel(row, now, today, locale, t)}`;
+}
+
+/** "1,2 MB", "48 kB": a file's size as a person reads it. */
+export function fileSize(bytes: number, locale: string): string {
+    const format = (value: number, digits: number) => new Intl.NumberFormat(locale, { maximumFractionDigits: digits }).format(value);
+    if (bytes >= 1_048_576) return `${format(bytes / 1_048_576, 1)} MB`;
+    if (bytes >= 1024) return `${format(bytes / 1024, 0)} kB`;
+
+    return `${bytes} B`;
 }

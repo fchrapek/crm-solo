@@ -24,7 +24,11 @@ trait PrintsTaskRecords
         $this->raw("# Task #{$record['id']} [{$record['state']}] ({$record['source']['type']})"
             .($record['due'] !== null ? ' due '.$record['due'].($record['is_overdue'] ? ' (OVERDUE)' : '') : ''));
         $this->raw('Ready: '.($record['readiness']['ready'] ? 'yes' : 'no, missing '.implode(', ', $record['readiness']['missing'])));
-        $this->raw('Time: '.$record['time']['minutes'].' min logged'.($record['time']['running_timer'] !== null ? ', timer #'.$record['time']['running_timer']['entry_id'].' running' : ''));
+        $this->raw('Time: '.$record['time']['minutes'].' min logged'.($record['time']['running_timer'] !== null ? ', timer #'.$record['time']['running_timer']['entry_id'].' running' : '')
+            .($record['reportable'] ? '' : ' · NOT reportable: this time does not count in the report or the hours bank'));
+        foreach ($record['time']['billed'] as $billed) {
+            $this->raw("Billed: {$billed['hours']} h in {$billed['period']}");
+        }
         if ($record['project']['repository_path'] ?? null) {
             $this->raw('Repo: '.$this->literal($record['project']['repository_path']));
         }

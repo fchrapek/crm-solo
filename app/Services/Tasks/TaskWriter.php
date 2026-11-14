@@ -7,7 +7,9 @@ namespace App\Services\Tasks;
 use App\Models\Project;
 use App\Models\Task;
 use App\Services\Integrations\Trello\TrelloListMapper;
+use App\Services\Time\PeriodSettled;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * The one way to create a task and change it outside a tick: the task form,
@@ -44,7 +46,7 @@ final class TaskWriter
                 ...$attributes,
                 'project_id' => $project->id,
                 'list_name' => $attributes['list_name'] ?? TrelloListMapper::LANE_TODO,
-                'is_reportable' => (bool) ($attributes['is_reportable'] ?? false),
+                'is_reportable' => isset($attributes['is_reportable']) ? (bool) $attributes['is_reportable'] : null,
             ]);
 
             if ($task->list_name === TrelloListMapper::LANE_DONE) {
@@ -70,14 +72,20 @@ final class TaskWriter
         $list = $changes['list_name'] ?? null;
         unset($changes['list_name']);
 
-        DB::transaction(function () use ($task, $changes, $list): void {
-            if ($changes !== []) {
-                $task->update($changes);
-            }
-            if ($list !== null) {
-                $this->completion->moveToLane($task, $list);
-            }
-        });
+        try {
+            DB::transaction(function () use ($task, $changes, $list): void {
+                if ($changes !== []) {
+                    $task->update($changes);
+                }
+                if ($list !== null) {
+                    $this->completion->moveToLane($task, $list);
+                }
+            });
+        } catch (PeriodSettled $settled) {
+            $task->refresh();
+
+            throw ValidationException::withMessages(['is_reportable' => $settled->reportableRefusal()]);
+        }
 
         return $task;
     }

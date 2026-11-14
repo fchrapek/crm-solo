@@ -194,7 +194,7 @@ final class HoursBank
     }
 
     /** A closed month reads its frozen figures; logged time stays live, and the report link is whichever report governs now. */
-    private static function fromClosure(string $period, ClientMonthClosure $closure, float $logged, ?ClientReport $report): HoursBankMonth
+    private static function fromClosure(string $period, ClientMonthClosure $closure, float $logged, ?ClientReport $report, ?BilledMonth $live): HoursBankMonth
     {
         $snapshot = $closure->snapshot;
         $hours = fn (string $key): ?float => isset($snapshot[$key]) ? (float) $snapshot[$key] : null;
@@ -212,6 +212,8 @@ final class HoursBank
             closureId: $closure->id,
             closedAt: CarbonImmutable::instance($closure->closed_at),
             outsideBank: (bool) ($snapshot['outside_bank'] ?? false),
+            // The note stays the owner's live one.
+            billed: BilledMonth::fromSnapshot($period, $snapshot)?->withNote($live?->note),
         );
     }
 
@@ -309,16 +311,19 @@ final class HoursBank
             ->pluck('minutes', 'client_id');
         $reportableMinutes = $minutes(true);
         $loggedMinutes = $minutes(false);
+        $billed = BilledTime::months(array_combine($ids, array_map(fn (int $id): int => (int) ($reportableMinutes[$id] ?? 0), $ids)), $period);
 
         $months = [];
         foreach ($ids as $id) {
             $logged = round((int) ($loggedMinutes[$id] ?? 0) / 60, 2);
-            $reportable = round((int) ($reportableMinutes[$id] ?? 0) / 60, 2);
             $report = $reports->get($id);
             $closure = $closures->get($id);
+            $billedMonth = $billed[$id];
+            $live = $billedMonth->billedHours();
+            $liveSource = HoursBankMonth::SOURCE_BILLED;
 
             if ($closure !== null) {
-                $months[$id] = self::fromClosure($period, $closure, $logged, $report);
+                $months[$id] = self::fromClosure($period, $closure, $logged, $report, $billedMonth);
 
                 continue;
             }
@@ -331,12 +336,13 @@ final class HoursBank
                     contractedHours: $report->contracted_hours !== null ? (float) $report->contracted_hours : null,
                     openingBalanceHours: (float) $report->opening_balance_hours,
                     rolloverCapHours: $report->rollover_cap_hours !== null ? (float) $report->rollover_cap_hours : null,
-                    usedHours: $governs ? (float) $report->actual_hours : $reportable,
+                    usedHours: $governs ? (float) $report->actual_hours : $live,
                     loggedHours: $logged,
                     reportId: $report->id,
                     reportStatus: $report->status,
-                    source: $governs ? HoursBankMonth::SOURCE_REPORT : HoursBankMonth::SOURCE_ENTRIES,
+                    source: $governs ? HoursBankMonth::SOURCE_REPORT : $liveSource,
                     outsideBank: $report->contracted_hours === null,
+                    billed: $governs ? $billedMonth->settledAt((float) $report->actual_hours) : $billedMonth,
                 );
 
                 continue;
@@ -348,10 +354,12 @@ final class HoursBank
                 contractedHours: $retainer !== null ? (float) $retainer->monthly_hours : null,
                 openingBalanceHours: $openings[$id],
                 rolloverCapHours: $retainer?->rollover_cap_hours !== null ? (float) $retainer->rollover_cap_hours : null,
-                usedHours: $reportable,
+                usedHours: $live,
                 loggedHours: $logged,
                 reportId: null,
                 reportStatus: null,
+                source: $liveSource,
+                billed: $billedMonth,
             );
         }
 

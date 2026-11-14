@@ -7,6 +7,7 @@ namespace App\Services\Integrations;
 use App\Models\Client;
 use App\Models\ClientRetainer;
 use App\Models\Contact;
+use App\Models\InfaktDraftRequest;
 use App\Models\Integration;
 use App\Models\Invoice;
 use App\Support\LocalCalendar;
@@ -15,10 +16,12 @@ use Exception;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Sleep;
 use RuntimeException;
+use Throwable;
 
 final class InfaktService
 {
@@ -27,6 +30,70 @@ final class InfaktService
 
     /** VAT rate for maintenance services (netto retainer + 23% at invoice level). */
     public const MAINTENANCE_VAT_SYMBOL = '23';
+
+    /**
+     * The only fields a draft may carry, each with its type: a scalar type, `list:<type>` or the name of another
+     * object below. A copy keeps everything Infakt's own copy keeps; nothing here issues, numbers, sends or marks an
+     * invoice paid. Names from the v3 Invoice definition (Infakt API docs, Przychody, Faktury VAT).
+     */
+    public const array DRAFT_INVOICE_FIELDS = [
+        'client_id' => 'int', 'sale_date' => 'date', 'invoice_date' => 'date', 'payment_method' => 'string', 'payment_date' => 'date',
+        'currency' => 'string', 'vat_exchange_date_kind' => 'string', 'services' => 'list:line', 'notes' => 'string',
+        'split_payment' => 'bool', 'split_payment_type' => 'string', 'recipient_signature' => 'string', 'seller_signature' => 'string',
+        'bank_name' => 'string', 'bank_account' => 'string', 'swift' => 'string', 'sale_type' => 'string', 'invoice_date_kind' => 'string',
+        'continuous_service_start_on' => 'date', 'continuous_service_end_on' => 'date', 'vat_date_value' => 'string',
+        'occasional_sale' => 'bool', 'building_service' => 'bool', 'sales_kind' => 'string', 'vat_exemption_reason' => 'int',
+        'bdo_code' => 'string', 'transaction_kind_id' => 'int', 'document_markings_ids' => 'list:int', 'not_income' => 'bool',
+        'third_party_addresses' => 'list:address', 'transaction_terms' => 'terms', 'local_government_recipient_address' => 'address',
+        'local_government_seller_address' => 'address',
+    ];
+
+    public const array DRAFT_LINE_FIELDS = [
+        'name' => 'string', 'unit_net_price' => 'int', 'quantity' => 'number', 'tax_symbol' => 'code', 'unit' => 'string',
+        'pkwiu' => 'string', 'cn' => 'string', 'pkob' => 'string', 'gtin' => 'string', 'flat_rate_tax_symbol' => 'code',
+        'discount' => 'numeric', 'unit_net_price_before_discount' => 'int', 'gtu_id' => 'int',
+    ];
+
+    /** A Dodatkowy podmiot (third_party_addresses) and the JST address slots. */
+    public const array DRAFT_ADDRESS_FIELDS = [
+        'company_name' => 'string', 'tax_id' => 'string', 'street' => 'string', 'building_number' => 'string', 'door_number' => 'string',
+        'post_code' => 'string', 'city' => 'string', 'country_code' => 'string', 'country' => 'string', 'role_code' => 'code',
+        'internal_identifier' => 'string',
+    ];
+
+    public const array DRAFT_TERMS_FIELDS = ['contracts' => 'list:deal', 'orders' => 'list:deal'];
+
+    /** A contract or an order: the one place a draft names a number. */
+    public const array DRAFT_DEAL_FIELDS = ['date' => 'date', 'number' => 'string'];
+
+    /** Refused at any depth of any payload, and never copied: identity, numbering, state, money received, KSeF, links. */
+    public const array DRAFT_FORBIDDEN_FIELDS = [
+        'id', 'uuid', 'parent_id', 'number', 'status', 'kind', 'paid_price', 'paid_date', 'left_to_pay', 'net_price', 'tax_price',
+        'gross_price', 'client_uuid', 'check_duplicate_number', 'extensions', 'ksef_data', 'ksef_number', 'amount_in_words',
+        'reconciliation_id', 'related_documents', 'receipt_number', 'created_at', 'updated_at', 'send_to_ksef', 'related_id',
+        'symbol', '_destroy',
+    ];
+
+    /** Patterns of DRAFT_FORBIDDEN_FIELDS for names a later API version may add. */
+    public const array DRAFT_FORBIDDEN_PATTERNS = ['/^ksef_/', '/_url$/', '/_at$/', '/(^|_)(sent|send|printed|delivered|paid)(_|$)/'];
+
+    /**
+     * Set fresh on a copy, never taken from the source. The buyer's snapshot is left out so Infakt fills it from
+     * client_id, the client record as Infakt holds it now.
+     */
+    public const array DRAFT_REPLACED_FIELDS = [
+        'invoice_date', 'sale_date', 'payment_date', 'client_id', 'continuous_service_start_on', 'continuous_service_end_on',
+        'client_company_name', 'client_first_name', 'client_last_name', 'client_business_activity_kind', 'client_street',
+        'client_street_number', 'client_flat_number', 'client_city', 'client_post_code', 'client_tax_code', 'client_country',
+    ];
+
+    private const array DRAFT_OBJECTS = [
+        'invoice' => self::DRAFT_INVOICE_FIELDS,
+        'line' => self::DRAFT_LINE_FIELDS,
+        'address' => self::DRAFT_ADDRESS_FIELDS,
+        'terms' => self::DRAFT_TERMS_FIELDS,
+        'deal' => self::DRAFT_DEAL_FIELDS,
+    ];
 
     private const BASE_URL = 'https://api.infakt.pl/v3';
 
@@ -49,6 +116,81 @@ final class InfaktService
                 'Content-Type' => 'application/json',
             ])
             ->timeout(30);
+    }
+
+    /**
+     * Walks the payload by path: every object only its own fields, every value its type, lists as lists.
+     *
+     * @param  array<string, mixed>  $payload
+     *
+     * @throws RuntimeException when the payload holds a forbidden field, or anything off the draft schema
+     */
+    public static function assertDraftOnly(array $payload): void
+    {
+        if (array_keys($payload) !== ['invoice'] || ! is_array($payload['invoice'])) {
+            throw new RuntimeException('Refusing to send an Infakt draft that is not a single invoice: the CRM only ever sends a draft.');
+        }
+
+        $forbidden = [];
+        $wrong = self::schemaErrors($payload['invoice'], 'invoice', 'invoice', $forbidden);
+        if ($forbidden !== []) {
+            throw new RuntimeException('Refusing to send an Infakt draft with '.implode(', ', $forbidden).': a draft never carries a number, a state, a payment or a send.');
+        }
+        if ($wrong !== []) {
+            throw new RuntimeException('Refusing to send an Infakt draft with '.implode(', ', $wrong).': the CRM only ever sends a draft built from its fixed fields.');
+        }
+    }
+
+    /**
+     * Why an invoice cannot be copied, or null: only an issued VAT invoice that is not a correction, an advance
+     * (ZAL) or a final invoice.
+     *
+     * @param  array<string, mixed>  $invoice
+     */
+    public static function sourceRefusal(array $invoice): ?string
+    {
+        $number = (string) ($invoice['number'] ?? '');
+
+        return match (self::sourceRefusalCode($invoice)) {
+            'not_vat' => "{$number} is a {$invoice['kind']} invoice, not a VAT invoice",
+            'draft' => ($number !== '' ? $number : 'it').' is still a draft in Infakt',
+            'advance' => "{$number} is an advance, final or correction invoice",
+            'settles_advance' => "{$number} settles an advance invoice",
+            default => null,
+        };
+    }
+
+    /**
+     * sourceRefusal as a code the Rozliczenia block can name: not_vat, draft, advance, settles_advance, or null.
+     *
+     * @param  array<string, mixed>  $invoice
+     */
+    public static function sourceRefusalCode(array $invoice): ?string
+    {
+        $number = (string) ($invoice['number'] ?? '');
+
+        return match (true) {
+            ($invoice['kind'] ?? 'vat') !== 'vat' => 'not_vat',
+            ($invoice['status'] ?? 'draft') === 'draft' || $number === '' => 'draft',
+            preg_match('~(^|/)(ZAL|KOR|KON|FK)(/|$)~i', $number) === 1 => 'advance',
+            ($invoice['parent_id'] ?? null) !== null => 'settles_advance',
+            default => null,
+        };
+    }
+
+    /**
+     * The projects of each fee-bearing invoice group on the month's sale date, sorted: what names a group.
+     *
+     * @return array<int, list<int>>
+     */
+    public static function invoiceGroupProjects(Client $client, Carbon $periodMonth): array
+    {
+        return $client->activeRetainersOn($periodMonth->copy()->endOfMonth())
+            ->filter(fn (ClientRetainer $p): bool => $p->monthly_fee !== null && (float) $p->monthly_fee > 0)
+            ->groupBy(fn (ClientRetainer $p): int => (int) $p->invoice_group)
+            ->map(fn (Collection $group): array => $group->pluck('project_id')->filter()->map(fn (mixed $id): int => (int) $id)->unique()->sort()->values()->all())
+            ->sortKeys()
+            ->all();
     }
 
     public function testConnection(): bool
@@ -97,6 +239,7 @@ final class InfaktService
      */
     public function postDraftInvoice(array $payload): ?string
     {
+        self::assertDraftOnly($payload);
         $response = $this->http->post('/async/invoices.json', $payload);
 
         if (! $response->successful()) {
@@ -104,6 +247,136 @@ final class InfaktService
         }
 
         return $response->json('invoice_task_reference_number');
+    }
+
+    /**
+     * One invoice as Infakt holds it now, services and Dodatkowy podmiot included; null when Infakt has no such invoice.
+     *
+     * @return array<string, mixed>|null
+     *
+     * @throws InfaktApiException on any other non-2xx response
+     */
+    public function fetchInvoice(string $uuid): ?array
+    {
+        $response = $this->http->get('/invoices/'.rawurlencode($uuid).'.json');
+        if ($response->status() === 404) {
+            return null;
+        }
+        if (! $response->successful()) {
+            throw new InfaktApiException($response->status(), $response->body());
+        }
+
+        return (array) $response->json();
+    }
+
+    /**
+     * The client's invoice with this number, read whole.
+     *
+     * @return array<string, mixed>|null
+     *
+     * @throws InfaktApiException
+     */
+    public function invoiceNumbered(string $infaktClientId, string $number): ?array
+    {
+        $response = $this->http->get('/invoices.json', ['q[client_id_eq]' => $infaktClientId, 'q[number_eq]' => $number, 'limit' => 10]);
+        if (! $response->successful()) {
+            throw new InfaktApiException($response->status(), $response->body());
+        }
+        $listed = collect($response->json()['entities'] ?? [])
+            ->first(fn (array $i): bool => ($i['number'] ?? null) === $number && (string) ($i['client_id'] ?? $infaktClientId) === $infaktClientId);
+
+        return isset($listed['uuid']) ? $this->fetchInvoice((string) $listed['uuid']) : null;
+    }
+
+    /**
+     * The client's invoices a copy may start from (VAT, issued, not an advance or final), newest first, as listed:
+     * what the Rozliczenia picker offers and what `last` takes the first of.
+     *
+     * @return Collection<int, array<string, mixed>>
+     *
+     * @throws InfaktApiException
+     */
+    public function copyableInvoices(string $infaktClientId, int $pages = 3): Collection
+    {
+        $found = collect();
+        for ($page = 0; $page < $pages; $page++) {
+            $response = $this->http->get('/invoices.json', [
+                'q[client_id_eq]' => $infaktClientId, 'q[kind_eq]' => 'vat', 'order' => 'invoice_date DESC', 'offset' => $page * 100, 'limit' => 100,
+            ]);
+            if (! $response->successful()) {
+                throw new InfaktApiException($response->status(), $response->body());
+            }
+            $entities = collect($response->json()['entities'] ?? []);
+            $found = $found->merge($entities->filter(fn (array $i): bool => (string) ($i['client_id'] ?? '') === $infaktClientId && self::sourceRefusal($i) === null));
+            if ($entities->count() < 100) {
+                break;
+            }
+        }
+
+        return $found->sortByDesc(fn (array $i): string => ($i['invoice_date'] ?? '').'#'.mb_str_pad((string) ($i['id'] ?? 0), 12, '0', STR_PAD_LEFT))->values();
+    }
+
+    /**
+     * Wystaw podobna: the source invoice whole, minus DRAFT_FORBIDDEN_FIELDS and DRAFT_REPLACED_FIELDS, with the
+     * billed month's sale date, today's issue date and the source's payment term from today.
+     *
+     * @param  array<string, mixed>  $source  a GET of one invoice
+     * @return array{invoice: array<string, mixed>}
+     *
+     * @throws RuntimeException when the source's payment term cannot be carried over
+     */
+    public function copyInvoicePayload(array $source, string $infaktClientId, Carbon $periodMonth): array
+    {
+        $copy = self::withoutForbidden($source);
+        foreach (self::DRAFT_REPLACED_FIELDS as $field) {
+            unset($copy[$field]);
+        }
+        if (($copy['services'] ?? []) === []) {
+            throw new RuntimeException("Refusing: Infakt sent invoice {$source['number']} without its lines.");
+        }
+        // A contract or an order keeps only its date and number; anything else on it, its id included, is not copied.
+        $deals = fn (mixed $list): array => array_values(array_filter(array_map(
+            fn (mixed $deal): array => is_array($deal) ? array_filter(array_intersect_key($deal, self::DRAFT_DEAL_FIELDS), fn (mixed $v): bool => $v !== null && $v !== '') : [],
+            is_array($list) ? $list : [],
+        )));
+        $terms = array_filter(array_map($deals, array_intersect_key((array) ($copy['transaction_terms'] ?? []), self::DRAFT_TERMS_FIELDS)));
+        unset($copy['transaction_terms']);
+        if ($terms !== []) {
+            $copy['transaction_terms'] = $terms;
+        }
+        $copy['services'] = array_map(fn (array $line): array => [
+            ...$line,
+            'quantity' => self::quantity($line['quantity'] ?? 1),
+        ], array_values($copy['services']));
+
+        $today = LocalCalendar::today();
+        $saleDate = $periodMonth->copy()->endOfMonth();
+        $method = (string) ($source['payment_method'] ?? 'transfer');
+        $term = isset($source['payment_date'], $source['invoice_date'])
+            ? (int) round(Carbon::parse((string) $source['invoice_date'])->diffInDays(Carbon::parse((string) $source['payment_date']), false))
+            : null;
+        if ($term !== null && ($term < 0 || ($term === 0 && ! in_array($method, ['cash', 'card'], true)))) {
+            throw new RuntimeException("Refusing: invoice {$source['number']} is due {$term} days after it was issued; fix the term in Infakt or pick another invoice.");
+        }
+        $continuous = ($source['invoice_date_kind'] ?? null) === 'continuous_service_end_on'
+            ? ['continuous_service_start_on' => $periodMonth->copy()->startOfMonth()->toDateString(), 'continuous_service_end_on' => $saleDate->toDateString()]
+            : [];
+        $currency = mb_strtoupper((string) ($source['currency'] ?? 'PLN'));
+
+        $invoice = [
+            ...$copy,
+            'client_id' => (int) $infaktClientId,
+            'sale_date' => $saleDate->toDateString(),
+            'invoice_date' => $today->toDateString(),
+            ...($term !== null ? ['payment_date' => $today->copy()->addDays($term)->toDateString()] : []),
+            ...$continuous,
+            'currency' => $currency,
+        ];
+        if ($currency !== 'PLN' && ! isset($invoice['vat_exchange_date_kind'])) {
+            $invoice['vat_exchange_date_kind'] = $this->vatExchangeDateKind();
+        }
+
+        return ['invoice' => $invoice];
     }
 
     /**
@@ -177,14 +450,7 @@ final class InfaktService
      */
     public function maintenanceInvoiceGroups(Client $client, Carbon $periodMonth): array
     {
-        if ($client->month_close_type !== 'maintenance') {
-            throw new RuntimeException("Refusing: {$client->name} is not a maintenance client — the CRM only drafts maintenance invoices.");
-        }
-
-        $infaktClientId = $client->external_ids['infakt'] ?? null;
-        if ($infaktClientId === null) {
-            throw new RuntimeException("Refusing: {$client->name} has no linked Infakt client id.");
-        }
+        $infaktClientId = $this->assertDraftableClient($client);
 
         $saleDate = $periodMonth->copy()->endOfMonth();
 
@@ -508,6 +774,60 @@ final class InfaktService
     }
 
     /**
+     * Forgets drafts Infakt no longer holds: the mirrored row goes and so does the draft request, so the month
+     * reads as never drafted. Each draft is asked for by its own id and only a 404 counts. Nothing is forgotten
+     * unless the oldest issued invoice this account knows still answers, which proves the key reads the same company.
+     *
+     * @return int how many drafts were forgotten
+     */
+    public function forgetDeletedDrafts(int $accountId): int
+    {
+        $known = Invoice::query()->where('account_id', $accountId)->whereNotNull('external_uuid')
+            ->where(fn ($q) => $q->whereNull('status')->orWhere('status', '!=', 'draft'))->orderBy('id')->value('external_uuid');
+        try {
+            if ($known === null || $this->fetchInvoice((string) $known) === null) {
+                return 0;
+            }
+        } catch (Throwable) {
+            return 0;
+        }
+
+        $drafted = InfaktDraftRequest::query()->where('account_id', $accountId)->where('status', InfaktDraftRequest::STATUS_CREATED)->whereNotNull('invoice_uuid')->pluck('invoice_uuid');
+        $mirrored = Invoice::query()->where('account_id', $accountId)->where('status', 'draft')->whereNotNull('external_uuid')->pluck('external_uuid');
+        $forgotten = 0;
+
+        foreach ($drafted->merge($mirrored)->unique() as $uuid) {
+            try {
+                if ($this->fetchInvoice((string) $uuid) !== null) {
+                    continue;
+                }
+            } catch (Throwable) {
+                continue;
+            }
+
+            DB::transaction(function () use ($accountId, $uuid): void {
+                InfaktDraftRequest::query()->where('account_id', $accountId)->where('invoice_uuid', $uuid)->where('status', InfaktDraftRequest::STATUS_CREATED)->delete();
+                Invoice::query()->where('account_id', $accountId)->where('external_uuid', $uuid)->where('status', 'draft')->delete();
+            });
+            $forgotten++;
+        }
+
+        return $forgotten;
+    }
+
+    /**
+     * One invoice into the local mirror, as the nightly sync would write it.
+     *
+     * @param  array<string, mixed>  $infaktInvoice
+     */
+    public function mirrorInvoice(array $infaktInvoice, Client $client): Invoice
+    {
+        $data = $this->mapInfaktInvoiceToLocal($infaktInvoice, $client->account_id, $client->id);
+
+        return Invoice::updateOrCreate(['account_id' => $client->account_id, 'external_id' => $data['external_id']], $data);
+    }
+
+    /**
      * Invoices Infakt already holds for an Infakt client with this sale date,
      * drafts included. Infakt is asked rather than the local invoices table,
      * which only learns about a draft at the next sync.
@@ -562,6 +882,111 @@ final class InfaktService
             'status' => $response->status(),
             'body' => $response->json() ?? $response->body(),
         ];
+    }
+
+    public function assertDraftableClient(Client $client): string
+    {
+        if ($client->month_close_type !== 'maintenance') {
+            throw new RuntimeException("Refusing: {$client->name} is not a maintenance client — the CRM only drafts maintenance invoices.");
+        }
+
+        $infaktClientId = $client->external_ids['infakt'] ?? null;
+        if ($infaktClientId === null) {
+            throw new RuntimeException("Refusing: {$client->name} has no linked Infakt client id.");
+        }
+
+        return (string) $infaktClientId;
+    }
+
+    /**
+     * @param  list<string>  $forbidden  paths of forbidden fields, filled as found
+     * @return list<string> paths off the schema or of the wrong type
+     */
+    private static function schemaErrors(mixed $value, string $type, string $path, array &$forbidden): array
+    {
+        if (str_starts_with($type, 'list:')) {
+            if (! is_array($value) || ! array_is_list($value)) {
+                return ["{$path} (not a list)"];
+            }
+            $errors = [];
+            foreach ($value as $index => $item) {
+                $errors = [...$errors, ...self::schemaErrors($item, mb_substr($type, 5), "{$path}[{$index}]", $forbidden)];
+            }
+
+            return $errors;
+        }
+
+        if (isset(self::DRAFT_OBJECTS[$type])) {
+            if (! is_array($value) || ($value !== [] && array_is_list($value))) {
+                return ["{$path} (not an object)"];
+            }
+            $errors = [];
+            foreach ($value as $key => $item) {
+                $at = "{$path}.{$key}";
+                $allowed = self::DRAFT_OBJECTS[$type][$key] ?? null;
+                if ($allowed === null) {
+                    if (is_string($key) && self::isForbidden($key)) {
+                        $forbidden[] = $at;
+                    } else {
+                        $errors[] = $at;
+                    }
+
+                    continue;
+                }
+                $errors = [...$errors, ...self::schemaErrors($item, $allowed, $at, $forbidden)];
+            }
+
+            return $errors;
+        }
+
+        $fits = match ($type) {
+            'int' => is_int($value),
+            'number' => is_int($value) || is_float($value),
+            'numeric' => is_int($value) || is_float($value) || (is_string($value) && is_numeric($value)),
+            'code' => is_int($value) || (is_string($value) && $value !== ''),
+            'bool' => is_bool($value),
+            'date' => is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1,
+            default => is_string($value),
+        };
+
+        return $fits ? [] : ["{$path} (not {$type})"];
+    }
+
+    private static function isForbidden(string $key): bool
+    {
+        return in_array($key, self::DRAFT_FORBIDDEN_FIELDS, true)
+            || collect(self::DRAFT_FORBIDDEN_PATTERNS)->contains(fn (string $pattern): bool => preg_match($pattern, $key) === 1);
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $fields
+     * @return array<array-key, mixed>
+     */
+    private static function withoutForbidden(array $fields): array
+    {
+        $kept = [];
+        foreach ($fields as $key => $value) {
+            if (is_string($key) && self::isForbidden($key)) {
+                continue;
+            }
+            if (is_array($value) && $key !== 'transaction_terms') {
+                $value = self::withoutForbidden($value);
+            }
+            // Empty values are what Infakt shows for an unset field; sending them back could clear or fail one.
+            if ($value === null || $value === '' || $value === []) {
+                continue;
+            }
+            $kept[$key] = $value;
+        }
+
+        return array_is_list($fields) ? array_values($kept) : $kept;
+    }
+
+    private static function quantity(mixed $quantity): int|float
+    {
+        $value = (float) $quantity;
+
+        return floor($value) === $value ? (int) $value : $value;
     }
 
     private static function comparable(mixed $value): ?string
@@ -867,6 +1292,9 @@ final class InfaktService
             'account_id' => $accountId,
             'client_id' => $clientId,
             'external_id' => (string) $infaktInvoice['id'],
+            'external_uuid' => $infaktInvoice['uuid'] ?? null,
+            'kind' => $infaktInvoice['kind'] ?? null,
+            'parent_external_id' => isset($infaktInvoice['parent_id']) ? (string) $infaktInvoice['parent_id'] : null,
             'number' => $infaktInvoice['number'] ?? null,
             'status' => $infaktInvoice['status'] ?? null,
             'client_company_name' => $this->normalizeName((string) ($infaktInvoice['client_company_name'] ?? '')) ?: null,

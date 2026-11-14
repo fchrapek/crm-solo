@@ -3,6 +3,8 @@ export type LaneKey = 'doing' | 'testing' | 'todo';
 export interface ClientTaskRow {
     task_id: number;
     name: string;
+    /** The project the task belongs to. */
+    project?: string | null;
     done: boolean;
     can_untick: boolean;
     /** Y-m-d in the display timezone. */
@@ -16,6 +18,14 @@ export interface ClientTaskRow {
     picked: boolean;
 }
 
+/** A live project of the client with its open tasks; private means no Trello board behind it. */
+export interface TaskProject {
+    id: number;
+    name: string;
+    open: number;
+    is_private: boolean;
+}
+
 export interface ClientTaskLane {
     key: LaneKey;
     count: number;
@@ -25,10 +35,14 @@ export interface ClientTaskLane {
 export interface RetainerTasks {
     mode: 'retainer';
     /** The lane sent whole; every other lane carries its first five rows. */
-    expanded: LaneKey | null;
+    expanded: LaneKey | 'done' | null;
     lanes: ClientTaskLane[];
-    projects: { id: number; name: string }[];
+    /** What is done, newest first: the first five rows unless expanded is done. */
+    done: { count: number; rows: OrderDoneRow[] };
+    projects: TaskProject[];
     repositories: { path: string; project: string }[];
+    /** A new task starts reportable while the client has an active retainer. */
+    reportable_by_default: boolean;
 }
 
 export interface OrderDoneRow extends ClientTaskRow {
@@ -50,8 +64,10 @@ export interface OrderTasks {
     open: { count: number; rows: ClientTaskRow[] };
     done: { count: number; rows: OrderDoneRow[] };
     time: { hours: number; count: number; rows: OrderTimeRow[] };
-    projects: { id: number; name: string }[];
+    projects: TaskProject[];
     repositories: { path: string; project: string }[];
+    /** A new task starts reportable while the client has an active retainer. */
+    reportable_by_default: boolean;
 }
 
 export type ClientTasks = RetainerTasks | OrderTasks;

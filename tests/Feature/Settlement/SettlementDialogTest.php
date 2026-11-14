@@ -31,7 +31,7 @@ final class SettlementDialogTest extends TestCase
     public function test_the_preview_answers_the_figures_a_close_would_freeze_with_the_hash_it_checks(): void
     {
         $this->entry('2026-09-10 08:00:00', 36 * 60 + 30);
-        $this->report('2026-09', opening: -9.5, contracted: 30, actual: 32, status: ClientReport::STATUS_FINALIZED);
+        $this->report('2026-09', opening: -9.5, contracted: 30, actual: 32, status: ClientReport::STATUS_FINALIZED, backed: true);
 
         $preview = $this->actingAs($this->user)->getJson("/clients/{$this->client->id}/months/2026-09/close")->assertOk()->json();
 
@@ -86,7 +86,7 @@ final class SettlementDialogTest extends TestCase
 
     public function test_przeglad_leaves_a_closed_month_even_while_its_report_still_waits(): void
     {
-        $this->report('2026-09', opening: 0, contracted: 30, actual: 20);
+        $this->report('2026-09', opening: 0, contracted: 30, actual: 20, backed: true);
         $this->settle('2026-09');
 
         $this->overview(fn (Assert $page) => $page

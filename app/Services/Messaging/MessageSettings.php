@@ -12,6 +12,7 @@ use App\Models\MessageTemplate;
 use App\Models\OutboundMessage;
 use App\Models\User;
 use App\Services\Agent\AgentRefusal;
+use App\Services\Agent\AgentWriteRecorder;
 use App\Services\Humanizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -24,9 +25,10 @@ final class MessageSettings
         private readonly MessageScheduler $scheduler,
     ) {}
 
-    public function template(int $accountId, string $key, ?string $name, ?string $body): MessageTemplate
+    /** An email template also takes a subject; a key belongs to one channel. */
+    public function template(int $accountId, string $key, ?string $name, ?string $body, string $channel = MessageTemplate::SMS, ?string $subject = null, ?bool $isDefault = null): MessageTemplate
     {
-        return DB::transaction(fn (): MessageTemplate => $this->templateLocked($accountId, $key, $name, $body));
+        return DB::transaction(fn (): MessageTemplate => $this->templateLocked($accountId, $key, $name, $body, $channel, $subject, $isDefault));
     }
 
     /**
@@ -40,12 +42,15 @@ final class MessageSettings
         return $rule;
     }
 
-    /** A template a rule still uses stays. */
-    public function deleteTemplate(int $accountId, string $key): void
+    /** A template a rule still uses stays; a summary email made from it keeps its own text. */
+    public function deleteTemplate(int $accountId, string $key, string $channel = MessageTemplate::SMS): void
     {
-        DB::transaction(function () use ($accountId, $key): void {
-            $template = MessageTemplate::query()->where('account_id', $accountId)->where('key', $key)->lockForUpdate()->first()
-                ?? throw AgentRefusal::invalid("No template {$key}.");
+        DB::transaction(function () use ($accountId, $key, $channel): void {
+            $template = MessageTemplate::query()->where('account_id', $accountId)->where('key', $key)->where('channel', $channel)->lockForUpdate()->first()
+                ?? throw AgentRefusal::invalid("No {$channel} template {$key}.");
+            if ($template->is_default && MessageTemplate::query()->where('account_id', $accountId)->where('channel', $channel)->whereKeyNot($template->id)->exists()) {
+                throw AgentRefusal::invalid('Set another template as the default first.');
+            }
             $rules = MessageRule::query()->where('template_id', $template->id)->pluck('key')->all();
             if ($rules !== []) {
                 throw AgentRefusal::invalid("Template {$key} is used by the rule ".implode(', ', $rules).'; delete or change that rule first.', ['rules' => $rules]);
@@ -104,6 +109,9 @@ final class MessageSettings
             }
             $account->settings = [...$settings, 'messages' => $messages];
             $account->save();
+            if ($messages !== (array) ($settings['messages'] ?? [])) {
+                app(AgentWriteRecorder::class)->recordUpdate($account, ['messages' => $settings['messages'] ?? null]);
+            }
         });
 
         return $this->sendingOf(Account::query()->findOrFail($accountId));
@@ -136,6 +144,40 @@ final class MessageSettings
         return ['text' => $text, 'client' => $client?->name, ...SmsText::measure($text)];
     }
 
+    /**
+     * The email as the client would get it for one month, subject and body.
+     * A placeholder without a value stays as written.
+     *
+     * @return array{subject: string, body: string, client: string, period: string, period_label: string}
+     */
+    public function emailPreview(int $accountId, string $subject, string $body, Client $client, string $period): array
+    {
+        $this->renderer->assertValid($accountId, $subject, MessageTemplate::EMAIL, subject: true);
+        $this->renderer->assertValid($accountId, $body, MessageTemplate::EMAIL);
+        $fields = $this->renderer->fields($accountId);
+
+        return [
+            'subject' => SummaryEmails::oneLine((string) Humanizer::clean($this->renderer->render($subject, $client, false, $fields, $period))),
+            'body' => (string) Humanizer::clean($this->renderer->render($body, $client, false, $fields, $period)),
+            'client' => $client->name,
+            'period' => $period,
+            'period_label' => app(MonthPlaceholders::class)->period($period),
+        ];
+    }
+
+    /** @return list<array{key: string, name: string, subject: string, body: string, is_default: bool}> */
+    public function emailTemplates(int $accountId): array
+    {
+        return MessageTemplate::query()->where('account_id', $accountId)->where('channel', MessageTemplate::EMAIL)->orderBy('id')->get()
+            ->map(fn (MessageTemplate $template): array => [
+                'key' => $template->key,
+                'name' => $template->name,
+                'subject' => (string) $template->subject,
+                'body' => (string) $template->body,
+                'is_default' => $template->is_default,
+            ])->values()->all();
+    }
+
     public function cancel(int $accountId, int $messageId, ?User $actor): OutboundMessage
     {
         $message = OutboundMessage::query()->where('account_id', $accountId)->find($messageId)
@@ -147,7 +189,7 @@ final class MessageSettings
             throw AgentRefusal::invalid("Message {$messageId} is {$message->fresh()?->status}; only a pending or failed message can be cancelled.");
         }
 
-        return $message->fresh();
+        return $this->recorded($message);
     }
 
     /**
@@ -188,7 +230,7 @@ final class MessageSettings
             throw AgentRefusal::invalid("Message {$messageId} is {$message->fresh()?->status}; only a failed message can be sent again.");
         }
 
-        return $message->fresh();
+        return $this->recorded($message);
     }
 
     public function optOut(Client $client, bool $optOut): void
@@ -200,21 +242,50 @@ final class MessageSettings
         });
     }
 
-    private function templateLocked(int $accountId, string $key, ?string $name, ?string $body): MessageTemplate
+    /** The message as stored now; its status move was a query update, so the agent trail is written here. */
+    private function recorded(OutboundMessage $message): OutboundMessage
+    {
+        $fresh = $message->fresh();
+        app(AgentWriteRecorder::class)->recordUpdate($fresh, ['status' => $message->status]);
+
+        return $fresh;
+    }
+
+    private function templateLocked(int $accountId, string $key, ?string $name, ?string $body, string $channel, ?string $subject, ?bool $isDefault): MessageTemplate
     {
         $key = $this->key($key);
         $template = MessageTemplate::query()->where('account_id', $accountId)->where('key', $key)->lockForUpdate()->first()
-            ?? new MessageTemplate(['account_id' => $accountId, 'key' => $key]);
+            ?? new MessageTemplate(['account_id' => $accountId, 'key' => $key, 'channel' => $channel]);
+        if ($template->channel !== $channel) {
+            throw AgentRefusal::invalid("Template {$key} is a {$template->channel} template; pick another key.");
+        }
 
         if ($body !== null && mb_trim($body) !== '') {
-            $this->renderer->assertValid($accountId, $body);
+            $this->renderer->assertValid($accountId, $body, $channel);
             $template->body = mb_trim($body);
         }
         if ($name !== null && mb_trim($name) !== '') {
             $template->name = mb_substr(mb_trim($name), 0, 100);
         }
+        if ($channel === MessageTemplate::EMAIL && $subject !== null && mb_trim($subject) !== '') {
+            $this->renderer->assertValid($accountId, $subject, $channel, subject: true);
+            $template->subject = SummaryEmails::oneLine($subject);
+        }
         if (! $template->exists && ($template->body === null || $template->name === null)) {
             throw AgentRefusal::invalid("Pass a name and a body for the new template {$key}.");
+        }
+        if ($channel === MessageTemplate::EMAIL && ($template->subject === null || $template->subject === '')) {
+            throw AgentRefusal::invalid("Pass a subject for the email template {$key}.");
+        }
+        if ($channel === MessageTemplate::EMAIL) {
+            $others = MessageTemplate::query()->where('account_id', $accountId)->where('channel', $channel)->when($template->exists, fn ($q) => $q->whereKeyNot($template->id));
+            if ($isDefault === false && $template->is_default && $others->exists()) {
+                throw AgentRefusal::invalid('Set another template as the default first.', ['field' => 'is_default']);
+            }
+            if ($isDefault === true || ! $others->exists()) {
+                (clone $others)->where('is_default', true)->update(['is_default' => false]);
+                $template->is_default = true;
+            }
         }
 
         $template->save();
@@ -230,8 +301,9 @@ final class MessageSettings
             ?? new MessageRule(['account_id' => $accountId, 'key' => $key, 'trigger_config' => []]);
 
         if (($attributes['template'] ?? null) !== null) {
-            $template = MessageTemplate::query()->where('account_id', $accountId)->where('key', $attributes['template'])->first()
-                ?? throw AgentRefusal::invalid("No template {$attributes['template']}.", ['valid_templates' => MessageTemplate::query()->where('account_id', $accountId)->pluck('key')->all()]);
+            $sms = MessageTemplate::query()->where('account_id', $accountId)->where('channel', MessageTemplate::SMS);
+            $template = (clone $sms)->where('key', $attributes['template'])->first()
+                ?? throw AgentRefusal::invalid("No text message template {$attributes['template']}.", ['valid_templates' => $sms->pluck('key')->all()]);
             $rule->template_id = $template->id;
         }
 

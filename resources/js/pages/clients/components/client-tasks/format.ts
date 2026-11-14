@@ -5,10 +5,6 @@ export function homePath(path: string): string {
     return path.replace(/^\/Users\/[^/]+(?=\/|$)/, '~');
 }
 
-export function initialLane<T extends { key: string; count: number }>(lanes: T[], expanded: string | null): string {
-    return expanded ?? lanes.find((lane) => lane.count > 0)?.key ?? lanes[0]?.key ?? 'doing';
-}
-
 export interface TickedRow {
     lane: LaneKey;
     index: number;

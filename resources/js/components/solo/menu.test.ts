@@ -10,7 +10,7 @@ describe('one Solo menu look', () => {
 
         expect(phone).toMatch(/\.box \{[^}]*width: 300px;[^}]*padding: var\(--solo-space-4\);/);
         expect(phone).toMatch(/\.box \.row \{[^}]*min-height: var\(--solo-touch\);/);
-        expect(phone).toMatch(/\[aria-pressed='true'\], \[data-state='checked'\]\):focus \{\s*color: var\(--solo-link, var\(--solo-accent\)\);/);
+        expect(phone).toMatch(/\[aria-pressed='true'\], \[data-state='checked'\]\):focus \{\s*color: var\(--solo-accent\);/);
         expect(desktop).toMatch(/\.box \{\s*width: 240px;/);
         expect(desktop).toMatch(/\.box \.row \{\s*min-height: 34px;/);
     });

@@ -12,12 +12,12 @@ final class BillingSummaryTest extends TestCase
     public function test_the_summary_prints_the_hours_bank_figures_with_a_cap_and_with_debt(): void
     {
         $capped = BillingSummary::lines(8, 10, 5, 15, 'en');
-        $this->assertContains('Opening balance for next month: +10h', $capped);
-        $this->assertContains('Hours above the agreed carry-over cap, not carried forward: 3h', $capped);
+        $this->assertContains('- Opening balance for next month: +10h', $capped);
+        $this->assertContains('- Hours above the agreed carry-over cap, not carried forward: 3h', $capped);
 
         $debt = BillingSummary::lines(-4, 10, 9, null, 'en');
-        $this->assertContains('Opening balance for the month: −4h', $debt);
-        $this->assertContains('Opening balance for next month: −3h', $debt);
+        $this->assertContains('- Opening balance for the month: −4h', $debt);
+        $this->assertContains('- Opening balance for next month: −3h', $debt);
         $this->assertSame([], preg_grep('/carry-over cap/', $debt));
     }
 
@@ -38,7 +38,7 @@ final class BillingSummaryTest extends TestCase
         $result = BillingSummary::replaceIn($body, 4, 12, 3, null);
 
         $this->assertSame(BillingSummary::REWRITTEN, $result['status']);
-        $this->assertStringStartsWith("```md\n## Billing summary\n```\n\n## Billing summary\n\nOpening balance for the month: +4h", $result['body']);
+        $this->assertStringStartsWith("```md\n## Billing summary\n```\n\n## Billing summary\n\n- Opening balance for the month: +4h", $result['body']);
     }
 
     public function test_two_summary_sections_are_left_alone(): void
@@ -81,7 +81,20 @@ final class BillingSummaryTest extends TestCase
         $result = BillingSummary::replaceIn($body, 4, 12, 3, null);
 
         $this->assertSame(BillingSummary::REWRITTEN, $result['status']);
-        $this->assertSame("# March\n\n## Billing summary\n\nOpening balance for the month: +4h\n\nPool for the month: +12h\n\nUsed in the month: \u{2212}3h\n\nOpening balance for next month: +13h\n", $result['body']);
+        $this->assertSame("# March\n\n## Billing summary\n\n- Opening balance for the month: +4h\n- Pool for the month: +12h\n- Used in the month: \u{2212}3h\n- Opening balance for next month: +13h\n", $result['body']);
+    }
+
+    public function test_a_summary_stored_with_blank_lines_between_items_is_replaced_once_by_the_list(): void
+    {
+        $stored = "# Październik\n\n- Migracja\n\n## Podsumowanie rozliczeniowe\n\nBilans na start miesiąca: +1h\n\nPula miesiąca: +6h\n\n"
+            ."Wykorzystano w miesiącu: \u{2212}7h\n\nBilans na start kolejnego miesiąca: 0h\n";
+
+        $result = BillingSummary::replaceIn($stored, 1, 6, 7.5, null);
+
+        $this->assertSame(BillingSummary::REWRITTEN, $result['status']);
+        $this->assertSame(1, mb_substr_count($result['body'], 'Podsumowanie rozliczeniowe'));
+        $this->assertStringNotContainsString("\n\nPula", $result['body']);
+        $this->assertStringEndsWith("- Wykorzystano w miesiącu: \u{2212}7.5h\n- Bilans na start kolejnego miesiąca: \u{2212}0.5h\n", $result['body']);
     }
 
     public function test_a_summary_heading_in_an_indented_code_block_is_not_the_section(): void

@@ -1,19 +1,23 @@
-import { DayTrail } from '@/components/solo/day-trail';
-import { Masthead } from '@/components/solo/masthead';
+import { ActionMenuItem } from '@/components/solo/action-menu';
 import { MonthCard, type MonthData } from '@/components/solo/month-card';
-import { EmptyBlock, Poster, SectionHead, SoloButton, touchTargetClass } from '@/components/solo/primitives';
-import { SegmentedControl } from '@/components/solo/segmented-control';
-import { splitClass, splitMainClass, splitSideClass } from '@/components/solo/split';
+import { Poster, SoloButton, SoloButtonLink } from '@/components/solo/primitives';
+import { Row } from '@/components/solo/row';
+import { RowMenu } from '@/components/solo/row-menu';
+import { Pills } from '@/components/solo/shell/pills';
+import { type PlaceResolver } from '@/components/solo/shell/place';
 import { SoloSurface } from '@/components/solo/surface';
-import { TaskRow, type DayTask } from '@/components/solo/task-row';
-import { Icon } from '@/components/ui/icon';
-import { durationText, parseDay, shortDate, weekdayName } from '@/lib/dates';
+import { type DayTask } from '@/components/solo/task-row';
+import { GroupHeading, Tile, TileGrid, TileInset, TileNote, TileRows, TileStack } from '@/components/solo/tile';
+import { capitalize, dayMonth, durationText, longDate, parseDay, shortDate, weekdayName } from '@/lib/dates';
 import day from '@/routes/day';
+import tasks from '@/routes/tasks';
 import today from '@/routes/today';
 import { type SharedData } from '@/types';
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
-import styles from './today.module.css';
+import { TimerTile } from './day';
+import styles from './day.module.css';
+import { dayPills } from './place';
 
 interface WeekDay {
     date: string;
@@ -24,6 +28,8 @@ interface WeekDay {
 
 interface WeekProps {
     today: string;
+    /** Today is closed. */
+    closed: boolean;
     week: 'this' | 'next';
     maxPicks: number;
     month: MonthData;
@@ -31,116 +37,162 @@ interface WeekProps {
     [key: string]: unknown;
 }
 
+const keep = { preserveScroll: true };
+
 /**
- * Figma: Tydzień (922:21329). One section per date, Monday first, each with its own count; a day below five picks
- * offers Wybierz. A past day's unfinished pick stays on its day, takeable into today or droppable.
+ * Figma: Tydzień, one date (1091:28683). Its picks under the date and its count; a day below five picks offers
+ * Wybierz. A past day's unfinished pick stays on its day, takeable into today or droppable.
  */
-function DaySection({ entry, today: todayDate, maxPicks }: { entry: WeekDay; today: string; maxPicks: number }) {
+export function DaySection({ entry, today: todayDate, maxPicks }: { entry: WeekDay; today: string; maxPicks: number }) {
     const { t, i18n } = useTranslation();
     const past = entry.date < todayDate;
     const isToday = entry.date === todayDate;
     const done = entry.picks.filter((pick) => pick.done).length;
-    const name = `${weekdayName(parseDay(entry.date), i18n.language)} · ${shortDate(entry.date, i18n.language)}`;
-    const meta =
+    const free = maxPicks - entry.picks.length;
+    const count =
         past && entry.picks.length === 0
             ? undefined
             : past
               ? t('{{done}} of {{count}} done', { done, count: entry.picks.length })
               : t('{{count}} of {{max}} picked', { count: entry.picks.length, max: maxPicks });
     const pickHref = isToday ? today.tasks().url : today.tasks({ query: { na: entry.date } }).url;
+    const canPick = entry.plannable && !entry.closed && free > 0;
+    const empty = entry.picks.length === 0;
 
     return (
-        <div className={styles.card}>
-            <SectionHead label={isToday ? `${t('Today')} · ${name}` : name} meta={meta} quiet={!isToday} />
-            {entry.picks.length === 0 && !entry.plannable ? (
-                <EmptyBlock>{t('Nothing planned')}</EmptyBlock>
+        <>
+            <GroupHeading
+                label={capitalize(weekdayName(parseDay(entry.date), i18n.language))}
+                note={shortDate(entry.date, i18n.language)}
+                current={isToday ? t('today') : undefined}
+                quiet={past}
+                end={
+                    empty && canPick ? (
+                        <SoloButtonLink href={pickHref} variant="secondary" size="control">
+                            {t('Choose')}
+                        </SoloButtonLink>
+                    ) : (
+                        count
+                    )
+                }
+            />
+            {empty ? (
+                <TileInset>
+                    <TileNote>{t('Nothing planned')}</TileNote>
+                </TileInset>
             ) : (
-                <ul className={styles.list}>
-                    {entry.picks.map((pick) => (
-                        <TaskRow
-                            key={pick.id}
-                            task={pick}
-                            trailing={
-                                <>
-                                    {pick.done && pick.minutes ? durationText(pick.minutes, t) : null}
-                                    {past && !pick.done && <span className={styles.late}>{t('not done')}</span>}
-                                    {past && !pick.done && (
+                <TileRows>
+                    {entry.picks.map((pick) => {
+                        const late = past && !pick.done;
+                        const removable = !past && entry.plannable && !entry.closed;
+
+                        return (
+                            <Row
+                                key={pick.id}
+                                check={{ done: pick.done, label: `${pick.done ? t('Done') : t('Not done')}: ${pick.name}` }}
+                                title={pick.name}
+                                href={tasks.show(pick.task_id)}
+                                time={pick.done && pick.minutes ? durationText(pick.minutes, t) : undefined}
+                                wideMeta={late ? t('not done') : pick.client}
+                                action={
+                                    late ? (
                                         <SoloButton
-                                            size="sm"
-                                            variant="ghost"
-                                            className={touchTargetClass}
-                                            onClick={() => router.post(day.picks.store().url, { task_id: pick.task_id }, { preserveScroll: true })}
+                                            variant="secondary"
+                                            size="control"
+                                            onClick={() => router.post(day.picks.store().url, { task_id: pick.task_id }, keep)}
                                         >
                                             {t('For today')}
                                         </SoloButton>
-                                    )}
-                                    {/* a done pick on a day ahead still holds one of its five places, so it can go too */}
-                                    {(past ? !pick.done : entry.plannable && !entry.closed) && (
+                                    ) : removable ? (
+                                        // a done pick on a day ahead still holds one of its five places, so it can go too
                                         <SoloButton
-                                            size="sm"
-                                            variant="ghost"
-                                            className={touchTargetClass}
+                                            variant="quiet"
+                                            size="control"
+                                            className={styles.rowAction}
                                             aria-label={`${t('Remove')}: ${pick.name}`}
-                                            title={t('Remove')}
-                                            onClick={() =>
-                                                router.delete(past ? day.picks.dismiss(pick.id).url : day.picks.destroy(pick.id).url, { preserveScroll: true })
-                                            }
+                                            onClick={() => router.delete(day.picks.destroy(pick.id).url, keep)}
                                         >
-                                            <Icon name="close" size={16} />
+                                            {t('Remove')}
                                         </SoloButton>
-                                    )}
-                                </>
+                                    ) : undefined
+                                }
+                                more={
+                                    late ? (
+                                        <RowMenu name={pick.name}>
+                                            <ActionMenuItem onSelect={() => router.delete(day.picks.dismiss(pick.id).url, keep)}>
+                                                {t('Remove')}
+                                            </ActionMenuItem>
+                                        </RowMenu>
+                                    ) : undefined
+                                }
+                            />
+                        );
+                    })}
+                    {canPick && (
+                        <Row
+                            title={t('Pick another')}
+                            meta={<span className={styles.phoneOnly}>{t('{{count}} free', { count: free })}</span>}
+                            wideMeta={t('{{count}} free slots', { count: free })}
+                            action={
+                                <SoloButtonLink href={pickHref} variant="secondary" size="control">
+                                    {t('Add')}
+                                </SoloButtonLink>
                             }
                         />
-                    ))}
-                    {entry.plannable && !entry.closed && entry.picks.length < maxPicks && (
-                        <li className={styles.addItem}>
-                            <Link href={pickHref} className={`${styles.addRow} ${touchTargetClass}`}>
-                                {entry.picks.length === 0 ? t('Choose') : t('Pick another')}
-                            </Link>
-                        </li>
                     )}
-                </ul>
+                </TileRows>
             )}
-        </div>
+        </>
     );
 }
 
+/**
+ * Figma: Tydzień (1091:28683, phone 1091:29016). Seven dates, Monday first, in one tile; this week or the next as a
+ * second row of pills; beside them the running timer and the month.
+ */
 export default function Week() {
-    const { today: todayDate, week, maxPicks, month, days } = usePage<SharedData & WeekProps>().props;
+    const { today: todayDate, week, maxPicks, month, days, timer } = usePage<SharedData & WeekProps>().props;
     const errors = usePage().props.errors as Record<string, string>;
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
+    const range =
+        days.length > 0 ? `${dayMonth(parseDay(days[0].date), i18n.language)} – ${longDate(days[days.length - 1].date, i18n.language)}` : null;
 
     return (
-        <SoloSurface className={styles.page} day="paper">
+        <SoloSurface day="paper">
             <Head title={t('Week')} />
-            <div className={styles.frame}>
-                <Masthead />
-                <main className={`${splitClass} ${styles.grid}`}>
-                    <div className={`${splitMainClass} ${styles.main}`}>
-                        <div className={styles.head}>
-                            <DayTrail current="week" />
-                            <Poster>{t('Week')}</Poster>
-                        </div>
-                        <SegmentedControl
-                            className={styles.weekSwitch}
+            <main className={styles.summary}>
+                <header className={styles.summaryHead}>
+                    <Poster>{t('Week')}</Poster>
+                    {range !== null && <p className={styles.meta}>{range}</p>}
+                    <div className={styles.headPills}>
+                        <Pills
                             label={t('Week')}
-                            value={week}
-                            options={[
-                                { value: 'this', label: t('This week'), href: today.week() },
-                                { value: 'next', label: t('Next week'), href: today.week({ query: { nastepny: 1 } }) },
+                            items={[
+                                { label: t('This week'), href: today.week(), active: week === 'this' },
+                                { label: t('Next week'), href: today.week({ query: { nastepny: 1 } }), active: week === 'next' },
                             ]}
                         />
-                        {errors.task_id && <p className={styles.error}>{errors.task_id}</p>}
+                    </div>
+                </header>
+                <TileGrid>
+                    <Tile kind="list">
+                        {errors.task_id && (
+                            <TileInset>
+                                <p className={styles.error}>{errors.task_id}</p>
+                            </TileInset>
+                        )}
                         {days.map((entry) => (
                             <DaySection key={entry.date} entry={entry} today={todayDate} maxPicks={maxPicks} />
                         ))}
-                    </div>
-                    <aside className={`${splitSideClass} ${styles.rail} ${styles.wideRail}`}>
-                        <MonthCard month={month} date={todayDate} monthLink />
-                    </aside>
-                </main>
-            </div>
+                    </Tile>
+                    <TileStack as="aside">
+                        {timer && <TimerTile running={timer} />}
+                        <MonthCard look="tile" month={month} />
+                    </TileStack>
+                </TileGrid>
+            </main>
         </SoloSurface>
     );
 }
+
+Week.place = ((props, { t }) => ({ pills: dayPills('week', t, props.closed) })) satisfies PlaceResolver<WeekProps>;

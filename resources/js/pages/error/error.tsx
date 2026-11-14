@@ -1,8 +1,8 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 
-import { Masthead } from '@/components/solo/masthead';
-import { Poster } from '@/components/solo/primitives';
+import { Poster, SoloButtonLink } from '@/components/solo/primitives';
+import { DogStill } from '@/components/solo/shell/dog-still';
 import { SoloSurface } from '@/components/solo/surface';
 import { dashboard, login } from '@/routes';
 import { SharedData } from '@/types';
@@ -21,7 +21,10 @@ const LINE: Record<number, string> = {
     403: 'This page does not belong to your account.',
 };
 
-/** Figma: Błąd 404 / 403 / 500 (581:17161, 581:17188, 581:17215; phones 581:17242 on). A guest gets no masthead and a link to log in. */
+/**
+ * Figma: Błąd 404 / 403 / 500 (1095:44768, 1095:45104, 1095:45339; phones 1095:44933 on). The surprised dog, the code
+ * as the poster, one line and one way out. Signed in it stands in the shell; a guest gets the page alone and a link to log in.
+ */
 export default function ErrorPage({ status, auth }: ErrorPageProps) {
     const { t } = useTranslation();
     // Shared props are absent when the error fires before the Inertia middleware, so treat that as a guest.
@@ -29,18 +32,18 @@ export default function ErrorPage({ status, auth }: ErrorPageProps) {
     const line = t(LINE[status] ?? LINE[500]);
 
     return (
-        <SoloSurface className={styles.page} day="paper">
+        <SoloSurface className={styles.page} day="paper" data-guest={signedIn ? undefined : ''}>
             <Head title={`${status}`} />
-            <div className={styles.frame}>
-                {signedIn && <Masthead current={null} />}
-                <main className={styles.main}>
-                    <Poster size="display">{status}</Poster>
-                    <p className={styles.line}>{line}</p>
-                    <Link className={styles.link} href={signedIn ? dashboard() : login()}>
-                        {signedIn ? t('Back to Today') : t('Log in')} →
-                    </Link>
-                </main>
-            </div>
+            <main className={styles.main}>
+                <span className={styles.dog}>
+                    <DogStill size={128} pose="wow" />
+                </span>
+                <Poster size="display">{status}</Poster>
+                <p className={styles.line}>{line}</p>
+                <SoloButtonLink href={signedIn ? dashboard() : login()} size="control">
+                    {signedIn ? t('Back to Today') : t('Log in')}
+                </SoloButtonLink>
+            </main>
         </SoloSurface>
     );
 }

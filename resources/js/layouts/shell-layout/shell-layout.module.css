@@ -1,0 +1,59 @@
+/* Figma: Shell. Phone first: one column with a 16 px margin; from 768 px the rail stands left and the column (main 640 and side 380, 20 apart) is centred in the room beside it. */
+.shell {
+    min-height: 100dvh;
+    background: var(--role-page);
+    color: var(--role-text-primary);
+}
+
+.column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--shell-gap);
+    max-width: calc(1040px + 2 * var(--shell-margin));
+    margin-inline: auto;
+    padding: calc(var(--role-space-12) + env(safe-area-inset-top, 0px)) calc(var(--shell-margin) + env(safe-area-inset-right, 0px)) 0
+        calc(var(--shell-margin) + env(safe-area-inset-left, 0px));
+}
+
+/* the column has the page margins and the full-height ground already */
+.content {
+    --solo-grid-margin: 0px;
+
+    min-width: 0;
+}
+
+.content > :global([data-day]) {
+    min-height: 0;
+}
+
+/* a vermilion or cobalt day view is a block in the column until it is rebuilt */
+.content > :global([data-day]:not([data-day='paper'])) {
+    padding: var(--role-space-16) var(--role-space-16) 0;
+    border-radius: var(--role-radius-lg);
+}
+
+@media (min-width: 768px) {
+    .shell {
+        padding-left: var(--shell-rail);
+    }
+
+    .column {
+        padding-top: var(--role-space-32);
+    }
+
+    .content > :global([data-day]:not([data-day='paper'])) {
+        padding: var(--role-space-24) var(--role-space-32) 0;
+    }
+}
+
+/* Printing gives the page alone, without the chrome around it */
+@media print {
+    .shell {
+        padding-left: 0;
+    }
+
+    .shell > :not(.column),
+    .column > :not(.content) {
+        display: none;
+    }
+}

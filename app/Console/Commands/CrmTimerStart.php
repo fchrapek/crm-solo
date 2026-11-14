@@ -6,8 +6,10 @@ namespace App\Console\Commands;
 
 use App\Console\Attributes\AccountScope;
 use App\Console\Commands\Concerns\AgentConsoleOutput;
+use App\Services\Agent\AgentRefusal;
 use App\Services\Agent\CrmEntityResolver;
 use App\Services\Agent\ReferenceException;
+use App\Services\Agent\TaskBillingNotes;
 use App\Services\Agent\TimerService;
 use Illuminate\Console\Command;
 
@@ -23,7 +25,7 @@ final class CrmTimerStart extends Command
 {
     use AgentConsoleOutput;
 
-    protected $signature = 'crm:timer-start {task : Task id or name fragment} {--desc= : Description on the entry} {--not-billable} {--json : Machine-readable output}';
+    protected $signature = 'crm:timer-start {task : Task id or name fragment} {--desc= : Description on the entry} {--json : Machine-readable output}';
 
     protected $description = 'Start a live timer on a task (close it with crm:timer-stop)';
 
@@ -39,11 +41,11 @@ final class CrmTimerStart extends Command
 
         $open = $timers->open($accountId);
 
-        $entry = $timers->start(
-            $task,
-            $this->option('desc') ? (string) $this->option('desc') : null,
-            ! $this->option('not-billable'),
-        );
+        try {
+            $entry = $timers->start($task, $this->option('desc') ? (string) $this->option('desc') : null);
+        } catch (AgentRefusal $e) {
+            return $this->refusal($e);
+        }
 
         if ($this->option('json')) {
             $this->raw($this->encodeJson($timers->startPayload($entry, $task, $open)));
@@ -52,6 +54,9 @@ final class CrmTimerStart extends Command
         }
 
         $this->raw("Timer started: entry #{$entry->id} on task #{$task->id}");
+        foreach (TaskBillingNotes::forTask($task)['warnings'] as $warning) {
+            $this->raw('WARNING '.$warning);
+        }
         $lines = ['Task: '.$this->literal($task->name).($task->project?->client ? ' ['.$this->literal($task->project->client->name).']' : '')];
         foreach ($open as $other) {
             $lines[] = "  also open: timer #{$other->id} (".$this->literal($other->task?->name ?? 'no task').'), overlaps are allowed';

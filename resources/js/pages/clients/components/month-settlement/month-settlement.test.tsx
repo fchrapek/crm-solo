@@ -60,6 +60,21 @@ describe('CloseMonthSummary', () => {
         expect(text).not.toContain('Wpisy dziś');
     });
 
+    test('billed time as the source says so, and the real entries ride along when they differ', () => {
+        const text = textOf(
+            preview({
+                source: 'billed',
+                report_status: null,
+                used: 37,
+                entries: 36.5,
+                billed_time: { real: 36.5, billed: 37 },
+            }),
+        );
+
+        expect(text).toContain('Przepracowane · z czasu rozliczanego −37,0 h');
+        expect(text).toContain('Wpisy dziś: 36,5 h.');
+    });
+
     test('hours over the rollover cap show as their own row', () => {
         expect(textOf(preview({ forfeited: 4 }))).toContain('Ponad limit kumulacji −4,0 h');
     });

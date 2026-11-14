@@ -1,9 +1,10 @@
 import { fieldControl, SoloField, SoloFieldRow, SoloInput } from '@/components/solo/field';
 import { IconButton } from '@/components/solo/icon-button';
-import { ListRow } from '@/components/solo/list-row';
 import { SectionAction, SectionHead, SoloButton } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
 import { ResponsiveSelect } from '@/components/solo/responsive-select';
+import { Row } from '@/components/solo/row';
+import { Tile, TileHeader, TileInset, TileNote, TileRows } from '@/components/solo/tile';
 import { InfoHint } from '@/components/ui/info-hint';
 import { freeKey } from '@/lib/field-key';
 import settings from '@/routes/settings';
@@ -11,6 +12,7 @@ import { router } from '@inertiajs/react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { FieldDefinition, FieldOption, FieldType } from '../types';
+import { RowButton, TileButton } from './parts';
 import styles from './tab.module.css';
 
 export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
@@ -25,7 +27,7 @@ export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
 
 const hasOptions = (type: FieldType) => type === 'select' || type === 'multiselect';
 
-/** Figma: Ustawienia / Pola klienta (597:2), phones 598:18217. The built-in fields, the account's fields, then the archived ones. */
+/** Figma: Ustawienia · Pola klienta (1091:12988, phone 1091:13262). The built-in fields, the account's fields, then the archived ones. */
 export function ClientFieldsTab({ fields, reserved }: { fields: FieldDefinition[]; reserved: string[] }) {
     const { t } = useTranslation();
     const [editing, setEditing] = useState<FieldDefinition | 'new' | null>(null);
@@ -35,96 +37,57 @@ export function ClientFieldsTab({ fields, reserved }: { fields: FieldDefinition[
         [field.on_overview ? t('key field') : null, field.required ? t('required') : null].filter(Boolean).join(' · ');
 
     const rows = (list: FieldDefinition[]) => (
-        <>
-            <ul className={`${styles.list} ${styles.phone}`}>
-                {list.map((field) => (
-                    <li key={field.key}>
-                        <ListRow title={field.label} value={flags(field) || undefined} onClick={() => setEditing(field)} />
-                    </li>
-                ))}
-            </ul>
-            <ul className={`${styles.list} ${styles.wide}`}>
-                {list.map((field) => (
-                    <li key={field.key} className={styles.row}>
-                        <span className={styles.rowText}>
-                            <button
-                                type="button"
-                                className={styles.rowTitle}
-                                data-tone={field.archived ? 'muted' : undefined}
-                                onClick={() => setEditing(field)}
-                            >
-                                {field.label}
-                            </button>
-                        </span>
-                        <span className={styles.rowEnd}>
-                            {field.on_overview && <span>{t('key field')}</span>}
-                            {field.required && <strong>{t('required')}</strong>}
-                            <SectionAction onClick={() => setEditing(field)}>{t('Edit')}</SectionAction>
-                        </span>
-                    </li>
-                ))}
-            </ul>
-        </>
+        <TileRows>
+            {list.map((field, index) => (
+                <Row
+                    key={field.key}
+                    rule={index > 0}
+                    title={field.label}
+                    meta={flags(field) || undefined}
+                    action={<RowButton onClick={() => setEditing(field)}>{t('Edit')}</RowButton>}
+                />
+            ))}
+        </TileRows>
     );
 
     return (
         <>
-            <section className={styles.section}>
-                <SectionHead
-                    kind="body"
-                    label={
-                        <>
-                            {t('Built in')} · 2 <InfoHint>{t('Every client has these two; they cannot be removed.')}</InfoHint>
-                        </>
-                    }
-                />
-                <dl className={styles.list}>
-                    <BuiltIn label={t('Assignee')} hint={t('One user of the account per client.')} />
-                    <BuiltIn label={t('Send SMS')} hint={t('Yes or no. A client set to no gets no text messages.')} />
-                </dl>
-            </section>
+            <Tile kind="list">
+                <TileHeader label={t('Built in')} count={2} end={<InfoHint>{t('Every client has these two; they cannot be removed.')}</InfoHint>} />
+                <TileRows>
+                    <Row rule={false} title={t('Assignee')} meta={<InfoHint>{t('One user of the account per client.')}</InfoHint>} />
+                    <Row title={t('Send SMS')} meta={<InfoHint>{t('Yes or no. A client set to no gets no text messages.')}</InfoHint>} />
+                </TileRows>
+            </Tile>
 
-            <section className={styles.section}>
-                <SectionHead
-                    kind="body"
-                    label={`${t('Client fields')} · ${active.length}`}
-                    action={<SectionAction onClick={() => setEditing('new')}>{t('New field')}</SectionAction>}
+            <Tile kind="list">
+                <TileHeader
+                    label={t('Client fields')}
+                    count={active.length}
+                    end={<TileButton onClick={() => setEditing('new')}>{t('New field')}</TileButton>}
                 />
-                {active.length === 0 && (
-                    <p className={styles.note}>{t('No fields yet. A field can hold a status, a date or a choice for every client.')}</p>
+                {active.length === 0 ? (
+                    <TileInset>
+                        <TileNote>{t('No fields yet. A field can hold a status, a date or a choice for every client.')}</TileNote>
+                    </TileInset>
+                ) : (
+                    rows(active)
                 )}
-                {rows(active)}
-            </section>
+            </Tile>
 
             {archived.length > 0 && (
-                <section className={styles.section}>
-                    <SectionHead
-                        kind="body"
-                        label={
-                            <>
-                                {t('Archived')} · {archived.length}{' '}
-                                <InfoHint>{t('Archived fields keep their values but take no new ones.')}</InfoHint>
-                            </>
-                        }
+                <Tile kind="list">
+                    <TileHeader
+                        label={t('Archived')}
+                        count={archived.length}
+                        end={<InfoHint>{t('Archived fields keep their values but take no new ones.')}</InfoHint>}
                     />
                     {rows(archived)}
-                </section>
+                </Tile>
             )}
 
             <FieldDialog field={editing} taken={[...reserved, ...fields.map((field) => field.key)]} onClose={() => setEditing(null)} />
         </>
-    );
-}
-
-function BuiltIn({ label, hint }: { label: string; hint: string }) {
-    return (
-        <div className={styles.row}>
-            <span className={styles.rowText}>
-                <span className={styles.rowTitle}>
-                    {label} <InfoHint>{hint}</InfoHint>
-                </span>
-            </span>
-        </div>
     );
 }
 

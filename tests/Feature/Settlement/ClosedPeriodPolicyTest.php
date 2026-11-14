@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature\Settlement;
 
 use App\Models\ClientReport;
+use App\Models\Project;
+use App\Models\Task;
+use App\Models\TimeEntry;
 use App\Services\Clients\MonthSettlement;
 use App\Services\Reports\Composers\StructuredListComposer;
 use App\Services\Reports\ReportComposerInterface;
@@ -34,6 +37,57 @@ final class ClosedPeriodPolicyTest extends TestCase
         });
     }
 
+    public function test_a_timer_does_not_start_on_a_day_a_finalized_report_covers_until_the_report_is_reopened(): void
+    {
+        $report = $this->report('2026-11', opening: 0, contracted: 30, actual: 1, status: ClientReport::STATUS_FINALIZED);
+
+        $this->actingAs($this->user)->postJson("/tasks/{$this->task->id}/time-entries/start")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'The report for November 2026 is finalized or sent. Reopen it to change its time.');
+        $this->artisan('crm:timer-start', ['task' => (string) $this->task->id, '--json' => true])
+            ->expectsOutputToContain('period_settled')
+            ->assertFailed();
+        $this->assertSame(0, TimeEntry::query()->count());
+
+        $report->update(['status' => ClientReport::STATUS_DRAFT]);
+
+        $this->actingAs($this->user)->postJson("/tasks/{$this->task->id}/time-entries/start")->assertCreated();
+        $this->assertNull(TimeEntry::query()->sole()->end_time);
+    }
+
+    public function test_a_timer_does_not_start_in_a_closed_month(): void
+    {
+        $this->closure('2026-11', opening: 0, contracted: 30, used: 1);
+
+        $this->actingAs($this->user)->postJson("/tasks/{$this->task->id}/time-entries/start")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'November 2026 is closed. Reopen it to change its time.');
+        $this->assertSame(0, TimeEntry::query()->count());
+    }
+
+    public function test_a_start_sent_again_after_the_report_was_finalized_returns_the_timer_it_opened(): void
+    {
+        $request = '6f1c2a0e-6c1b-4c55-9a55-0c1d2e3f4a5b';
+        $opened = $this->actingAs($this->user)->postJson("/tasks/{$this->task->id}/time-entries/start", ['request_id' => $request])->assertCreated()->json('id');
+        TimeEntry::query()->findOrFail($opened)->stopNow();
+        $this->report('2026-11', opening: 0, contracted: 30, actual: 1, status: ClientReport::STATUS_FINALIZED);
+
+        $this->actingAs($this->user)->postJson("/tasks/{$this->task->id}/time-entries/start", ['request_id' => $request])
+            ->assertOk()
+            ->assertJsonPath('id', $opened);
+        $this->assertSame(1, TimeEntry::query()->count());
+    }
+
+    public function test_a_finalized_report_of_one_client_leaves_another_clients_timers_alone(): void
+    {
+        $this->report('2026-11', opening: 0, contracted: 30, actual: 1, status: ClientReport::STATUS_FINALIZED);
+        $other = $this->account->clients()->create(['name' => 'Other', 'currency' => 'PLN']);
+        $project = Project::create(['account_id' => $this->account->id, 'client_id' => $other->id, 'name' => 'Other site']);
+        $task = Task::create(['project_id' => $project->id, 'name' => 'Free', 'source' => 'manual']);
+
+        $this->actingAs($this->user)->postJson("/tasks/{$task->id}/time-entries/start")->assertCreated();
+    }
+
     public function test_a_report_generated_for_a_closed_month_carries_the_closures_figures(): void
     {
         $this->entry('2026-09-10 08:00:00', 600);
@@ -51,17 +105,17 @@ final class ClosedPeriodPolicyTest extends TestCase
         $this->assertStringContainsString('Used in the month: −10h', $report->body_markdown);
     }
 
-    public function test_reports_generate_on_a_closed_month_uses_the_closure_and_refuses_an_hours_override(): void
+    public function test_report_create_on_a_closed_month_uses_the_closure_and_refuses_an_hours_override(): void
     {
         $this->entry('2026-09-10 08:00:00', 600);
         $this->settle('2026-09');
 
-        $this->artisan('reports:generate', ['client' => $this->client->id, '--period' => '2026-09', '--hours' => 12, '--composer' => 'structured_list', '--locale' => 'en'])
+        $this->artisan('crm:report-create', ['client' => (string) $this->client->id, '--period' => '2026-09', '--hours' => 12, '--composer' => 'structured_list', '--locale' => 'en'])
             ->expectsOutputToContain('Reopen September 2026 to change the figures.')
             ->assertFailed();
         $this->assertSame(0, ClientReport::query()->count());
 
-        $this->artisan('reports:generate', ['client' => $this->client->id, '--period' => '2026-09', '--composer' => 'structured_list', '--locale' => 'en'])->assertSuccessful();
+        $this->artisan('crm:report-create', ['client' => (string) $this->client->id, '--period' => '2026-09', '--composer' => 'structured_list', '--locale' => 'en'])->assertSuccessful();
         $this->assertSame(10.0, (float) ClientReport::query()->sole()->actual_hours);
     }
 
@@ -87,7 +141,7 @@ final class ClosedPeriodPolicyTest extends TestCase
 
         $this->store('2026-11')->assertSessionHas('error', 'Recalculate the report for September 2026 first.');
         $this->regenerate($october)->assertSessionHas('error', 'Recalculate the report for September 2026 first.');
-        $this->artisan('reports:generate', ['client' => $this->client->id, '--period' => '2026-11', '--composer' => 'structured_list', '--locale' => 'en'])
+        $this->artisan('crm:report-create', ['client' => (string) $this->client->id, '--period' => '2026-11', '--composer' => 'structured_list', '--locale' => 'en'])
             ->expectsOutputToContain('Recalculate the report for September 2026 first.')
             ->assertFailed();
         $this->assertSame(2, ClientReport::query()->count());
@@ -117,7 +171,7 @@ final class ClosedPeriodPolicyTest extends TestCase
 
     public function test_a_close_landing_while_a_report_regenerates_refuses_the_regenerate(): void
     {
-        $report = $this->report('2026-09', opening: 0, contracted: 30, actual: 10);
+        $report = $this->report('2026-09', opening: 0, contracted: 30, actual: 10, backed: true);
         $this->composeWith(function (): void {
             $settlement = app(MonthSettlement::class);
             $settlement->close($this->client, '2026-09', $settlement->preview($this->client, '2026-09')['hash']);
@@ -156,7 +210,7 @@ final class ClosedPeriodPolicyTest extends TestCase
 
     public function test_a_closed_months_figures_refuse_regenerate_opening_edits_and_delete(): void
     {
-        $report = $this->report('2026-09', opening: 0, contracted: 30, actual: 10);
+        $report = $this->report('2026-09', opening: 0, contracted: 30, actual: 10, backed: true);
         $this->settle('2026-09');
         $refusal = 'Reopen September 2026 to change the figures.';
 
@@ -238,7 +292,7 @@ final class ClosedPeriodPolicyTest extends TestCase
 
     public function test_a_closed_months_report_still_finalizes_and_goes_out(): void
     {
-        $report = $this->report('2026-09', opening: 0, contracted: 30, actual: 10);
+        $report = $this->report('2026-09', opening: 0, contracted: 30, actual: 10, backed: true);
         $this->settle('2026-09');
 
         $this->transition($report, 'finalize')->assertSessionHas('success');
@@ -248,7 +302,7 @@ final class ClosedPeriodPolicyTest extends TestCase
 
     public function test_a_status_move_that_hands_a_closed_month_to_its_other_report_is_refused(): void
     {
-        $this->report('2026-09', opening: 0, contracted: 30, actual: 10, status: ClientReport::STATUS_FINALIZED);
+        $this->report('2026-09', opening: 0, contracted: 30, actual: 10, status: ClientReport::STATUS_FINALIZED, backed: true);
         $draft = $this->report('2026-09', opening: 0, contracted: 30, actual: 2);
         $this->settle('2026-09');
 
@@ -288,7 +342,7 @@ final class ClosedPeriodPolicyTest extends TestCase
 
     public function test_finalizing_a_report_that_takes_its_month_over_flags_the_drafts_after_it(): void
     {
-        $older = $this->report('2026-09', opening: 0, contracted: 30, actual: 10);
+        $older = $this->report('2026-09', opening: 0, contracted: 30, actual: 10, backed: true);
         $this->report('2026-09', opening: 0, contracted: 30, actual: 2);
         $october = $this->report('2026-10', opening: 28, contracted: 30, actual: 10);
 
@@ -299,7 +353,7 @@ final class ClosedPeriodPolicyTest extends TestCase
 
     public function test_a_status_move_that_keeps_the_same_report_in_charge_flags_nothing(): void
     {
-        $september = $this->report('2026-09', opening: 0, contracted: 30, actual: 10);
+        $september = $this->report('2026-09', opening: 0, contracted: 30, actual: 10, backed: true);
         $october = $this->report('2026-10', opening: 20, contracted: 30, actual: 10);
 
         $this->transition($september, 'finalize')->assertSessionHas('success');
@@ -345,7 +399,7 @@ final class ClosedPeriodPolicyTest extends TestCase
 
     public function test_a_closed_months_body_keeps_one_billing_summary_printed_from_the_closure(): void
     {
-        $report = $this->report('2026-09', opening: 0, contracted: 30, actual: 10);
+        $report = $this->report('2026-09', opening: 0, contracted: 30, actual: 10, backed: true);
         $report->update(['body_markdown' => "# Wrzesień\n\nPrace.\n\n## Billing summary\n\nOpening balance for the month: +0h"]);
         $this->settle('2026-09');
 

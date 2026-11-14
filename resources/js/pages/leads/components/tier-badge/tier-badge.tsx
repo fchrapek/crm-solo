@@ -1,6 +1,5 @@
+import { Chip, type ChipStatus } from '@/components/solo/chip';
 import { useLeadLabel } from '../../lib/labels';
-
-import styles from './tier-badge.module.css';
 
 interface Props {
     tier: string;
@@ -10,25 +9,21 @@ interface Props {
     routing?: string | null;
 }
 
-const TONE: Record<string, string> = {
-    gold: styles.gold,
-    oak: styles.oak,
-    rowan: styles.rowan,
-};
+const DOT: Record<string, ChipStatus> = { gold: 'hot', oak: 'warm', rowan: 'cold' };
 
 /**
- * Hot / Warm / Cold (slugs stay gold/oak/rowan - they key config's
- * tier_routing). The tier is routing, not decoration - Hot means a personal
- * reply inside 24h, Cold means no minutes spent - so it earns colour, and the
- * tooltip states the consequence so colour never carries meaning alone.
+ * Figma: TierChip. Hot / Warm / Cold (slugs stay gold/oak/rowan - they key config's tier_routing). The tier is
+ * routing: Hot means a personal reply inside 24h, Cold means no minutes spent. The dot's shape tells it, not a colour.
  */
 export function TierBadge({ tier, total, routing }: Props) {
     const label = useLeadLabel();
 
     return (
-        <span className={`${styles.badge} ${TONE[tier] ?? styles.rowan}`} title={routing ? label('routing', routing) : undefined}>
-            {label('tier', tier)}
-            {total !== undefined && <span className={styles.total}>{total}</span>}
+        <span title={routing ? label('routing', routing) : undefined}>
+            <Chip status={DOT[tier] ?? 'cold'}>
+                {label('tier', tier)}
+                {total !== undefined && ` · ${total}`}
+            </Chip>
         </span>
     );
 }

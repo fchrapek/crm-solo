@@ -1,3 +1,4 @@
+import type { EditableTimeEntry, TaskOption } from '@/components/time-entry-edit-dialog';
 import type { LifecycleStage } from '@/types';
 
 export interface JournalWorkRow {
@@ -11,6 +12,8 @@ export interface JournalWorkRow {
     running: boolean;
     writes: number | null;
     is_new: boolean;
+    /** The row is one finished time entry: what its editor needs. */
+    entry?: EditableTimeEntry | null;
 }
 
 export interface JournalEntryNote {
@@ -39,7 +42,7 @@ export interface JournalSettlement {
         used: number | null;
         contracted: number | null;
         closing: number | null;
-        source: 'report' | 'entries' | null;
+        source: 'report' | 'entries' | 'billed' | null;
     };
 }
 
@@ -80,4 +83,6 @@ export interface ClientJournal {
     stage: { stage: LifecycleStage; since: string | null; retainer_from: string | null };
     period: string;
     projects: JournalProject[];
+    /** The client's tasks a time entry can be tied to. */
+    tasks?: TaskOption[];
 }

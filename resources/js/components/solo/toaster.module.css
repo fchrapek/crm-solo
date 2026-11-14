@@ -6,7 +6,7 @@
     background-color: var(--solo-pop-bg, var(--solo-bg));
     color: var(--solo-fg);
     border: var(--solo-pop-width, 2px) solid var(--solo-pop-border, var(--solo-fg));
-    border-radius: var(--solo-field-radius, var(--solo-radius-lg));
+    border-radius: var(--role-radius-md);
     box-shadow: var(--solo-pop-shadow, none);
     font-family: var(--solo-font-text);
     font-size: var(--solo-text-action);
@@ -22,26 +22,26 @@
 }
 
 .toasts [data-sonner-toast] [data-icon] {
-    color: var(--solo-link, var(--solo-accent));
+    color: var(--role-text-primary);
 }
 
 .toasts [data-sonner-toast][data-type='success'] [data-icon] {
-    color: var(--solo-ok);
+    color: var(--role-status-done);
 }
 
 .toasts [data-sonner-toast][data-type='warning'] [data-icon] {
-    color: var(--solo-warn);
+    color: var(--role-status-waiting);
 }
 
 .toasts [data-sonner-toast][data-type='error'] [data-icon] {
-    color: var(--solo-error);
+    color: var(--role-text-primary);
 }
 
 .toasts [data-sonner-toast] [data-button] {
-    background-color: var(--solo-primary, var(--solo-fg));
-    color: var(--solo-on-primary, var(--solo-bg));
-    border-radius: var(--solo-button-radius, var(--solo-radius-full));
-    font-weight: var(--solo-button-weight, 700);
+    background-color: var(--solo-fg);
+    color: var(--solo-bg);
+    border-radius: var(--solo-radius-full);
+    font-weight: 600;
 }
 
 .toasts [data-sonner-toast] [data-close-button] {

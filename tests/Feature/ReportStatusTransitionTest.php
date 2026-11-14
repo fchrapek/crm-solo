@@ -313,9 +313,13 @@ final class ReportStatusTransitionTest extends TestCase
         });
     }
 
+    /** A September report billing 3 h, backed by one task's stated figure as a finalize needs. */
     private function report(string $status, ?string $sentAt = null, ?Client $client = null): ClientReport
     {
         $client ??= $this->client;
+        $project = Project::query()->firstOrCreate(['account_id' => $client->account_id, 'client_id' => $client->id, 'name' => 'Strona']);
+        $task = \App\Models\Task::query()->firstOrCreate(['project_id' => $project->id, 'name' => 'Wdrożenie'], ['is_reportable' => true]);
+        \App\Models\TaskBilledMonth::query()->updateOrCreate(['task_id' => $task->id, 'client_id' => $client->id, 'period' => '2026-09'], ['billed_minutes' => 180]);
 
         return $client->reports()->create([
             'account_id' => $client->account_id,

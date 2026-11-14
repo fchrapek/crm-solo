@@ -14,9 +14,14 @@ use App\Models\ClientRetainer;
 use App\Models\MessageRule;
 use App\Models\MessageTemplate;
 use App\Models\OutboundMessage;
+use App\Models\Project;
+use App\Models\Task;
+use App\Models\TaskBilledMonth;
+use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\Clients\Fields\ClientFieldDefinitions;
 use App\Services\Clients\Fields\ClientFieldWriter;
+use App\Services\Clients\LoggedTimeFreeze;
 use App\Services\Clients\MonthSettlement;
 use App\Services\Clients\RetainerTerms;
 use App\Services\Clients\SettlementOutcome;
@@ -25,6 +30,7 @@ use App\Services\Reports\Composers\StructuredListComposer;
 use App\Services\Reports\ReportComposerRegistry;
 use App\Services\Reports\ReportStatusTransition;
 use App\Services\Reports\ReportWriter;
+use App\Services\Time\PeriodSettled;
 use Closure;
 use Illuminate\Database\Events\TransactionCommitting;
 use Illuminate\Database\QueryException;
@@ -47,7 +53,7 @@ use Throwable;
  */
 final class MariaDbLockingTest extends TestCase
 {
-    private const array PROTECTED_DATABASES = ['crm_solo', 'crm_solo_demo'];
+    private const array PROTECTED_DATABASES = ['crm_solo', 'crm_solo_demo', 'crm_solo_frozen_do_not_use'];
 
     /** @var list<PDO> */
     private static array $inherited = [];
@@ -299,6 +305,77 @@ final class MariaDbLockingTest extends TestCase
         $this->assertSame(ClientReport::STATUS_SENT, $report->fresh()->status);
     }
 
+    public function test_a_timer_start_waits_on_the_client_row(): void
+    {
+        $task = $this->task();
+
+        $this->whileHolding('clients', $this->client->id, fn () => TimeEntry::startFor($task));
+
+        $this->assertSame(0, TimeEntry::query()->count());
+    }
+
+    public function test_a_timer_start_queued_behind_a_finalize_of_today_is_refused(): void
+    {
+        $october = $this->report('2026-10-01', '2026-10-31', ClientReport::STATUS_DRAFT);
+        $task = $this->task();
+
+        $second = $this->interleave(
+            fn () => app(ReportStatusTransition::class)->finalize($october, $this->user),
+            function () use ($task): array {
+                try {
+                    TimeEntry::startFor($task);
+
+                    return ['started', ''];
+                } catch (PeriodSettled $settled) {
+                    return ['refused', $settled->reason.' '.$settled->month];
+                }
+            },
+        );
+
+        $this->assertSame(ClientReport::STATUS_FINALIZED, $october->fresh()->status);
+        $this->assertSame(['refused', LoggedTimeFreeze::REPORTED.' 2026-10'], $second);
+        $this->assertSame(0, TimeEntry::query()->count());
+    }
+
+    public function test_a_finalize_queued_behind_a_timer_start_is_refused_on_the_running_timer(): void
+    {
+        $october = $this->report('2026-10-01', '2026-10-31', ClientReport::STATUS_DRAFT);
+        $task = $this->task();
+
+        $second = $this->interleave(
+            fn () => TimeEntry::startFor($task),
+            fn (): array => self::outcome(app(ReportStatusTransition::class)->finalize($october, $this->user)),
+        );
+
+        $this->assertSame(['refused', "Stop the timer running in this report's period first."], $second);
+        $this->assertSame(ClientReport::STATUS_DRAFT, $october->fresh()->status);
+        $this->assertNull(TimeEntry::query()->sole()->end_time);
+    }
+
+    public function test_a_start_that_loses_the_race_for_its_request_id_returns_the_winner(): void
+    {
+        $task = $this->task()->load('project');
+        $request = '7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f';
+        $raced = false;
+        TimeEntry::creating(function (TimeEntry $entry) use (&$raced, $request, $task): void {
+            if ($raced) {
+                return;
+            }
+            $raced = true;
+            DB::connection('lock_holder')->table('time_entries')->insert([
+                'account_id' => $task->project->account_id, 'project_id' => $task->project_id, 'client_id' => $task->project->client_id, 'task_id' => $task->id,
+                'source' => TimeEntry::SOURCE_MANUAL, 'title' => 'Work', 'description' => 'Work', 'start_time' => now(), 'duration_minutes' => 0, 'billable' => true,
+                'start_request_id' => $request, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        });
+
+        $entry = TimeEntry::startFor($task, requestId: $request);
+
+        $this->assertFalse($entry->wasRecentlyCreated);
+        $this->assertSame($request, $entry->start_request_id);
+        $this->assertSame(1, TimeEntry::query()->count());
+    }
+
     public function test_the_settlement_migrations_go_down_and_up_again(): void
     {
         // Everything from the first settlement migration on, so later migrations go down and up with them.
@@ -453,6 +530,13 @@ final class MariaDbLockingTest extends TestCase
         throw new RuntimeException("Connection {$connectionId} never queued behind the client row lock within 10 seconds. Seen: ".json_encode($seen));
     }
 
+    private function task(): Task
+    {
+        $project = Project::query()->firstOrCreate(['account_id' => $this->client->account_id, 'client_id' => $this->client->id, 'name' => 'Site']);
+
+        return Task::query()->firstOrCreate(['project_id' => $project->id, 'name' => 'Work'], ['source' => 'manual']);
+    }
+
     private function septemberReport(string $status): ClientReport
     {
         return $this->report('2026-09-01', '2026-09-30', $status);
@@ -460,6 +544,9 @@ final class MariaDbLockingTest extends TestCase
 
     private function report(string $start, string $end, string $status): ClientReport
     {
+        // A report finalizes or sends only when its hours are the sum of its task figures.
+        TaskBilledMonth::query()->updateOrCreate(['task_id' => $this->task()->id, 'client_id' => $this->client->id, 'period' => mb_substr($start, 0, 7)], ['billed_minutes' => 120]);
+
         return $this->client->reports()->create([
             'account_id' => $this->client->account_id, 'period_type' => 'month', 'period_start' => $start, 'period_end' => $end,
             'contracted_hours' => 10, 'actual_hours' => 2, 'opening_balance_hours' => 0, 'currency' => 'PLN', 'composer_key' => 'structured_list',

@@ -35,7 +35,7 @@ final class BriefSettlementTest extends TestCase
         $this->assertSame('2026-09', $hours['bank']['period']);
         $this->assertSame('2026-09', $hours['bank']['active_period']);
         $this->assertTrue($hours['bank']['open_period_behind']);
-        $this->assertSame('entries', $hours['bank']['source']);
+        $this->assertSame('billed', $hours['bank']['source']);
         $this->assertSame(10.0, $hours['bank']['used']);
         $this->assertNull($hours['bank']['closed_period']);
         $this->assertNull($hours['bank']['closed_at']);

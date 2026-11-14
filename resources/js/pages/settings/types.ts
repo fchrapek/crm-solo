@@ -1,4 +1,6 @@
-export const SETTINGS_TABS = ['konto', 'wyglad', 'leady', 'pola-klienta', 'sms', 'integracje', 'agenci'] as const;
+export const SETTINGS_TABS = ['konto', 'wyglad', 'leady', 'pola-klienta', 'sms', 'email', 'integracje', 'agenci'] as const;
+/** A member's own settings; every other tab configures the account. */
+export const MEMBER_TABS: readonly SettingsTab[] = ['konto', 'wyglad'];
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
@@ -8,6 +10,7 @@ export const TAB_LABEL: Record<SettingsTab, string> = {
     leady: 'Leads',
     'pola-klienta': 'Client fields',
     sms: 'Text messages',
+    email: 'Email messages',
     integracje: 'Integrations',
     agenci: 'Agents',
 };
@@ -51,6 +54,8 @@ export interface IntegrationRow {
     last_sync_error: string | null;
     client_conflicts: string[];
     boards: number | null;
+    skipped_lists: string[] | null;
+    seen_lists: string[] | null;
     syncs: boolean;
 }
 
@@ -93,6 +98,21 @@ export interface MessageTemplateRow {
     rules: number;
 }
 
+export interface EmailTemplateRow {
+    key: string;
+    name: string;
+    subject: string;
+    body: string;
+    is_default: boolean;
+}
+
+/** How a client email goes out: live only once a sender is set on the server. */
+export interface EmailSending {
+    live: boolean;
+    from: string | null;
+    bcc: string;
+}
+
 export interface MessageRuleRow {
     key: string;
     template: string | null;
@@ -119,6 +139,7 @@ export interface SettingsSummary {
     users: number;
     client_fields: number;
     message_rules: number;
+    email_templates: number;
     default_sources: number;
     custom_sources: number;
     connected: string[];
@@ -138,6 +159,8 @@ export interface SettingsProps {
     sending?: SendingSettings;
     templates?: MessageTemplateRow[];
     rules?: MessageRuleRow[];
+    email_templates?: EmailTemplateRow[];
+    email_sending?: EmailSending;
     fields?: FieldDefinition[];
     integrations?: IntegrationRow[];
     demo?: boolean;

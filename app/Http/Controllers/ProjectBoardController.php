@@ -7,8 +7,10 @@ namespace App\Http\Controllers;
 use App\Models\AgentToken;
 use App\Models\Client;
 use App\Models\Project;
+use App\Models\Repository;
 use App\Models\TimeEntry;
 use App\Services\Agent\AgentName;
+use App\Services\Clients\ClientBillingMode;
 use App\Services\Clients\ClientTasksQuery;
 use App\Support\LegalName;
 use App\Support\LocalCalendar;
@@ -63,12 +65,22 @@ final class ProjectBoardController extends Controller
                     ->where('start_time', '>=', $from)
                     ->where('start_time', '<', $until)
                     ->sum('duration_minutes'),
+                'repositories' => $project->repositories()->orderBy('name')->orderBy('id')->get()
+                    ->map(fn (Repository $repo): array => [
+                        'id' => $repo->id,
+                        'name' => $repo->name,
+                        'local_path' => $repo->local_path,
+                        'remote_url' => $repo->remote_url,
+                        'provider' => $repo->provider,
+                    ])->all(),
                 'live_agent' => $agentTimer?->start_time !== null ? [
                     'agent' => AgentName::fromToken(AgentToken::query()->whereKey($agentTimer->actor_token_id)->value('name')),
                     'started_at' => $agentTimer->start_time->toIso8601String(),
                 ] : null,
             ],
             ...app(ClientTasksQuery::class)->forProject($client, $project, is_string($expanded) ? $expanded : null),
+            'projects' => app(ClientTasksQuery::class)->projects($client, ClientBillingMode::RETAINER),
+            'open_tasks_count' => app(ClientTasksQuery::class)->visibleOpenTasks($client, ClientBillingMode::RETAINER)->count(),
             'trelloEnabled' => ! config('app.demo') && ($trello?->isConfigured() ?? false),
             'trelloActions' => ! config('app.demo'),
         ]);

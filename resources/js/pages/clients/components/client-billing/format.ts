@@ -1,7 +1,191 @@
+import type { ChipStatus } from '@/components/solo/chip';
+import type { PlaceLinkPill } from '@/components/solo/shell/place';
 import { capitalize, monthName, shortDate } from '@/lib/dates';
+import clients from '@/routes/clients';
 import type { TFunction } from 'i18next';
-import { hoursTerms } from '../client-list/format';
-import type { ActivePosition, BillingInvoice, LedgerRow } from './types';
+import { hoursNumber, hoursTerms } from '../client-list/format';
+import type { ActivePosition, BilledMonth, BillingInvoice, BillingMonth, LedgerRow } from './types';
+
+const h = (value: number, locale: string, signed = false) => `${hoursNumber(value, locale, signed)}\u00a0h`;
+
+/** Rozliczenia on one month: the month travels in the URL, so a reload and a link land on it. */
+export function monthUrl(clientId: number, period: string): string {
+    return clients.show({ client: clientId, tab: 'rozliczenia' }, { query: { miesiac: period } }).url;
+}
+
+/** "Wrzesień", with the year once it is not the running one. */
+export function monthLabel(period: string, current: string, locale: string): string {
+    const name = capitalize(monthName(period, locale));
+
+    return period.slice(0, 4) === current.slice(0, 4) ? name : `${name} ${period.slice(0, 4)}`;
+}
+
+export const MONTH_PILLS = 6;
+
+/** The month pills beside the title: the newest whole months of the bank, the month in progress and the one shown, newest first. */
+export function monthPills(rows: LedgerRow[], shown: string, current: string, clientId: number, locale: string, t: TFunction): PlaceLinkPill[] {
+    const recent = rows.filter((row) => row.whole_month).map((row) => row.period);
+    const periods = [...new Set([current, ...recent.slice(0, MONTH_PILLS), shown])].sort().reverse();
+
+    return periods.map((period) => ({
+        label: monthLabel(period, current, locale),
+        href: monthUrl(clientId, period),
+        active: period === shown,
+        ...(period === current ? { note: t('month_running') } : {}),
+    }));
+}
+
+/** What the month's report is, as the chip and the line under the title name it. */
+export type ReportState = 'running' | 'to_generate' | 'stale' | 'draft' | 'finalized' | 'sent';
+
+export function reportState(month: Pick<BillingMonth, 'report'>, running: boolean): ReportState {
+    const report = month.report;
+    if (report === null) {
+        return running ? 'running' : 'to_generate';
+    }
+    if (report.status === 'draft') {
+        return report.needs_recalculation ? 'stale' : 'draft';
+    }
+
+    return report.status;
+}
+
+export function reportChip(month: Pick<BillingMonth, 'report'>, running: boolean, locale: string, t: TFunction): { status: ChipStatus; label: string } {
+    const report = month.report;
+    switch (reportState(month, running)) {
+        case 'running':
+            return { status: 'open', label: t('report_chip_running') };
+        case 'to_generate':
+            return { status: 'waiting', label: t('report_chip_to_generate') };
+        case 'stale':
+            return { status: 'waiting', label: t('report_chip_stale') };
+        case 'draft':
+            return {
+                status: 'open',
+                label: report?.generated_on ? t('report_chip_draft', { date: shortDate(report.generated_on, locale) }) : t('ledger_report_draft'),
+            };
+        case 'finalized':
+            return { status: 'waiting', label: t('report_chip_finalized') };
+        case 'sent':
+            return { status: 'done', label: report?.sent_on ? t('ledger_report_sent', { date: shortDate(report.sent_on, locale) }) : t('ledger_report_sent_undated') };
+    }
+}
+
+/** The line under the month's name: how the month stands, then its report. */
+export function monthNote(month: BillingMonth, current: string, behind: string | null, locale: string, t: TFunction): string {
+    const figures = month.figures;
+    const running = month.period === current;
+    const [year, mon] = month.period.split('-').map(Number);
+    const lastDay = `${month.period}-${String(new Date(year, mon, 0).getDate()).padStart(2, '0')}`;
+    const state = reportState(month, running);
+    const report =
+        state === 'running'
+            ? null
+            : state === 'to_generate'
+              ? figures.has_retainer
+                  ? t('report_note_to_generate')
+                  : null
+              : state === 'stale'
+                ? t('report_note_stale')
+                : state === 'draft'
+                  ? t('ledger_report_draft_named')
+                  : state === 'finalized'
+                    ? t('ledger_report_finalized_named')
+                    : month.report?.sent_on
+                      ? t('ledger_report_sent_named', { date: shortDate(month.report.sent_on, locale) })
+                      : t('ledger_report_sent_undated_named');
+
+    if (figures.closed) {
+        const values = {
+            date: figures.closed_on !== null ? shortDate(figures.closed_on, locale) : '',
+            used: hoursNumber(figures.used, locale),
+            contracted: figures.contracted !== null ? hoursTerms(figures.contracted, locale) : '',
+        };
+
+        return [t(figures.contracted !== null ? 'month_note_closed' : 'month_note_closed_bare', values), report].filter(Boolean).join(' · ');
+    }
+    if (running) {
+        return [t('month_note_running'), behind !== null ? t('month_note_behind', { month: monthName(behind, locale) }) : null, report].filter(Boolean).join(' · ');
+    }
+
+    return [t('month_note_ended', { date: shortDate(lastDay, locale) }), figures.has_retainer ? t('ledger_open') : null, report].filter(Boolean).join(' · ');
+}
+
+/** The caption under the billed figure: equal to the real time, or how far the owner's figures moved it. */
+export function billedCaption(figures: Pick<BilledMonth, 'real' | 'billed' | 'used'>, locale: string, t: TFunction): string {
+    const diff = Math.round(((figures.billed ?? figures.used) - figures.real) * 100) / 100;
+    if (Math.abs(diff) < 0.005) {
+        return t('billed_caption_equal');
+    }
+
+    return t(diff < 0 ? 'billed_caption_less' : 'billed_caption_more', { hours: hoursNumber(Math.abs(diff), locale) });
+}
+
+/** The caption under the balance: frozen by a closure, past the package, or what is left of it. */
+export function balanceCaption(figures: Pick<BilledMonth, 'closed' | 'closed_on' | 'closing'>, locale: string, t: TFunction): string {
+    if (figures.closed) {
+        return figures.closed_on !== null ? t('balance_caption_frozen', { date: shortDate(figures.closed_on, locale) }) : t('ledger_closed_undated');
+    }
+
+    return figures.closing < 0
+        ? t('balance_caption_over', { hours: hoursNumber(-figures.closing, locale) })
+        : t('{{hours}} h free', { hours: hoursNumber(figures.closing, locale) });
+}
+
+/** Hours the rollover cap cut from what the month could draw on. */
+export function forfeitedOf(figures: Pick<BilledMonth, 'opening' | 'contracted' | 'available'>): number {
+    return Math.max(0, Math.round((figures.opening + (figures.contracted ?? 0) - figures.available) * 100) / 100);
+}
+
+/** "z wpisów", "z czasu rozliczanego", "z raportu (szkic)": where the month's used hours come from; a closure names nothing. */
+export function usedSourceKey(month: Pick<BillingMonth, 'figures' | 'report'>): string | null {
+    const source = month.figures.source;
+    if (source === 'closure') {
+        return null;
+    }
+    if (source === 'report') {
+        return month.report?.status === 'draft' ? 'close_source_draft' : 'close_source_report';
+    }
+
+    return `close_source_${source}`;
+}
+
+/** Settlement first, then the report's delivery; a report beside a settlement names itself. */
+export function ledgerStates(row: LedgerRow, locale: string, t: TFunction): { settlement: string | null; report: string | null } {
+    const settlement =
+        row.settlement === 'closed'
+            ? row.closed_on !== null
+                ? t('ledger_closed', { date: shortDate(row.closed_on, locale) })
+                : t('ledger_closed_undated')
+            : row.settlement === 'open'
+              ? row.report_id === null
+                  ? t('ledger_open_from', { balance: h(row.opening, locale, true) })
+                  : t('ledger_open')
+              : null;
+    const named = row.settlement !== null;
+    const report =
+        row.report_id === null || row.status === null
+            ? null
+            : row.status === 'draft'
+              ? t(named ? 'ledger_report_draft_named' : 'ledger_report_draft')
+              : row.status === 'sent'
+                ? row.sent_on !== null
+                    ? t(named ? 'ledger_report_sent_named' : 'ledger_report_sent', { date: shortDate(row.sent_on, locale) })
+                    : t(named ? 'ledger_report_sent_undated_named' : 'ledger_report_sent_undated')
+                : t(named ? 'ledger_report_finalized_named' : 'ledger_report_finalized');
+
+    return { settlement, report };
+}
+
+/** The chip of an invoice: the dot carries the state, never vermilion (an overdue invoice waits, it is not over a limit). */
+export function invoiceChip(invoice: BillingInvoice, locale: string, t: TFunction): { status: ChipStatus; label: string } {
+    const label = invoiceState(invoice, locale, t);
+    if (invoice.status === 'paid') {
+        return { status: 'done', label };
+    }
+
+    return { status: invoice.status === 'draft' ? 'open' : 'waiting', label };
+}
 
 /** Grouped from the thousands ("1 800 zł"), which Polish leaves ungrouped by default. */
 export function moneyOf(amount: number, currency: string, locale: string, cents: boolean): string {

@@ -19,6 +19,8 @@ interface ResponsiveSelectProps {
     onValueChange: (value: string) => void;
     options: ResponsiveSelectOption[];
     disabled?: boolean;
+    /** What an empty value reads as, for a choice that has no default. */
+    placeholder?: string;
     /** False keeps the select popover on phones too, for a caller outside the Solo pages. */
     sheet?: boolean;
     /** fieldControl() output: id, invalid state and the error link. */
@@ -26,7 +28,7 @@ interface ResponsiveSelectProps {
 }
 
 /** Figma: Mobile / Text field (Select), 346:8706: the Solo select from 768 px, a field opening a sheet of options below it. */
-export function ResponsiveSelect({ label, value, onValueChange, options, disabled, sheet = true, control }: ResponsiveSelectProps) {
+export function ResponsiveSelect({ label, value, onValueChange, options, disabled, placeholder, sheet = true, control }: ResponsiveSelectProps) {
     const wide = useSoloWide() || !sheet;
     const [open, setOpen] = useState(false);
     const selected = options.find((option) => option.value === value);
@@ -35,7 +37,7 @@ export function ResponsiveSelect({ label, value, onValueChange, options, disable
         return (
             <Select value={value} onValueChange={onValueChange} disabled={disabled}>
                 <SelectTrigger look="solo" title={typeof selected?.label === 'string' ? selected.label : undefined} {...control}>
-                    <SelectValue />
+                    <SelectValue placeholder={placeholder} />
                 </SelectTrigger>
                 <SelectContent>
                     {options.map((option) => (
@@ -63,7 +65,7 @@ export function ResponsiveSelect({ label, value, onValueChange, options, disable
                     aria-labelledby={`${labelId(control.id)} ${control.id}-value`}
                 >
                     <span className={styles.selectValue} id={`${control.id}-value`}>
-                        {selected?.label}
+                        {selected?.label ?? placeholder}
                     </span>
                     <Icon name="chevron-down" size={16} />
                 </button>

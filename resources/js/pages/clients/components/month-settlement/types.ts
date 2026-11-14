@@ -1,4 +1,10 @@
-export type CloseSource = 'report' | 'entries';
+export type CloseSource = 'report' | 'entries' | 'billed';
+
+/** Both values of a month, in hours: real as logged, billed as charged (the sum of its task figures). */
+export interface BilledSnapshot {
+    real: number;
+    billed: number;
+}
 
 /** What closing a month would freeze, read when the dialog opens (GET client-months.preview). */
 export interface ClosePreview {
@@ -14,6 +20,8 @@ export interface ClosePreview {
     source: CloseSource;
     report_status: 'draft' | 'finalized' | 'sent' | null;
     entries: number;
+    /** Absent from a closure made before billed time existed. */
+    billed_time?: BilledSnapshot;
     hash: string;
     refusal: string | null;
 }

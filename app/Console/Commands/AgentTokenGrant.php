@@ -20,7 +20,7 @@ final class AgentTokenGrant extends Command
 {
     protected $signature = 'agent-tokens:grant
         {id : Token id from agent-tokens:list}
-        {--ability=* : write:notes, write:tasks, write:time, write:leads, write:month-close, write:clients, write:messages, or write for every write group}';
+        {--ability=* : write:notes, write:tasks, write:time, write:leads, write:month-close, write:clients, write:messages, write:reports, write:invoice-drafts, write:billing, or write for every write group}';
 
     protected $description = "Add abilities to an agent token (operator: any account's token, by id)";
 

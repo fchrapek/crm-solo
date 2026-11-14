@@ -1,32 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 
 /**
- * Theme — the app's visual identity (see resources/css/themes.css).
- *
- * Second axis alongside `appearance` (light/dark/system), which decides
- * brightness only. Every theme works in both appearances; the two compose via
- * `data-theme` on <html> plus the existing `.dark` class.
- *
- * Persisted the same way as appearance: localStorage for the client, a cookie
- * so a server-rendered first paint can match and avoid a flash.
- *
- * Paper and Boring SaaS are offered; a value saved from a retired theme (ink,
- * brutal, bauhaus) reads as Paper and is applied as Paper.
- */
-export const THEMES = [
-    { id: 'paper', label: 'Paper' },
-    { id: 'boring-saas', label: 'Boring SaaS' },
-] as const;
-
-export type Theme = (typeof THEMES)[number]['id'];
-
-/**
- * Accent — the single saturated colour in the UI. Third axis, independent of
- * theme and appearance. `default` means "whatever the theme ships", which is
- * why it is not a colour of its own.
- *
- * Ink deliberately ignores this: a monochrome theme with one saturated button
- * is not monochrome (enforced in themes.css).
+ * Accent — the single saturated colour in the UI, independent of appearance.
+ * `default` means "whatever the theme ships", which is why it is not a colour
+ * of its own. Persisted in localStorage and a cookie.
  */
 export const ACCENTS = [
     { id: 'default', label: 'Theme default', swatch: 'var(--color-brand)' },
@@ -51,12 +28,11 @@ export type Accent = (typeof ACCENTS)[number]['id'];
  */
 export const DEFAULT_ACCENT: Accent = 'indigo';
 
-export const DEFAULT_THEME: Theme = 'paper';
+/** The one theme: themes.css keys its tokens on this `data-theme` value. */
+export const THEME = 'paper';
 
-const STORAGE_KEY = 'theme';
 const ACCENT_KEY = 'accent';
 
-const isTheme = (value: unknown): value is Theme => THEMES.some((t) => t.id === value);
 const isAccent = (value: unknown): value is Accent => ACCENTS.some((a) => a.id === value);
 
 const setCookie = (name: string, value: string, days = 365) => {
@@ -65,8 +41,8 @@ const setCookie = (name: string, value: string, days = 365) => {
     document.cookie = `${name}=${value};path=/;max-age=${days * 24 * 60 * 60};SameSite=Lax`;
 };
 
-export const applyTheme = (theme: Theme) => {
-    document.documentElement.setAttribute('data-theme', theme);
+export const applyTheme = () => {
+    document.documentElement.setAttribute('data-theme', THEME);
 };
 
 export const applyAccent = (accent: Accent) => {
@@ -79,15 +55,6 @@ export const applyAccent = (accent: Accent) => {
     document.documentElement.setAttribute('data-accent', accent);
 };
 
-/** Read the stored theme, falling back to the default for missing/legacy values. */
-export const storedTheme = (): Theme => {
-    if (typeof localStorage === 'undefined') return DEFAULT_THEME;
-
-    const saved = localStorage.getItem(STORAGE_KEY);
-
-    return isTheme(saved) ? saved : DEFAULT_THEME;
-};
-
 /** Read the stored accent, falling back to the theme's own. */
 export const storedAccent = (): Accent => {
     if (typeof localStorage === 'undefined') return DEFAULT_ACCENT;
@@ -98,25 +65,8 @@ export const storedAccent = (): Accent => {
 };
 
 export function initializeTheme() {
-    applyTheme(storedTheme());
+    applyTheme();
     applyAccent(storedAccent());
-}
-
-export function useTheme() {
-    const [theme, setTheme] = useState<Theme>(DEFAULT_THEME);
-
-    const updateTheme = useCallback((next: Theme) => {
-        setTheme(next);
-        localStorage.setItem(STORAGE_KEY, next);
-        setCookie(STORAGE_KEY, next);
-        applyTheme(next);
-    }, []);
-
-    useEffect(() => {
-        setTheme(storedTheme());
-    }, []);
-
-    return { theme, updateTheme } as const;
 }
 
 export function useAccent() {

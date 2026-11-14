@@ -66,3 +66,45 @@
 .destructive .description {
   color: color-mix(in srgb, var(--color-destructive) 80%, transparent);
 }
+
+/* Solo notice: Figma Notice / warn|error|ok */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: var(--solo-space-3) var(--solo-space-4);
+  border: 0;
+  border-radius: var(--solo-radius-lg);
+  background: var(--solo-block, none);
+  color: var(--solo-fg);
+  font: 600 var(--solo-text-row) / 1.35 var(--solo-font-text);
+}
+
+.noticeIcon {
+  flex: none;
+  margin-top: 2px;
+}
+
+.notice[data-tone='warn'] .noticeIcon {
+  color: var(--solo-warn);
+}
+
+.notice[data-tone='error'] .noticeIcon {
+  color: var(--solo-error);
+}
+
+.notice[data-tone='ok'] .noticeIcon {
+  color: var(--solo-ok);
+}
+
+.noticeText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 768px) {
+  .notice {
+    font-size: var(--solo-text-control);
+  }
+}

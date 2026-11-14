@@ -1,0 +1,54 @@
+/* Figma: JournalEntry. Inset 12 px like a row; the line above it runs as far in as its text. */
+.entry {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-4);
+    padding: var(--role-space-12);
+    list-style: none;
+}
+
+.ruled::before {
+    content: '';
+    position: absolute;
+    inset: 0 var(--role-space-12) auto;
+    height: var(--role-stroke-rule);
+    background: var(--role-rule);
+}
+
+.head {
+    display: flex;
+    align-items: center;
+    gap: var(--role-space-8);
+    min-height: var(--role-control);
+}
+
+.meta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--role-space-8);
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.kind {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.more {
+    display: flex;
+    margin-left: auto;
+}
+
+.body {
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-control) / 1.4 var(--solo-font-text);
+    overflow-wrap: anywhere;
+}
+
+.body p {
+    margin: 0;
+}

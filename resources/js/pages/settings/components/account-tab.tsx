@@ -1,16 +1,18 @@
+import { Chip } from '@/components/solo/chip';
 import { KvRow } from '@/components/solo/kv-row';
-import { ListRow } from '@/components/solo/list-row';
-import { SectionAction, SectionHead } from '@/components/solo/primitives';
+import { Row } from '@/components/solo/row';
+import { Tile, TileHeader, TileRows } from '@/components/solo/tile';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import users from '@/routes/users';
 import { router } from '@inertiajs/react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AccountUser, Me } from '../types';
+import { RowButton, TileButton } from './parts';
 import styles from './tab.module.css';
 import { UserDialog, type UserDialogMode } from './user-dialog';
 
-/** Figma: Ustawienia / Konto (466:7567), phones 473:8038. The profile, then the account's users. */
+/** Figma: Ustawienia · Konto (1090:9949, phone 1090:10299). The profile, then the account's users. */
 export function AccountTab({ me, users: members, isOwner }: { me: Me; users: AccountUser[]; isOwner: boolean }) {
     const { t } = useTranslation();
     const [dialog, setDialog] = useState<UserDialogMode | null>(null);
@@ -31,60 +33,43 @@ export function AccountTab({ me, users: members, isOwner }: { me: Me; users: Acc
 
     return (
         <>
-            <section className={styles.section}>
-                <SectionHead
-                    kind="body"
+            <Tile kind="plain">
+                <TileHeader
                     label={t('Profile')}
-                    action={
-                        <SectionAction onClick={() => setDialog({ kind: 'profile', user: { ...me, owner: isOwner } })}>{t('Edit')}</SectionAction>
-                    }
+                    end={<TileButton onClick={() => setDialog({ kind: 'profile', user: { ...me, owner: isOwner } })}>{t('Edit')}</TileButton>}
                 />
-                <dl className={styles.list}>
-                    <KvRow label={t('Name')}>
+                <dl className={styles.kv}>
+                    <KvRow layout="tile" label={t('Name')}>
                         {me.first_name} {me.last_name}
                     </KvRow>
-                    <KvRow label={t('Email')}>{me.email}</KvRow>
-                    <KvRow label={t('Password')}>••••••••••</KvRow>
+                    <KvRow layout="tile" label={t('Email')}>
+                        {me.email}
+                    </KvRow>
+                    <KvRow layout="tile" label={t('Password')}>
+                        ••••••••••
+                    </KvRow>
                 </dl>
-            </section>
+            </Tile>
 
-            <section className={styles.section}>
-                <SectionHead
-                    kind="body"
-                    label={`${t('Users')} · ${active.length}`}
-                    action={isOwner ? <SectionAction onClick={() => setDialog({ kind: 'create' })}>{t('New user')}</SectionAction> : undefined}
+            <Tile kind="list">
+                <TileHeader
+                    label={t('Users')}
+                    count={active.length}
+                    end={isOwner ? <TileButton onClick={() => setDialog({ kind: 'create' })}>{t('New user')}</TileButton> : undefined}
                 />
-                <ul className={`${styles.list} ${styles.phone}`}>
-                    {members.map((member) => (
-                        <li key={member.id}>
-                            {opens(member) ? (
-                                <ListRow title={member.name} sub={role(member)} onClick={() => open(member)} />
-                            ) : (
-                                <ListRow title={member.name} sub={role(member)} trailing={null} disabled />
-                            )}
-                        </li>
-                    ))}
-                </ul>
-                <dl className={`${styles.list} ${styles.wide}`}>
-                    {members.map((member) => (
-                        <KvRow
+                <TileRows>
+                    {members.map((member, index) => (
+                        <Row
                             key={member.id}
-                            label={
-                                opens(member) ? (
-                                    <button type="button" className={styles.plainButton} onClick={() => open(member)}>
-                                        {member.name}
-                                    </button>
-                                ) : (
-                                    member.name
-                                )
-                            }
-                            tone={member.deleted_at !== null ? 'muted' : undefined}
-                        >
-                            {role(member)}
-                        </KvRow>
+                            rule={index > 0}
+                            title={member.name}
+                            meta={member.deleted_at === null ? role(member) : undefined}
+                            chip={member.deleted_at !== null ? <Chip status="open">{role(member)}</Chip> : undefined}
+                            action={opens(member) ? <RowButton onClick={() => open(member)}>{t('Edit')}</RowButton> : undefined}
+                        />
                     ))}
-                </dl>
-            </section>
+                </TileRows>
+            </Tile>
 
             <UserDialog
                 mode={dialog}

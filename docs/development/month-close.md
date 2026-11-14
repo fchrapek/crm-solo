@@ -46,16 +46,16 @@ from `month-close:tick` / the MCP tool alike. It records `completed_via`
 
 ## The page
 
-`/month-close?period=YYYY-MM` (Figma: Zamknięcie miesiąca, direction A) lists
-every client in the period's close, one row each: progress and who acts next,
-the hours to close for a retainer client with no checklist left, or the day it
-finished (all steps moved and the hours month closed). The month is the poster;
-the trail offers the month before and after, never past the month in progress
-nor before June 2026. `/month-close/{client}?period=` is the client's card: the
-steps per site, then the client's own, with the hours close and the client's
-report mode and SSH alias beside them. Opening a card never starts a close; the
-first tick does (`PATCH month-close/{client}/steps`, the same path as an agent's
-tick).
+`/month-close?period=YYYY-MM` (Figma 1094:34610) lists every client in the period's close, one row each: progress
+and who acts next, the hours to close for a retainer client with no checklist left, or the day it finished (all
+steps moved and the hours month closed). The place is Zamknięcie miesiąca and the month; the pills are the month
+before and after, never past the month in progress nor before June 2026. A second row of pills filters the list by
+who acts next, hours left to close and finished clients (`?pokaz=ty|agent|godziny|zakonczone`, read by the page
+from the rows it already has). `/month-close/{client}?period=` is the client's card (Figma 1094:34969): the steps
+per site, then the client's own, with the hours close and the client's report mode, type and SSH alias beside them;
+its pills are the month's clients with their progress (`clients`). The report and the invoice step also link to the
+month on the client's Rozliczenia. Opening a card never starts a close; the first tick does
+(`PATCH month-close/{client}/steps`, the same path as an agent's tick).
 
 ## Commands
 
@@ -65,12 +65,36 @@ tick).
 | `month-close:tick {client} {step} {state} [--project= --note= --period=] [--json]` | Move one step. `step` may be `list`. A bare site-step key errors and lists the sites when the client has more than one; pass `--project`. The period defaults to the previous month. |
 | `month-close:sync-sites [--apply --prune]` | Report projects that look like sites but are not flagged, and flagged sites whose repository is gone. Writes only with `--apply`. |
 | `month-close:map-backups [--apply --force --base=]` | Propose each site's `backup_path` from the backup folders, deriving the search folder from sites already mapped; contended folders are left to a human. |
-| `infakt:draft-invoice {client} [--period= --dry-run --status= --resend-unconfirmed]` | Create the maintenance invoice in Infakt as a **draft** only. One numbered request per client, month and invoice group (`infakt_draft_requests`), so a rerun resumes instead of drafting twice; an unanswered request blocks its group until checked. |
+| `infakt:draft-invoice {client} [--period= --like=last\|<number> --project= --dry-run --status= --resend-unconfirmed]` (agents: `invoice-draft`) | Create the maintenance invoices in Infakt as **drafts** only, one per invoice group, from the retainer or as a copy of each group's previous invoice (`needs_source` until a group's invoice is picked once). One numbered request per client, month and invoice group (`infakt_draft_requests`), so a rerun resumes instead of drafting twice; an unanswered request blocks its group until checked. The same drafts come from the client's Rozliczenia tab (Faktury za miesiąc: Kopiuj fakturę, Wybierz fakturę, Kopiuj wszystkie). |
 | `infakt:client {ref}`, `infakt:invoices {client}` | Look up an Infakt client by its Infakt id or UUID; list a CRM client's recent Infakt invoices. |
 
 The sale date is the last day of the billed month. A retainer position that
 ends that month must be dated to the first of the next month, or it is
 inactive on the sale date and the draft is refused.
+
+## Summary email
+
+For a `summary_email` client the deliverable is the month's summary email,
+drafted from an email template (Ustawienia · Wiadomości e-mail; one is the
+default for new drafts) and sent from the CRM on the owner's click
+(`/clients/{client}/summary-emails/{period}`, owner only, behind
+`feature:billing`). On the client's card the step row says the email's state
+and opens the draft (`SummaryEmailDialog`): recipients, BCC to the owner,
+template, subject, text with a preview that keeps every line break as the
+email does, then Wyślij behind a confirmation. An unconfirmed live send offers
+"Oznacz jako wysłane" (the owner found it in the mailbox) and an explicit
+resend; nothing retries by itself. "Pomiń w tym miesiącu" skips the step the
+usual way. The checkbox stays tickable by hand for mail sent outside the CRM.
+On the client's Rozliczenia (retainer clients) the ledger's last column
+becomes PODSUMOWANIE: each month's email state opens the same dialog, a month
+closed before any email keeps its settlement line, and on phones one row
+names the due month's email (`billing_emails`, owner only). A live send ticks `summary_email` through
+`MonthCloseTicker` (`completed_via` `web`, the owner as actor); if that tick
+fails, the email stays sent and the tick is retried on its own. A test send
+(log, array or redirected mail, [hosting.md](hosting.md#mail)) never ticks.
+Sending does not depend on the month being closed and freezes nothing. Agents
+prepare the draft with `crm summary-email-draft <client> --month=` (MCP
+`summary_email_draft`, `write:reports`); nothing lets an agent send.
 
 ## Financial close is separate
 

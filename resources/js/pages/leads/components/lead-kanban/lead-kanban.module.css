@@ -1,6 +1,42 @@
 .board {
-    /* The KanbanBoard primitive scrolls horizontally on its own, but only if
-       every flex ancestor allows shrinking. */
     min-width: 0;
-    width: 100%;
+}
+
+/* Figma: LeadCard. Name, company, then the tier chip with the brand and the source. */
+.card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-4);
+    padding: var(--role-space-12);
+    color: var(--role-text-primary);
+    text-decoration: none;
+}
+
+.card:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: -2px;
+    border-radius: var(--role-radius-sm);
+}
+
+.name {
+    font: 600 var(--solo-text-control) / 1.3 var(--solo-font-text);
+    overflow-wrap: anywhere;
+}
+
+.company {
+    font: 400 var(--solo-text-meta) / 1.3 var(--solo-font-text);
+    overflow-wrap: anywhere;
+}
+
+.foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--role-space-4) var(--role-space-8);
+    padding-top: var(--role-space-4);
+}
+
+.meta {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.3 var(--solo-font-text);
 }

@@ -1,8 +1,10 @@
+import { Chip } from '@/components/solo/chip';
 import { fieldControl, SoloField, SoloInput } from '@/components/solo/field';
-import { ListRow } from '@/components/solo/list-row';
-import { SectionAction, SectionHead, SoloButton } from '@/components/solo/primitives';
+import { SoloButton } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
 import { ResponsiveSelect } from '@/components/solo/responsive-select';
+import { Row } from '@/components/solo/row';
+import { Tile, TileHeader, TileInset, TileNote, TileRows } from '@/components/solo/tile';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { jsonRequest } from '@/lib/json-request';
 import agentTokens from '@/routes/agent-tokens';
@@ -13,11 +15,12 @@ import { toast } from 'sonner';
 import { copyAgentPrompt } from '../../tasks/components/task-page/task-header';
 import type { AgentTokenRow } from '../types';
 import { useStampLabel } from './format';
+import { RowButton, TileButton } from './parts';
 import styles from './tab.module.css';
 
 const READ = 'read';
 
-/** Days left at which the expiry turns to the accent colour. */
+/** Days left at which the expiry becomes a waiting chip. */
 const SOON_DAYS = 14;
 
 const EXPIRY = [
@@ -28,7 +31,7 @@ const EXPIRY = [
 ] as const;
 
 /**
- * Figma: Ustawienia / Agenci (206:5097), phones 473:8933. The owner's agent
+ * Figma: Ustawienia · Agenci (1092:26787, phone 1092:27008). The owner's agent
  * tokens: the plain token arrives once, in the create response, and is never
  * sent again; the list shows names, abilities, last use and expiry only.
  */
@@ -45,53 +48,36 @@ export function AgentsTab({ tokens, abilities, today, demo }: { tokens: AgentTok
     const soon = (token: AgentTokenRow) => token.expires_in_days !== null && token.expires_in_days <= SOON_DAYS;
 
     return (
-        <section className={styles.section}>
-            <SectionHead
-                kind="body"
-                label={`${t('Tokens')} · ${tokens.length}`}
-                action={demo ? undefined : <SectionAction onClick={() => setCreating(true)}>{t('New token')}</SectionAction>}
-            />
-            {demo && <p className={styles.note}>{t('Agent tokens are not part of the demo.')}</p>}
-            {!demo && tokens.length === 0 && (
-                <p className={`${styles.note} ${styles.emptyBlock}`}>
-                    {t('No agent tokens yet. A token lets Claude Code or Codex reach this CRM with the crm command or MCP.')}
-                </p>
-            )}
-            <ul className={`${styles.list} ${styles.phone}`}>
-                {tokens.map((token) => (
-                    <li key={token.id}>
-                        <ListRow
-                            title={token.name}
-                            sub={[...token.abilities, token.last_used === null ? null : used(token)].filter(Boolean).join(' · ')}
-                            value={
-                                token.expires_in_days === null ? undefined : (
-                                    <span className={soon(token) ? styles.accent : undefined}>
-                                        {t('day_count', { count: token.expires_in_days })}
-                                    </span>
-                                )
-                            }
-                            onClick={() => setEditing(token)}
-                        />
-                    </li>
-                ))}
-            </ul>
-            <ul className={`${styles.list} ${styles.wide}`}>
-                {tokens.map((token) => (
-                    <li key={token.id} className={styles.row}>
-                        <span className={styles.rowText}>
-                            <button type="button" className={styles.rowTitle} onClick={() => setEditing(token)}>
-                                {token.name}
-                            </button>
-                            <span className={styles.mono}>{token.abilities.join(' · ')}</span>
-                        </span>
-                        <span className={styles.rowEnd}>
-                            {used(token)}
-                            <strong data-tone={soon(token) ? 'accent' : undefined}>{expiry(token)}</strong>
-                            <SectionAction onClick={() => setRevoking(token)}>{t('Revoke')}</SectionAction>
-                        </span>
-                    </li>
-                ))}
-            </ul>
+        <>
+            <Tile kind="list">
+                <TileHeader
+                    label={t('Tokens')}
+                    count={tokens.length}
+                    end={demo ? undefined : <TileButton onClick={() => setCreating(true)}>{t('New token')}</TileButton>}
+                />
+                {demo || tokens.length === 0 ? (
+                    <TileInset>
+                        <TileNote>
+                            {demo
+                                ? t('Agent tokens are not part of the demo.')
+                                : t('No agent tokens yet. A token lets Claude Code or Codex reach this CRM with the crm command or MCP.')}
+                        </TileNote>
+                    </TileInset>
+                ) : (
+                    <TileRows>
+                        {tokens.map((token, index) => (
+                            <Row
+                                key={token.id}
+                                rule={index > 0}
+                                title={token.name}
+                                wideMeta={[used(token), soon(token) ? null : expiry(token)].filter(Boolean).join(' · ')}
+                                chip={soon(token) ? <Chip status="waiting">{expiry(token)}</Chip> : undefined}
+                                action={<RowButton onClick={() => setEditing(token)}>{t('Abilities')}</RowButton>}
+                            />
+                        ))}
+                    </TileRows>
+                )}
+            </Tile>
 
             <CreateTokenDialog open={creating} abilities={abilities} onClose={() => setCreating(false)} />
             <EditTokenDialog
@@ -115,7 +101,7 @@ export function AgentsTab({ tokens, abilities, today, demo }: { tokens: AgentTok
                     setRevoking(null);
                 }}
             />
-        </section>
+        </>
     );
 }
 
@@ -143,7 +129,7 @@ function AbilityChecks({
                         disabled={disabled || ability === READ}
                         onChange={(e) => onChange(e.target.checked ? [...value, ability] : value.filter((held) => held !== ability))}
                     />
-                    <span className={styles.mono}>{ability}</span>
+                    <span className={styles.code}>{ability}</span>
                 </label>
             ))}
         </fieldset>

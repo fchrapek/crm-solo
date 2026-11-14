@@ -69,18 +69,15 @@ final class CommandAccountScopeTest extends TestCase
         return [
             'projects:archive' => ['projects:archive', ['project' => ['__PROJECT__']]],
             'projects:archive by name' => ['projects:archive', ['project' => ['Other site']]],
-            'projects:create' => ['projects:create', ['--client' => '__CLIENT__', '--name' => ['Sneaky']]],
             'projects:delete' => ['projects:delete', ['project' => '__PROJECT__', '--force' => true]],
             'tasks:create' => ['tasks:create', ['--project' => '__PROJECT__', '--name' => ['Sneaky']]],
             'tasks:delete' => ['tasks:delete', ['--project' => '__PROJECT__', '--force' => true]],
-            'reports:generate' => ['reports:generate', ['client' => '__CLIENT__', '--composer' => 'structured_list']],
             'infakt:invoices' => ['infakt:invoices', ['client' => '__CLIENT__']],
             'infakt:draft-invoice' => ['infakt:draft-invoice', ['client' => '__CLIENT__', '--dry-run' => true]],
             'infakt:client with another account' => ['infakt:client', ['ref' => '77', '--account' => '__ACCOUNT__']],
             'trello:adopt with another account' => ['trello:adopt', ['--account' => '__ACCOUNT__']],
             'reports:prompt-show with another account' => ['reports:prompt-show', ['--account' => '__ACCOUNT__']],
             'reports:prompt-import with another account' => ['reports:prompt-import', ['path' => '/dev/null', '--account' => '__ACCOUNT__']],
-            'projects:create with another account' => ['projects:create', ['--client' => 'Mine', '--name' => ['X'], '--account' => '__ACCOUNT__']],
             'time:log with another account' => ['time:log', ['minutes' => 5, '--client' => 'Mine', '--account' => '__ACCOUNT__']],
         ];
     }

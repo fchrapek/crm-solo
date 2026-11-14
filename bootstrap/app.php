@@ -23,7 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Closed mode sends guests to the /czesc splash; /login still works.
         $middleware->redirectGuestsTo(fn () => config('waitlist.closed') ? route('czesc') : route('login'));
         $middleware->redirectUsersTo(AppServiceProvider::HOME);
-        $middleware->encryptCookies(except: ['appearance', 'theme']);
+        $middleware->encryptCookies(except: ['appearance']);
         // Sessions and remember cookies stamped with an older password hash are refused.
         $middleware->authenticateSessions();
 

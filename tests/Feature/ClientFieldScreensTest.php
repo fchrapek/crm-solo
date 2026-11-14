@@ -126,7 +126,7 @@ final class ClientFieldScreensTest extends TestCase
         app(ClientFieldWriter::class)->set($this->client, ['visit_at' => '2026-10-16 10:00']);
         $message = OutboundMessage::query()->sole();
 
-        $intruder = User::factory()->create(['account_id' => Account::factory()->create()->id]);
+        $intruder = User::factory()->create(['account_id' => Account::factory()->create()->id, 'owner' => true]);
         $this->actingAs($intruder)->post("/messages/{$message->id}/cancel")->assertSessionHasErrors('form');
         $this->actingAs($this->user)->post("/messages/{$message->id}/cancel")->assertSessionHasNoErrors();
 
@@ -137,7 +137,7 @@ final class ClientFieldScreensTest extends TestCase
     {
         $message = $this->failedReminder('SMSAPI 13: Invalid phone number');
 
-        $intruder = User::factory()->create(['account_id' => Account::factory()->create()->id]);
+        $intruder = User::factory()->create(['account_id' => Account::factory()->create()->id, 'owner' => true]);
         $this->actingAs($intruder)->post("/messages/{$message->id}/resend")->assertSessionHasErrors('form');
         $this->assertSame(OutboundMessage::FAILED, $message->fresh()->status);
 

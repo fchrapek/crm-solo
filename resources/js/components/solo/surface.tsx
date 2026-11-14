@@ -1,4 +1,4 @@
-import { createContext, useContext, useSyncExternalStore, type HTMLAttributes } from 'react';
+import { createContext, useContext, useSyncExternalStore, type HTMLAttributes, type ReactNode } from 'react';
 
 export type DayState = 'paper' | 'timer' | 'done';
 
@@ -14,6 +14,11 @@ export function SoloSurface({ day, ...rest }: { day: DayState } & HTMLAttributes
             <div data-day={day} {...rest} />
         </SoloSurfaceContext.Provider>
     );
+}
+
+/** The Solo look for overlays opened from a part that sits on a surface it does not render, such as the shell's chrome. */
+export function SoloScope({ children }: { children: ReactNode }) {
+    return <SoloSurfaceContext.Provider value={true}>{children}</SoloSurfaceContext.Provider>;
 }
 
 type PortalDocument = Pick<Document, 'createElement' | 'body'>;

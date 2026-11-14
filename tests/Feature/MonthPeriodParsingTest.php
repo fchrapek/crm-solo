@@ -114,11 +114,11 @@ final class MonthPeriodParsingTest extends TestCase
     }
 
     #[DataProvider('days')]
-    public function test_reports_generate_covers_the_month_named(string $now, string $period, string $lastDay): void
+    public function test_report_create_covers_the_month_named(string $now, string $period, string $lastDay): void
     {
         Carbon::setTestNow($now);
 
-        $this->assertSame(0, Artisan::call('reports:generate', ['client' => (string) $this->client->id, '--period' => $period, '--composer' => 'structured_list']));
+        $this->assertSame(0, Artisan::call('crm:report-create', ['client' => (string) $this->client->id, '--period' => $period, '--composer' => 'structured_list']));
 
         $report = ClientReport::sole();
         $this->assertSame($period.'-01', $report->period_start->toDateString());
@@ -150,7 +150,7 @@ final class MonthPeriodParsingTest extends TestCase
         }
 
         $this->assertSame(1, Artisan::call('infakt:draft-invoice', ['client' => (string) $this->client->id, '--period' => $period]));
-        $this->assertSame(1, Artisan::call('reports:generate', ['client' => (string) $this->client->id, '--period' => $period, '--composer' => 'structured_list']));
+        $this->assertSame(1, Artisan::call('crm:report-create', ['client' => (string) $this->client->id, '--period' => $period, '--composer' => 'structured_list']));
         $this->assertSame(1, Artisan::call('month-close:tick', ['client' => (string) $this->client->id, 'step' => 'report', 'state' => 'done', '--period' => $period]));
         // The web stack trims input first, so a padded month is a month there.
         if (! LocalCalendar::isMonth(mb_trim($period))) {

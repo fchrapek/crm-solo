@@ -1,22 +1,22 @@
-import FlashMessages from '@/components/flash-messages';
 import InertiaPagination from '@/components/inertia-pagination';
-import { IconButton } from '@/components/solo/icon-button';
-import { ListRow } from '@/components/solo/list-row';
-import { Masthead } from '@/components/solo/masthead';
-import { Poster, SectionAction } from '@/components/solo/primitives';
+import { Chip } from '@/components/solo/chip';
+import { ListTable, ListTableCell, ListTableHead, ListTableRow } from '@/components/solo/list-table';
+import { Poster, SoloButton, SoloButtonLink } from '@/components/solo/primitives';
+import { Row } from '@/components/solo/row';
+import { type PlaceResolver } from '@/components/solo/shell/place';
 import { SoloSurface } from '@/components/solo/surface';
-import { SoloToaster } from '@/components/solo/toaster';
+import { Tile, TileInset } from '@/components/solo/tile';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Icon } from '@/components/ui/icon';
 import clientsRoute from '@/routes/clients';
 import contactsRoute from '@/routes/contacts';
 import { type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { rangeOf } from '../clients/components/client-list/format';
 import { ContactDialog, type ContactRecord } from '../clients/components/details-tab/contact-dialog';
 import styles from './index.module.css';
+import { contactsPlace, listQuery, listUrl, type ContactFilters } from './place';
 
 export interface ContactRow extends ContactRecord {
     name: string;
@@ -24,7 +24,7 @@ export interface ContactRow extends ContactRecord {
 }
 
 interface ContactsPageProps {
-    filters: { search: string; trashed: 'with' | null };
+    filters: ContactFilters;
     contacts: {
         data: ContactRow[];
         links: { url: string | null; label: string; active: boolean }[];
@@ -37,21 +37,19 @@ interface ContactsPageProps {
     [key: string]: unknown;
 }
 
-const SEARCH_DEBOUNCE_MS = 250;
-
 type Open = { open: boolean; contact: ContactRecord | null };
-
-/** The list's query string: the search, and the deleted contacts when they are shown. */
-const listQuery = (search: string, trashed: 'with' | null) => ({ ...(search === '' ? {} : { search }), ...(trashed === null ? {} : { trashed }) });
 
 const keyOf = (opened: ContactsPageProps['opened']) => (opened === null ? null : opened === 'new' ? 'new' : opened.id);
 
-/** Figma: Kontakty (177:74), phones 473:13791; create and edit are ContactDialog over the list. */
+const restore = (contact: ContactRecord) => router.put(contactsRoute.restore(contact.id).url, {}, { preserveScroll: true });
+
+/**
+ * Figma: Kontakty (1088:4520, phone 1088:4837). The list is one tile: a table from 768 px, the person and the client
+ * on a phone. The command bar narrows it; create and edit are ContactDialog over the list.
+ */
 export default function ContactsIndex() {
     const { filters, contacts, clients, opened } = usePage<SharedData & ContactsPageProps>().props;
     const { t } = useTranslation();
-    const [search, setSearch] = useState(filters.search);
-    const sent = useRef(filters.search);
     const [dialog, setDialog] = useState<Open>({ open: opened !== null, contact: opened === null || opened === 'new' ? null : opened });
     const [openedKey, setOpenedKey] = useState(keyOf(opened));
     const [removing, setRemoving] = useState<ContactRecord | null>(null);
@@ -62,25 +60,10 @@ export default function ContactsIndex() {
         if (opened !== null) setDialog({ open: true, contact: opened === 'new' ? null : opened });
     }
 
-    useEffect(() => {
-        const next = search.trim();
-        if (next === filters.search || next === sent.current) return;
-        const timer = window.setTimeout(() => {
-            sent.current = next;
-            router.get(contactsRoute.index.url(), listQuery(next, filters.trashed), { preserveState: true, preserveScroll: true, replace: true });
-        }, SEARCH_DEBOUNCE_MS);
-
-        return () => window.clearTimeout(timer);
-    }, [search, filters.search, filters.trashed]);
-
     const close = () => {
         setDialog((was) => ({ ...was, open: false }));
         if (new URL(window.location.href).searchParams.has('kontakt')) {
-            router.get(contactsRoute.index.url(), listQuery(filters.search, filters.trashed), {
-                preserveState: true,
-                preserveScroll: true,
-                replace: true,
-            });
+            router.get(contactsRoute.index.url(), listQuery(filters), { preserveState: true, preserveScroll: true, replace: true });
         }
     };
     const remove = (contact: ContactRecord) => {
@@ -88,129 +71,73 @@ export default function ContactsIndex() {
         if (contact.deleted_at === null) {
             setRemoving(contact);
         } else {
-            router.put(contactsRoute.restore(contact.id).url, {}, { preserveScroll: true });
+            restore(contact);
         }
     };
+    const create = () => setDialog({ open: true, contact: null });
+    const narrowed = filters.search !== '';
 
     return (
-        <SoloSurface className={styles.page} day="paper">
+        <SoloSurface day="paper">
             <Head title={t('Contacts')} />
-            <div className={styles.frame}>
-                <Masthead current="contacts" />
-                <main>
-                    <div className={styles.navBar}>
-                        <IconButton icon="plus" label={t('New contact')} onClick={() => setDialog({ open: true, contact: null })} />
-                    </div>
-                    <header className={styles.head}>
-                        <div className={styles.actionRow}>
-                            <SectionAction onClick={() => setDialog({ open: true, contact: null })}>{t('New contact')}</SectionAction>
-                        </div>
-                        <Poster>{t('Contacts')}</Poster>
-                        <div className={styles.searchBar} data-solo-fab="">
-                            <label className={styles.searchField}>
-                                <Icon name="search" size={20} className={styles.searchIcon} />
-                                <input
-                                    type="search"
-                                    className={styles.search}
-                                    value={search}
-                                    placeholder={t('Search a person, company or email')}
-                                    aria-label={t('Search contacts')}
-                                    onChange={(event) => setSearch(event.target.value)}
-                                />
-                            </label>
-                        </div>
-                    </header>
-
-                    <table className={styles.table} aria-label={t('Contacts')}>
-                        <colgroup>
-                            <col className={styles.colPerson} />
-                            <col className={styles.colClient} />
-                            <col />
-                        </colgroup>
-                        <thead>
-                            <tr>
-                                <th scope="col">{t('Person')}</th>
-                                <th scope="col">{t('Client name')}</th>
-                                <th scope="col">{t('Email')}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {contacts.data.map((contact) => (
-                                <tr key={contact.id} data-deleted={contact.deleted_at !== null || undefined}>
-                                    <td>
-                                        <button type="button" className={styles.rowButton} onClick={() => setDialog({ open: true, contact })}>
-                                            {contact.name}
-                                        </button>
-                                    </td>
-                                    <td>
-                                        {contact.client !== null && (
-                                            <Link
-                                                href={clientsRoute.show({ client: contact.client.id, tab: 'przeglad' })}
-                                                className={styles.clientLink}
-                                            >
-                                                {contact.client.name}
-                                            </Link>
-                                        )}
-                                    </td>
-                                    <td className={styles.muted}>{contact.emails[0] ?? ''}</td>
-                                </tr>
-                            ))}
-                            {contacts.data.length === 0 && (
-                                <tr>
-                                    <td colSpan={3} className={styles.empty}>
-                                        {t('No contacts found.')}
-                                    </td>
-                                </tr>
+            <main className={styles.page}>
+                <header className={styles.head}>
+                    <Poster>{t('Contacts')}</Poster>
+                    <SoloButton size="control" onClick={create}>
+                        {t('New contact')}
+                    </SoloButton>
+                </header>
+                {narrowed && (
+                    <Tile kind="list" as="div">
+                        <Row
+                            as="div"
+                            rule={false}
+                            title={t('Results for "{{query}}"', { query: filters.search })}
+                            meta={contacts.total}
+                            action={
+                                <SoloButtonLink href={listUrl({ ...filters, search: '' })} variant="secondary" size="control">
+                                    {t('Clear')}
+                                </SoloButtonLink>
+                            }
+                        />
+                    </Tile>
+                )}
+                <Tile kind="list" as="div">
+                    {contacts.data.length === 0 ? (
+                        <TileInset>
+                            <p className={styles.empty}>{narrowed ? t('No contacts found.') : t('No contacts yet.')}</p>
+                            {!narrowed && (
+                                <SoloButton size="control" variant="secondary" onClick={create}>
+                                    {t('New contact')}
+                                </SoloButton>
                             )}
-                        </tbody>
-                    </table>
-
-                    <ul className={styles.phoneList} aria-label={t('Contacts')}>
-                        {contacts.data.map((contact) => (
-                            <li key={contact.id}>
-                                <ListRow
-                                    title={contact.name}
-                                    sub={
-                                        contact.deleted_at !== null
-                                            ? t('deleted, can be restored')
-                                            : (contact.client?.name ?? contact.emails[0] ?? undefined)
-                                    }
-                                    onClick={() => setDialog({ open: true, contact })}
-                                />
-                            </li>
-                        ))}
-                        {contacts.data.length === 0 && <li className={styles.empty}>{t('No contacts found.')}</li>}
-                    </ul>
-
-                    <SectionAction
-                        className={styles.trashed}
-                        onClick={() =>
-                            router.get(contactsRoute.index.url(), listQuery(filters.search, filters.trashed === null ? 'with' : null), {
-                                preserveScroll: true,
-                                preserveState: true,
-                                replace: true,
-                            })
-                        }
-                    >
-                        {filters.trashed === null ? t('Show deleted') : t('Hide deleted')}
-                    </SectionAction>
-
+                        </TileInset>
+                    ) : (
+                        <div className={styles.table}>
+                            <ContactTable rows={contacts.data} onOpen={(contact) => setDialog({ open: true, contact })} onRestore={restore} />
+                        </div>
+                    )}
+                    <div className={styles.foot}>
+                        <SoloButtonLink
+                            href={listUrl({ ...filters, trashed: filters.trashed === null ? 'with' : null })}
+                            variant="quiet"
+                            size="control"
+                            preserveScroll
+                            replace
+                        >
+                            {filters.trashed === null ? t('Show deleted') : t('Hide deleted')}
+                        </SoloButtonLink>
+                    </div>
                     <InertiaPagination
-                        look="solo"
+                        look="tile"
                         links={contacts.links}
                         preserveScroll
                         summary={t('{{range}} of {{total}}', { range: rangeOf(contacts.from ?? 0, contacts.to ?? 0), total: contacts.total })}
                     />
-                </main>
-            </div>
+                </Tile>
+            </main>
 
-            <ContactDialog
-                open={dialog.open}
-                onOpenChange={(open) => !open && close()}
-                clients={clients}
-                contact={dialog.contact}
-                onRemove={remove}
-            />
+            <ContactDialog open={dialog.open} onOpenChange={(open) => !open && close()} clients={clients} contact={dialog.contact} onRemove={remove} />
             <ConfirmDialog
                 open={removing !== null}
                 onOpenChange={(value) => !value && setRemoving(null)}
@@ -225,7 +152,72 @@ export default function ContactsIndex() {
                     setRemoving(null);
                 }}
             />
-            <FlashMessages toaster={<SoloToaster />} />
         </SoloSurface>
+    );
+}
+
+ContactsIndex.place = contactsPlace satisfies PlaceResolver<ContactsPageProps>;
+
+/** Person, client, e-mail. A phone keeps the person and the client; a deleted contact carries its chip (from 768 px) and the way back. */
+export function ContactTable({ rows, onOpen, onRestore }: { rows: ContactRow[]; onOpen: (contact: ContactRow) => void; onRestore: (contact: ContactRow) => void }) {
+    const { t } = useTranslation();
+    const anyDeleted = rows.some((contact) => contact.deleted_at !== null);
+
+    return (
+        <ListTable label={t('Contacts')}>
+            <thead>
+                <tr>
+                    <ListTableHead>{t('Person')}</ListTableHead>
+                    <ListTableHead narrow />
+                    <ListTableHead wide>{t('Client name')}</ListTableHead>
+                    <ListTableHead wide>{t('Email')}</ListTableHead>
+                    {anyDeleted && <ListTableHead align="end" wide aria-label={t('Status')} />}
+                </tr>
+            </thead>
+            <tbody>
+                {rows.map((contact) => (
+                    <ListTableRow key={contact.id} minor={contact.deleted_at !== null}>
+                        <ListTableCell kind="title" truncate>
+                            <button type="button" className={styles.rowButton} onClick={() => onOpen(contact)}>
+                                {contact.name}
+                            </button>
+                        </ListTableCell>
+                        <ListTableCell kind="meta" align="end" narrow>
+                            {contact.deleted_at !== null ? (
+                                <SoloButton size="control" variant="secondary" onClick={() => onRestore(contact)}>
+                                    {t('Restore')}
+                                </SoloButton>
+                            ) : (
+                                (contact.client?.name ?? t('No client'))
+                            )}
+                        </ListTableCell>
+                        <ListTableCell kind={contact.client === null ? 'meta' : 'text'} wide>
+                            {contact.client === null ? (
+                                t('No client')
+                            ) : (
+                                <Link href={clientsRoute.show({ client: contact.client.id, tab: 'przeglad' })} className={styles.rowLink}>
+                                    {contact.client.name}
+                                </Link>
+                            )}
+                        </ListTableCell>
+                        <ListTableCell kind="meta" wide>
+                            {contact.emails[0] ?? ''}
+                        </ListTableCell>
+                        {anyDeleted && (
+                            <ListTableCell align="end" wide>
+                                {contact.deleted_at !== null && (
+                                    <span className={styles.deleted}>
+                                        <Chip status="open">{t('deleted_contact_chip')}</Chip>
+                                        <SoloButton size="control" variant="secondary" onClick={() => onRestore(contact)}>
+                                            {t('Restore')}
+                                        </SoloButton>
+                                    </span>
+                                )}
+                            </ListTableCell>
+                        )}
+                    </ListTableRow>
+                ))}
+            </tbody>
+        </ListTable>
     );
 }

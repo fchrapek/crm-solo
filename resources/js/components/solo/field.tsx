@@ -1,4 +1,5 @@
-import type { ComponentProps, InputHTMLAttributes, ReactNode } from 'react';
+import { Icon } from '@/components/ui/icon';
+import type { ComponentProps, ReactNode } from 'react';
 import styles from './field.module.css';
 
 const errorId = (id: string) => `${id}-error`;
@@ -38,16 +39,22 @@ export function SoloField({
                 {label}
             </label>
             {children}
-            {error && (
-                <p id={errorId(htmlFor)} className={styles.error}>
-                    {error}
-                </p>
-            )}
+            <FieldError htmlFor={htmlFor} error={error} />
         </div>
     );
 }
 
-export function SoloInput({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
+/** A field's error line, for a control that is not a SoloField (a checkbox row); link it with fieldControl's id. */
+export function FieldError({ htmlFor, error }: { htmlFor: string; error?: string }) {
+    return error ? (
+        <p id={errorId(htmlFor)} className={styles.error}>
+            <Icon name="warning" size={16} />
+            {error}
+        </p>
+    ) : null;
+}
+
+export function SoloInput({ className, ...rest }: ComponentProps<'input'>) {
     return <input className={[styles.box, className].filter(Boolean).join(' ')} {...rest} />;
 }
 

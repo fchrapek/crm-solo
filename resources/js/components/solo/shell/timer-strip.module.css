@@ -1,0 +1,35 @@
+.strip {
+    position: fixed;
+    inset-inline: calc(var(--shell-margin) + env(safe-area-inset-left, 0px)) calc(var(--shell-margin) + env(safe-area-inset-right, 0px));
+    bottom: calc(var(--solo-tab-bar-height) + env(safe-area-inset-bottom, 0px) + var(--shell-dock) + var(--role-space-8));
+    z-index: var(--z-banner);
+    display: flex;
+    align-items: center;
+    gap: var(--role-space-12);
+    height: 56px;
+    padding: 0 6px 0 var(--role-space-16);
+    border-radius: var(--role-radius-md);
+    background: var(--role-tile-timer);
+    color: var(--role-text-on-colour);
+    font: 600 var(--solo-text-control) / normal var(--solo-font-text);
+}
+
+.time {
+    flex: none;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.title {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+    .strip {
+        display: none;
+    }
+}

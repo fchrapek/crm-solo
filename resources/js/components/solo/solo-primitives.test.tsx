@@ -7,31 +7,13 @@ import InertiaPagination from '@/components/inertia-pagination';
 import { Select, SelectTrigger, SelectValue } from '@/components/ui/select';
 import pl from '../../../../lang/pl.json';
 import { ActorMark, actorOf, initials } from './actor-mark';
-import { LiveLine } from './live-line';
-import { currentWeek, MonthCard, shownWeeks, type MonthData } from './month-card';
+import { currentWeek, MonthCalendar, MonthCard, shownWeeks, type MonthData } from './month-card';
 import { EmptyBlock, SectionHead, SoloButton } from './primitives';
-import { StagePill } from './stage-pill';
 import { soloPortalRoot, SoloSurface, useInSoloSurface, useSoloPortalSurface } from './surface';
 import { TaskRow } from './task-row';
+import { GroupHeading } from './tile';
 
 await i18next.use(initReactI18next).init({ lng: 'pl', resources: { pl: { translation: pl } }, interpolation: { escapeValue: false } });
-
-describe('StagePill', () => {
-    test('the pill takes the status colour of its stage: active green, paused amber, churned red', () => {
-        expect(renderToStaticMarkup(<StagePill stage="active" />)).toContain('data-tone="green"');
-        expect(renderToStaticMarkup(<StagePill stage="paused" />)).toContain('data-tone="amber"');
-        expect(renderToStaticMarkup(<StagePill stage="churned" />)).toContain('data-tone="red"');
-    });
-
-    test('the retired stages that history still carries keep their own tone', () => {
-        expect(renderToStaticMarkup(<StagePill stage="prospect" />)).toContain('data-tone="neutral"');
-        expect(renderToStaticMarkup(<StagePill stage="offer_sent" />)).toContain('data-tone="blue"');
-    });
-
-    test('the pill shows the stage label in the reader language', () => {
-        expect(renderToStaticMarkup(<StagePill stage="paused" />)).toContain('Wstrzymany');
-    });
-});
 
 describe('ActorMark', () => {
     test("any write with actor_via set is an agent, the owner's own bridge runs included", () => {
@@ -83,6 +65,49 @@ describe('SectionHead', () => {
         const html = renderToStaticMarkup(<SectionHead kind="body" as="span" label="Współpraca" />);
         expect(html).not.toContain('<h2');
         expect(html).toContain('<span');
+    });
+});
+
+describe('GroupHeading', () => {
+    test('the label is a heading with its note and the current word beside it, and the end slot after them', () => {
+        const html = renderToStaticMarkup(<GroupHeading label="Czwartek" note="12.11" current="dziś" end="1 z 5 wybrane" />);
+        expect(html).toMatch(/<h2[^>]*>Czwartek<\/h2><span[^>]*>12\.11<\/span><span[^>]*>dziś<\/span><\/span><span[^>]*>1 z 5 wybrane<\/span>/);
+        expect(html).toContain('data-size="regular"');
+        expect(html).toContain('data-current=""');
+        expect(html).not.toContain('data-quiet');
+        expect(renderToStaticMarkup(<GroupHeading label="Piątek" />)).not.toContain('data-current');
+    });
+
+    test('a group that is over is marked quiet, and a menu or a board column takes the compact size without the inset', () => {
+        expect(renderToStaticMarkup(<GroupHeading label="Środa" quiet />)).toContain('data-quiet=""');
+        const compact = renderToStaticMarkup(<GroupHeading as="p" size="compact" flush label="Przypięci" />);
+        expect(compact).toContain('data-size="compact"');
+        expect(compact).toContain('data-flush=""');
+        expect(compact).toMatch(/<p[^>]*>Przypięci<\/p>/);
+    });
+
+    test('it is smaller and lighter than a row title, in sentence case, and a tile label is the same label', async () => {
+        const css = await Bun.file(new URL('./tile.module.css', import.meta.url)).text();
+        const label = css.match(/\.groupLabel \{([^}]*)\}/)?.[1] ?? '';
+        expect(label).toContain('font: 400 var(--solo-heading-group)');
+        expect(label).toContain('color: var(--role-text-primary)');
+        expect(label).not.toContain('uppercase');
+        expect(css.match(/\.label \{([^}]*)\}/)?.[1]).toContain('font: 400 var(--solo-heading-group)');
+        expect(css).not.toContain('uppercase');
+
+        const tokens = await Bun.file(new URL('../../../css/solo.css', import.meta.url)).text();
+        const rem = (name: string) => [...tokens.matchAll(new RegExp(`${name}: ([\\d.]+)rem`, 'g'))].map((match) => Number(match[1]));
+        const row = rem('--solo-text-row')[0];
+        expect(rem('--solo-heading-group')).toEqual([0.875]);
+        expect(rem('--solo-heading-group')[0]).toBeLessThan(row);
+        expect(rem('--solo-heading-group-compact')[0]).toBeLessThan(rem('--solo-heading-group')[0]);
+    });
+
+    test('the heading carries the row rule under it, in cobalt for today, and a note under it keeps its own inset', async () => {
+        const css = await Bun.file(new URL('./tile.module.css', import.meta.url)).text();
+        expect(css.match(/\.group::after \{([^}]*)\}/)?.[1]).toContain('background: var(--role-rule)');
+        expect(css).toMatch(/\.group\[data-current\]::after \{[^}]*background: var\(--role-selection\)/);
+        expect(css).not.toMatch(/\.group \+ \.inset \{/);
     });
 });
 
@@ -142,16 +167,8 @@ describe('TaskRow', () => {
         expect(css).toMatch(
             /\.titleLink::after \{\s*content: '';\s*position: absolute;\s*inset: calc\(-1 \* var\(--row-pad\)\) calc\(-1 \* var\(--solo-space-2\)\);/,
         );
-        expect(css).toMatch(/\.titleLink:focus-visible::after \{\s*outline: 2px solid var\(--solo-focus, var\(--solo-fg\)\);/);
+        expect(css).toMatch(/\.titleLink:focus-visible::after \{\s*outline: 2px solid var\(--solo-fg\);/);
         expect(css).toMatch(/\.row \{[^}]*padding-block: var\(--row-pad\);/);
-    });
-});
-
-describe('LiveLine', () => {
-    test('renders the label next to the agent mark in the requested size', () => {
-        const html = renderToStaticMarkup(<LiveLine size="sm">claude</LiveLine>);
-        expect(html).toContain('data-size="sm"');
-        expect(html).toContain('claude');
     });
 });
 
@@ -280,47 +297,35 @@ describe('SoloToaster on phones', () => {
     test('toasts sit above the tab bar below 768 px and keep the desktop 24 px from it', async () => {
         const { SOLO_TOAST_OFFSET } = await import('./toaster');
         const css = await Bun.file(new URL('../../../css/solo.css', import.meta.url)).text();
-        const [phone, desktop] = [css.indexOf('--solo-toast-offset: var(--solo-tab-bar-clearance);'), css.indexOf('--solo-toast-offset: 24px;')];
+        const [phone, desktop] = [
+            css.indexOf('--solo-toast-offset: calc(var(--solo-tab-bar-clearance) + var(--shell-dock) + var(--shell-strip));'),
+            css.indexOf('--solo-toast-offset: 24px;'),
+        ];
 
         expect(SOLO_TOAST_OFFSET).toEqual({ bottom: 'var(--solo-toast-offset)' });
         expect(phone).toBeGreaterThan(-1);
         expect(desktop).toBeGreaterThan(css.indexOf('@media (min-width: 768px)'));
     });
 
-    test('on a page with a floating button or a bottom action toasts rise above it on phones and stay 24 px from the edge on desktop', async () => {
+    test('on a page with a floating button or a bottom action toasts rise above it on phones, and the stack is nothing on desktop', async () => {
         const css = await Bun.file(new URL('../../../css/solo.css', import.meta.url)).text();
-        const fab = css.indexOf(
-            ':root:has([data-solo-fab]) {\n    --solo-toast-offset: calc(var(--solo-tab-bar-clearance) + var(--solo-fab-clearance));',
-        );
-        const bar = css.indexOf(
-            ':root:has([data-solo-bottom-action]) {\n    --solo-toast-offset: calc(var(--solo-tab-bar-clearance) + var(--solo-bottom-action-clearance));',
-        );
-        const desktop = css.indexOf('        --solo-toast-offset: 24px;', bar);
-        const reset = css.slice(css.lastIndexOf('@media (min-width: 768px)', desktop), desktop);
+        const fab = css.indexOf(':root:has([data-solo-fab]) {\n    --shell-dock: var(--solo-fab-clearance);');
+        const bar = css.indexOf(':root:has([data-solo-bottom-action]) {\n    --shell-dock: var(--solo-bottom-action-clearance);');
+        const reset = css.slice(css.indexOf('@media (min-width: 768px)', bar));
 
         expect(fab).toBeGreaterThan(-1);
         expect(bar).toBeGreaterThan(fab);
-        expect(reset).toContain(':root:has([data-solo-fab]),');
-        expect(reset).toContain(':root:has([data-solo-bottom-action]),');
+        expect(reset).toMatch(/:root:root \{\n\s*--shell-dock: 0px;\n\s*--shell-strip: 0px;/);
     });
 });
 
-describe('FloatingButton on phones', () => {
-    test('both the button and the link carry the marker the page layout reserves room for', async () => {
-        const { FloatingButton, FloatingButtonLink } = await import('./floating-button');
-        expect(renderToStaticMarkup(<FloatingButton>+ Zasób</FloatingButton>)).toContain('data-solo-fab=""');
-        expect(renderToStaticMarkup(<FloatingButtonLink href="/x">+ Zasób</FloatingButtonLink>)).toContain('data-solo-fab=""');
-    });
-
-    test('a page with one ends below the button, which itself sits on the tab bar clearance at its own height', async () => {
+describe('the room a fixed phone bar takes', () => {
+    test('a page with a marked bar ends below it: the shell pads by the tab bar, the dock, the strip and the helper', async () => {
         const css = await Bun.file(new URL('../../../css/solo.css', import.meta.url)).text();
-        const fab = (await Bun.file(new URL('./mobile.module.css', import.meta.url)).text()).match(/\.fab \{([^}]*)\}/)?.[1] ?? '';
 
-        expect(fab).toContain('bottom: var(--solo-tab-bar-clearance);');
-        expect(fab).toContain('height: var(--solo-fab-height);');
         expect(css).toContain('--solo-fab-clearance: calc(var(--solo-fab-height) + var(--solo-space-4));');
         expect(css).toContain(
-            '[data-day]:has([data-solo-tab-bar]):has([data-solo-fab]) {\n    padding-bottom: calc(var(--solo-tab-bar-clearance) + var(--solo-fab-clearance));',
+            '[data-shell] {\n    padding-bottom: calc(var(--solo-tab-bar-clearance) + var(--shell-dock) + var(--shell-strip) + var(--shell-helper));',
         );
     });
 });
@@ -399,22 +404,20 @@ describe('SegmentedControl at 320 px', () => {
         expect(item).toContain('white-space: normal;');
         expect(item).toContain('text-align: center;');
         expect(item).toMatch(/flex: 1 1 auto;[\s\S]*min-width: 0;/);
-        const lineHeight = Number(item.match(/font: 500 var\(--solo-text-control\) \/ ([\d.]+)/)?.[1]);
+        const lineHeight = Number(item.match(/font: 600 var\(--solo-text-control\) \/ ([\d.]+)/)?.[1]);
         expect(2 * lineHeight * 14).toBeLessThanOrEqual(44);
     });
 });
 
 describe('KvRow field rows', () => {
-    test('on Paper phones the label sits left and its value right, Boring SaaS stacks them, and the label column comes back from 768 px', async () => {
+    test('on phones the label sits left and its value right, and the label column comes back from 768 px', async () => {
         const css = await Bun.file(new URL('./kv-row.module.css', import.meta.url)).text();
-        const tokens = await Bun.file(new URL('../../../css/solo.css', import.meta.url)).text();
         const wideAt = css.indexOf('@media (min-width: 768px)', css.indexOf('Field row on phones'));
         const phone = css.slice(0, wideAt).match(/\n\.row\[data-layout='column'\] \{([^}]*)\}/)?.[1] ?? '';
         const wide = css.slice(wideAt).match(/\.row\[data-layout='column'\] \{([^}]*)\}/)?.[1] ?? '';
 
-        expect(phone).toContain('flex-direction: var(--solo-kv-flow, row);');
-        expect(css.slice(0, wideAt)).toMatch(/\.row\[data-layout='column'\] \.value \{[^}]*text-align: var\(--solo-kv-value-align, right\);/);
-        expect(tokens).toMatch(/:root\[data-theme='boring-saas'\] \{[^}]*--solo-kv-flow: column;/);
+        expect(phone).toContain('flex-direction: row;');
+        expect(css.slice(0, wideAt)).toMatch(/\.row\[data-layout='column'\] \.value \{[^}]*text-align: right;/);
         expect(css.slice(0, wideAt)).not.toMatch(/\.row\[data-layout='column'\] \.label \{[^}]*flex-basis: \d+px/);
         expect(wide).toContain('flex-direction: row;');
         expect(css.slice(wideAt)).toMatch(/\.row\[data-layout='column'\] \.label \{\s*flex: 0 0 200px;/);
@@ -435,7 +438,6 @@ describe('display caps leading', () => {
         const rules = [
             ['./client-header.module.css', /@media \(min-width: 768px\) \{[\s\S]*?\n {4}\.name \{([^}]*)\}/],
             ['./primitives.module.css', /\.poster \{([^}]*)\}/],
-            ['../../pages/auth/login.module.css', /\.title \{([^}]*)\}/],
         ] as const;
 
         for (const [file, rule] of rules) {
@@ -473,6 +475,28 @@ describe('Month card and Stop', () => {
         expect(currentWeek(october(9))).toBe(1);
         expect(currentWeek(october(0))).toBe(0);
         expect(currentWeek(october(null))).toBe(4);
+    });
+
+    test('the whole month numbers every day in its state, starts under its weekday and names four states in the legend', () => {
+        const html = renderToStaticMarkup(<MonthCalendar month={{ ...october(9), closed: 6 }} />);
+        const cells = [...html.matchAll(/<span role="listitem"[^>]*data-state="(\w+)"[^>]*>(\d+)<\/span>/g)].map(([, state, day]) => [
+            Number(day),
+            state,
+        ]);
+
+        expect(html).toContain('6 z 22 dni zamkniętych');
+        expect(cells).toHaveLength(31);
+        expect(cells[0]).toEqual([1, 'open']);
+        expect(cells[9]).toEqual([10, 'today']);
+        expect(cells[30]).toEqual([31, 'future']);
+        expect(html.match(/<span aria-hidden="true"><\/span>/g)).toHaveLength(3);
+        expect(html.replace(/<[^>]+>/g, '|')).toContain('zamknięty||||otwarty||||dziś||||przed nami');
+    });
+
+    test('the month tile opens the whole month from its button, which says it opens a dialog', () => {
+        const html = renderToStaticMarkup(<MonthCard look="tile" month={october(9)} />);
+
+        expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*>Cały miesiąc<\/button>/);
     });
 
     test('once today is closed the compact card keeps its week, not the last weekend of the month', () => {
@@ -565,7 +589,7 @@ describe('Month card and Stop', () => {
         expect(css).toMatch(/\.popover \.grid \{\s*grid-template-columns: repeat\(7, var\(--solo-tile-size\)\);/);
     });
 
-    test('closed days are ink with a paper tick on paper, paper with an ink tick at night, cream with the surface colour on timer and done, the red accent in Boring SaaS', async () => {
+    test('closed days are ink with a paper tick on paper, paper with an ink tick at night, cream with the surface colour on timer and done', async () => {
         const css = await Bun.file(new URL('../../../css/solo.css', import.meta.url)).text();
         const block = (selector: string) => css.match(new RegExp(`${selector.replace(/[[\]()*.'=]/g, '\\$&')} \\{([^}]*)\\}`))?.[1] ?? '';
         const tile = (body: string) => [body.match(/--solo-tile-done: ([^;]+);/)?.[1], body.match(/--solo-tile-tick: ([^;]+);/)?.[1]];
@@ -573,10 +597,6 @@ describe('Month card and Stop', () => {
         expect(tile(block('[data-day]'))).toEqual(['var(--solo-ink)', 'var(--solo-paper)']);
         expect(tile(block(".dark [data-day='paper']"))).toEqual(['var(--solo-paper)', 'var(--solo-ink)']);
         expect(tile(block("[data-day='timer'],\n[data-day='done']"))).toEqual(['var(--solo-paper)', 'var(--solo-on-accent)']);
-        expect(tile(block(":root[data-theme='boring-saas'] [data-day]"))).toEqual([
-            'var(--color-destructive)',
-            'var(--color-destructive-foreground)',
-        ]);
     });
 
     test('the Stop look draws its own square, so a caller passes only the label', () => {
@@ -589,13 +609,7 @@ describe('Month card and Stop', () => {
         expect(ink).not.toContain('<svg');
     });
 
-    test('the running time inside the task page Stop takes the button colour, not the muted grey', async () => {
-        const css = await Bun.file(new URL('../../pages/tasks/components/task-page/task-page.module.css', import.meta.url)).text();
-
-        expect(css.match(/\.timerElapsed \{([^}]*)\}/)?.[1]).toContain('color: inherit;');
-    });
-
-    test('Stop fills with the surface ink, not the brand colour Boring SaaS gives ink buttons', async () => {
+    test('Stop fills with the surface ink', async () => {
         const css = await Bun.file(new URL('./primitives.module.css', import.meta.url)).text();
 
         expect(
@@ -609,14 +623,7 @@ describe('Month card and Stop', () => {
 
 describe('the A2f row hover', () => {
     test('a hovered row clears its own cut only between rows, so the last row keeps the list end under every theme', async () => {
-        const files = [
-            './task-row.module.css',
-            './waiting-row.module.css',
-            './mobile.module.css',
-            '../../pages/settings/components/tab.module.css',
-            '../../pages/clients/index.module.css',
-            '../../pages/contacts/index.module.css',
-        ];
+        const files = ['./task-row.module.css', './mobile.module.css'];
 
         for (const file of files) {
             const css = await Bun.file(new URL(file, import.meta.url)).text();

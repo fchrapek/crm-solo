@@ -13,6 +13,7 @@ use App\Models\ClientMonthSettlementEvent;
 use App\Models\ClientRetainer;
 use App\Models\OutboundMessage;
 use App\Models\Project;
+use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Services\Clients\Fields\ClientFieldsQuery;
 use App\Support\LocalCalendar;
@@ -56,6 +57,49 @@ final class ClientJournalQuery
         ];
     }
 
+    /**
+     * The tasks a time entry of this client can be tied to, the ones touched last first.
+     *
+     * @return list<array{id: int, name: string, project_name: string|null}>
+     */
+    public function taskOptions(Client $client): array
+    {
+        return Task::query()
+            ->whereHas('project', fn ($q) => $q->where('client_id', $client->id)->where('account_id', $client->account_id))
+            ->whereNull('archived_at')
+            ->with('project:id,name')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->limit(200)
+            ->get()
+            ->map(fn (Task $task): array => ['id' => $task->id, 'name' => $task->name, 'project_name' => $task->project?->name])
+            ->all();
+    }
+
+    /**
+     * @return array{stage: string, since: string|null, retainer_from: string|null}
+     */
+    public function stage(Client $client): array
+    {
+        $stage = (string) ($client->lifecycle_stage ?? 'active');
+        $entered = $client->lifecycleEvents()
+            ->where('account_id', $client->account_id)
+            ->where('to_stage', $stage)
+            ->where(fn ($q) => $q->whereNull('from_stage')->orWhereColumn('from_stage', '!=', 'to_stage'))
+            ->value('created_at');
+        $retainer = ClientRetainer::query()
+            ->where('client_id', $client->id)
+            ->where('account_id', $client->account_id)
+            ->leadingOn(LocalCalendar::todayDate())
+            ->value('effective_from');
+
+        return [
+            'stage' => $stage,
+            'since' => $entered !== null ? $this->localDate(CarbonImmutable::parse($entered, 'UTC')) : null,
+            'retainer_from' => $retainer !== null ? CarbonImmutable::parse($retainer)->toDateString() : null,
+        ];
+    }
+
     /** @return array<string, mixed> */
     private function summary(Client $client, CarbonImmutable $since): array
     {
@@ -79,6 +123,7 @@ final class ClientJournalQuery
             'stage' => $this->stage($client),
             'period' => $period,
             'projects' => $this->projects($client, $period),
+            'tasks' => $this->taskOptions($client),
         ];
     }
 
@@ -113,7 +158,7 @@ final class ClientJournalQuery
             ->where('account_id', $client->account_id)
             ->whereIn('id', $shown->pluck('entry_ids')->flatten())
             ->with('task:id,name')
-            ->get(['id', 'task_id', 'title', 'description', 'start_time', 'end_time', 'duration_minutes', 'actor_via'])
+            ->get(['id', 'task_id', 'title', 'description', 'start_time', 'end_time', 'duration_minutes', 'actor_via', 'billable'])
             ->keyBy('id');
         $events = ClientLifecycleEvent::query()
             ->where('account_id', $client->account_id)
@@ -182,6 +227,15 @@ final class ClientJournalQuery
             'running' => $members->contains(fn (TimeEntry $entry): bool => $entry->end_time === null),
             'writes' => $row['session'] !== null ? ($writes[$row['session']] ?? 0) : null,
             'is_new' => $this->isNew($row['at'], $since),
+            'entry' => $members->count() === 1 && $lead->end_time !== null ? [
+                'id' => $lead->id,
+                'title' => $lead->title,
+                'description' => $lead->description,
+                'task_id' => $lead->task_id,
+                'start_time' => $lead->start_time?->toIso8601String(),
+                'end_time' => $lead->end_time->toIso8601String(),
+                'billable' => (bool) $lead->billable,
+            ] : null,
         ];
     }
 
@@ -284,30 +338,6 @@ final class ClientJournalQuery
                 ->values()
                 ->all(),
             'next' => $more ? (string) $floor->getTimestamp() : null,
-        ];
-    }
-
-    /**
-     * @return array{stage: string, since: string|null, retainer_from: string|null}
-     */
-    private function stage(Client $client): array
-    {
-        $stage = (string) ($client->lifecycle_stage ?? 'active');
-        $entered = $client->lifecycleEvents()
-            ->where('account_id', $client->account_id)
-            ->where('to_stage', $stage)
-            ->where(fn ($q) => $q->whereNull('from_stage')->orWhereColumn('from_stage', '!=', 'to_stage'))
-            ->value('created_at');
-        $retainer = ClientRetainer::query()
-            ->where('client_id', $client->id)
-            ->where('account_id', $client->account_id)
-            ->leadingOn(LocalCalendar::todayDate())
-            ->value('effective_from');
-
-        return [
-            'stage' => $stage,
-            'since' => $entered !== null ? $this->localDate(CarbonImmutable::parse($entered, 'UTC')) : null,
-            'retainer_from' => $retainer !== null ? CarbonImmutable::parse($retainer)->toDateString() : null,
         ];
     }
 

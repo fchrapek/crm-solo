@@ -359,6 +359,47 @@ final class ClientTasksTest extends TestCase
         $this->assertSame(1, TimeEntry::count());
     }
 
+    public function test_a_row_names_its_project_and_the_projects_carry_their_open_tasks(): void
+    {
+        $board = Project::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'name' => 'Board', 'trello_board_id' => 'board-1']);
+        $this->task('On the site', 'Doing');
+        Task::create(['project_id' => $board->id, 'name' => 'On the board', 'source' => 'manual', 'list_name' => 'To-Do']);
+        Task::create(['project_id' => $board->id, 'name' => 'Also on the board', 'source' => 'manual', 'list_name' => 'Doing']);
+
+        $tasks = app(ClientTasksQuery::class)->props($this->client->fresh())['tasks'];
+
+        $this->assertSame(['On the site' => 'Site', 'Also on the board' => 'Board'], collect($tasks['lanes'][0]['rows'])->pluck('project', 'name')->all());
+        $this->assertSame([
+            ['id' => $board->id, 'name' => 'Board', 'open' => 2, 'is_private' => false],
+            ['id' => $this->project->id, 'name' => 'Site', 'open' => 1, 'is_private' => true],
+        ], array_values(array_filter($tasks['projects'], fn (array $project): bool => $project['name'] !== 'General')));
+        $this->assertSame(0, collect($tasks['projects'])->firstWhere('name', 'General')['open']);
+    }
+
+    public function test_done_tasks_come_newest_first_with_their_time_five_at_a_time_until_asked_for_all(): void
+    {
+        foreach (range(1, 7) as $i) {
+            $this->task("Done {$i}", 'Doing', ['finished_at' => Carbon::parse("2026-10-0{$i} 12:00:00", 'UTC')]);
+        }
+        $newest = Task::where('name', 'Done 7')->firstOrFail();
+        TimeEntry::create([
+            'account_id' => $this->account->id, 'client_id' => $this->client->id, 'project_id' => $this->project->id, 'task_id' => $newest->id,
+            'user_id' => $this->user->id, 'start_time' => Carbon::parse('2026-10-07 10:00:00', 'UTC'), 'end_time' => Carbon::parse('2026-10-07 11:10:00', 'UTC'),
+            'duration_minutes' => 70,
+        ]);
+        $this->task('Still open', 'Doing');
+
+        $done = app(ClientTasksQuery::class)->props($this->client->fresh())['tasks']['done'];
+        $all = app(ClientTasksQuery::class)->props($this->client->fresh(), 'done')['tasks'];
+
+        $this->assertSame(7, $done['count']);
+        $this->assertSame(['Done 7', 'Done 6', 'Done 5', 'Done 4', 'Done 3'], array_column($done['rows'], 'name'));
+        $this->assertSame([true, '2026-10-07', 70, 'Site'], [$done['rows'][0]['done'], $done['rows'][0]['done_on'], $done['rows'][0]['minutes'], $done['rows'][0]['project']]);
+        $this->assertSame('done', $all['expanded']);
+        $this->assertCount(7, $all['done']['rows']);
+        $this->assertSame(['Still open'], array_column($all['lanes'][0]['rows'], 'name'));
+    }
+
     /**
      * @return list<array{key: string, count: int, rows: list<array<string, mixed>>}>
      */

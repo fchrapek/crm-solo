@@ -1,21 +1,21 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { DoneList } from './index';
+import { Tile } from '@/components/solo/tile';
+import { PlanRows } from './summary';
 import { picks } from './story-fixtures';
 
-/** Figma: Podsumowanie, the picks as Done rows in the accent block. */
+/** Figma: Podsumowanie, the day's picks in the plan tile. */
 const meta = {
     title: 'Dziś/Podsumowanie list',
-    component: DoneList,
+    component: PlanRows,
     args: { picks, timers: [] },
-    globals: { day: 'done' },
     decorators: [
         (Story) => (
-            <div style={{ maxWidth: 760 }}>
+            <Tile kind="list" style={{ maxWidth: 640 }}>
                 <Story />
-            </div>
+            </Tile>
         ),
     ],
-} satisfies Meta<typeof DoneList>;
+} satisfies Meta<typeof PlanRows>;
 
 export default meta;
 
@@ -23,6 +23,6 @@ type Story = StoryObj<typeof meta>;
 
 export const Phone: Story = {};
 
-export const Desktop: Story = { globals: { day: 'done', viewport: { value: 'desktop', isRotated: false } } };
+export const Desktop: Story = { globals: { viewport: { value: 'desktop', isRotated: false } } };
 
 export const AllDone: Story = { args: { picks: picks.slice(0, 2) } };

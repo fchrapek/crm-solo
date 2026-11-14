@@ -25,6 +25,12 @@ final class PeriodSettled extends RuntimeException
         parent::__construct("Time on {$day} is settled ({$reason} {$month}).");
     }
 
+    /** Why the task's reportable flag cannot change while a finalized or sent report counts it. */
+    public function reportableRefusal(): string
+    {
+        return __('This task counts in the finalized or sent report for :month. Reopen the report to change whether it counts.', ['month' => LocalCalendar::monthName($this->month)]);
+    }
+
     /** Why the task or project holding this time cannot be deleted; a task is archived instead. */
     public function deleteRefusal(bool $project = false): string
     {

@@ -28,7 +28,7 @@ final class MonthSettlementTest extends TestCase
         $this->retainer(30, '2026-01-01');
     }
 
-    public function test_closing_from_entries_freezes_the_live_figures_and_writes_one_event(): void
+    public function test_closing_an_unreported_month_freezes_the_live_figures_and_writes_one_event(): void
     {
         $this->entry('2026-09-10 08:00:00', 600);
         $this->entry('2026-09-11 08:00:00', 120, reportable: false);
@@ -38,13 +38,13 @@ final class MonthSettlementTest extends TestCase
         $closure = ClientMonthClosure::query()->sole();
         $this->assertSame('2026-09', $closure->period);
         $this->assertSame($this->user->id, $closure->closed_by_user_id);
-        $this->assertSame('entries', $closure->snapshot['source']);
+        $this->assertSame('billed', $closure->snapshot['source']);
         $this->assertNull($closure->snapshot['report_id']);
         $this->assertEquals(30, $closure->snapshot['contracted']);
         $this->assertEquals(10, $closure->snapshot['used']);
         $this->assertEquals(20, $closure->snapshot['closing']);
         $this->assertEquals(12, $closure->snapshot['logged']);
-        $this->assertSame(1, $closure->snapshot['schema_version']);
+        $this->assertSame(2, $closure->snapshot['schema_version']);
 
         $event = ClientMonthSettlementEvent::query()->sole();
         $this->assertSame(ClientMonthSettlementEvent::ACTION_CLOSE, $event->action);
@@ -78,7 +78,7 @@ final class MonthSettlementTest extends TestCase
 
     public function test_a_draft_reports_hours_are_authoritative_and_live_entries_ride_along_as_information(): void
     {
-        $report = $this->report('2026-09', opening: 0, contracted: 30, actual: 32);
+        $report = $this->report('2026-09', opening: 0, contracted: 30, actual: 32, backed: true);
         $this->entry('2026-09-10 08:00:00', 2190);
 
         $preview = $this->settlement()->preview($this->client, '2026-09');
@@ -96,7 +96,7 @@ final class MonthSettlementTest extends TestCase
     public function test_the_sent_report_governs_when_a_month_has_two(): void
     {
         $this->report('2026-09', opening: 0, contracted: 30, actual: 5);
-        $sent = $this->report('2026-09', opening: 0, contracted: 30, actual: 28, status: ClientReport::STATUS_SENT);
+        $sent = $this->report('2026-09', opening: 0, contracted: 30, actual: 28, status: ClientReport::STATUS_SENT, backed: true);
 
         $this->close('2026-09')->assertSessionHas('success');
 
@@ -153,6 +153,14 @@ final class MonthSettlementTest extends TestCase
         $this->assertSame(0, ClientMonthClosure::query()->count());
     }
 
+    public function test_a_timer_still_running_from_before_the_month_blocks_the_close_too(): void
+    {
+        $this->entry('2026-08-28 09:00:00', 0, running: true);
+
+        $this->close('2026-09')->assertSessionHas('error', 'Stop the timer running for September 2026 first.');
+        $this->assertSame(0, ClientMonthClosure::query()->count());
+    }
+
     public function test_figures_that_moved_since_the_preview_refuse_the_close(): void
     {
         $stale = $this->settlement()->preview($this->client, '2026-09')['hash'];
@@ -182,7 +190,7 @@ final class MonthSettlementTest extends TestCase
     public function test_a_later_report_sent_between_the_preview_and_the_close_refuses_the_close(): void
     {
         $this->travelTo(Carbon::parse('2026-11-20 10:00:00', 'UTC'));
-        $october = $this->report('2026-10', opening: 0, contracted: 30, actual: 4, status: ClientReport::STATUS_FINALIZED);
+        $october = $this->report('2026-10', opening: 0, contracted: 30, actual: 4, status: ClientReport::STATUS_FINALIZED, backed: true);
         $october->update(['status' => ClientReport::STATUS_DRAFT, 'finalized_at' => null]);
         $hash = $this->hash('2026-09');
 

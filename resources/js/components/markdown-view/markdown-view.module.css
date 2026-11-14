@@ -1,3 +1,16 @@
+/* the app reset strips bullets everywhere; :where keeps this below a caller's own `.x ul` rule */
+.view :where(ul, ol) {
+    padding-left: 1.5em;
+}
+
+.view :where(ul) {
+    list-style: disc;
+}
+
+.view :where(ol) {
+    list-style: decimal;
+}
+
 /* a list of tasks only sits flush; ordinary items in a mixed list keep their bullets and indent */
 .view :global(.contains-task-list:not(:has(> li:not(.task-list-item)))) {
     margin-left: 0;
@@ -21,7 +34,7 @@
     width: 1em;
     height: 1em;
     margin: 0 0.5em 0 0;
-    border: var(--solo-check-width, 1.5px) solid var(--solo-check-border, currentColor);
+    border: 1.5px solid currentColor;
     border-radius: 3px;
     vertical-align: middle;
     color: inherit;
@@ -30,14 +43,14 @@
 }
 
 .view :global(.task-list-item input[type='checkbox']:checked) {
-    border-color: var(--solo-primary, currentColor);
-    background: var(--solo-primary, currentColor);
+    border-color: currentColor;
+    background: currentColor;
 }
 
 .view :global(.task-list-item input[type='checkbox']:checked)::before {
     content: '✓';
-    color: var(--solo-on-primary, var(--solo-bg, var(--color-background)));
+    color: var(--solo-bg, var(--color-background));
     font-size: 0.75em;
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1;
 }

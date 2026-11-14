@@ -1,51 +1,9 @@
-.page {
-    min-height: 100vh;
-}
-
-.frame {
-    max-width: var(--solo-grid-max);
-    margin: 0 auto;
-    padding-inline: var(--solo-grid-margin);
-    padding-bottom: var(--solo-space-8);
-}
-
-/* the day screens sit on the shared record split (components/solo/split): the head and the day in the main column, the month in the side */
-.grid {
-    padding-top: var(--solo-page-top, var(--solo-space-7));
-}
-
-/* one-line metas truncate instead of widening a column */
-.head,
-.main,
-.rail {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-content: start;
-    min-width: 0;
-}
-
-.head {
-    gap: 18px;
-    margin-bottom: var(--solo-space-5);
-}
-
-.main {
-    gap: var(--solo-space-5);
-}
-
-.rail {
-    gap: var(--solo-space-7);
-    margin-top: var(--solo-space-7);
-}
-
-@media (min-width: 768px) {
-    .grid {
-        padding-top: var(--solo-page-top, 80px);
-    }
-
-    .rail {
-        margin-top: 0;
-    }
+/* The timer focus view (/?widok=timer): the earlier content on a vermilion tile inside the shell, until its fate is decided. */
+.timer {
+    padding: var(--role-space-24) var(--role-space-16);
+    border-radius: var(--role-radius-lg);
+    background: var(--role-tile-timer);
+    color: var(--role-text-on-colour);
 }
 
 .list {
@@ -60,172 +18,11 @@
     display: none;
 }
 
-/* Paper keeps the add row inside the block; Boring SaaS puts it below */
-.addItem {
-    display: var(--solo-add-inline, flex);
-    padding: var(--solo-space-3) var(--solo-row-inset, 0);
-    list-style: none;
-}
-
-.card {
-    padding: var(--solo-card-pad, 0);
-    border: var(--solo-card-width, 0) solid var(--solo-card-border, transparent);
-    border-radius: var(--solo-card-radius, 0);
-    background: var(--solo-card, none);
-    box-shadow: var(--solo-card-shadow, none);
-}
-
-/* with no rows yet the section is only its head, and the add row below belongs to it, so no card is drawn */
-.card:not(:has(li:not(.addItem))) {
-    padding: 0;
-    border-width: 0;
-    background: none;
-    box-shadow: none;
-}
-
-.addRow {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--solo-space-3);
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--solo-fg-muted);
-    font: 500 var(--solo-text-action) / 1.3 var(--solo-font-text);
-    cursor: pointer;
-}
-
-/* the task above the add row is the list's last one under Boring SaaS */
-.list > li:has(+ .addItem) {
-    --solo-hover-rule: var(--solo-add-cut, transparent);
-    border-bottom-color: var(--solo-add-cut, var(--solo-rule));
-}
-
-.addBelow {
-    display: var(--solo-add-below, none);
-}
-
-/* Figma A2f / Free slots: a dashed outline the width of the column */
-.slot {
-    margin: 0;
-    border: 1px dashed var(--solo-slot-edge, var(--solo-rule));
-    border-radius: var(--solo-slot-radius, var(--solo-radius-lg));
-    padding: 14px var(--solo-space-4);
-    font-size: var(--solo-text-sub);
-    color: var(--solo-fg-muted);
-    text-decoration: none;
-}
-
-a.slot:hover {
-    color: var(--solo-fg);
-}
-
-.quiet,
-.note {
-    margin: 0;
-    font-size: var(--solo-text-sub);
-    color: var(--solo-fg-muted);
-}
-
-.subLine {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--solo-space-1) var(--solo-space-4);
-    align-items: baseline;
-}
-
-.weekSwitch {
-    justify-self: start;
-}
-
-.pickActions {
-    display: contents;
-}
-
-.dayMenu {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--solo-link, var(--solo-fg));
-    cursor: pointer;
-}
-
-.subAction {
-    font-size: var(--solo-text-sub);
-    font-weight: 500;
-}
-
-/* a Bottom action's wrapper: on phones the bar is fixed above the tab bar and leaves no gap in the column */
-.actions.barSlot {
-    display: contents;
-}
-
-@media (min-width: 768px) {
-    .actions.barSlot {
-        display: flex;
-    }
-
-    .planAction {
-        margin-top: var(--solo-space-3);
-    }
-}
-
-/* Plan jutro: the head spans the page above the split; Propozycje and the way to the full list sit beside the list from 768 px and below it on phones */
-.headApart {
-    margin-bottom: var(--solo-space-6);
-}
-
-.suggestions {
-    gap: var(--solo-space-4);
-    margin-top: var(--solo-space-6);
-}
-
-@media (min-width: 768px) {
-    .headApart {
-        margin-bottom: var(--solo-space-7);
-    }
-
-    .suggestions {
-        margin-top: 0;
-    }
-}
-
-.allTasks {
-    justify-self: start;
-    color: var(--solo-fg);
-    font: 600 var(--solo-text-meta) / normal var(--solo-font-text);
-    text-decoration: none;
-}
-
-.allTasks:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-}
-
-.allTasks:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
-    outline-offset: 3px;
-    border-radius: var(--solo-radius-xs);
-}
-
 .actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--solo-space-5);
-}
-
-.late {
-    color: var(--solo-late);
-    font-size: var(--solo-text-meta);
-    white-space: nowrap;
-}
-
-.error {
-    margin: 0;
-    font-size: var(--solo-text-action);
-    font-weight: 600;
-    color: var(--solo-late);
 }
 
 /* Timer A2: the task, its clock and the start time in the main column; the day's queue, the total and Stop beside it */
@@ -268,7 +65,7 @@ a.slot:hover {
 
 .where {
     overflow: hidden;
-    font-weight: 500;
+    font-weight: 400;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -285,10 +82,10 @@ a.slot:hover {
     gap: var(--solo-space-2);
     margin: 0;
     font-family: var(--solo-font-display);
-    font-stretch: var(--solo-display-stretch, 62%);
-    font-weight: var(--solo-display-weight, 900);
+    font-stretch: 62%;
+    font-weight: 900;
     line-height: 0.86;
-    letter-spacing: var(--solo-display-tracking, -0.02em);
+    letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
 }
 
@@ -317,6 +114,10 @@ a.slot:hover {
 }
 
 @media (min-width: 768px) {
+    .timer {
+        padding: var(--role-space-32) var(--role-space-24);
+    }
+
     .timerMain {
         gap: var(--solo-space-5);
     }
@@ -335,261 +136,5 @@ a.slot:hover {
 
     .timerSide {
         margin-top: 0;
-    }
-}
-
-/* Boring SaaS draws GOTOWE? at its own 237 px on wide screens */
-@media (min-width: 1100px) {
-    .doneHead {
-        --solo-poster-display: var(--solo-done-poster, 9.5rem);
-    }
-}
-
-.body {
-    margin: 0;
-    font-size: var(--solo-text-control);
-    line-height: 1.4;
-}
-
-.main section + section {
-    margin-top: var(--solo-card-stack, var(--solo-space-6));
-}
-
-/* Podsumowanie's side column: calendar, day status (with Zamknij dzień before a close), JUTRO and its line, the main action; on the column's edge and none in a box */
-.summaryRail {
-    gap: var(--solo-space-6);
-    margin-top: var(--solo-space-5);
-}
-
-.status,
-.tomorrow {
-    display: grid;
-    gap: var(--solo-space-3);
-    justify-items: start;
-}
-
-.tomorrow {
-    justify-items: stretch;
-}
-
-/* Section head Inset=None: no padding under the label either */
-.tomorrow > .headTight {
-    padding-bottom: 0;
-}
-
-.tomorrow > a {
-    justify-self: start;
-}
-
-/* Figma: A2f / Day status */
-.dayStatus {
-    display: flex;
-    align-items: center;
-    gap: var(--solo-space-2);
-    margin: 0;
-    font: 500 var(--solo-text-control) / 1.3 var(--solo-font-text);
-}
-
-.dayStatus [data-icon] {
-    flex: none;
-}
-
-/* Dziś's side column holds only the calendar, which phones do not draw */
-.wideRail {
-    display: none;
-}
-
-@media (min-width: 768px) {
-    .wideRail {
-        display: grid;
-    }
-
-    .summaryRail {
-        margin-top: 0;
-    }
-
-    .phoneOnly {
-        display: none;
-    }
-}
-
-/* a ghost action that starts a column sits on the column edge; a boxed ghost keeps its inset */
-.actions .flush {
-    padding-left: var(--solo-flush-inset, 0);
-}
-
-/* the running row on the default day list; on phones the clock sits above Stop in the row's end column */
-.running {
-    display: grid;
-    grid-template-columns: auto auto;
-    justify-content: end;
-    justify-items: end;
-    align-items: center;
-    gap: var(--solo-space-1) var(--solo-space-2);
-}
-
-.running > :last-child {
-    grid-column: 1 / -1;
-}
-
-@media (min-width: 768px) {
-    .running {
-        display: inline-flex;
-        gap: var(--solo-space-3);
-    }
-}
-
-.liveDot {
-    flex: none;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--solo-tile-now);
-    box-shadow: 0 0 0 4px var(--solo-line-quiet, var(--solo-rule));
-}
-
-.elapsed {
-    font-size: var(--solo-button-md);
-    font-weight: 700;
-    color: var(--solo-fg);
-    font-variant-numeric: tabular-nums;
-}
-
-/* Wszystkie zadania: the list under the record header, about 40 px between client groups */
-.listGrid {
-    padding-top: var(--solo-space-1);
-}
-
-.group {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-}
-
-.main .group + .group {
-    margin-top: var(--solo-space-4);
-}
-
-.countEnd {
-    display: none;
-}
-
-.more {
-    justify-self: start;
-    margin-top: var(--solo-space-4);
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--solo-fg-muted);
-    font: 500 var(--solo-text-control) / 1.3 var(--solo-font-text);
-    cursor: pointer;
-}
-
-.more:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-}
-
-.more:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
-    outline-offset: 3px;
-    border-radius: var(--solo-radius-xs);
-}
-
-.wideOnly {
-    display: none;
-}
-
-/* phones: the whole row picks (the action covers it, its label unseen), and a picked row is the List row Active fill */
-.pickRow > :last-child {
-    display: contents;
-}
-
-.pickAction {
-    position: absolute;
-    inset: 0;
-    border-radius: var(--solo-row-radius, 0);
-    color: transparent;
-}
-
-.pickAction:hover {
-    text-decoration: none;
-}
-
-/* a full day leaves the row to its title link */
-.pickAction:disabled {
-    pointer-events: none;
-}
-
-.pickAction:focus-visible {
-    outline-offset: -2px;
-    border-radius: var(--solo-row-radius, 0);
-}
-
-/* a pick for another day names that action on phones too; the whole row still picks */
-.pickAction.named {
-    position: static;
-    color: var(--solo-link, var(--solo-fg));
-    font-weight: 500;
-}
-
-.pickAction.named::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: var(--solo-row-radius, 0);
-}
-
-.pickRow:has(.picked) {
-    border-radius: var(--solo-row-radius, 0);
-    background: var(--solo-soft);
-}
-
-.picked {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-}
-
-@media (min-width: 768px) {
-    .listGrid {
-        padding-top: var(--solo-space-5);
-    }
-
-    .countInline {
-        display: none;
-    }
-
-    .countEnd {
-        display: inline;
-    }
-
-    .pickRow > :last-child {
-        display: flex;
-    }
-
-    .pickAction {
-        position: static;
-        color: var(--solo-link, var(--solo-fg));
-        font-weight: 500;
-    }
-
-    .pickAction:hover {
-        text-decoration: underline;
-    }
-
-    .picked {
-        position: static;
-        width: auto;
-        height: auto;
-        clip-path: none;
-        color: var(--solo-fg-muted);
-        font: 500 var(--solo-text-control) / normal var(--solo-font-text);
-    }
-
-    .wideOnly {
-        display: inline;
     }
 }

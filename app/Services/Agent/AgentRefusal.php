@@ -24,6 +24,13 @@ final class AgentRefusal extends RuntimeException
 
     public const string FEATURE_OFF = 'feature_off';
 
+    public const string REPORT_EXISTS = 'report_exists';
+
+    public const string NOT_A_DRAFT = 'not_a_draft';
+
+    /** The UI's own service said no; the message says why, as the page would. */
+    public const string REFUSED = 'refused';
+
     /**
      * @param  array<string, mixed>  $context
      */

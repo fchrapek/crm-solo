@@ -71,7 +71,6 @@ final class TaskCompletionParityTest extends TestCase
             'is_completed' => true,
             'list_name' => 'Done',
             'finished_at' => '2026-09-16 08:00:00',
-            'successors' => 1,
             'timer_stopped' => true,
             'minutes' => 2,
         ];
@@ -94,7 +93,6 @@ final class TaskCompletionParityTest extends TestCase
             'is_completed' => false,
             'list_name' => 'Testing',
             'finished_at' => '2026-09-16 08:00:00',
-            'successors' => 1,
             'timer_stopped' => true,
             'minutes' => 2,
         ];
@@ -103,17 +101,22 @@ final class TaskCompletionParityTest extends TestCase
         }
     }
 
-    public function test_a_recurring_task_passes_its_report_visibility_to_the_next_one(): void
+    public function test_no_path_makes_a_next_task_from_a_task_that_still_carries_a_recurrence_interval(): void
     {
-        $reportable = $this->manualTask('Monthly audit');
-        $reportable->update(['is_reportable' => true]);
-        $hidden = $this->manualTask('Monthly updates');
+        $tasks = [
+            ...collect($this->paths(withListMove: true))->map(fn (Closure $tick, string $path) => [$tick, $this->manualTask("Manual {$path}")]),
+            ...collect($this->paths(withListMove: false))->map(fn (Closure $tick, string $path) => [$tick, $this->trelloTask("Card {$path}")])->values(),
+        ];
+        Task::query()->update(['recurrence_period_days' => 7]);
+        $before = Task::count();
 
-        $this->artisan('crm:task-done', ['task' => (string) $reportable->id])->assertSuccessful();
-        $this->artisan('crm:task-done', ['task' => (string) $hidden->id])->assertSuccessful();
+        foreach ($tasks as [$tick, $task]) {
+            $tick($task);
+            $this->assertNotNull($task->fresh()->finished_at, $task->name);
+            $this->assertSame(7, (int) $task->fresh()->recurrence_period_days, $task->name);
+        }
 
-        $this->assertTrue($reportable->fresh()->latestOpenSuccessor()->is_reportable);
-        $this->assertFalse($hidden->fresh()->latestOpenSuccessor()->is_reportable);
+        $this->assertSame($before, Task::count());
     }
 
     public function test_repeating_done_on_a_finished_task_stops_its_timer_and_changes_nothing_else(): void
@@ -128,7 +131,6 @@ final class TaskCompletionParityTest extends TestCase
 
             $this->assertNotNull($entry->fresh()->end_time, "Path {$path}.");
             $this->assertSame('2026-09-16 08:00:00', $task->fresh()->finished_at->toDateTimeString(), "Path {$path}.");
-            $this->assertSame(1, Task::where('parent_task_id', $task->id)->count(), "Path {$path}.");
             Carbon::setTestNow(Carbon::parse('2026-09-16 08:00:00', 'UTC'));
         }
     }
@@ -146,7 +148,7 @@ final class TaskCompletionParityTest extends TestCase
         }
     }
 
-    public function test_two_finishes_from_stale_copies_make_one_successor_and_keep_the_first_date(): void
+    public function test_two_finishes_from_stale_copies_keep_the_first_date(): void
     {
         $task = $this->manualTask('Weekly');
         $first = Task::findOrFail($task->id);
@@ -157,20 +159,7 @@ final class TaskCompletionParityTest extends TestCase
         $result = app(TaskCompletion::class)->finish($second);
 
         $this->assertTrue($result->wasAlreadyDone);
-        $this->assertSame(1, Task::where('parent_task_id', $task->id)->count());
         $this->assertSame('2026-09-16 08:00:00', $task->fresh()->finished_at->toDateTimeString());
-    }
-
-    public function test_untick_and_tick_again_reuses_the_waiting_successor(): void
-    {
-        $task = $this->manualTask('Weekly');
-        $completion = app(TaskCompletion::class);
-
-        $completion->finish($task);
-        $completion->unfinish($task);
-        $completion->finish($task);
-
-        $this->assertSame(1, Task::where('parent_task_id', $task->id)->count());
     }
 
     public function test_an_untick_is_refused_when_the_sync_completed_the_card_after_the_check(): void
@@ -189,81 +178,6 @@ final class TaskCompletionParityTest extends TestCase
             $this->assertArrayHasKey('task_id', $e->errors());
         }
         $this->assertNotNull($task->fresh()->finished_at);
-    }
-
-    public function test_changing_the_interval_between_finishes_still_makes_one_successor(): void
-    {
-        $task = $this->manualTask('Interval');
-        $completion = app(TaskCompletion::class);
-
-        $completion->finish($task);
-        $completion->unfinish($task);
-        $task->update(['recurrence_period_days' => 14]);
-        $completion->finish($task);
-
-        $this->assertSame(1, Task::where('recurrence_predecessor_id', $task->id)->count());
-        $this->assertSame(1, Task::where('parent_task_id', $task->id)->count());
-    }
-
-    public function test_a_recurring_chain_keeps_going(): void
-    {
-        $a = $this->manualTask('Chain');
-        $completion = app(TaskCompletion::class);
-
-        $completion->finish($a);
-        $b = Task::where('recurrence_predecessor_id', $a->id)->sole();
-        $completion->finish($b);
-        $c = Task::where('recurrence_predecessor_id', $b->id)->sole();
-
-        $this->assertSame($b->id, $c->parent_task_id);
-        $this->assertSame($c->id, $b->fresh()->latestOpenSuccessor()?->id);
-        $this->assertFalse($c->is_completed);
-    }
-
-    public function test_the_backfill_links_only_unambiguous_successors(): void
-    {
-        $single = $this->manualTask('Single');
-        $double = $this->manualTask('Double');
-        $child = fn (Task $parent, int $days) => Task::create([
-            'project_id' => $this->manualProject->id, 'name' => $parent->name, 'source' => 'manual',
-            'parent_task_id' => $parent->id, 'recurrence_period_days' => $days,
-        ]);
-        $only = $child($single, 7);
-        $child($single, 30);
-        $child($double, 7);
-        $child($double, 7);
-
-        \Illuminate\Support\Facades\Schema::table('tasks', function ($table): void {
-            $table->dropUnique(['recurrence_predecessor_id']);
-            $table->dropColumn('recurrence_predecessor_id');
-        });
-        (require database_path('migrations/2026_10_01_140200_add_recurrence_predecessor_id_to_tasks_table.php'))->up();
-
-        $this->assertSame($single->id, $only->fresh()->recurrence_predecessor_id);
-        $this->assertSame(1, Task::whereNotNull('recurrence_predecessor_id')->count());
-    }
-
-    public function test_a_historical_successor_is_linked_even_after_the_interval_changed(): void
-    {
-        $parent = $this->manualTask('Weekly');
-        $completion = app(TaskCompletion::class);
-        $completion->finish($parent);
-        // Before the link existed: the successor carries no predecessor, and the parent moved to 14 days.
-        Task::where('parent_task_id', $parent->id)->update(['recurrence_predecessor_id' => null]);
-        $parent->update(['recurrence_period_days' => 14]);
-        $ambiguous = $this->manualTask('Twice');
-        foreach ([1, 2] as $copy) {
-            Task::create(['project_id' => $this->manualProject->id, 'name' => 'Twice', 'source' => 'manual', 'parent_task_id' => $ambiguous->id, 'recurrence_period_days' => 7]);
-        }
-
-        (require database_path('migrations/2026_10_01_180100_link_recurrence_successors_across_interval_changes.php'))->up();
-
-        $this->assertSame(1, Task::where('recurrence_predecessor_id', $parent->id)->count());
-        $this->assertSame(0, Task::where('recurrence_predecessor_id', $ambiguous->id)->count());
-
-        $completion->unfinish($parent);
-        $completion->finish($parent);
-        $this->assertSame(1, Task::where('parent_task_id', $parent->id)->count());
     }
 
     public function test_moving_a_trello_card_between_lanes_from_the_crm_stays_refused(): void
@@ -337,7 +251,6 @@ final class TaskCompletionParityTest extends TestCase
     {
         return Task::create([
             'project_id' => $this->manualProject->id, 'name' => $name, 'source' => 'manual', 'list_name' => 'Doing',
-            'recurrence_period_days' => 7,
         ]);
     }
 
@@ -345,7 +258,7 @@ final class TaskCompletionParityTest extends TestCase
     {
         return Task::create([
             'project_id' => $this->trelloProject->id, 'name' => $name, 'source' => 'trello', 'trello_card_id' => 'card-'.md5($name),
-            'list_name' => 'Testing', 'recurrence_period_days' => 7,
+            'list_name' => 'Testing',
         ]);
     }
 
@@ -369,7 +282,6 @@ final class TaskCompletionParityTest extends TestCase
             'is_completed' => (bool) $task->is_completed,
             'list_name' => $task->list_name,
             'finished_at' => $task->finished_at?->toDateTimeString(),
-            'successors' => Task::where('parent_task_id', $task->id)->count(),
             'timer_stopped' => $entry->end_time !== null,
             'minutes' => (int) $entry->duration_minutes,
         ];

@@ -18,6 +18,7 @@ use App\Services\Agent\TaskRecord;
 use App\Support\LegalName;
 use App\Support\LocalCalendar;
 use Carbon\CarbonInterface;
+use Inertia\Inertia;
 
 /**
  * The props of the task page (Figma: Zadanie). Read only; every write the
@@ -50,6 +51,7 @@ final class TaskPage
             'resources' => $this->resources($task),
             'activity' => $this->activity->forTask($task, $activityLimit, $viewer->id),
             'live' => $this->activity->live($task),
+            'parent_options' => Inertia::optional(fn (): array => $this->parentOptions($task)),
             'clock' => [
                 'today' => LocalCalendar::today()->toDateString(),
                 'now' => now()->toIso8601String(),
@@ -81,6 +83,7 @@ final class TaskPage
             'is_overdue' => $task->isOverdue(),
             'labels' => $task->labels,
             'priority' => $task->priority,
+            'is_reportable' => (bool) $task->is_reportable,
             'parent_task_id' => $task->parent_task_id,
             'parent_task' => $task->parentTask ? ['id' => $task->parentTask->id, 'name' => $task->parentTask->name] : null,
             'child_tasks' => $task->childTasks->map(fn (Task $child): array => [
@@ -114,6 +117,23 @@ final class TaskPage
                 'label' => $a->label,
             ])->values(),
         ];
+    }
+
+    /**
+     * The tasks the edit form offers as a parent: the project's own, without this one.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    private function parentOptions(Task $task): array
+    {
+        return Task::query()
+            ->where('project_id', $task->project_id)
+            ->whereNull('archived_at')
+            ->whereKeyNot($task->id)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (Task $option): array => ['id' => $option->id, 'name' => $option->name])
+            ->all();
     }
 
     /**

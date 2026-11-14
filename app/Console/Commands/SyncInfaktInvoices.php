@@ -44,7 +44,9 @@ final class SyncInfaktInvoices extends Command
             $this->info("Processing account ID: {$integration->account_id}");
 
             try {
-                $stats = (new InfaktService($integration))->syncInvoices($integration->account_id, $since);
+                $service = new InfaktService($integration);
+                $stats = $service->syncInvoices($integration->account_id, $since);
+                $stats['drafts_gone'] = config('app.demo') ? 0 : $service->forgetDeletedDrafts($integration->account_id);
             } catch (InfaktApiException $e) {
                 $this->error("Infakt API error: {$e->userMessage()}");
 
@@ -57,6 +59,7 @@ final class SyncInfaktInvoices extends Command
                     ['Created', $stats['created']],
                     ['Updated', $stats['updated']],
                     ['Errors', $stats['errors']],
+                    ['Drafts deleted in Infakt', $stats['drafts_gone']],
                 ]
             );
         }

@@ -3,7 +3,7 @@
     margin-bottom: var(--spacing-2);
     font-size: var(--font-size-sm);
     line-height: var(--line-height-snug);
-    font-weight: 500;
+    font-weight: 400;
 }
 
 .label:has(+ :disabled),
@@ -22,16 +22,16 @@
     color: var(--solo-fg-muted);
     font-family: var(--solo-font-text);
     font-size: var(--solo-text-meta);
-    font-weight: 500;
+    font-weight: 400;
     line-height: normal;
 }
 
 @media (min-width: 768px) {
     :global([data-day]) .label {
-        font-size: var(--solo-label-size, var(--solo-text-meta));
-        font-weight: var(--solo-label-weight, 400);
-        letter-spacing: var(--solo-label-tracking, 0);
-        text-transform: var(--solo-label-case, none);
+        font-size: var(--solo-text-meta);
+        font-weight: 400;
+        letter-spacing: 0;
+        text-transform: none;
     }
 }
 

@@ -57,7 +57,7 @@
     justify-content: space-between;
     gap: var(--solo-space-3) var(--solo-space-5);
     padding-top: 22px;
-    font: 500 var(--solo-text-control) / normal var(--solo-font-text);
+    font: 600 var(--solo-text-control) / normal var(--solo-font-text);
 }
 
 .soloSummary {
@@ -107,7 +107,39 @@ a.soloPage:hover {
 
 .soloStep:focus-visible,
 .soloPage:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline: 2px solid var(--solo-fg);
     outline-offset: 3px;
     border-radius: var(--solo-radius-xs);
+}
+
+/* Tile look (Figma: Pagination of the redesign): the phone drops the page figure */
+.tile {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--role-space-12);
+    padding: var(--role-space-12);
+}
+
+.tileSummary {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.tilePages {
+    display: flex;
+    align-items: center;
+    gap: var(--role-space-12);
+}
+
+.tilePage {
+    display: none;
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+@media (min-width: 768px) {
+    .tilePage {
+        display: inline;
+    }
 }

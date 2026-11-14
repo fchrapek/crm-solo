@@ -1,4 +1,4 @@
-import type { ClientCooperationType, MonthCloseType, ReportMode } from '@/types';
+import type { ClientCooperationType, LifecycleStage, MonthCloseType, ReportMode } from '@/types';
 
 export interface ClientDetails {
     type: 'business' | 'individual';
@@ -10,6 +10,7 @@ export interface ClientDetails {
     address: string | null;
     postal_code: string | null;
     city: string | null;
+    region: string | null;
     country: string | null;
     cooperation_type: ClientCooperationType | null;
     month_close_type: MonthCloseType;
@@ -22,6 +23,7 @@ export interface ClientDetails {
     ssh_config: string | null;
     maintenance_invoice_description: string | null;
     report_baseline_markdown: string | null;
+    notes: string | null;
     archived: boolean;
 }
 
@@ -44,4 +46,20 @@ export interface ClientContactRow {
     email: string | null;
     phone: string | null;
     position: string | null;
+}
+
+/** Where the relationship stands: the stage, the day it began and the day the current retainer began. */
+export interface ClientStage {
+    stage: LifecycleStage;
+    since: string | null;
+    retainer_from: string | null;
+}
+
+/** A live project of the client as Dane lists it. */
+export interface DetailsProject {
+    id: number;
+    name: string;
+    is_private: boolean;
+    include_in_month_close: boolean;
+    repositories: number;
 }

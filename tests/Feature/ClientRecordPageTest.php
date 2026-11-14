@@ -91,31 +91,32 @@ final class ClientRecordPageTest extends TestCase
         $this->actingAs($this->user)->get("/clients/{$this->client->id}/Dane")->assertNotFound();
     }
 
-    public function test_the_edit_page_still_resolves_beside_the_tab_route_and_the_old_create_address_opens_the_dialog_on_klienci(): void
+    public function test_the_old_edit_address_opens_the_record_and_the_old_create_address_opens_the_dialog_on_klienci(): void
     {
         $this->actingAs($this->user)
             ->get("/clients/{$this->client->id}/edit")
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->component('clients/edit'));
+            ->assertRedirect("/clients/{$this->client->id}/przeglad");
+
+        $this->actingAs($this->user)
+            ->get("/clients/{$this->client->id}/edit?invoice_year=all")
+            ->assertRedirect("/clients/{$this->client->id}/przeglad");
 
         $this->actingAs($this->user)
             ->get('/clients/create')
             ->assertRedirect('/clients?nowy=1');
     }
 
-    public function test_the_documents_and_settings_page_keeps_what_has_no_record_tab_and_drops_the_overview(): void
+    public function test_the_record_tabs_carry_what_the_documents_and_settings_page_held(): void
     {
-        $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/edit")
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('clients/edit')
-                ->hasAll(['client', 'projects', 'reports', 'reportComposers', 'reportBaselineMarkdown',
-                    'invoices', 'invoiceFilters', 'revenue', 'timeEntries', 'clientTasks', 'lifecycleEvents', 'retainers', 'documents'])
-                ->missing('overview'));
+        $props = fn (string $tab): array => $this->actingAs($this->user)->get("/clients/{$this->client->id}/{$tab}")->assertOk()->viewData('page')['props'];
+
+        $this->assertArrayHasKey('billing_invoices', $props('rozliczenia'));
+        $this->assertEmpty(array_diff(['details', 'projects', 'documents', 'contacts', 'stage'], array_keys($props('dane'))));
+        $this->assertEmpty(array_diff(['journal', 'journal_work', 'journal_notes'], array_keys($props('dziennik'))));
+        $this->assertArrayHasKey('projects', $props('zadania')['tasks']);
     }
 
-    public function test_another_accounts_client_has_no_documents_and_settings_page(): void
+    public function test_another_accounts_client_has_no_old_edit_address(): void
     {
         $this->actingAs($this->user)->get("/clients/{$this->stranger->id}/edit")->assertNotFound();
     }
@@ -170,6 +171,20 @@ final class ClientRecordPageTest extends TestCase
         $this->assertSame('1234567890', $client->tax_id);
     }
 
+    public function test_the_data_tab_carries_notes_and_region_so_the_dialog_can_change_them(): void
+    {
+        $this->actingAs($this->user)
+            ->put("/clients/{$this->client->id}", ['type' => 'business', 'name' => $this->client->name, 'notes' => 'Woli telefon rano.', 'region' => 'mazowieckie'])
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($this->user)
+            ->get("/clients/{$this->client->id}/dane")
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('details.notes', 'Woli telefon rano.')
+                ->where('details.region', 'mazowieckie')
+            );
+    }
+
     public function test_an_archived_client_still_opens_its_record_marked_archived(): void
     {
         $this->client->delete();
@@ -203,6 +218,27 @@ final class ClientRecordPageTest extends TestCase
                 ->where('details.cooperation_type', 'retainer')
                 ->where('details.month_close_type', 'maintenance')
                 ->where('details.infakt_id', '10000123')
+            );
+    }
+
+    public function test_the_data_tab_carries_the_relationship_stage_and_the_live_projects_with_their_repositories(): void
+    {
+        $account = $this->client->account_id;
+        $this->client->update(['lifecycle_stage' => 'paused']);
+        $board = Project::create(['account_id' => $account, 'client_id' => $this->client->id, 'name' => 'Sklep', 'trello_board_id' => 'board-1', 'include_in_month_close' => true]);
+        $private = Project::create(['account_id' => $account, 'client_id' => $this->client->id, 'name' => 'Galeria']);
+        Project::create(['account_id' => $account, 'client_id' => $this->client->id, 'name' => 'Stary', 'archived_at' => now()]);
+        Project::create(['account_id' => $this->stranger->account_id, 'client_id' => $this->stranger->id, 'name' => 'Obcy']);
+        \App\Models\Repository::create(['project_id' => $board->id, 'name' => 'sklep', 'local_path' => '/Users/test/dev/sklep', 'provider' => 'local']);
+
+        $this->actingAs($this->user)
+            ->get("/clients/{$this->client->id}/dane")
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('stage.stage', 'paused')
+                ->where('projects', fn ($projects) => collect($projects)->where('name', '!=', 'General')->values()->all() === [
+                    ['id' => $private->id, 'name' => 'Galeria', 'is_private' => true, 'include_in_month_close' => false, 'repositories' => 0],
+                    ['id' => $board->id, 'name' => 'Sklep', 'is_private' => false, 'include_in_month_close' => true, 'repositories' => 1],
+                ])
             );
     }
 

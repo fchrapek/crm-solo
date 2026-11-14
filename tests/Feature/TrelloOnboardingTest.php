@@ -340,7 +340,7 @@ final class TrelloOnboardingTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->user)
-            ->from("/clients/{$client->id}/edit")
+            ->from("/clients/{$client->id}/dane")
             ->post("/projects/{$target->id}/connect-trello", [
                 'mode' => 'link',
                 'trello_board_id' => 'b_taken',

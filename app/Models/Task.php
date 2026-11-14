@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Casts\TaskDescription;
+use App\Services\Clients\BilledTime;
+use App\Services\Clients\ClientFinancialLock;
 use App\Services\Integrations\Trello\TrelloListMapper;
 use App\Services\Time\TimeEntryWriter;
 use App\Support\LocalCalendar;
@@ -13,7 +15,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -50,6 +51,7 @@ final class Task extends Model
         'trello_due_complete',
         'trello_activity_at',
         'trello_move_pending_at',
+        'trello_skipped',
         'name',
         'description',
         'list_name',
@@ -71,12 +73,16 @@ final class Task extends Model
         'priority',
         'ai_priority',
         'ai_priority_reasoning',
-        'recurrence_period_days',
         'parent_task_id',
-        'recurrence_predecessor_id',
         'archived_at',
         'issue_url',
     ];
+
+    /** Whether a new task on $clientId's projects starts reportable: it does while the client has an active retainer. */
+    public static function reportableByDefault(?int $clientId): bool
+    {
+        return $clientId !== null && ClientRetainer::query()->where('client_id', $clientId)->leadingOn(LocalCalendar::todayDate())->exists();
+    }
 
     public function resolveRouteBinding($value, $field = null): ?Model
     {
@@ -175,16 +181,23 @@ final class Task extends Model
                 ->where(fn (Builder $q) => $q->whereNull($project->qualifyColumn('client_id'))->orWhereHas('client')));
     }
 
+    /** Leaves out a card archived in a skipped Trello column, unless it was finished before it was filed there. */
+    public function scopeWork(Builder $query): void
+    {
+        $query->where(fn (Builder $q) => $q->where($query->qualifyColumn('trello_skipped'), false)
+            ->orWhereNotNull($query->qualifyColumn('finished_at')));
+    }
+
     /** A synced card: Trello owns its title, description, list and completion. */
     public function hasTrelloCard(): bool
     {
         return $this->trello_card_id !== null;
     }
 
-    /** Done for the owner: ticked in the CRM, or completed on its board. */
+    /** Done for the owner: ticked in the CRM, or completed on its board unless filed in a skipped column (scopeWork). */
     public function isDone(): bool
     {
-        return $this->finished_at !== null || (bool) $this->is_completed;
+        return $this->finished_at !== null || ((bool) $this->is_completed && ! $this->trello_skipped);
     }
 
     /**
@@ -222,12 +235,13 @@ final class Task extends Model
 
     /**
      * Whether a CRM untick can make this task open again. A card completed
-     * on its board stays done whatever the CRM clears, so only Trello reopens it.
+     * on its board stays done whatever the CRM clears, so only Trello reopens it,
+     * unless it sits in a skipped column, where its board completion is no work.
      */
     public function canUnfinish(): bool
     {
         return $this->hasTrelloCard()
-            ? $this->finished_at !== null && ! $this->is_completed
+            ? $this->finished_at !== null && (! $this->is_completed || $this->trello_skipped)
             : $this->isDone();
     }
 
@@ -247,60 +261,6 @@ final class Task extends Model
     }
 
     /**
-     * The newest open task spawned from this one — what a caller reports back
-     * after completing a recurring task.
-     */
-    public function latestOpenSuccessor(): ?self
-    {
-        return self::query()
-            ->where('recurrence_predecessor_id', $this->id)
-            ->where('is_completed', false)
-            ->orderByDesc('id')
-            ->first();
-    }
-
-    /**
-     * If this task has a recurrence period, create the next instance dated
-     * `period_days` after today. Carries over the CLI choice so the new task
-     * is immediately ready to launch on its due date, and whether it shows in
-     * client reports. One next instance per task: a repeated finish, or an
-     * untick and a tick again, keeps the one it already made, even once that
-     * one is itself done.
-     */
-    public function spawnRecurringInstance(): void
-    {
-        if ($this->recurrence_period_days === null || $this->recurrence_period_days <= 0) {
-            return;
-        }
-
-        // Open or already done, the next instance exists: a re-finish never adds another,
-        // whatever the interval is now. The unique column settles a race.
-        if (self::query()->where('recurrence_predecessor_id', $this->id)->exists()) {
-            return;
-        }
-
-        try {
-            self::create([
-                'project_id' => $this->project_id,
-                'name' => $this->name,
-                'description' => $this->description,
-                'list_name' => 'To-Do',
-                'due_date' => LocalCalendar::today()->addDays($this->recurrence_period_days)->toDateString(),
-                'priority' => $this->priority,
-                'source' => 'manual',
-                'is_reviewed' => true,
-                'is_completed' => false,
-                'recurrence_period_days' => $this->recurrence_period_days,
-                'is_reportable' => (bool) $this->is_reportable,
-                'parent_task_id' => $this->id,
-                'recurrence_predecessor_id' => $this->id,
-            ]);
-        } catch (UniqueConstraintViolationException) {
-            // Another finish of this task spawned it first.
-        }
-    }
-
-    /**
      * Cascade hook — when a parent is deleted, null out children's
      * parent_task_id so we never leave dangling references. Mirrors the DB
      * FK's ON DELETE SET NULL but works portably across drivers (SQLite tests
@@ -309,9 +269,25 @@ final class Task extends Model
      */
     protected static function booted(): void
     {
+        self::creating(function (Task $task): void {
+            if ($task->getAttribute('is_reportable') === null) {
+                $task->is_reportable = self::reportableByDefault(Project::query()->whereKey($task->project_id)->value('client_id'));
+            }
+        });
+
+        // Before the row is written, so the client locks come first, as in every billing write.
+        self::updating(function (Task $task): void {
+            if ($task->isDirty('is_reportable')) {
+                app(BilledTime::class)->taskCountChanged($task);
+            }
+        });
+
         self::deleting(function (Task $task): void {
-            // Logged time outlives the task, still billed to its project and client; time in a settled period refuses the delete.
-            app(TimeEntryWriter::class)->detachTask($task);
+            // Logged time outlives the task, still billed to its project and client; time or a figure in a settled period refuses the delete.
+            app(ClientFinancialLock::class)->clients(BilledTime::clientsOfTask($task), function () use ($task): void {
+                app(BilledTime::class)->forgetTask($task);
+                app(TimeEntryWriter::class)->detachTask($task);
+            });
 
             self::query()
                 ->where('parent_task_id', $task->id)
@@ -336,6 +312,7 @@ final class Task extends Model
             'trello_due_complete' => 'boolean',
             'trello_activity_at' => 'datetime',
             'trello_move_pending_at' => 'datetime',
+            'trello_skipped' => 'boolean',
             'finished_at' => 'datetime',
             'is_reviewed' => 'boolean',
             'is_reportable' => 'boolean',

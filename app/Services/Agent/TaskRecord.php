@@ -6,10 +6,12 @@ namespace App\Services\Agent;
 
 use App\Models\Task;
 use App\Models\TaskAttachment;
+use App\Models\TaskBilledMonth;
 use App\Models\TaskBrief;
 use App\Models\TaskLink;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\Clients\BilledTime;
 use App\Services\Integrations\Trello\TrelloListMapper;
 use App\Services\Tasks\CardDescription;
 use Illuminate\Support\Facades\Storage;
@@ -99,6 +101,7 @@ final class TaskRecord
             'is_overdue' => $task->isOverdue(),
             'done' => $task->isDone(),
             'archived' => $task->isArchived(),
+            'reportable' => (bool) $task->is_reportable,
             'trello' => $task->hasTrelloCard(),
             'card_url' => $task->hasTrelloCard() ? $task->trello_url : null,
             'untrusted' => self::untrustedListKeys($task, ['name', 'project', 'list', 'card_url']),
@@ -164,6 +167,7 @@ final class TaskRecord
             'name' => (string) $task->name,
             'state' => $this->state($task),
             'finished_at' => $task->finished_at?->toIso8601String(),
+            'reportable' => (bool) $task->is_reportable,
             'card_lane' => $task->hasTrelloCard() ? $task->list_name : null,
             'due' => $task->dueDay(),
             'is_overdue' => $task->isOverdue(),
@@ -324,18 +328,25 @@ final class TaskRecord
     }
 
     /**
-     * @return array{minutes: int, running_timer: array{entry_id: int, started_at: string|null}|null}
+     * Real minutes logged, the running timer, and the billed hours stated per month (a month without one bills the
+     * task's real time; `crm task-billed` shows both values).
+     *
+     * @return array{minutes: int, reportable_minutes: int, running_timer: array{entry_id: int, started_at: string|null}|null, billed: list<array{period: string, client_id: int, hours: float}>}
      */
     private function time(Task $task): array
     {
         $running = TimeEntry::query()->where('task_id', $task->id)->whereNull('end_time')->orderByDesc('start_time')->first();
+        $minutes = (int) TimeEntry::query()->where('task_id', $task->id)->whereNotNull('end_time')->sum('duration_minutes');
 
         return [
-            'minutes' => (int) TimeEntry::query()->where('task_id', $task->id)->whereNotNull('end_time')->sum('duration_minutes'),
+            'minutes' => $minutes,
+            'reportable_minutes' => $task->is_reportable ? $minutes : 0,
             'running_timer' => $running !== null ? [
                 'entry_id' => (int) $running->id,
                 'started_at' => $running->start_time?->toIso8601String(),
             ] : null,
+            'billed' => TaskBilledMonth::query()->where('task_id', $task->id)->orderBy('period')->get(['period', 'client_id', 'billed_minutes'])
+                ->map(fn (TaskBilledMonth $row): array => ['period' => $row->period, 'client_id' => (int) $row->client_id, 'hours' => BilledTime::hours($row->billed_minutes)])->values()->all(),
         ];
     }
 }

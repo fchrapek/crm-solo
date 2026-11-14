@@ -6,6 +6,7 @@ namespace App\Services\Clients;
 
 use App\Models\Client;
 use App\Support\LegalName;
+use Illuminate\Support\Facades\Auth;
 
 final class ClientHeader
 {
@@ -31,7 +32,7 @@ final class ClientHeader
             'name' => $client->name,
             'short_name' => LegalName::short($client->name),
             'billing_mode' => $mode,
-            'billing' => $client->account->hasFeature('billing'),
+            'billing' => $client->account->shows('billing', Auth::user()),
             'is_archived' => $client->deleted_at !== null,
             'is_pinned' => $client->is_pinned,
             'open_tasks_count' => $this->tasks->visibleOpenTasks($client, $mode)->count(),

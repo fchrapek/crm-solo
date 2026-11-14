@@ -7,9 +7,9 @@ import { CopyContextAction } from './copy-context-action';
 
 export type OverviewAction = 'copy' | 'report' | 'pin';
 
-/** Desktop reads Kopiuj, Generuj, then the pin menu; the phone ••• menu leads with Generuj raport (Figma 330:1683). An order client has no report (D8). */
+/** From 768 px: Kopiuj, Generuj, the pin. On a phone Kopiuj is the main button, so the "more" menu holds the rest. An order client has no report. */
 export function overviewActionOrder(inMenu: boolean, mode: ClientHeaderData['billing_mode']): OverviewAction[] {
-    const order: OverviewAction[] = inMenu ? ['report', 'copy', 'pin'] : ['copy', 'report', 'pin'];
+    const order: OverviewAction[] = inMenu ? ['report', 'pin'] : ['copy', 'report', 'pin'];
 
     return mode === 'retainer' ? order : order.filter((action) => action !== 'report');
 }

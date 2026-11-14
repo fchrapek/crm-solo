@@ -385,6 +385,106 @@ final class ClientBillingTest extends TestCase
         }
     }
 
+    public function test_the_month_in_the_url_drives_the_screen_and_survives_a_reload(): void
+    {
+        $this->retainer(8);
+        $task = Task::create(['account_id' => $this->account->id, 'project_id' => $this->project->id, 'name' => 'Galeria', 'is_reportable' => true]);
+        $this->entry($task, '2026-08-12 08:00:00', 90);
+        $this->entry($task, '2026-09-12 08:00:00', 30);
+
+        foreach (['2026-08' => 1.5, '2026-09' => 0.5] as $period => $hours) {
+            $month = $this->props("/clients/{$this->client->id}/rozliczenia?miesiac={$period}")['billing_month'];
+
+            $this->assertSame($period, $month['period']);
+            $this->assertSame($period, $month['figures']['period']);
+            $this->assertSame($hours, (float) $month['figures']['real']);
+            $this->assertSame(['Galeria'], array_column($month['figures']['tasks'], 'task'));
+            $this->assertSame(app(\App\Services\Clients\BilledTime::class)->figures($this->client, $period), $month['figures']);
+        }
+    }
+
+    public function test_without_a_month_the_screen_shows_the_month_the_client_owes_next(): void
+    {
+        $this->retainer(8);
+
+        $this->assertSame(app(HoursBank::class)->settlement($this->client)->activePeriod, $this->props("/clients/{$this->client->id}/rozliczenia")['billing_month']['period']);
+    }
+
+    public function test_a_month_that_has_not_started_or_is_no_month_falls_back_to_the_active_one(): void
+    {
+        $this->retainer(8);
+        $active = app(HoursBank::class)->settlement($this->client)->activePeriod;
+
+        foreach (['2026-11', '2026-13', 'wrzesien', ''] as $month) {
+            $this->assertSame($active, $this->props("/clients/{$this->client->id}/rozliczenia?miesiac={$month}")['billing_month']['period']);
+        }
+        $this->assertSame('2026-10', $this->props("/clients/{$this->client->id}/rozliczenia?miesiac=2026-10")['billing_month']['period']);
+    }
+
+    public function test_the_month_carries_its_report_its_invoices_and_its_checklist(): void
+    {
+        $this->retainer(8);
+        $report = $this->report('2026-09', ClientReport::STATUS_DRAFT, contracted: 8, actual: 2);
+        $report->forceFill(['needs_recalculation' => true])->save();
+        $this->invoice('1/09/2026', 'sent', '2026-10-01', '2026-09-30', payment: '2026-10-15');
+        $this->invoice('1/08/2026', 'paid', '2026-09-02', '2026-08-31');
+        $this->invoice('2/09/2026', 'paid', '2026-09-20', null);
+        $this->client->update(['month_close_type' => 'gig', 'include_in_month_close' => true]);
+
+        $month = $this->props("/clients/{$this->client->id}/rozliczenia?miesiac=2026-09")['billing_month'];
+
+        $this->assertSame($report->id, $month['report']['id']);
+        $this->assertSame('draft', $month['report']['status']);
+        $this->assertTrue($month['report']['needs_recalculation']);
+        $this->assertEqualsCanonicalizing(['1/09/2026', '2/09/2026'], array_column($month['invoices'], 'number'));
+        $this->assertSame(['done' => 0, 'total' => count(\App\Models\MonthCloseRun::stepTemplateFor($this->client->refresh()))], $month['checklist']);
+        $this->assertSame([['key' => 'structured_list', 'label' => app(StructuredListComposer::class)->label()]], $month['composers']);
+
+        $august = $this->props("/clients/{$this->client->id}/rozliczenia?miesiac=2026-08")['billing_month'];
+        $this->assertNull($august['report']);
+        $this->assertNull($august['checklist']);
+        $this->assertSame(['1/08/2026'], array_column($august['invoices'], 'number'));
+    }
+
+    public function test_a_started_checklist_counts_its_moved_steps(): void
+    {
+        $this->retainer(8);
+        $this->client->update(['month_close_type' => 'gig', 'include_in_month_close' => true]);
+        $run = \App\Models\MonthCloseRun::startFor($this->client->refresh(), '2026-08');
+        $run->steps()->first()->update(['state' => \App\Models\MonthCloseStep::STATE_DONE]);
+
+        $this->assertSame(['done' => 1, 'total' => $run->steps()->count()], $this->props("/clients/{$this->client->id}/rozliczenia?miesiac=2026-08")['billing_month']['checklist']);
+    }
+
+    public function test_an_order_client_has_no_month_but_keeps_the_whole_invoice_list(): void
+    {
+        $this->dormant->delete();
+        $this->invoice('1/09/2026', 'paid', '2026-09-05', null);
+
+        $props = $this->props("/clients/{$this->client->id}/rozliczenia?miesiac=2026-09");
+
+        $this->assertSame('order', $props['billing']['mode']);
+        $this->assertArrayNotHasKey('billing_month', $props);
+        $this->assertSame(['1/09/2026'], array_column($props['billing_invoices']['rows'], 'number'));
+    }
+
+    public function test_another_accounts_month_is_never_shown(): void
+    {
+        $other = Account::create(['name' => 'Other']);
+        $foreign = $other->clients()->create(['name' => 'Obcy', 'currency' => 'PLN']);
+
+        $this->actingAs($this->user)->get("/clients/{$foreign->id}/rozliczenia?miesiac=2026-09")->assertNotFound();
+    }
+
+    /** @return array<string, mixed> */
+    private function props(string $url): array
+    {
+        $response = $this->actingAs($this->user)->get($url);
+        $response->assertOk();
+
+        return $response->viewData('page')['props'];
+    }
+
     /** @return array<string, mixed> */
     private function billing(): array
     {

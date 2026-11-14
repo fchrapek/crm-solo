@@ -2,7 +2,7 @@ import '../resources/css/app.css';
 
 import { SoloSurface, type DayState } from '@/components/solo/surface';
 import { applyAppearance } from '@/hooks/use-appearance';
-import { ACCENTS, applyAccent, applyTheme, DEFAULT_ACCENT, DEFAULT_THEME, THEMES } from '@/hooks/use-theme';
+import { ACCENTS, applyAccent, applyTheme, DEFAULT_ACCENT } from '@/hooks/use-theme';
 import type { Decorator, Preview } from '@storybook/react-vite';
 import i18next from 'i18next';
 import { I18nextProvider, initReactI18next } from 'react-i18next';
@@ -24,7 +24,7 @@ const translator = (lng: 'pl' | 'en') => {
 const translators = { pl: translator('pl'), en: translator('en') };
 
 const withAppAxes: Decorator = (Story, { globals }) => {
-    applyTheme(globals.theme);
+    applyTheme();
     applyAccent(globals.accent);
     applyAppearance(globals.appearance);
 
@@ -48,7 +48,6 @@ const preview: Preview = {
     decorators: [withAppAxes],
     parameters: { layout: 'fullscreen', viewport: { options: viewports } },
     initialGlobals: {
-        theme: DEFAULT_THEME,
         accent: DEFAULT_ACCENT,
         appearance: 'light',
         locale: 'pl',
@@ -56,9 +55,6 @@ const preview: Preview = {
         viewport: { value: 'phone', isRotated: false },
     },
     globalTypes: {
-        theme: {
-            toolbar: { title: 'Theme', icon: 'paintbrush', dynamicTitle: true, items: THEMES.map((t) => ({ value: t.id, title: t.label })) },
-        },
         accent: {
             toolbar: { title: 'Accent', icon: 'circle', dynamicTitle: true, items: ACCENTS.map((a) => ({ value: a.id, title: a.label })) },
         },

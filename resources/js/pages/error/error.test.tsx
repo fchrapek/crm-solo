@@ -12,13 +12,15 @@ const { default: ErrorPage } = await import('./error');
 await i18next.use(initReactI18next).init({ lng: 'pl', resources: { pl: { translation: pl } }, interpolation: { escapeValue: false } });
 
 describe('the error page', () => {
-    test('a guest gets the code as the poster, one line and a link to log in, with no masthead', () => {
+    test('a guest gets the surprised dog, the code as the poster, one line and a link to log in, with no masthead', () => {
         const html = renderToStaticMarkup(<ErrorPage status={404} />);
 
         expect(html).toContain('data-day="paper"');
         expect(html).toMatch(/<h1[^>]*>404<\/h1>/);
         expect(html).toContain('Tej strony nie ma albo zmieniła adres.');
-        expect(html).toMatch(/href="\/login"[^>]*>Zaloguj się →<\/a>/);
+        expect(html).toMatch(/href="\/login"[^>]*>Zaloguj się<\/a>/);
+        expect(html).toContain('data-pose="wow"');
+        expect(html).toContain('data-guest=""');
         expect(html).not.toContain('<header');
     });
 

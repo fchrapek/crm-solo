@@ -1,7 +1,10 @@
+import { Chip, type ChipStatus } from '@/components/solo/chip';
 import { fieldControl, SoloField, SoloInput } from '@/components/solo/field';
-import { ListRow } from '@/components/solo/list-row';
-import { SectionAction, SectionHead, SoloButton } from '@/components/solo/primitives';
+import { KvRow } from '@/components/solo/kv-row';
+import { Notice } from '@/components/solo/notice';
+import { SectionAction, SoloButton } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
+import { Tile, TileActions, TileHeader, TileNote } from '@/components/solo/tile';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useReverbNotification } from '@/contexts/reverb-context';
 import integrations from '@/routes/integrations';
@@ -11,6 +14,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { IntegrationRow, ServerConfig } from '../types';
 import { useStampLabel } from './format';
+import { TileButton } from './parts';
 import styles from './tab.module.css';
 
 type State = 'connected' | 'off' | 'none';
@@ -29,25 +33,18 @@ function stateOf(integration: IntegrationRow): State {
     return integration.has_api_key || integration.has_trello_api_key ? 'off' : 'none';
 }
 
-/** Figma: Ustawienia / Integracje (206:5280), phones 473:8726. The old integration pages' form lives in Konfiguruj. */
-export function IntegrationsTab({
-    integrations: rows,
-    demo,
-    server,
-    today,
-}: {
-    integrations: IntegrationRow[];
-    demo: boolean;
-    server: ServerConfig | null;
-    today: string;
-}) {
+const WHAT: Record<string, string> = { infakt: 'Invoices and clients', smsapi: 'Text messages' };
+
+const CHIP: Record<State, ChipStatus> = { connected: 'done', off: 'waiting', none: 'open' };
+
+/** Figma: Ustawienia · Integracje (1091:30364, phone 1091:30683). One tile per connection; its form lives in Konfiguruj. */
+export function IntegrationsTab({ integrations: rows, demo, today }: { integrations: IntegrationRow[]; demo: boolean; today: string }) {
     const { t } = useTranslation();
     const stamp = useStampLabel(today);
     const { flash } = usePage<SharedData & { flash?: { syncUuid?: string } }>().props;
     const { addUuid } = useReverbNotification();
     const [configuring, setConfiguring] = useState<string | null>(null);
     const [syncing, setSyncing] = useState<IntegrationRow | null>(null);
-    const connected = rows.filter((row) => stateOf(row) === 'connected').length;
 
     useEffect(() => {
         if (flash?.syncUuid) addUuid(flash.syncUuid);
@@ -55,71 +52,52 @@ export function IntegrationsTab({
 
     if (demo) {
         return (
-            <section className={styles.section}>
-                <SectionHead kind="body" label={t('Connections')} />
-                <p className={styles.note}>
+            <Tile kind="plain">
+                <TileHeader label={t('Connections')} />
+                <TileNote>
                     {t('Integrations are not part of the demo. In your own install they connect Trello, Infakt and your lead forms.')}
-                </p>
-            </section>
+                </TileNote>
+            </Tile>
         );
     }
 
-    const detail = (row: IntegrationRow) => {
-        const what =
-            row.provider === 'trello'
-                ? t('board_count', { count: row.boards ?? 0 })
-                : row.provider === 'infakt'
-                  ? t('Invoices and clients')
-                  : row.provider === 'smsapi'
-                    ? t('Text messages')
-                    : null;
-        const when = !row.syncs ? null : row.last_synced === null ? t('never synced') : t('last sync {{when}}', { when: stamp(row.last_synced) });
-
-        return [what, when].filter(Boolean).join(', ');
-    };
     const canSync = (row: IntegrationRow) => row.syncs && stateOf(row) === 'connected';
     const configured = rows.find((row) => row.provider === configuring) ?? null;
 
     return (
-        <section className={styles.section}>
-            <SectionHead kind="body" label={`${t('Connections')} · ${connected}`} />
-            <ul className={`${styles.list} ${styles.phone}`}>
-                {rows.map((row) => (
-                    <li key={row.provider}>
-                        <ListRow
-                            title={row.name}
-                            sub={`${t(STATE_LABEL[stateOf(row)])} · ${detail(row)}`}
-                            onClick={() => setConfiguring(row.provider)}
-                        />
-                    </li>
-                ))}
-            </ul>
-            <ul className={`${styles.list} ${styles.wide}`}>
-                {rows.map((row) => (
-                    <li key={row.provider} className={styles.row}>
-                        <span className={styles.rowText}>
-                            <span className={styles.rowTitle}>
-                                {row.name}
-                                <span className={`${styles.rowSub} ${styles.state}`} data-state={stateOf(row)}>
-                                    {t(STATE_LABEL[stateOf(row)])}
-                                </span>
-                            </span>
-                            <span className={styles.rowSub}>{detail(row)}</span>
-                            {NOTE[row.provider] && <span className={styles.rowSub}>{t(NOTE[row.provider])}</span>}
-                            {row.last_sync_error && <span className={`${styles.rowSub} ${styles.accent}`}>{row.last_sync_error}</span>}
-                        </span>
-                        <span className={styles.rowEnd}>
-                            <SectionAction onClick={() => setConfiguring(row.provider)}>{t('Configure')}</SectionAction>
-                            {canSync(row) && (
-                                <SoloButton variant="outline" size="sm" onClick={() => setSyncing(row)}>
-                                    {t('Sync')}
-                                </SoloButton>
+        <>
+            {rows.map((row) => (
+                <Tile key={row.provider} kind="plain">
+                    <TileHeader
+                        label={WHAT[row.provider] ? `${row.name} · ${t(WHAT[row.provider])}` : row.name}
+                        end={<Chip status={CHIP[stateOf(row)]}>{t(STATE_LABEL[stateOf(row)])}</Chip>}
+                    />
+                    {NOTE[row.provider] && <TileNote>{t(NOTE[row.provider])}</TileNote>}
+                    {row.last_sync_error && <Notice kind="warn">{row.last_sync_error}</Notice>}
+                    {(row.syncs || row.provider === 'trello') && (
+                        <dl className={styles.kv}>
+                            {row.syncs && (
+                                <KvRow layout="tile" label={t('Last sync')} tone={row.last_synced === null ? 'muted' : undefined}>
+                                    {row.last_synced === null ? t('never synced') : stamp(row.last_synced)}
+                                </KvRow>
                             )}
-                        </span>
-                    </li>
-                ))}
-            </ul>
-            {server !== null && <ServerLine server={server} />}
+                            {row.provider === 'trello' && (
+                                <KvRow layout="tile" label={t('Boards')}>
+                                    {row.boards ?? 0}
+                                </KvRow>
+                            )}
+                        </dl>
+                    )}
+                    <TileActions>
+                        {canSync(row) && (
+                            <SoloButton variant="secondary" size="control" onClick={() => setSyncing(row)}>
+                                {t('Sync')}
+                            </SoloButton>
+                        )}
+                        <TileButton onClick={() => setConfiguring(row.provider)}>{t('Configure')}</TileButton>
+                    </TileActions>
+                </Tile>
+            ))}
 
             <IntegrationDialog
                 integration={configured}
@@ -146,42 +124,29 @@ export function IntegrationsTab({
                     setSyncing(null);
                 }}
             />
-        </section>
+        </>
     );
 }
 
-/** Values set on the server (.env), shown as set or not, never as values. */
-function ServerLine({ server }: { server: ServerConfig }) {
+/** Figma: Z konfiguracji serwera. Values set on the server (.env), shown as set or not, never as values. */
+export function ServerTile({ server }: { server: ServerConfig }) {
     const { t } = useTranslation();
     const forms = server.kiwwwi_forms;
-    const partial = forms.total > 0 && forms.polled < forms.total;
-    const openai = server.openai ? t('key set') : t('no key');
 
     return (
-        <>
-            <p className={`${styles.note} ${styles.wide}`}>
-                {t('From the server configuration, read only')}
-                {'  '}
-                <span className={styles.serverValue}>OpenAI: {openai}</span>
+        <Tile kind="plain">
+            <TileHeader label={t('From the server configuration')} end={t('read only')} />
+            <dl className={styles.kv}>
+                <KvRow layout="tile" label="OpenAI" tone={server.openai ? undefined : 'muted'}>
+                    {server.openai ? t('key set') : t('no key')}
+                </KvRow>
                 {forms.total > 0 && (
-                    <>
-                        {' · '}
-                        <span className={styles.serverValue}>
-                            {t('Kiwwwi forms')}:{' '}
-                            <span className={partial ? styles.accent : undefined}>{t('{{polled}} of {{total}} sites', forms)}</span>
-                        </span>
-                    </>
+                    <KvRow layout="tile" label={t('Kiwwwi forms')}>
+                        {t('{{polled}} of {{total}} sites', forms)}
+                    </KvRow>
                 )}
-            </p>
-            <div className={styles.phone}>
-                {forms.total > 0 && (
-                    <p className={`${styles.note} ${partial ? styles.dot : ''}`}>
-                        {t('Kiwwwi forms')}: {t('{{polled}} of {{total}} sites', forms)}
-                    </p>
-                )}
-                <p className={styles.note}>OpenAI: {openai}</p>
-            </div>
-        </>
+            </dl>
+        </Tile>
     );
 }
 
@@ -197,6 +162,7 @@ function IntegrationDialog({
 }) {
     const { t } = useTranslation();
     const [draft, setDraft] = useState({ api_key: '', trello_api_key: '', is_enabled: false });
+    const [skipped, setSkipped] = useState<string[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [processing, setProcessing] = useState(false);
     const [disconnecting, setDisconnecting] = useState(false);
@@ -205,6 +171,7 @@ function IntegrationDialog({
         setShown(integration);
         if (integration !== null) {
             setDraft({ api_key: '', trello_api_key: '', is_enabled: integration.is_enabled });
+            setSkipped(integration.skipped_lists ?? []);
             setErrors({});
         }
     }
@@ -221,7 +188,7 @@ function IntegrationDialog({
         event.preventDefault();
         if (row === null) return;
         setProcessing(true);
-        router.put(integrations.update(row.provider).url, draft, {
+        router.put(integrations.update(row.provider).url, trello ? { ...draft, settings: { skipped_lists: skipped } } : draft, {
             preserveScroll: true,
             onSuccess: onClose,
             onError: (errs) => setErrors(errs),
@@ -299,6 +266,15 @@ function IntegrationDialog({
                     />
                     {t('Enable this integration')}
                 </label>
+                {trello && (
+                    <SkippedColumns
+                        seen={row.seen_lists ?? []}
+                        value={skipped}
+                        onChange={setSkipped}
+                        error={Object.entries(errors).find(([key]) => key.startsWith('settings.skipped_lists'))?.[1]}
+                        disabled={processing}
+                    />
+                )}
                 {row.client_conflicts.length > 0 && (
                     <div>
                         <p className={styles.message} data-tone="warn">
@@ -342,5 +318,73 @@ function IntegrationDialog({
                 }}
             />
         </>
+    );
+}
+
+const columnKey = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** Trello columns whose cards stay on the board but are not CRM tasks; the sync archives them, by name on every board. */
+export function SkippedColumns({
+    seen,
+    value,
+    onChange,
+    error,
+    disabled,
+}: {
+    seen: string[];
+    value: string[];
+    onChange: (names: string[]) => void;
+    error?: string;
+    disabled: boolean;
+}) {
+    const { t } = useTranslation();
+    const [typed, setTyped] = useState('');
+    const keys = new Set(value.map(columnKey));
+    const seenKeys = new Set(seen.map(columnKey));
+    const names = [...seen, ...value.filter((name) => !seenKeys.has(columnKey(name)))];
+    const toggle = (name: string, on: boolean) => onChange(on ? [...value, name] : value.filter((held) => columnKey(held) !== columnKey(name)));
+    const add = () => {
+        const name = typed.trim().replace(/\s+/g, ' ');
+        if (name !== '' && !keys.has(columnKey(name))) onChange([...value, name]);
+        setTyped('');
+    };
+
+    return (
+        <fieldset className={styles.checks}>
+            <legend>{t('Skipped columns')}</legend>
+            {names.map((name) => (
+                <label key={columnKey(name)} className={styles.check}>
+                    <input type="checkbox" checked={keys.has(columnKey(name))} disabled={disabled} onChange={(e) => toggle(name, e.target.checked)} />
+                    {name}
+                </label>
+            ))}
+            <span className={styles.addRow}>
+                <SoloInput
+                    id="integration-skipped-column"
+                    aria-label={t('Add a column name')}
+                    aria-invalid={error ? true : undefined}
+                    value={typed}
+                    placeholder={t('Add a column name')}
+                    onChange={(e) => setTyped(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            add();
+                        }
+                    }}
+                    maxLength={100}
+                    disabled={disabled}
+                />
+                <SectionAction onClick={add} disabled={disabled || typed.trim() === ''}>
+                    {t('Add')}
+                </SectionAction>
+            </span>
+            <p className={styles.fieldNote}>{t('Cards in these columns stay on Trello and are not tasks in the CRM.')}</p>
+            {error && (
+                <p className={styles.message} data-tone="error">
+                    {error}
+                </p>
+            )}
+        </fieldset>
     );
 }

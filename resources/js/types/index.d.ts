@@ -18,7 +18,6 @@ export interface NavItem {
 export interface Account {
     id: number;
     name: string;
-    is_test: boolean;
     features: { billing: boolean };
 }
 
@@ -180,9 +179,18 @@ interface TranslationStore {
     };
 }
 
+/** The newest running timer, shared with every page for the rail chip and the phone strip. */
+export interface ShellTimer {
+    id: number;
+    started_at: string;
+    task: string | null;
+    client: string | null;
+}
+
 export interface SharedData {
     name: string;
     auth: Auth;
+    timer: ShellTimer | null;
     locale: string;
     translations: TranslationStore | null;
     [key: string]: unknown;

@@ -81,9 +81,6 @@ export default defineConfig(({ mode }) => {
                         // Inertia - the bridge between Laravel and React
                         'vendor-inertia': ['@inertiajs/react'],
 
-                        // Charts library - only needed on pages with charts
-                        'vendor-charts': ['recharts'],
-
                         // i18n - internationalization
                         'vendor-i18n': ['i18next', 'react-i18next', 'i18next-browser-languagedetector', 'i18next-http-backend'],
 

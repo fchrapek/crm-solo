@@ -6,7 +6,7 @@
 }
 
 .total {
-    font-weight: 700;
+    font-weight: 600;
 }
 
 .info {
@@ -22,7 +22,7 @@
     padding-top: var(--solo-space-3);
     color: var(--solo-accent);
     font-size: var(--solo-text-meta);
-    font-weight: 500;
+    font-weight: 400;
     line-height: 1.4;
 }
 

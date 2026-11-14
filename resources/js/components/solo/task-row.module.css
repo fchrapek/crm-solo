@@ -35,24 +35,24 @@
     width: 18px;
     height: 18px;
     padding: 0;
-    border: var(--solo-check-width, 2px) solid var(--solo-check-border, var(--solo-fg));
+    border: 2px solid var(--solo-fg);
     border-radius: var(--solo-radius-sm);
-    background: var(--solo-control-bg, none);
-    color: var(--solo-on-primary, var(--solo-bg));
+    background: none;
+    color: var(--solo-bg);
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
     line-height: 1;
     cursor: pointer;
 }
 
 .check:focus-visible {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline: 2px solid var(--solo-fg);
     outline-offset: 3px;
 }
 
 .done .check {
-    border-color: var(--solo-primary, var(--solo-fg));
-    background: var(--solo-primary, var(--solo-fg));
+    border-color: var(--solo-fg);
+    background: var(--solo-fg);
     cursor: default;
 }
 
@@ -67,7 +67,7 @@
 /* the one-line title keeps at least 8rem; actions that leave less move under it */
 .text {
     position: relative;
-    display: var(--solo-task-text, flex);
+    display: flex;
     flex: 1 1 8rem;
     align-items: baseline;
     gap: var(--solo-space-3);
@@ -86,17 +86,17 @@
 
 /* one line on every width; the full name is the row's tooltip and the task page's title */
 .title {
-    font: 500 var(--solo-mobile-body) / 1.235 var(--solo-font-text);
+    font: 600 var(--solo-mobile-body) / 1.235 var(--solo-font-text);
     white-space: nowrap;
 }
 
 @media (min-width: 768px) {
     .row {
-        --title-line: calc(var(--solo-text-action) * 1.35);
+        --title-line: calc(var(--solo-text-row) * 1.35);
     }
 
     .title {
-        font: 500 var(--solo-text-action) / 1.35 var(--solo-font-text);
+        font: 600 var(--solo-text-row) / 1.35 var(--solo-font-text);
     }
 }
 
@@ -118,9 +118,9 @@
     flex: 0 0 auto;
     gap: 0.4em;
     /* the title gets most of a phone row */
-    max-width: var(--solo-task-meta-max, 30%);
+    max-width: 30%;
     min-width: 0;
-    margin-top: var(--solo-task-meta-top, 0);
+    margin-top: 0;
     font-size: var(--solo-text-meta);
     color: var(--solo-fg-muted);
     white-space: nowrap;
@@ -139,9 +139,9 @@
 }
 
 .project {
-    flex: var(--solo-task-project-flex, 0 1 auto);
+    flex: 0 1 auto;
     min-width: 0;
-    max-width: var(--solo-task-project-max, none);
+    max-width: none;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -182,7 +182,7 @@
 }
 
 .titleLink:focus-visible::after {
-    outline: 2px solid var(--solo-focus, var(--solo-fg));
+    outline: 2px solid var(--solo-fg);
     outline-offset: -2px;
 }
 
@@ -274,7 +274,7 @@
     }
 
     .day .text {
-        display: var(--solo-task-text, flex);
+        display: flex;
     }
 
     .day .check {
@@ -286,8 +286,8 @@
     }
 
     .day .meta {
-        max-width: var(--solo-task-meta-max, 45%);
-        margin-top: var(--solo-task-meta-top, 0);
+        max-width: 45%;
+        margin-top: 0;
     }
 
     .day:has([data-running]) .meta {
@@ -329,7 +329,7 @@
     }
 
     .compact .meta {
-        max-width: var(--solo-task-meta-max, 45%);
+        max-width: 45%;
         font-size: var(--solo-text-meta);
     }
 }
@@ -397,6 +397,6 @@
 
 @media (min-width: 768px) {
     .meta {
-        max-width: var(--solo-task-meta-max, 45%);
+        max-width: 45%;
     }
 }

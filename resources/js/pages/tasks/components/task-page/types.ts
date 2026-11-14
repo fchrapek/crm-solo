@@ -1,3 +1,5 @@
+import type { EditableTimeEntry } from '@/components/time-entry-edit-dialog';
+
 export interface ChildTask {
     id: number;
     name: string;
@@ -24,6 +26,10 @@ export interface TaskData {
     due_date: string | null;
     due_day: string | null;
     is_overdue: boolean;
+    priority: 'low' | 'medium' | 'high' | null;
+    /** Its time and billed figure count in the client's report. */
+    is_reportable: boolean;
+    parent_task_id: number | null;
     parent_task: { id: number; name: string } | null;
     child_tasks: ChildTask[];
     has_trello_card: boolean;
@@ -111,6 +117,8 @@ export interface ActivityRow extends Stamp {
     minutes: number | null;
     text: string | null;
     fields: string[];
+    /** A logged time row's own entry, for the edit dialog. */
+    entry: EditableTimeEntry | null;
 }
 
 export interface TaskActivityPage {
@@ -142,6 +150,8 @@ export interface TaskPageProps {
     activity: TaskActivityPage;
     live: LiveAgent | null;
     clock: TaskClock;
+    /** Sent only when the edit form asks: the project's other tasks. */
+    parent_options?: { id: number; name: string }[];
     [key: string]: unknown;
 }
 

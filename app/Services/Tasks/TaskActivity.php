@@ -125,7 +125,7 @@ final class TaskActivity
             ->orderByDesc('end_time')
             ->orderByDesc('id')
             ->when($take !== null, fn (Builder $query) => $query->limit($take))
-            ->get(['id', 'description', 'title', 'duration_minutes', 'end_time', 'actor_via', 'actor_token_id', 'actor_user_id'])
+            ->get(['id', 'task_id', 'description', 'title', 'duration_minutes', 'start_time', 'end_time', 'billable', 'actor_via', 'actor_token_id', 'actor_user_id'])
             ->map(fn (TimeEntry $entry): array => [
                 ...$this->base(CarbonImmutable::instance($entry->end_time), self::SOURCE_TIME, $entry->id, 0, 'time-'.$entry->id),
                 'kind' => 'time',
@@ -134,6 +134,15 @@ final class TaskActivity
                 'user_id' => $entry->actor_user_id,
                 'minutes' => (int) $entry->duration_minutes,
                 'text' => $this->ownText($entry->description, $task) ?? $this->ownText($entry->title, $task),
+                'entry' => [
+                    'id' => $entry->id,
+                    'title' => $entry->title,
+                    'description' => $entry->description,
+                    'task_id' => $entry->task_id,
+                    'start_time' => $entry->start_time?->toIso8601String(),
+                    'end_time' => $entry->end_time?->toIso8601String(),
+                    'billable' => (bool) $entry->billable,
+                ],
             ]);
     }
 
@@ -309,6 +318,7 @@ final class TaskActivity
             'minutes' => $row['minutes'] ?? null,
             'text' => $row['text'] ?? null,
             'fields' => $row['fields'] ?? [],
+            'entry' => $row['entry'] ?? null,
         ];
     }
 

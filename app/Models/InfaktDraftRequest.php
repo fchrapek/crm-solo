@@ -28,11 +28,20 @@ final class InfaktDraftRequest extends Model
     /** The outcome is unknown; Infakt may hold the draft. Blocks the group until checked. */
     public const string STATUS_UNCONFIRMED = 'unconfirmed';
 
+    public const string SOURCE_RETAINER = 'retainer';
+
+    /** A copy of the Infakt invoice named by source_invoice_uuid (Wystaw podobna). */
+    public const string SOURCE_COPY = 'copy';
+
     protected $fillable = [
         'account_id',
         'client_id',
         'period',
         'invoice_group',
+        'source',
+        'source_invoice_uuid',
+        'source_invoice_number',
+        'project_ids',
         'status',
         'attempt',
         'lease_expires_at',
@@ -58,6 +67,7 @@ final class InfaktDraftRequest extends Model
     {
         return [
             'invoice_group' => 'integer',
+            'project_ids' => 'array',
             'attempt' => 'integer',
             'lease_expires_at' => 'datetime',
         ];

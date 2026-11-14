@@ -35,6 +35,8 @@ final class DemoIntegrationsOffTest extends TestCase
 
     private User $owner;
 
+    private Client $client;
+
     private Project $linked;
 
     private Project $private;
@@ -53,7 +55,7 @@ final class DemoIntegrationsOffTest extends TestCase
 
         $account = Account::factory()->create();
         $this->owner = User::factory()->create(['account_id' => $account->id, 'owner' => true, 'first_name' => 'F', 'last_name' => 'C']);
-        $client = Client::factory()->create(['account_id' => $account->id]);
+        $this->client = $client = Client::factory()->create(['account_id' => $account->id]);
         $this->linked = Project::create(['account_id' => $account->id, 'client_id' => $client->id, 'name' => 'Linked', 'trello_board_id' => 'board-1']);
         $this->private = Project::create(['account_id' => $account->id, 'client_id' => $client->id, 'name' => 'Private']);
         $this->trello = Integration::create([
@@ -85,6 +87,8 @@ final class DemoIntegrationsOffTest extends TestCase
             'sync a project' => ['post', '/projects/{linked}/sync-trello', []],
             'list mapping' => ['put', '/projects/{linked}/trello-list-mapping', ['mapping' => ['list-1' => 'done']]],
             'available boards' => ['get', '/projects/{private}/available-trello-boards', []],
+            'invoices to copy' => ['get', '/clients/{client}/invoice-drafts/sources', []],
+            'invoice draft' => ['post', '/clients/{client}/invoice-drafts', ['period' => '2026-10', 'group' => 1]],
         ];
     }
 
@@ -108,7 +112,7 @@ final class DemoIntegrationsOffTest extends TestCase
     #[DataProvider('absentRoutes')]
     public function test_integration_routes_are_absent_on_the_demo(string $method, string $uri, array $payload): void
     {
-        $uri = str_replace(['{private}', '{linked}'], [(string) $this->private->id, (string) $this->linked->id], $uri);
+        $uri = str_replace(['{private}', '{linked}', '{client}'], [(string) $this->private->id, (string) $this->linked->id, (string) $this->client->id], $uri);
         $settingsBefore = $this->linked->fresh()->settings;
 
         $this->actingAs($this->owner)->json($method, $uri, $payload)->assertNotFound();
@@ -147,14 +151,14 @@ final class DemoIntegrationsOffTest extends TestCase
             ->assertJsonPath('props.integrations', []);
     }
 
-    public function test_the_client_page_offers_no_trello_connection_on_the_demo_even_with_a_configured_row(): void
+    public function test_the_project_page_offers_no_trello_connection_on_the_demo_even_with_a_configured_row(): void
     {
-        $this->actingAs($this->owner)->get("/clients/{$this->linked->client_id}/edit")
+        $this->actingAs($this->owner)->get("/clients/{$this->linked->client_id}/projects/{$this->linked->id}")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page->where('trelloEnabled', false)->where('trelloActions', false));
 
         config(['app.demo' => false]);
-        $this->actingAs($this->owner)->get("/clients/{$this->linked->client_id}/edit")
+        $this->actingAs($this->owner)->get("/clients/{$this->linked->client_id}/projects/{$this->linked->id}")
             ->assertInertia(fn (Assert $page) => $page->where('trelloEnabled', true)->where('trelloActions', true));
     }
 

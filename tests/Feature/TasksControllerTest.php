@@ -376,8 +376,7 @@ final class TasksControllerTest extends TestCase
         ]);
         // Manually wire a cycle A <-> B by setting A.parent_task_id = B.id
         // via direct DB write, sidestepping the controller's protection. This
-        // simulates a row that pre-exists in the DB before the fix shipped
-        // (recurring-instance chains can produce one with enough edits).
+        // simulates a row that pre-exists in the DB before the fix shipped.
         $a->forceFill(['parent_task_id' => $b->id])->saveQuietly();
 
         // Without the visited-set / depth-cap guard, this PUT would walk the

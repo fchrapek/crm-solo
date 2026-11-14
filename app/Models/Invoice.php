@@ -26,8 +26,11 @@ final class Invoice extends Model
         'account_id',
         'client_id',
         'external_id',
+        'external_uuid',
         'number',
         'status',
+        'kind',
+        'parent_external_id',
         'client_company_name',
         'client_tax_code',
         'currency',
@@ -62,6 +65,9 @@ final class Invoice extends Model
         // row the sync could not number is still not an advance.
         return $query->where(function (Builder $q): void {
             $q->whereNull('number')->orWhere('number', 'not like', '%/ZAL/%');
+        })->where(function (Builder $q): void {
+            // A draft is not invoiced yet; rows from before the status was stored have none and are issued.
+            $q->whereNull('status')->orWhere('status', '!=', 'draft');
         });
     }
 

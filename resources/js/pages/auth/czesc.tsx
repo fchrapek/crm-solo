@@ -2,14 +2,16 @@ import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Wordmark } from '@/components/solo/logos';
+import { fieldControl, SoloField, SoloInput } from '@/components/solo/field';
+import { Notice } from '@/components/solo/notice';
 import { SoloButton, SoloButtonLink } from '@/components/solo/primitives';
-import { resetTurnstile, TurnstileWidget } from '@/components/turnstile-widget';
+import { resetTurnstile } from '@/components/turnstile-widget';
 import { login } from '@/routes';
 import czesc from '@/routes/czesc';
 import type { SharedData } from '@/types';
 
 import own from './czesc.module.css';
+import { AuthFrame, TurnstileSlot } from './frame';
 import styles from './login.module.css';
 
 type WaitlistForm = {
@@ -26,7 +28,7 @@ interface WaitlistProps {
     turnstileSiteKey?: string | null;
 }
 
-/** Closed mode: what a guest sees instead of the app. Visual design is not final (Figma first). */
+/** Closed mode: what a guest sees instead of the app. */
 export default function Waitlist({ joined, turnstileSiteKey }: WaitlistProps) {
     const { t } = useTranslation();
     const { flash } = usePage<SharedData & { flash?: { error?: string | null } }>().props;
@@ -50,82 +52,59 @@ export default function Waitlist({ joined, turnstileSiteKey }: WaitlistProps) {
     };
 
     return (
-        <div className={styles.page} data-day="timer">
+        <AuthFrame
+            tone="vermilion"
+            title={joined ? t('waitlist_joined_title') : t('waitlist_title')}
+            lede={joined ? t('waitlist_thanks') : t('waitlist_lede')}
+            pose={Object.keys(errors).length > 0 || Boolean(flash?.error) ? 'wow' : 'cool'}
+            peek={joined}
+        >
             <Head title={t('Waitlist')} />
-            <main className={styles.frame}>
-                <div className={styles.brand}>
-                    <p className={styles.eyebrow}>{t('Closed for now')}</p>
-                    <Wordmark className={styles.wordmark} />
-                </div>
+            {joined ? (
+                <section className={styles.form}>
+                    <SoloButtonLink href={login.url()} variant="secondary" size="control" block>
+                        {t('Log in')}
+                    </SoloButtonLink>
+                </section>
+            ) : (
+                <form className={styles.form} onSubmit={onSubmit}>
+                    <SoloField label={t('Email')} htmlFor="email" error={errors.email}>
+                        <SoloInput
+                            {...fieldControl('email', errors.email)}
+                            type="email"
+                            required
+                            autoComplete="email"
+                            value={data.email}
+                            onChange={(e) => setData('email', e.target.value)}
+                        />
+                    </SoloField>
 
-                {joined ? (
-                    <section className={styles.form} aria-live="polite">
-                        <h1 className={styles.title}>{t('Thank you')}</h1>
-                        <p className={own.lede}>{t('waitlist_thanks')}</p>
-                        <SoloButtonLink href={login.url()} variant="ghost" size="lg" block>
-                            {t('Log in')}
-                        </SoloButtonLink>
-                    </section>
-                ) : (
-                    <form className={styles.form} onSubmit={onSubmit}>
-                        <h1 className={styles.title}>{t('Join the waitlist')}</h1>
-                        <p className={own.lede}>{t('waitlist_lede')}</p>
+                    <SoloField label={t('Name (optional)')} htmlFor="name" error={errors.name}>
+                        <SoloInput {...fieldControl('name', errors.name)} type="text" autoComplete="name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
+                    </SoloField>
 
-                        <label className={styles.field} htmlFor="email">
-                            <span>{t('Email')}</span>
-                            <input
-                                id="email"
-                                type="email"
-                                required
-                                autoFocus
-                                autoComplete="email"
-                                value={data.email}
-                                onChange={(e) => setData('email', e.target.value)}
-                            />
-                            {errors.email && <span className={styles.error}>{errors.email}</span>}
-                        </label>
+                    <div className={own.honeypot} aria-hidden="true">
+                        <label htmlFor="website">{t('Leave this field empty')}</label>
+                        <input id="website" type="text" tabIndex={-1} autoComplete="off" value={data.website} onChange={(e) => setData('website', e.target.value)} />
+                    </div>
 
-                        <label className={styles.field} htmlFor="name">
-                            <span>{t('Name (optional)')}</span>
-                            <input id="name" type="text" autoComplete="name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
-                            {errors.name && <span className={styles.error}>{errors.name}</span>}
-                        </label>
+                    <TurnstileSlot siteKey={turnstileSiteKey} action="waitlist" error={errors['cf-turnstile-response']} onToken={setTurnstileToken} />
 
-                        <div className={own.honeypot} aria-hidden="true">
-                            <label htmlFor="website">{t('Leave this field empty')}</label>
-                            <input
-                                id="website"
-                                type="text"
-                                tabIndex={-1}
-                                autoComplete="off"
-                                value={data.website}
-                                onChange={(e) => setData('website', e.target.value)}
-                            />
-                        </div>
+                    {flash?.error && (
+                        <Notice kind="warn" role="alert">
+                            {flash.error}
+                        </Notice>
+                    )}
 
-                        {turnstileSiteKey && (
-                            <div className={styles.turnstile}>
-                                <TurnstileWidget siteKey={turnstileSiteKey} action="waitlist" onToken={setTurnstileToken} />
-                                {errors['cf-turnstile-response'] && <span className={styles.error}>{errors['cf-turnstile-response']}</span>}
-                            </div>
-                        )}
+                    <SoloButton type="submit" size="control" variant="primary" block disabled={processing}>
+                        {processing ? t('Signing up') : t('waitlist_submit')}
+                    </SoloButton>
 
-                        <SoloButton type="submit" size="lg" block disabled={processing}>
-                            {processing ? t('Signing up') : t('Sign me up')} →
-                        </SoloButton>
-
-                        {flash?.error && (
-                            <p className={styles.error} role="alert">
-                                {flash.error}
-                            </p>
-                        )}
-
-                        <p className={own.signIn}>
-                            {t('Already have an account?')} <Link href={login.url()}>{t('Log in')}</Link>
-                        </p>
-                    </form>
-                )}
-            </main>
-        </div>
+                    <p className={own.signIn}>
+                        {t('Already have an account?')} <Link href={login.url()}>{t('Log in')}</Link>
+                    </p>
+                </form>
+            )}
+        </AuthFrame>
     );
 }

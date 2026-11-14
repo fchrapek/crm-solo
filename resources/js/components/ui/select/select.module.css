@@ -8,7 +8,7 @@
   justify-content: space-between;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-input);
-  background-color: var(--input-bg, transparent);
+  background-color: transparent;
   padding: var(--spacing-2) var(--spacing-3);
   font-size: var(--font-size-sm);
   box-shadow: var(--shadow-xs);
@@ -289,10 +289,10 @@
 @media (min-width: 768px) {
   .soloTrigger {
     min-height: 0;
-    padding: var(--solo-field-pad, 9px var(--solo-space-3));
-    border-width: var(--solo-field-width, 1px);
-    border-radius: var(--solo-field-radius, var(--solo-radius-lg));
-    font: 400 var(--solo-text-field-regular) / var(--solo-field-leading, 20px) var(--solo-font-text);
+    padding: 9px var(--solo-space-3);
+    border-width: 1px;
+    border-radius: var(--solo-radius-lg);
+    font: 400 var(--solo-text-field-regular) / 20px var(--solo-font-text);
   }
 }
 
@@ -309,7 +309,7 @@
 .soloTrigger:focus-visible {
   border-color: var(--solo-field-border);
   box-shadow: none;
-  outline: 2px solid var(--solo-focus, var(--solo-fg));
+  outline: 2px solid var(--solo-fg);
   outline-offset: 2px;
 }
 
@@ -333,11 +333,11 @@
   gap: 0.28em;
   justify-content: flex-start;
   padding: var(--solo-space-2) var(--solo-space-4);
-  border: var(--solo-outline-width, 1px) solid var(--solo-control-border, var(--solo-field-border));
-  border-radius: var(--solo-button-radius, var(--solo-radius-full));
-  background-color: var(--solo-control-bg, var(--solo-field-bg));
+  border: 1px solid var(--solo-field-border);
+  border-radius: var(--solo-radius-full);
+  background-color: var(--solo-field-bg);
   color: var(--solo-fg);
-  font: 500 var(--solo-text-control) / normal var(--solo-font-text);
+  font: 600 var(--solo-text-control) / normal var(--solo-font-text);
   box-shadow: none;
 }
 
@@ -348,7 +348,7 @@
 .soloPillTrigger:focus-visible {
   border-color: var(--solo-fg);
   box-shadow: none;
-  outline: 2px solid var(--solo-focus, var(--solo-fg));
+  outline: 2px solid var(--solo-fg);
   outline-offset: 2px;
 }
 

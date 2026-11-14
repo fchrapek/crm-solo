@@ -30,10 +30,17 @@ is the first month whose retainer months must be settled; read it only through
 
 **More than one account** (2026-10-12): one hosted instance can carry other businesses, each its own account. `php artisan accounts:create "<name>" --owner-email= --owner-first-name= --owner-last-name= --password-file=` makes one with its owner (there is no password reset by mail). The first account is the operator's (`Account::operatorId()`): Horizon, `integrations:probe`, the kiwwwi lead pull and the server indicators in Ustawienia belong to it. Local verbs and the stdio MCP carry no credentials, so once a second account exists they act only in the account named by `AGENT_LOCAL_ACCOUNT` and refuse otherwise; `accounts:create` refuses until it is set. The lead vocabulary (custom sources, source and pipeline labels) is read per account through `App\Services\Leads\LeadVocabulary`; pipelines themselves stay in `config/leadgen.php` for every account.
 
-**Modules**: `accounts.settings.features` switches a module off for one account; a missing key means on. Today there is one, `billing` (month close, retainers and the hours bank, reports, revenue, the Rozliczenia tab). Off, its routes answer 404 (`feature:billing` middleware), the shared `auth.user.account.features` prop hides the nav, `month-close:tick` and its tools refuse with `feature_off`, and `brief`, `client:config`, `today` and search leave the billing data out. Read it only through `Account::hasFeature()`.
+**Modules**: `accounts.settings.features` switches a module off for one account; a missing key means on. Today there is one, `billing` (month close, retainers and the hours bank, reports, revenue, the Rozliczenia tab). Off, its routes answer 404 (`feature:billing` middleware), the shared `auth.user.account.features` prop hides the nav, `month-close:tick` and its tools refuse with `feature_off`, and `brief`, `client:config`, `today` and search leave the billing data out. Read it through `Account::hasFeature()`, or `Account::shows()` where a person is looking.
 
 **User**: `users.owner` is a boolean. There is no role column and no admin
-role; `User::whereRole()` understands `owner` and `user` only.
+role; `User::whereRole()` understands `owner` and `user` only. A member
+(not an owner) works with clients, tasks, time and notes. The owner's alone,
+behind the `manage-account` gate: integrations, the account's settings (leads,
+client fields, SMS, email), cancelling and resending messages, deleting a
+client (403 for a member). Billing is absent for a member, as if the module
+were off: `Account::shows('billing', $viewer)` decides the routes (404), the
+shared `features` prop and what the client screens and search carry. Agents and
+commands have no viewer and act as the account (`MemberAccessTest`).
 
 ## Client
 
@@ -62,8 +69,10 @@ postal code). Vocabulary lives in constants: `Client::LIFECYCLE_STAGES`
   (`ClientOrderSummary`: title from the catch-all project, the short client
   name while it is still "General"; all time by `client_id`; done over total
   tasks under `Task::scopeOpen()`; the latest invoice by issue date, gross from
-  `gross_price`, state draft, unpaid or paid) instead of the hours bank, month
-  close, report action and abonament. The controller reads the mode once per
+  `gross_price`, state draft, unpaid or paid) instead of the hours bank and month
+  close. Zlecenie offers Dodaj abonament (the first retainer), and Rozliczenia
+  lists the client's reports in a Raporty tile with Generuj raport
+  ([client-reports.md](client-reports.md)). The controller reads the mode once per
   request and an order page never builds the bank, the settlement or the
   ledger. For an order, Czeka na ciebie lists the next dated open task and the
   unpaid invoice due first, Zadania is one open list plus "Zrobione" and the
@@ -74,6 +83,9 @@ postal code). Vocabulary lives in constants: `Client::LIFECYCLE_STAGES`
   phone and e-mail under Kontakt.
 - `hourly_rate` (net) applies to `cooperation_type=hourly` clients; retainer
   clients price overage on the retainer position instead.
+- `billed_time` and `billed_rounding_minutes` are unused since 2026-11-05:
+  every client bills each task's stated figure, else its real time
+  (`client-reports.md`, Billed time).
 - `cooperation_type` may be empty. Lista counts those clients under their own
   filter (`cooperation_type=none`, "Bez typu"), so Wszyscy is the sum of the
   type rows.
@@ -90,13 +102,11 @@ postal code). Vocabulary lives in constants: `Client::LIFECYCLE_STAGES`
 
 **Client record**: `/clients/{client}/{tab}` (`pages/clients/show.tsx`) with
 Przegląd, Zadania, Dziennik, Rozliczenia and Dane; `/clients/{client}` opens
-Przegląd. **Documents and settings** (`/clients/{client}/edit`,
-`pages/clients/edit.tsx`) keeps what has no record tab yet: projects (Work), the full report list, report generation and baseline
-(Reports), the invoice list and revenue by year, month or the last 12 months
-(Invoices), time entry editing, the stage change and note editing (Activity),
-documents and the remaining form fields (Data), and month close, SSH, the
-invoice line, retainer positions and delete behind the gear (Settings). The old `#overview` anchor
-opens Przegląd (`pages/clients/edit.tsx`).
+Przegląd. The earlier documents and settings page (`/clients/{client}/edit`) is retired: every part of it lives on
+a tab (projects and Trello on Zadania and the project page, reports, invoices and the retainer on Rozliczenia, time
+entries and notes on Dziennik, documents, the form with the client's notes and region, the stage, month close and
+delete on Dane), and the old address
+redirects to Przegląd.
 
 ## Custom client fields
 
@@ -105,6 +115,10 @@ An account adds its own fields to clients (`ClientFieldDefinition`: `key`, `labe
 ## Text messages
 
 `message_templates` (body with `{client_name}`, `{assignee_name}`, `{field:key}`), `message_rules` (`field_value`: the field takes a value; `date_offset`: some time from a date field, whole days on the wall clock, optional local time; `expire_minutes`) and `outbound_messages`, one row per message, unique per rule, client and occurrence (`event:<field event id>` or `at:<date value>`). `MessageScheduler` changes only `pending` rows: a moved or cleared date supersedes its reminder and a date that comes back revives it, while a cancelled message stays cancelled. `messages:dispatch` (every minute) claims a due row with a guarded update, rechecks expiry, archive, rule, opt-out (`clients.sms_opt_out`; the screens show a pending message of an opted-out client as held, `held` on the row) and phone (E.164, Polish numbers by default), freezes the recipient and text, and sends through the account's provider (`SmsProviderRegistry`, `accounts.settings.messages.provider`; `simulator` sends nothing, `smsapi` uses the account's SMSAPI integration, [integrations.md](integrations.md)). A failure is recorded and never resent on its own; `MessageSettings::resend` ("Wyślij ponownie", `crm message-resend`) puts that row back to pending with `to` and `body` cleared, a new expiry from the rule, `resends` counted and the failure kept as `previous_error`, and the scheduler never withdraws a resent reminder for being past its time. Quiet hours come from `accounts.settings.messages.quiet_hours` (default 20:00 to 08:00 local). With `accounts.settings.messages.ascii` on (off by default: Polish letters stay) `SmsText` spells characters outside the GSM alphabet without diacritics before sending, so a message stays at 160 characters per SMS; the template preview in Ustawienia counts the SMS the same way. In the app: Ustawienia, Pola klienta and Wiadomości SMS; the client's Dane, Przegląd and Dziennik; the queue at `/sms` (from Klienci and Ustawienia).
+
+## Summary emails
+
+`message_templates.channel` is `sms` (every template before 2026-11-03) or `email`; an email template has a `subject` too, and `{period}`, `{work_list}` (the month's finished reportable tasks as the report lists them) and `{hours_summary}` (the billing summary's balance lines, `BillingSummary` wording, no heading) work only there. A key belongs to one channel; a text message rule takes only an `sms` template. `client_summary_emails` holds one email per client and month (unique `client_id, period`): template, recipients (the client's own address and its contacts', checked on every write and remembered for the next month), `bcc_owner`, subject and body (`HumanizedText`), and the send record. `App\Services\Messaging\SummaryEmails` is the one place it changes; its docblock has the state table (`draft`, `queued`, `sent`, `test_sent`, `failed`, `unconfirmed`) and the attempt guard, modelled on `InfaktDraftRun`. Only the owner sends, marks an unconfirmed live send as sent, or retries the step tick; a `sent` email is locked. Reading the email settles what a dead worker left (`SummaryEmails::recover`): a send lost before it reached the mailer becomes `failed` ("Sending did not start."), one lost after it `unconfirmed`, and a live sent email with no tick is ticked. The worker hands a send to the mailer only inside its lease and recovery acts only after it, each write guarded on the hand-off it read; the tick re-reads the email under the client lock, so it happens once. A refresh from the template keeps a subject or text edited by hand (`text_edited_at`) unless the owner confirms; an agent's refresh of such a draft is refused. A subject is one line: `{work_list}` and `{hours_summary}` are refused there, and `{hours_summary}` is empty for a client without a retainer. Agents make and refresh drafts only. Mail delivery rules: [hosting.md](hosting.md#mail).
 
 ## ClientRetainer ("positions")
 
@@ -144,6 +158,28 @@ throws on update and delete. Both tables belong to the client and carry no
 `account_id`; the cascade fires only on a hard client delete, and clients are
 soft-deleted, so archiving keeps them; they are reached only through an
 account-scoped client.
+
+`task_billed_months`: one row per task, `client_id` and `period` (unique
+together) with the billed figure the owner stated for that task in that month,
+`billed_minutes` (0 or more), an internal `note` (`HumanizedText`, never
+shown to the client) and `updated_by_user_id`. The client is the one the figure
+was billed to, the way `time_entries.client_id` is: a task moved with its time
+(`task-edit --move-time`) takes its open months' figures along, and a figure in
+a closed or reported month stays. No `account_id`: reached through an
+account-scoped client or task. Written and deleted only by
+`App\Services\Clients\BilledTime` (a task delete goes through it and is
+refused by a settled figure) and audited for agents; a row on a task that is
+not reportable counts nowhere. See [client-reports.md](client-reports.md).
+
+`client_billed_months`: one row per client and `period` with a whole-month
+billed figure from before task figures (2026-11-03 to 2026-11-05). Nothing
+writes it any more and its `billed_minutes` count nowhere; its `note` still
+shows on the month. No `account_id`: reached only through an account-scoped
+client, cascades on a hard client delete.
+
+`client_reports.opening_set_at`: when the owner last set the opening by hand
+(the opening edit); a recalculating regenerate clears it. Backfilled from the
+latest `opening_balance` revision.
 
 `client_reports.needs_recalculation`: set on later drafts when a month's
 settled figures change; see [client-reports.md](client-reports.md).
@@ -210,15 +246,15 @@ Belongs to a project. Fields worth knowing:
 - **Done is two facts.** `is_completed` and `list_name` are the card's status;
   `finished_at` is the owner's tick. Ticking and unticking go through
   `App\Services\Tasks\TaskCompletion` on every surface: it stops the task's
-  running timers first, moves a manual task to Done (and spawns the next
-  recurring instance), and on a Trello card records only `finished_at`.
+  running timers first, moves a manual task to Done, and on a Trello card
+  records only `finished_at`.
 - `Task::scopeOpen()` is the one definition of an open task (not finished, not
   completed, not archived, not in Done, on a live project).
 - `source`: `manual`, `trello`, or `email` (history from a removed email
   pipeline, together with the `is_reviewed`/`review_*` columns).
 - `is_reportable` (default false) puts the task's time in client reports.
-- `recurrence_period_days` with `recurrence_predecessor_id`: one finish spawns
-  one successor.
+- `recurrence_period_days` and `recurrence_predecessor_id`: recurring tasks were
+  removed on 2026-11-11; the columns remain and nothing reads them.
 - `parent_task_id` (FK `ON DELETE SET NULL`; `Task::booted` also nulls the
   children in PHP, so the rule holds where the FK does not exist).
 - `cli`, `agent_lane` and `session_*` belong to the retired agent board and
@@ -258,7 +294,8 @@ one as a target.
   archived after a complete card fetch and restored if it comes back.
 - Deleting a task unlinks its time (`TimeEntryWriter::detachTask`), so a task
   with time in a closed month or a finalized or sent report cannot be deleted,
-  only archived; the web offers the archive, `tasks:delete` skips it and
+  only archived; the web offers the archive, `tasks:delete` skips it (and refuses a batch
+  that holds a Trello card) and
   `projects:delete` (or the web project delete) refuses the whole project.
 - `projects.archived_at` is the same one level up, and on a Trello-backed
   project it is a tombstone: the sync skips the board, so archiving is the only

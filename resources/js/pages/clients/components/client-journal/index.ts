@@ -1,3 +1,2 @@
-export { ClientJournalTab } from './client-journal';
-export { isRelationshipScreen } from './format';
+export { ClientJournalTab, JournalActions } from './client-journal';
 export type { ClientJournal, JournalNote, JournalPage, JournalWorkRow } from './types';

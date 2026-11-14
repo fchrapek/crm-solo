@@ -1,0 +1,107 @@
+/* Figma: the record head. Phone: chip, title, then the main button and "more"; from 768 px the actions stand at the title's end. */
+.frame {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--role-space-8);
+    min-width: 0;
+    padding-top: var(--role-space-4);
+}
+
+.chip {
+    display: flex;
+}
+
+.titleRow {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--role-space-12);
+    width: 100%;
+    min-width: 0;
+}
+
+.title {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-8);
+    min-width: 0;
+}
+
+.note {
+    margin: 0;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.note[data-kind='line'] {
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.aside {
+    display: flex;
+    align-items: center;
+    gap: var(--role-space-8);
+    width: 100%;
+    min-width: 0;
+}
+
+/* a row of pills scrolls sideways inside the frame on a phone */
+.aside > nav {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.actions {
+    display: none;
+}
+
+.phoneActions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--role-space-8);
+}
+
+@media (min-width: 768px) {
+    .frame {
+        padding-top: 0;
+    }
+
+    .titleRow {
+        flex-flow: row wrap;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: var(--role-space-16);
+    }
+
+    /* a long name wraps inside the room the actions leave before the actions drop under it */
+    .title {
+        flex: 1 1 0;
+        min-width: min(100%, 560px);
+    }
+
+    .titleRow:has(> .aside) .title {
+        min-width: min(100%, 280px);
+    }
+
+    .aside {
+        width: auto;
+        max-width: 100%;
+        margin-left: auto;
+    }
+
+    .actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--role-space-8);
+        margin-left: auto;
+    }
+
+    .phoneActions {
+        display: none;
+    }
+}

@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Console\Commands\CrmMessageSending;
 use App\Mcp\Servers\CrmServer;
+use App\Mcp\Tools\MessageCancelTool;
 use App\Mcp\Tools\MessageSendingTool;
+use App\Mcp\Tools\MessageTemplateSetTool;
 use App\Models\Account;
+use App\Models\AgentAuditEvent;
 use App\Models\Client;
 use App\Models\Integration;
 use App\Models\OutboundMessage;
 use App\Models\User;
+use App\Services\Agent\AgentRefusal;
 use App\Services\Clients\Fields\ClientFieldDefinitions;
 use App\Services\Clients\Fields\ClientFieldWriter;
 use App\Services\Messaging\MessageDispatcher;
@@ -19,7 +24,6 @@ use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -105,8 +109,17 @@ final class SmsapiProviderTest extends TestCase
 
     public function test_smsapi_cannot_be_chosen_before_it_is_connected_and_a_later_disconnect_fails_instead_of_sending(): void
     {
-        CrmServer::tool(MessageSendingTool::class, ['provider' => 'smsapi'])->assertHasErrors(['Connect SMSAPI']);
-        CrmServer::tool(MessageSendingTool::class, ['provider' => 'twilio'])->assertHasErrors(['Unknown SMS provider']);
+        $refusal = function (string $provider): string {
+            try {
+                app(MessageSettings::class)->sending($this->account->id, provider: $provider);
+            } catch (AgentRefusal $e) {
+                return $e->getMessage();
+            }
+
+            return '';
+        };
+        $this->assertStringContainsString('Connect SMSAPI', $refusal('smsapi'));
+        $this->assertStringContainsString('Unknown SMS provider', $refusal('twilio'));
         $this->assertSame('simulator', app(MessageSettings::class)->sendingOf($this->account->fresh())['provider']);
 
         $this->connect();
@@ -120,14 +133,44 @@ final class SmsapiProviderTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_the_verb_switches_the_account_to_smsapi_and_back(): void
+    public function test_an_agent_cannot_switch_the_provider_through_the_verb_or_the_tool(): void
     {
-        $this->connect();
+        Integration::create(['account_id' => $this->account->id, 'provider' => 'smsapi', 'is_enabled' => true, 'api_key' => 'token-of-the-account']);
 
-        $this->assertSame(0, Artisan::call('crm:message-sending', ['--provider' => 'simulator', '--json' => true]));
-        $this->assertSame('simulator', $this->account->fresh()->settings['messages']['provider']);
-        $this->assertSame(0, Artisan::call('crm:message-sending', ['--provider' => 'smsapi']));
-        $this->assertStringContainsString('sent by smsapi', Artisan::output());
+        $this->assertFalse(app(CrmMessageSending::class)->getDefinition()->hasOption('provider'));
+        CrmServer::tool(MessageSendingTool::class, ['provider' => 'smsapi', 'quiet_from' => '21:00'])->assertOk();
+
+        $sending = app(MessageSettings::class)->sendingOf($this->account->fresh());
+        $this->assertSame(['simulator', '21:00'], [$sending['provider'], $sending['quiet_from']]);
+    }
+
+    public function test_real_messages_stop_at_the_accounts_daily_cap_and_the_simulator_is_never_capped(): void
+    {
+        config(['services.smsapi.daily_cap' => 1]);
+        $this->connect();
+        Http::fake(['api.smsapi.pl/*' => Http::response(['count' => 1, 'list' => [['id' => 'abc123', 'status' => 'QUEUE']]])]);
+        $second = Client::factory()->create(['account_id' => $this->account->id, 'name' => 'Nowak Dom', 'phone' => '100 100 300']);
+
+        $this->book();
+        $this->assertSame([OutboundMessage::SENT => 1], app(MessageDispatcher::class)->dispatchDue());
+        app(ClientFieldWriter::class)->set($second, ['visit_at' => '2026-10-21 10:00']);
+        $this->assertSame([OutboundMessage::FAILED => 1], app(MessageDispatcher::class)->dispatchDue());
+
+        $this->assertStringStartsWith('daily_cap', (string) OutboundMessage::query()->where('client_id', $second->id)->sole()->error);
+        Http::assertSentCount(1);
+
+        app(MessageSettings::class)->sending($this->account->id, provider: 'simulator');
+        app(MessageSettings::class)->resend($this->account->id, OutboundMessage::query()->where('client_id', $second->id)->sole()->id);
+        $this->assertSame([OutboundMessage::SIMULATED => 1], app(MessageDispatcher::class)->dispatchDue());
+    }
+
+    public function test_an_agents_template_write_and_cancel_leave_rows_in_the_agent_trail(): void
+    {
+        CrmServer::tool(MessageTemplateSetTool::class, ['key' => 'late', 'name' => 'Spóźnienie', 'body' => 'Będziemy później.'])->assertOk();
+        $this->book();
+        CrmServer::tool(MessageCancelTool::class, ['id' => OutboundMessage::query()->sole()->id])->assertOk();
+
+        $this->assertSame(['message_templates', 'outbound_messages'], AgentAuditEvent::query()->orderBy('id')->pluck('target_type')->unique()->values()->all());
     }
 
     public function test_settings_switch_the_account_to_smsapi_only_once_it_is_connected(): void

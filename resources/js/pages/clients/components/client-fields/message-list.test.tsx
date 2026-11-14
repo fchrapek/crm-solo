@@ -33,12 +33,13 @@ function Reason({ message }: { message: MessageRow }) {
 }
 
 describe('MessageList', () => {
-    test('a failed text reads nieudana with a hint and offers Wyślij ponownie where Anuluj sits', () => {
+    test('a failed text reads nieudana on an ink dot, says why on a line of its own and offers Wyślij ponownie where Anuluj sits', () => {
         const html = renderToStaticMarkup(<MessageList rows={[row({ id: 2, status: 'failed', error: 'SMSAPI 13: Invalid phone number' })]} />);
 
         expect(html).toContain('data-status="failed"');
         expect(html).toContain('nieudana');
-        expect(html).toContain('aria-label="Dlaczego się nie udało"');
+        expect(html).toContain('data-status="agent"');
+        expect(html).toContain('Operator odrzucił SMS i nic nie wyszło. Powód: SMSAPI 13: Invalid phone number');
         expect(html).toContain('Wyślij ponownie');
         expect(html).not.toContain('>Anuluj<');
     });
@@ -48,6 +49,14 @@ describe('MessageList', () => {
 
         expect(html).toContain('>Anuluj<');
         expect(html).not.toContain('Wyślij ponownie');
+    });
+
+    test('a member reads the queue without Anuluj or Wyślij ponownie', () => {
+        const html = renderToStaticMarkup(<MessageList manage={false} rows={[row({}), row({ id: 2, status: 'failed', error: 'x' })]} />);
+
+        expect(html).not.toContain('>Anuluj<');
+        expect(html).not.toContain('Wyślij ponownie');
+        expect(html).toContain('nieudana');
     });
 
     test('the hint tells a refusal from a missing answer, which may already have reached the client', () => {

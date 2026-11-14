@@ -66,9 +66,9 @@ final class CrmEntityResolver
         );
     }
 
-    public function project(string $needle, int $accountId): Project
+    public function project(string $needle, int $accountId, ?int $clientId = null): Project
     {
-        $query = Project::query()->where('account_id', $accountId);
+        $query = Project::query()->where('account_id', $accountId)->when($clientId !== null, fn (Builder $q) => $q->where('client_id', $clientId));
 
         if (ctype_digit($needle)) {
             return $query->find((int) $needle) ?? throw new ReferenceNotFoundException('project', $needle);

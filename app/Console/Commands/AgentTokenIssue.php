@@ -22,7 +22,7 @@ final class AgentTokenIssue extends Command
     protected $signature = 'agent-tokens:issue
         {user : The user the token acts as: id or email}
         {name : What holds the token, e.g. "claude-code macbook"}
-        {--ability=* : read, write:notes, write:tasks, write:time, write:leads, write:month-close, write:clients, write:messages, or write for every write group (default: read)}
+        {--ability=* : read, write:notes, write:tasks, write:time, write:leads, write:month-close, write:clients, write:messages, write:reports, write:invoice-drafts, write:billing, or write for every write group (default: read)}
         {--days= : Days until it expires (default AGENT_TOKEN_DAYS)}
         {--no-expiry : Never expires; revoke it by hand}
         {--to-file= : Write the token to this file (mode 0600) instead of printing it}';
