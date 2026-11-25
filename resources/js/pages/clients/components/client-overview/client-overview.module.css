@@ -1,4 +1,4 @@
-/* Figma: Klient · Przegląd. The tiles and their rows are parts; only what sits inside a tile is styled here. */
+/* Figma: Client · Overview. The tiles and their rows are parts; only what sits inside a tile is styled here. */
 .ledger {
     display: flex;
     flex-direction: column;
@@ -18,4 +18,15 @@
     .smsHeadRest {
         display: inline;
     }
+}
+
+/* the hours tile's buttons side by side */
+.hoursActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--role-space-8);
+}
+
+.hoursActions:empty {
+    display: none;
 }

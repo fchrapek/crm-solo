@@ -174,6 +174,18 @@ final class HoursBank
     }
 
     /**
+     * The whole months of the ledger, newest first, without their figures: every month a screen can open.
+     *
+     * @return list<string>
+     */
+    public function ledgerMonths(Client $client, ?CarbonInterface $now = null): array
+    {
+        [, $periods] = $this->ledgerPeriods($client, $now);
+
+        return array_values(array_map(strval(...), array_keys(array_filter($periods, fn (array $period): bool => $period['whole']))));
+    }
+
+    /**
      * One page of the ledger; only that page's months are read, so a long history costs no more per page. Without
      * $withIdleMonth the month in progress drops out when nothing settles in it: no retainer, report or closure.
      *

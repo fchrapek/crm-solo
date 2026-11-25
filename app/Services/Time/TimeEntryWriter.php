@@ -112,19 +112,24 @@ final class TimeEntryWriter
     /**
      * Moves a task's time onto the task's project and client, entry by entry,
      * running ones included; an entry in a settled period stays where it is.
+     * $withinClient moves only the time already on the task's client.
      *
      * @return array{moved: list<TimeEntry>, skipped: list<array{entry: TimeEntry, settled: PeriodSettled}>}
      *
      * @throws TimeEntryChanged
      */
-    public function followTask(Task $task): array
+    public function followTask(Task $task, bool $withinClient = false): array
     {
         $result = ['moved' => [], 'skipped' => []];
+        $client = self::clientOf($task);
+        if ($withinClient && $client === null) {
+            return $result;
+        }
         $entries = TimeEntry::query()->where('task_id', $task->id)
             ->where(fn ($query) => $query->whereNull('project_id')->orWhere('project_id', '!=', $task->project_id))
+            ->when($withinClient, fn ($query) => $query->where('client_id', $client))
             ->orderBy('start_time')->get();
 
-        $client = self::clientOf($task);
         foreach ($entries as $entry) {
             try {
                 $result['moved'][] = $this->locked($entry, [$client], function (TimeEntry $entry) use ($task, $client): TimeEntry {

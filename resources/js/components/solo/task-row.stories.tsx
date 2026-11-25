@@ -7,7 +7,7 @@ const open: DayTask = { task_id: 42, name: 'Aktualizacja cennika PDF', client: '
 const noop = () => {};
 
 const meta = {
-    title: 'Zadania/Task row',
+    title: 'Tasks/Task row',
     component: TaskRow,
     args: { task: open },
     decorators: [

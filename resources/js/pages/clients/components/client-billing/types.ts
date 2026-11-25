@@ -51,7 +51,7 @@ export interface BilledMonth {
     refusal_code: 'invalid_argument' | 'period_settled' | 'not_a_draft' | 'refused' | 'not_reportable' | null;
 }
 
-/** Settlement ("zamknięty" only from a real closure) and report delivery are separate facts on one row. */
+/** Settlement (closed only from a real closure) and report delivery are separate facts on one row. */
 export interface LedgerRow {
     key: string;
     report_id: number | null;
@@ -98,7 +98,7 @@ export interface BillingInvoice {
     external_url: string | null;
 }
 
-/** One invoice group of the billed month on Rozliczenia (InfaktDrafting::monthState); amounts in grosze. */
+/** One invoice group of the billed month on Billing (InfaktDrafting::monthState); amounts in grosze. */
 export interface InvoiceDraftGroup {
     group: number;
     projects: string[];
@@ -128,6 +128,12 @@ export interface InvoiceSource {
     lines: string[];
 }
 
+/** Report baseline with one entry per heading and its list items; null while the account has it off. */
+export interface ReportBaseline {
+    markdown: string | null;
+    sections: { title: string | null; items: number }[];
+}
+
 export interface ActivePosition {
     id: number;
     label: string | null;
@@ -143,6 +149,8 @@ export interface RetainerBilling {
     settlement: { active_period: string; current_period: string; open_behind: boolean };
     opening_balance: { report_id: number; value: number | null; version: string } | null;
     waiting_report: { report_id: number; period: string; status: ReportStatus } | null;
+    /** Every whole month of the bank, newest first: the month pills and the Older menu. */
+    months: string[];
     retainer: {
         active: ActivePosition[];
         positions: Retainer[];
@@ -151,6 +159,7 @@ export interface RetainerBilling {
     };
     invoices: { rows: BillingInvoice[]; more: number };
     invoice_drafts: InvoiceDrafts | null;
+    report_baseline: ReportBaseline | null;
 }
 
 /** A month of a client without a retainer, in both values (no ledger to carry it). */
@@ -170,6 +179,7 @@ export interface OrderBilling {
     report_period: string;
     composers: { key: string; label: string }[];
     currency: ClientCurrency;
+    report_baseline: ReportBaseline | null;
 }
 
 export interface OrderReportRow {
@@ -180,17 +190,26 @@ export interface OrderReportRow {
 
 export type ClientBilling = RetainerBilling | OrderBilling;
 
-/** One page of the hours bank; "Starsze" reloads only this prop with `next` and the rows are appended. */
+/** One page of the hours bank; Older reloads only this prop with `next` and the rows are appended. */
 export interface BillingLedger {
     rows: LedgerRow[];
     next: string | null;
     start: { date: string; balance: number } | null;
 }
 
-/** The month Rozliczenia shows (billing_month): what the billed time dialog reads, plus the month's report, invoices and checklist. */
+export interface MonthSettlementState {
+    state: 'closed' | 'open' | null;
+    closure_id: number | null;
+    reopen_refusal: string | null;
+    reopen_blocker: { report_id: number; period: string } | null;
+}
+
+/** The month Billing shows (billing_month): what the billed time dialog reads, plus the month's report, invoices and checklist. */
 export interface BillingMonth {
     period: string;
     figures: BilledMonth;
+    /** The month's own settlement, whichever page of the bank holds it; closure_id only on the latest closure, the one that reopens. */
+    settlement: MonthSettlementState;
     report: {
         id: number;
         status: ReportStatus;

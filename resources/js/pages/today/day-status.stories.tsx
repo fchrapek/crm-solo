@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { DayStatus } from './summary';
 
-/** Figma: Podsumowanie, the day's state beside the close button. */
+/** Figma: Summary, the day's state beside the close button. */
 const meta = {
-    title: 'Dziś/Podsumowanie status',
+    title: 'Today/Summary status',
     component: DayStatus,
     args: { closed: true, running: false },
     decorators: [

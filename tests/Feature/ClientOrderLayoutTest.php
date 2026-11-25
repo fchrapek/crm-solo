@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
-/** D8: a client without retainer evidence reads in the Zlecenie layout on Przegląd and Rozliczenia. */
+/** D8: a client without retainer evidence reads in the Order layout on Overview and Billing. */
 final class ClientOrderLayoutTest extends TestCase
 {
     use RefreshDatabase;
@@ -102,19 +102,19 @@ final class ClientOrderLayoutTest extends TestCase
 
     public function test_the_header_names_the_layout_on_every_tab(): void
     {
-        foreach (['przeglad', 'zadania', 'dziennik', 'rozliczenia', 'dane'] as $tab) {
+        foreach (['overview', 'tasks', 'journal', 'billing', 'details'] as $tab) {
             $this->actingAs($this->user)
                 ->get("/clients/{$this->client->id}/{$tab}")
                 ->assertInertia(fn (Assert $page) => $page->where('client.billing_mode', ClientBillingMode::ORDER));
         }
     }
 
-    public function test_rozliczenia_lists_the_reports_of_a_client_without_a_retainer_and_what_a_new_one_needs(): void
+    public function test_billing_lists_the_reports_of_a_client_without_a_retainer_and_what_a_new_one_needs(): void
     {
         $this->report('2026-08-01', '2026-08-31', null);
         $this->report('2026-09-01', '2026-09-30', null);
 
-        $billing = $this->props('rozliczenia')['billing'];
+        $billing = $this->props('billing')['billing'];
 
         $this->assertSame(['2026-09', '2026-08'], array_column($billing['reports'], 'period'));
         $this->assertSame(ClientReport::STATUS_DRAFT, $billing['reports'][0]['status']);
@@ -132,14 +132,14 @@ final class ClientOrderLayoutTest extends TestCase
         $this->assertSame(ClientBillingMode::RETAINER, $this->mode());
     }
 
-    public function test_przeglad_and_rozliczenia_carry_the_same_order_block(): void
+    public function test_overview_and_billing_carry_the_same_order_block(): void
     {
         $this->client->generalProject()->update(['name' => 'Audyt energetyczny domu']);
         $this->entry('2026-09-15 08:00:00', 390);
         $this->entry('2026-10-01 08:00:00', 210);
 
-        $overview = $this->props('przeglad')['overview']['order'];
-        $billing = $this->props('rozliczenia')['billing']['order'];
+        $overview = $this->props('overview')['overview']['order'];
+        $billing = $this->props('billing')['billing']['order'];
 
         $this->assertSame($overview, $billing);
         $this->assertSame('Audyt energetyczny domu', $overview['title']);
@@ -153,7 +153,7 @@ final class ClientOrderLayoutTest extends TestCase
         $project = $this->client->generalProject();
         $project->update(['name' => 'Audyt energetyczny domu', 'description' => 'Dom jednorodzinny, 164 m2', 'backup_path' => '/kopie/audyt', 'include_in_month_close' => true]);
 
-        $order = $this->props('rozliczenia')['billing']['order'];
+        $order = $this->props('billing')['billing']['order'];
 
         $this->assertSame($project->id, $order['project']['id']);
         $this->assertSame('Audyt energetyczny domu', $order['project']['name']);
@@ -166,8 +166,8 @@ final class ClientOrderLayoutTest extends TestCase
     {
         $company = $this->account->clients()->create(['name' => 'Pracownia Przykładowa Sp. z o.o.']);
 
-        $this->assertSame('Jan Przykładowy', $this->props('przeglad')['overview']['order']['title']);
-        $this->assertSame('Pracownia Przykładowa', $this->props('przeglad', $company)['overview']['order']['title']);
+        $this->assertSame('Jan Przykładowy', $this->props('overview')['overview']['order']['title']);
+        $this->assertSame('Pracownia Przykładowa', $this->props('overview', $company)['overview']['order']['title']);
     }
 
     public function test_time_counts_every_entry_of_the_client_whatever_its_project(): void
@@ -176,7 +176,7 @@ final class ClientOrderLayoutTest extends TestCase
         $this->entry('2026-09-20 08:00:00', 60);
         $this->entry('2026-09-21 08:00:00', 30, $other);
 
-        $this->assertSame(1.5, $this->props('przeglad')['overview']['order']['hours']);
+        $this->assertSame(1.5, $this->props('overview')['overview']['order']['hours']);
     }
 
     public function test_progress_counts_done_under_the_completion_rules_including_trello_done_and_archived(): void
@@ -187,7 +187,7 @@ final class ClientOrderLayoutTest extends TestCase
         Task::create(['project_id' => $project->id, 'name' => 'On Done', 'source' => 'manual', 'list_name' => TrelloListMapper::LANE_DONE]);
         Task::create(['project_id' => $project->id, 'name' => 'Archived', 'source' => 'manual', 'archived_at' => now()]);
 
-        $order = $this->props('przeglad')['overview']['order'];
+        $order = $this->props('overview')['overview']['order'];
 
         $this->assertSame(['done' => 3, 'total' => 4], $order['tasks']);
         $this->assertSame('in_progress', $order['state']);
@@ -200,18 +200,18 @@ final class ClientOrderLayoutTest extends TestCase
         Task::create(['project_id' => $project->id, 'name' => 'Raport', 'source' => 'trello', 'trello_card_id' => 'c1', 'archived_at' => now(), 'trello_skipped' => true]);
         $filed = Task::create(['project_id' => $project->id, 'name' => 'Wdrożenie', 'source' => 'trello', 'trello_card_id' => 'c2', 'archived_at' => now(), 'trello_skipped' => true, 'finished_at' => '2026-10-01 10:00:00']);
 
-        $this->assertSame(['done' => 1, 'total' => 2], $this->props('przeglad')['overview']['order']['tasks']);
-        $done = $this->props('zadania')['tasks']['done'];
+        $this->assertSame(['done' => 1, 'total' => 2], $this->props('overview')['overview']['order']['tasks']);
+        $done = $this->props('tasks')['tasks']['done'];
         $this->assertSame([1, [$filed->id]], [$done['count'], array_column($done['rows'], 'task_id')]);
     }
 
     public function test_an_order_with_every_task_done_reads_done_and_one_without_tasks_has_no_state(): void
     {
-        $this->assertNull($this->props('przeglad')['overview']['order']['state']);
+        $this->assertNull($this->props('overview')['overview']['order']['state']);
 
         Task::create(['project_id' => $this->client->generalProject()->id, 'name' => 'Ticked', 'source' => 'manual', 'finished_at' => now()]);
 
-        $this->assertSame('done', $this->props('przeglad')['overview']['order']['state']);
+        $this->assertSame('done', $this->props('overview')['overview']['order']['state']);
     }
 
     public function test_the_poster_reads_the_latest_invoice_by_issue_date_in_gross_currency_units(): void
@@ -219,7 +219,7 @@ final class ClientOrderLayoutTest extends TestCase
         $this->invoice('2/09/2026', 'sent', '2026-09-29', payment: '2026-10-14', gross: 240000, net: 195122);
         $this->invoice('1/10/2026', 'paid', '2026-09-01', gross: 50000, net: 40650);
 
-        $invoice = $this->props('przeglad')['overview']['order']['invoice'];
+        $invoice = $this->props('overview')['overview']['order']['invoice'];
 
         $this->assertSame('2/09/2026', $invoice['number']);
         $this->assertSame(2400.0, $invoice['gross']);
@@ -235,11 +235,11 @@ final class ClientOrderLayoutTest extends TestCase
         $this->invoice('8/09/2026', 'sent', '2026-09-29');
         Invoice::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'external_id' => 'undated', 'number' => null, 'status' => 'draft', 'invoice_date' => null, 'gross_price' => 100]);
 
-        $this->assertSame('8/09/2026', $this->props('przeglad')['overview']['order']['invoice']['number']);
+        $this->assertSame('8/09/2026', $this->props('overview')['overview']['order']['invoice']['number']);
 
         Invoice::query()->whereNotNull('invoice_date')->delete();
 
-        $invoice = $this->props('przeglad')['overview']['order']['invoice'];
+        $invoice = $this->props('overview')['overview']['order']['invoice'];
         $this->assertNull($invoice['number']);
         $this->assertNull($invoice['invoice_date']);
         $this->assertSame('draft', $invoice['state']);
@@ -250,15 +250,15 @@ final class ClientOrderLayoutTest extends TestCase
         $this->invoice('1/09/2026', 'sent', '2026-09-20', payment: '2026-10-05');
 
         $this->travelTo(Carbon::parse('2026-10-05 21:59:00', 'UTC'));
-        $this->assertFalse($this->props('przeglad')['overview']['order']['invoice']['overdue'], 'still the payment day in Warsaw');
+        $this->assertFalse($this->props('overview')['overview']['order']['invoice']['overdue'], 'still the payment day in Warsaw');
 
         $this->travelTo(Carbon::parse('2026-10-05 22:01:00', 'UTC'));
-        $this->assertTrue($this->props('przeglad')['overview']['order']['invoice']['overdue'], 'the next day in Warsaw');
+        $this->assertTrue($this->props('overview')['overview']['order']['invoice']['overdue'], 'the next day in Warsaw');
 
         Invoice::query()->update(['status' => 'paid']);
-        $this->assertFalse($this->props('przeglad')['overview']['order']['invoice']['overdue']);
+        $this->assertFalse($this->props('overview')['overview']['order']['invoice']['overdue']);
         Invoice::query()->update(['status' => 'draft']);
-        $this->assertFalse($this->props('przeglad')['overview']['order']['invoice']['overdue']);
+        $this->assertFalse($this->props('overview')['overview']['order']['invoice']['overdue']);
     }
 
     public function test_invoice_statuses_map_to_draft_unpaid_and_paid(): void
@@ -267,16 +267,16 @@ final class ClientOrderLayoutTest extends TestCase
             Invoice::query()->delete();
             $this->invoice('1/09/2026', $status, '2026-09-29');
 
-            $this->assertSame($state, $this->props('przeglad')['overview']['order']['invoice']['state'], $status);
+            $this->assertSame($state, $this->props('overview')['overview']['order']['invoice']['state'], $status);
         }
     }
 
     public function test_an_order_without_an_invoice_has_none(): void
     {
-        $this->assertNull($this->props('rozliczenia')['billing']['order']['invoice']);
+        $this->assertNull($this->props('billing')['billing']['order']['invoice']);
     }
 
-    public function test_czeka_na_ciebie_names_the_next_dated_open_task_and_its_running_timer(): void
+    public function test_waiting_for_you_names_the_next_dated_open_task_and_its_running_timer(): void
     {
         $project = $this->client->generalProject();
         Task::create(['project_id' => $project->id, 'name' => 'Bez terminu', 'source' => 'manual']);
@@ -284,53 +284,53 @@ final class ClientOrderLayoutTest extends TestCase
         $later = Task::create(['project_id' => $project->id, 'name' => 'Przekazanie raportu', 'source' => 'manual', 'due_date' => '2026-10-14']);
         $next = Task::create(['project_id' => $project->id, 'name' => 'Raport z audytu', 'source' => 'manual', 'due_date' => '2026-10-09']);
 
-        $task = $this->props('przeglad')['overview']['order_waiting']['task'];
+        $task = $this->props('overview')['overview']['order_waiting']['task'];
         $this->assertSame(['task_id' => $next->id, 'name' => 'Raport z audytu', 'due' => '2026-10-09', 'running_id' => null], $task);
 
         $running = TimeEntry::create([
             'account_id' => $this->account->id, 'project_id' => $project->id, 'client_id' => $this->client->id, 'task_id' => $next->id,
             'source' => TimeEntry::SOURCE_MANUAL, 'start_time' => now()->subMinutes(5),
         ]);
-        $this->assertSame($running->id, $this->props('przeglad')['overview']['order_waiting']['task']['running_id']);
+        $this->assertSame($running->id, $this->props('overview')['overview']['order_waiting']['task']['running_id']);
 
         $next->update(['finished_at' => now()]);
-        $this->assertSame($later->id, $this->props('przeglad')['overview']['order_waiting']['task']['task_id']);
+        $this->assertSame($later->id, $this->props('overview')['overview']['order_waiting']['task']['task_id']);
 
         $later->update(['finished_at' => now()]);
-        $this->assertNull($this->props('przeglad')['overview']['order_waiting']['task']);
+        $this->assertNull($this->props('overview')['overview']['order_waiting']['task']);
     }
 
-    public function test_czeka_na_ciebie_names_an_unpaid_invoice_but_never_a_paid_or_draft_one(): void
+    public function test_waiting_for_you_names_an_unpaid_invoice_but_never_a_paid_or_draft_one(): void
     {
         config(['services.infakt.invoice_url' => 'https://app.infakt.pl/app/faktury/{id}']);
         $this->invoice('1/09/2026', 'paid', '2026-09-01');
         $this->invoice('2/09/2026', 'draft', '2026-09-28');
-        $this->assertNull($this->props('przeglad')['overview']['order_waiting']['invoice']);
+        $this->assertNull($this->props('overview')['overview']['order_waiting']['invoice']);
 
         $this->invoice('3/09/2026', 'sent', '2026-09-29', payment: '2026-10-14');
-        $invoice = $this->props('przeglad')['overview']['order_waiting']['invoice'];
+        $invoice = $this->props('overview')['overview']['order_waiting']['invoice'];
         $this->assertSame('3/09/2026', $invoice['number']);
         $this->assertSame('2026-10-14', $invoice['payment_date']);
         $this->assertFalse($invoice['overdue']);
         $this->assertSame('https://app.infakt.pl/app/faktury/ext-3/09/2026', $invoice['external_url']);
 
         $this->invoice('4/08/2026', 'sent', '2026-08-20', payment: '2026-09-03');
-        $invoice = $this->props('przeglad')['overview']['order_waiting']['invoice'];
+        $invoice = $this->props('overview')['overview']['order_waiting']['invoice'];
         $this->assertSame('4/08/2026', $invoice['number'], 'the most urgent unpaid invoice first');
         $this->assertTrue($invoice['overdue']);
 
         Invoice::query()->update(['status' => 'paid']);
-        $this->assertNull($this->props('przeglad')['overview']['order_waiting']['invoice']);
+        $this->assertNull($this->props('overview')['overview']['order_waiting']['invoice']);
     }
 
     public function test_a_retainer_client_has_no_order_waiting_rows(): void
     {
         ClientRetainer::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'monthly_hours' => 10, 'effective_from' => '2026-01-01']);
 
-        $this->assertNull($this->props('przeglad')['overview']['order_waiting']);
+        $this->assertNull($this->props('overview')['overview']['order_waiting']);
     }
 
-    public function test_zadania_lists_an_orders_open_tasks_once_its_done_ones_apart_and_its_time(): void
+    public function test_tasks_lists_an_orders_open_tasks_once_its_done_ones_apart_and_its_time(): void
     {
         $project = $this->client->generalProject();
         $board = Project::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'name' => 'Board', 'trello_board_id' => 'b1']);
@@ -345,7 +345,7 @@ final class ClientOrderLayoutTest extends TestCase
         TimeEntry::query()->latest('id')->first()->update(['task_id' => $ticked->id]);
         $this->entry('2026-10-05 08:00:00', 90);
 
-        $tasks = $this->props('zadania')['tasks'];
+        $tasks = $this->props('tasks')['tasks'];
 
         $this->assertSame('order', $tasks['mode']);
         $this->assertSame(3, $tasks['open']['count']);
@@ -367,13 +367,13 @@ final class ClientOrderLayoutTest extends TestCase
         Task::create(['project_id' => $project->id, 'name' => 'Pomysł', 'source' => 'manual', 'list_name' => 'Backlog']);
         Task::create(['project_id' => $project->id, 'name' => 'Zrobione', 'source' => 'manual', 'finished_at' => now()]);
 
-        $props = $this->props('zadania');
+        $props = $this->props('tasks');
 
         $this->assertSame(2, $props['tasks']['open']['count']);
         $this->assertSame($props['tasks']['open']['count'], $props['client']['open_tasks_count']);
     }
 
-    public function test_zadania_bounds_an_orders_done_tasks_and_time_and_expands_on_request(): void
+    public function test_tasks_bounds_an_orders_done_tasks_and_time_and_expands_on_request(): void
     {
         $project = $this->client->generalProject();
         foreach (range(1, 7) as $i) {
@@ -381,13 +381,13 @@ final class ClientOrderLayoutTest extends TestCase
             $this->entry(sprintf('2026-09-%02d 08:00:00', $i), 30);
         }
 
-        $tasks = $this->props('zadania')['tasks'];
+        $tasks = $this->props('tasks')['tasks'];
         $this->assertSame(7, $tasks['done']['count']);
         $this->assertCount(5, $tasks['done']['rows']);
         $this->assertCount(5, $tasks['time']['rows']);
         $this->assertSame(7, $tasks['time']['count']);
 
-        $response = $this->actingAs($this->user)->get("/clients/{$this->client->id}/zadania?wszystkie=done");
+        $response = $this->actingAs($this->user)->get("/clients/{$this->client->id}/tasks?expand=done");
         $this->assertCount(7, $response->viewData('page')['props']['tasks']['done']['rows']);
     }
 
@@ -395,7 +395,7 @@ final class ClientOrderLayoutTest extends TestCase
     {
         ClientRetainer::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'monthly_hours' => 10, 'effective_from' => '2026-01-01']);
 
-        $tasks = $this->props('zadania')['tasks'];
+        $tasks = $this->props('tasks')['tasks'];
         $this->assertSame('retainer', $tasks['mode']);
         $this->assertCount(3, $tasks['lanes']);
     }
@@ -404,15 +404,15 @@ final class ClientOrderLayoutTest extends TestCase
     {
         ClientRetainer::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'monthly_hours' => 10, 'effective_from' => '2026-01-01']);
 
-        $this->assertNull($this->props('przeglad')['overview']['order']);
-        $this->assertSame(ClientBillingMode::RETAINER, $this->props('rozliczenia')['billing']['mode']);
-        $this->assertArrayNotHasKey('order', $this->props('rozliczenia')['billing']);
-        $this->assertSame(ClientBillingMode::RETAINER, $this->props('dane')['client']['billing_mode']);
+        $this->assertNull($this->props('overview')['overview']['order']);
+        $this->assertSame(ClientBillingMode::RETAINER, $this->props('billing')['billing']['mode']);
+        $this->assertArrayNotHasKey('order', $this->props('billing')['billing']);
+        $this->assertSame(ClientBillingMode::RETAINER, $this->props('details')['client']['billing_mode']);
     }
 
-    public function test_dane_carries_the_individual_type(): void
+    public function test_details_carries_the_individual_type(): void
     {
-        $this->assertSame('individual', $this->props('dane')['details']['type']);
+        $this->assertSame('individual', $this->props('details')['details']['type']);
     }
 
     public function test_another_accounts_tasks_entries_invoices_and_retainers_never_reach_the_order_block(): void
@@ -428,16 +428,16 @@ final class ClientOrderLayoutTest extends TestCase
         Invoice::create(['account_id' => $other->id, 'client_id' => $foreign->id, 'external_id' => 'x-1', 'number' => '9/09/2026', 'status' => 'paid', 'invoice_date' => '2026-09-05', 'gross_price' => 100]);
         ClientRetainer::create(['account_id' => $other->id, 'client_id' => $foreign->id, 'monthly_hours' => 9, 'effective_from' => '2026-01-01']);
 
-        $order = $this->props('przeglad')['overview']['order'];
+        $order = $this->props('overview')['overview']['order'];
 
         $this->assertSame(['done' => 0, 'total' => 0], $order['tasks']);
         $this->assertSame(0.0, $order['hours']);
         $this->assertNull($order['invoice']);
         $this->assertSame(ClientBillingMode::ORDER, $this->mode());
-        $tasks = $this->props('zadania')['tasks'];
+        $tasks = $this->props('tasks')['tasks'];
         $this->assertSame([0, 0, 0], [$tasks['open']['count'], $tasks['done']['count'], $tasks['time']['count']]);
-        $this->assertSame(['task' => null, 'invoice' => null], $this->props('przeglad')['overview']['order_waiting']);
-        $this->actingAs($this->user)->get("/clients/{$foreign->id}/przeglad")->assertNotFound();
+        $this->assertSame(['task' => null, 'invoice' => null], $this->props('overview')['overview']['order_waiting']);
+        $this->actingAs($this->user)->get("/clients/{$foreign->id}/overview")->assertNotFound();
     }
 
     public function test_a_report_without_contracted_hours_never_becomes_bank_debt_and_the_brief_has_no_bank(): void
@@ -470,14 +470,14 @@ final class ClientOrderLayoutTest extends TestCase
         $this->report('2026-08-01', '2026-08-31', null);
         $queries = fn (string $tab): array => $this->queriesFor("/clients/{$this->client->id}/{$tab}");
 
-        $queries('przeglad');
-        $overview = $queries('przeglad');
-        $billing = $queries('rozliczenia');
+        $queries('overview');
+        $overview = $queries('overview');
+        $billing = $queries('billing');
         foreach (['2026-03', '2026-04', '2026-05', '2026-06', '2026-07'] as $month) {
             $this->report("{$month}-01", Carbon::parse("{$month}-01")->endOfMonth()->toDateString(), null);
         }
 
-        foreach (['przeglad' => $overview, 'rozliczenia' => $billing] as $tab => $before) {
+        foreach (['overview' => $overview, 'billing' => $billing] as $tab => $before) {
             $after = $queries($tab);
             $this->assertCount(count($before), $after, "{$tab} grows with the report history");
         }

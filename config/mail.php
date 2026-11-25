@@ -126,6 +126,11 @@ return [
     // A client email counts as sent only with this on, no redirect and a mailer other than log or array.
     'live_send' => (bool) env('MAIL_LIVE_SEND', false),
 
+    // An account's own sender never connects into these, on top of every private and reserved range.
+    'account_sender' => [
+        'blocked_subnets' => array_filter(explode(',', (string) env('STACK_SUBNET', ''))),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Markdown Mail Settings

@@ -54,7 +54,7 @@ final class OpenTaskDefinitionTest extends TestCase
 
     public function test_the_full_task_list_leaves_out_a_finished_card(): void
     {
-        $this->actingAs($this->user)->get('/zadania')
+        $this->actingAs($this->user)->get('/all-tasks')
             ->assertInertia(fn (Assert $page) => $page
                 ->where('groups.0.tasks', fn ($tasks) => collect($tasks)->pluck('name')->all() === ['Header still open'])
             );
@@ -115,7 +115,7 @@ final class OpenTaskDefinitionTest extends TestCase
         $this->client->delete();
 
         $this->assertSame(0, Task::query()->open()->count());
-        $this->actingAs($this->user)->get('/zadania')
+        $this->actingAs($this->user)->get('/all-tasks')
             ->assertInertia(fn (Assert $page) => $page->where('groups', []));
     }
 

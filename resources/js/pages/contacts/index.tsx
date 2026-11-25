@@ -1,5 +1,6 @@
 import InertiaPagination from '@/components/inertia-pagination';
 import { Chip } from '@/components/solo/chip';
+import { useLinkPrefetch } from '@/components/solo/link-prefetch';
 import { ListTable, ListTableCell, ListTableHead, ListTableRow } from '@/components/solo/list-table';
 import { Poster, SoloButton, SoloButtonLink } from '@/components/solo/primitives';
 import { Row } from '@/components/solo/row';
@@ -44,7 +45,7 @@ const keyOf = (opened: ContactsPageProps['opened']) => (opened === null ? null :
 const restore = (contact: ContactRecord) => router.put(contactsRoute.restore(contact.id).url, {}, { preserveScroll: true });
 
 /**
- * Figma: Kontakty (1088:4520, phone 1088:4837). The list is one tile: a table from 768 px, the person and the client
+ * Figma: Contacts (1088:4520, phone 1088:4837). The list is one tile: a table from 768 px, the person and the client
  * on a phone. The command bar narrows it; create and edit are ContactDialog over the list.
  */
 export default function ContactsIndex() {
@@ -54,7 +55,7 @@ export default function ContactsIndex() {
     const [openedKey, setOpenedKey] = useState(keyOf(opened));
     const [removing, setRemoving] = useState<ContactRecord | null>(null);
 
-    // A visit that names a contact (?kontakt=) opens it; the same answer again (after a save) does not.
+    // A visit that names a contact (?contact=) opens it; the same answer again (after a save) does not.
     if (keyOf(opened) !== openedKey) {
         setOpenedKey(keyOf(opened));
         if (opened !== null) setDialog({ open: true, contact: opened === 'new' ? null : opened });
@@ -62,7 +63,7 @@ export default function ContactsIndex() {
 
     const close = () => {
         setDialog((was) => ({ ...was, open: false }));
-        if (new URL(window.location.href).searchParams.has('kontakt')) {
+        if (new URL(window.location.href).searchParams.has('contact')) {
             router.get(contactsRoute.index.url(), listQuery(filters), { preserveState: true, preserveScroll: true, replace: true });
         }
     };
@@ -161,6 +162,8 @@ ContactsIndex.place = contactsPlace satisfies PlaceResolver<ContactsPageProps>;
 /** Person, client, e-mail. A phone keeps the person and the client; a deleted contact carries its chip (from 768 px) and the way back. */
 export function ContactTable({ rows, onOpen, onRestore }: { rows: ContactRow[]; onOpen: (contact: ContactRow) => void; onRestore: (contact: ContactRow) => void }) {
     const { t } = useTranslation();
+    const prefetch = useLinkPrefetch();
+    const clientHref = (id: number) => clientsRoute.show({ client: id, tab: 'overview' });
     const anyDeleted = rows.some((contact) => contact.deleted_at !== null);
 
     return (
@@ -177,8 +180,8 @@ export function ContactTable({ rows, onOpen, onRestore }: { rows: ContactRow[]; 
             <tbody>
                 {rows.map((contact) => (
                     <ListTableRow key={contact.id} minor={contact.deleted_at !== null}>
-                        <ListTableCell kind="title" truncate>
-                            <button type="button" className={styles.rowButton} onClick={() => onOpen(contact)}>
+                        <ListTableCell kind="title">
+                            <button type="button" className={styles.rowButton} title={contact.name} onClick={() => onOpen(contact)}>
                                 {contact.name}
                             </button>
                         </ListTableCell>
@@ -195,7 +198,7 @@ export function ContactTable({ rows, onOpen, onRestore }: { rows: ContactRow[]; 
                             {contact.client === null ? (
                                 t('No client')
                             ) : (
-                                <Link href={clientsRoute.show({ client: contact.client.id, tab: 'przeglad' })} className={styles.rowLink}>
+                                <Link href={clientHref(contact.client.id)} prefetch={prefetch(clientHref(contact.client.id))} className={styles.rowLink} title={contact.client.name}>
                                     {contact.client.name}
                                 </Link>
                             )}

@@ -17,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 /**
- * The Agenci tab: the owner issues, re-scopes and revokes the account's agent
+ * The Agents tab: the owner issues, re-scopes and revokes the account's agent
  * tokens through the same service as the agent-tokens:* commands.
  */
 final class AgentTokensController extends Controller

@@ -14,7 +14,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
 
-#[Description('Add a retainer (abonament) position to a client, or with id change only the fields given (null clears one). Positions are listed with their ids by client_brief. A change that would alter a month already closed or being settled is refused: change it from the next month on. Say what you will write and wait for the owner before calling it.')]
+#[Description('Add a retainer position to a client, or with id change only the fields given (null clears one). Positions are listed with their ids by client_brief. A change that would alter a month already closed or being settled is refused: change it from the next month on. Say what you will write and wait for the owner before calling it.')]
 final class RetainerSetTool extends Tool
 {
     use HandlesReferenceErrors;

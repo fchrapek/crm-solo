@@ -18,7 +18,7 @@ export function statusLabelKey(status: ReportStatus): string {
     }
 }
 
-/** The one forward step: Oznacz jako gotowy on a draft, Oznacz jako wysłany when it is ready; the frame's ink button, a menu item in the phone menu. */
+/** The one forward step: Mark as ready on a draft, Mark as sent when it is ready; the frame's ink button, a menu item in the phone menu. */
 export function StatusAction({ status, onConfirm }: { status: ReportStatus; onConfirm: (confirm: Confirm) => void }) {
     const { t } = useTranslation();
 
@@ -52,7 +52,7 @@ export function statusLine(
         : t(statusLabelKey(report.status));
 }
 
-/** The chip beside Wysyłka: a draft is open, a ready report waits to go out, a sent one is done. */
+/** The chip beside Delivery: a draft is open, a ready report waits to go out, a sent one is done. */
 export function statusChip(
     report: { status: ReportStatus; sent_on: string | null },
     locale: string,
@@ -70,7 +70,7 @@ export function statusChip(
 
 const EDITING = 'edycja';
 
-/** The editor is a place of its own (the Edytuj pill), so the mode travels in the URL. */
+/** The editor is a place of its own (the Edit pill), so the mode travels in the URL. */
 export function isEditing(url: string): boolean {
     return new URLSearchParams(url.split('?')[1] ?? '').get(EDITING) === '1';
 }

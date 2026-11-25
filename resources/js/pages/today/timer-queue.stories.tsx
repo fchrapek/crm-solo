@@ -4,7 +4,7 @@ import { picks } from './story-fixtures';
 
 /** Figma: Timer A2, the side column: the day's picks as Queue rows on the timer surface. */
 const meta = {
-    title: 'Dziś/Timer queue',
+    title: 'Today/Timer queue',
     component: TimerQueue,
     args: { picks, runningTaskId: 44 },
     globals: { day: 'timer' },

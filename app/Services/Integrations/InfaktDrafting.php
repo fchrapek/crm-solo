@@ -20,7 +20,7 @@ use RuntimeException;
 use Throwable;
 
 /**
- * The one way into an Infakt draft for the command, the agent verb and tool, and the Rozliczenia block. Draft only.
+ * The one way into an Infakt draft for the command, the agent verb and tool, and the Billing block. Draft only.
  * The unit is the invoice group, named by its positions' projects; each group is drafted once a month, from the
  * retainer or as a copy (Wystaw podobna) of the invoice recorded for it in the latest earlier month. A group with no
  * usable source is `needs_source` until the owner picks an invoice; the other groups still draft.
@@ -55,7 +55,7 @@ final class InfaktDrafting
     }
 
     /**
-     * $chainOnly: `last` copies only a group's recorded invoice, never the client's latest one (the Rozliczenia block,
+     * $chainOnly: `last` copies only a group's recorded invoice, never the client's latest one (the Billing block,
      * where a first copy is always a pick).
      *
      * @return array{period: string, mode: string, results: list<array<string, mixed>>}
@@ -83,7 +83,7 @@ final class InfaktDrafting
     }
 
     /**
-     * What the Rozliczenia picker offers: the client's issued VAT invoices, newest first.
+     * What the Billing picker offers: the client's issued VAT invoices, newest first.
      *
      * @return Collection<int, array{uuid: ?string, number: ?string, invoice_date: ?string, sale_date: ?string, net_price: int, currency: string, lines: list<string>}>
      *
@@ -108,7 +108,7 @@ final class InfaktDrafting
     }
 
     /**
-     * The billed month's invoices per group for the Rozliczenia block, read from the CRM only (draft rows and the
+     * The billed month's invoices per group for the Billing block, read from the CRM only (draft rows and the
      * invoice mirror): what each group would copy, or its draft. Null when the client is not drafted through Infakt.
      *
      * @return array{period: string, groups: list<array<string, mixed>>}|null
@@ -238,10 +238,10 @@ final class InfaktDrafting
         $groups = InfaktService::invoiceGroupProjects($client, $month);
         $period = $month->format('Y-m');
         if ($groups === []) {
-            throw new RuntimeException("Refusing: no active fee-bearing abonament position for {$client->name} on {$month->copy()->endOfMonth()->toDateString()}.");
+            throw new RuntimeException("Refusing: no active fee-bearing retainer position for {$client->name} on {$month->copy()->endOfMonth()->toDateString()}.");
         }
         if ($project !== null && ! collect($groups)->contains(fn (array $ids): bool => in_array($project->id, $ids, true))) {
-            throw new RuntimeException("Refusing: {$project->name} is on no fee-bearing abonament position of {$client->name} on {$month->copy()->endOfMonth()->toDateString()}.");
+            throw new RuntimeException("Refusing: {$project->name} is on no fee-bearing retainer position of {$client->name} on {$month->copy()->endOfMonth()->toDateString()}.");
         }
         $wanted = fn (int $group, array $ids): bool => ($project === null || in_array($project->id, $ids, true)) && ($only === null || $group === $only);
 
@@ -490,7 +490,7 @@ final class InfaktDrafting
         }
     }
 
-    /** The last copy attempt's refusal for a group of a month, kept so the block shows the pick instead of Kopiuj. */
+    /** The last copy attempt's refusal for a group of a month, kept so the block shows the pick instead of Copy invoice. */
     private function refusalKey(Client $client, string $period, int $group): string
     {
         return "infakt-draft-refusal:{$client->id}:{$period}:{$group}";

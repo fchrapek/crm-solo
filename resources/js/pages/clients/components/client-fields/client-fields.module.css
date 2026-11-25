@@ -1,4 +1,4 @@
-/* Client fields, their history and text messages on the client record and the SMS queue. Phone first. */
+/* Client fields and text messages on the client record and the SMS queue. Phone first. */
 
 .grid {
     display: grid;
@@ -11,14 +11,6 @@
     font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
 }
 
-.empty {
-    margin: 0;
-    padding: var(--solo-space-3) var(--solo-head-inset, 0);
-    border-radius: var(--solo-block-radius, 0);
-    background: var(--solo-block, none);
-    color: var(--solo-fg-muted);
-    font: 400 var(--solo-text-sub) / 1.45 var(--solo-font-text);
-}
 
 .checks {
     display: flex;
@@ -56,29 +48,6 @@
     width: 18px;
     height: 18px;
     accent-color: var(--solo-fg);
-}
-
-/* field history */
-.history {
-    margin: 0;
-    padding: var(--solo-block-pad, 0);
-    border-radius: var(--solo-block-radius, 0);
-    background: var(--solo-block, none);
-    list-style: none;
-}
-
-.historyRow {
-    display: flex;
-    gap: var(--solo-space-3);
-    padding: var(--solo-space-3) var(--solo-row-inset, 0);
-    border-bottom: 1px solid var(--solo-rule);
-    color: var(--solo-fg);
-    font: 400 var(--solo-text-sub) / 1.4 var(--solo-font-text);
-    overflow-wrap: anywhere;
-}
-
-.historyRow:last-child {
-    border-bottom-color: var(--solo-rule-end, var(--solo-rule));
 }
 
 /* messages: the row's text opens the details */

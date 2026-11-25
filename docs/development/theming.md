@@ -9,7 +9,7 @@ One theme, Paper (the A2f look), and two independent axes persisted per browser:
 
 `app.blade.php` stamps `data-theme="paper"` on `<html>` and `initializeTheme()` in
 `hooks/use-theme.tsx` sets it again on load, because `themes.css` keys its tokens on that
-attribute. Ustawienia · Wygląd (`/settings/wyglad`) sets the language, the mode and the accent.
+attribute. Mój profil · Wygląd (`/profile`) sets the language and the mode.
 
 Boring SaaS and the older Ink, Brutal and Bauhaus themes were removed on 2026-11-11, with their
 CSS, their fonts and the theme picker. A browser that still holds a `theme` value in localStorage
@@ -34,8 +34,44 @@ rebuilt matches the shell in light and dark.
 
 Tiles are never outlined: every tile has the tile fill (`--role-tile`, one step lighter than the page in dark), and
 a measured figure stands out through the poster face. The 2 px ink outline (`--role-outline`,
-`--role-stroke-outline`) belongs to small controls: buttons, pills, the hours bar, fields, the helper's bubble and
-window, the command bar's key badge. The vermilion timer tile is the one coloured tile.
+`--role-stroke-outline`) belongs to small controls: buttons, pills, the hours bar, the command bar's key
+badge. The vermilion timer tile is the one coloured tile.
+
+Fields are filled on tone, never outlined (Figma, Shared · Dialogs and fields, B): an input, select, textarea or
+date field is the page tone (`--solo-field-bg`, which reads `--role-page`) on its tile or dialog, with a transparent
+1 px border that keeps its size. Hover mixes 6 % of the text colour into the fill; focus is a 2 px
+`--role-focus-ring` ring inside the box and error a 2 px ink ring with the message under the field, never red;
+disabled is 50 % opacity. The empty fill is about 1.16:1 against the tile in both appearances, so the label and
+the value or placeholder (`--solo-fg-muted`, 5:1 on the fill) carry the field's shape. Dialogs and confirms have
+no edge in either appearance and no rule over the footer: the actions sit on a band of the same tone to the
+dialog's edges, Cancel the quiet button and the submit the one strong button. A bottom sheet has no rule under
+its header, and its foot actions take the same band.
+
+## Motion
+
+One set of tokens in `variables.css` (Figma, Shared · Transitions, set B), CSS `transition` and keyframes only, no
+animation library and no JS timers:
+
+| Token | Value | For |
+|---|---|---|
+| `--motion-fast` | 120 ms | colour, background, border and opacity of every control: buttons and icon buttons, pills and menu pills, row hover fills, rail icons, a switch's track, a field's hover fill, the page cross-fade |
+| `--motion-base` | 160 ms | what moves: a switch's knob, the folded group's caret, menus and popovers opening (opacity and 4 px from the trigger side) |
+| `--motion-slow` | 200 ms | dialogs and bottom sheets (scrim fade, the panel 8 px up, the sheet from below) and a folded group's body |
+
+Whatever closes takes the `-exit` value (`--motion-fast-exit`, `--motion-base-exit`, `--motion-slow-exit`, 0.75 of
+the entry) and `--ease-exit`; everything else eases with `--ease-standard`. Colour states come from one
+zero-specificity rule in `solo.css` (`:where([data-day] *)`), so a component writes its own `transition` only for a
+transform or an overlay. Focus rings, a press, a keyboard highlight (`data-highlighted`, `data-selected`) and disabled
+change at once. Only colour, background, border colour, box shadow, opacity and transform move, with one exception:
+`Fold` (`components/solo/fold.tsx`) opens a body with `grid-template-rows: 0fr` to `1fr`, which needs no measuring, and
+everything that opens in place goes through it (`fold.test.tsx` names the exceptions). Its content stays
+mounted, so a refused field in a closed group can take the focus once the group opens; a closed body is `inert` and
+turns `visibility: hidden` when its fold has ended, so Tab and screen readers skip it.
+
+`prefers-reduced-motion: reduce` sets `--motion-base` and `--motion-slow` to 0 ms in `variables.css`, so nothing
+slides, grows or rotates; `--motion-fast` stays, so a colour still fades. `bun run lint:tokens` fails on any
+transition or animation in any stylesheet that writes its own time or easing, or reads a variable that is not a
+motion token (`scripts/motion-tokens.mjs`); a looping animation (`infinite`, the spinner) keeps its own period.
 
 ## Typography and icons
 
@@ -43,8 +79,16 @@ window, the command bar's key badge. The vermilion timer tile is the one coloure
 Spline Sans. The Solo screens use two families and no more (`solo.css`): Archivo for display and
 Switzer for everything else, figures included (Switzer's digits share one width, and the shell
 root sets `tabular-nums`). Inter stays declared in `fonts.css` as the last named face in the Solo
-text stack. The system monospace appears only where 0 and O must be told apart: a token field,
-the report diff, a code block.
+text stack. No monospace face anywhere: code, the report diff and a token field use the text face
+(`base.css` resets the browser's mono default for `code`, `kbd`, `samp` and `pre`).
+
+Names in narrow places are one line with an ellipsis and the native tooltip, never a wrap that grows the
+row: `<Row>` cuts its title from 768 px, `ListTableCell` has `truncate`, a command bar token stops at about 30
+characters. Every element a stylesheet cuts (an ellipsis or a line clamp) carries its whole text in `title`; a
+part given a node reads the text with `fullText()` (`lib/plain-text.ts`, HTML elements only, never a
+component's children). `full-text.test.tsx` lists every cutting rule and where its tooltip comes from, so a new
+one fails until it is listed. A poster name is never cut: a task title and a client's name share
+`<Poster size="record">` and wrap whole. A row's `wrap` is for text that is content (a note, a message).
 
 Eight type roles, each with one intention (`type-roles.test.ts` guards the rules):
 
@@ -112,7 +156,7 @@ invisible to theming.
 
 ## Guards (`bun run lint:tokens`)
 
-Four contracts, all failing the build:
+Five contracts, all failing the build:
 
 1. Every `var(--x)` in the CSS layer resolves to a property defined in
    `variables.css` or `solo.css` (catches invented token names).
@@ -124,6 +168,8 @@ Four contracts, all failing the build:
 4. **The Solo layer is mobile first.** In `solo.css` and `components/solo/`,
    width queries are `min-width` at 768px or 1100px only (see `day-screens.md`,
    Phones).
+5. **Motion comes from the tokens.** No transition or animation in any
+   stylesheet writes its own duration or easing (see Motion above).
 
 ## Verifying contrast (read before writing a probe)
 
@@ -134,8 +180,8 @@ distinct ways — each of these produced confident, false results here:
 2. **`color-mix()` returns `color(srgb 0.25 0.94 …)`** — 0-1 floats that read as
    near-black if parsed as 0-255. Chrome does *not* normalise this to `rgb()` in
    computed style.
-3. **Transitions.** Lanes carry `transition: background 0.12s`, so reading
-   immediately after switching returns the *previous* colour. Wait ~250ms.
+3. **Transitions.** Every colour on a Solo surface fades over `--motion-fast`, so
+   reading immediately after switching returns the *previous* colour. Wait ~250ms.
 4. **Alpha compositing.** Tinted pills have semi-transparent backgrounds;
    comparing text against the un-composited colour understates contrast
    dramatically (1.2:1 where the real value was 4.7:1).

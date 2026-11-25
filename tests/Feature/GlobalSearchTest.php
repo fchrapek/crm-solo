@@ -15,6 +15,7 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Tests\Feature\Concerns\CallsAgentSurfaces;
 use Tests\TestCase;
 
@@ -63,7 +64,7 @@ final class GlobalSearchTest extends TestCase
 
         $this->assertSame(['clients', 'tasks', 'contacts', 'leads', 'reports', 'invoices'], array_column($result['groups'], 'group'));
         $this->assertSame(['Pracownia Mebli'], array_column($result['groups'][0]['items'], 'title'));
-        $this->assertSame("/clients/{$this->client->id}/przeglad", $result['groups'][0]['items'][0]['url']);
+        $this->assertSame("/clients/{$this->client->id}/overview", $result['groups'][0]['items'][0]['url']);
         $this->assertStringNotContainsString('Obce', json_encode($result, JSON_THROW_ON_ERROR));
     }
 
@@ -98,6 +99,26 @@ final class GlobalSearchTest extends TestCase
         $invoices = collect($this->actingAs($this->user)->getJson('/search?q=21/09')->assertOk()->json('groups'))->firstWhere('group', 'invoices');
 
         $this->assertSame(19.2, $invoices['items'][0]['detail']['net']);
+    }
+
+    public function test_an_invoice_leads_to_its_clients_billing_tab_with_no_fragment(): void
+    {
+        $invoices = collect($this->actingAs($this->user)->getJson('/search?q=21/09')->assertOk()->json('groups'))->firstWhere('group', 'invoices');
+
+        $this->assertSame("/clients/{$this->client->id}/billing", $invoices['items'][0]['url']);
+    }
+
+    public function test_an_empty_answer_counts_what_the_archive_would_add(): void
+    {
+        $empty = $this->actingAs($this->user)->getJson('/search?q=galeria')->assertOk()->json();
+        $this->assertSame([], $empty['groups']);
+        $this->assertSame(1, $empty['archived_total']);
+
+        $this->assertSame(0, $this->actingAs($this->user)->getJson('/search?q=mebl')->json('archived_total'));
+        $this->assertSame(0, $this->actingAs($this->user)->getJson('/search?q=galeria&archived=1')->json('archived_total'));
+
+        Artisan::call('crm:search', ['query' => 'galeria']);
+        $this->assertStringContainsString('1 with --archived', Artisan::output());
     }
 
     public function test_a_single_character_searches_nothing(): void

@@ -1,3 +1,4 @@
+import { IconButton } from '@/components/solo/icon-button';
 import { Icon } from '@/components/ui/icon';
 import { CANONICAL_LANES, isCanonicalLane, listLaneLabel } from '@/lib/list-lane-label';
 import { router } from '@inertiajs/react';
@@ -5,8 +6,9 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
+import { SoloInput } from '@/components/solo/field';
+import { SoloButton } from '@/components/solo/primitives';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import styles from './list-mapping-dialog.module.css';
@@ -119,9 +121,11 @@ export function ListMappingDialog({ open, onOpenChange, projectId, lists, mappin
                             </div>
                             {lists.map((list) => (
                                 <div key={list.id} className={styles.row}>
-                                    <span className={styles.listName}>{list.name}</span>
+                                    <span className={styles.listName} title={list.name}>
+                                        {list.name}
+                                    </span>
                                     <Select value={mapping[list.id] ?? 'Backlog'} onValueChange={(v) => updateLane(list.id, v)} disabled={processing}>
-                                        <SelectTrigger>
+                                        <SelectTrigger look="solo">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -153,22 +157,15 @@ export function ListMappingDialog({ open, onOpenChange, projectId, lists, mappin
 
                         {customLanes.map((lane) => (
                             <div key={lane} className={styles.customLaneRow}>
-                                <span className={styles.listName}>{lane}</span>
-                                <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="ghost"
-                                    aria-label={t('Remove lane')}
-                                    onClick={() => removeCustomLane(lane)}
-                                    disabled={processing}
-                                >
-                                    <Icon name="close" size={16} />
-                                </Button>
+                                <span className={styles.listName} title={lane}>
+                                    {lane}
+                                </span>
+                                <IconButton icon="close" look="quiet" label={t('Remove lane')} onClick={() => removeCustomLane(lane)} disabled={processing} />
                             </div>
                         ))}
 
                         <div className={styles.addLaneRow}>
-                            <Input
+                            <SoloInput
                                 type="text"
                                 value={newLaneName}
                                 onChange={(e) => setNewLaneName(e.target.value)}
@@ -189,12 +186,12 @@ export function ListMappingDialog({ open, onOpenChange, projectId, lists, mappin
                     </div>
 
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={processing}>
+                        <SoloButton variant="pill" type="button" onClick={() => onOpenChange(false)} disabled={processing}>
                             {t('Cancel')}
-                        </Button>
-                        <Button type="submit" disabled={processing || lists.length === 0}>
+                        </SoloButton>
+                        <SoloButton variant="ink" size="md" type="submit" disabled={processing || lists.length === 0}>
                             {processing ? t('Saving…') : t('Save')}
-                        </Button>
+                        </SoloButton>
                     </DialogFooter>
                 </form>
             </DialogContent>

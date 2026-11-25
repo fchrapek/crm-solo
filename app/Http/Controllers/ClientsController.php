@@ -18,21 +18,23 @@ use App\Services\Clients\ClientOverviewQuery;
 use App\Services\Clients\ClientSwitcherQuery;
 use App\Services\Clients\ClientTasksQuery;
 use App\Services\Clients\ClientViews;
+use App\Services\Clients\MonthCloseModule;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request as HttpRequest;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use Inertia\Support\Header;
 
 final class ClientsController extends Controller
 {
     /** The client record's tabs, in header order; the route accepts only these. */
-    public const array TABS = ['przeglad', 'zadania', 'dziennik', 'rozliczenia', 'dane'];
+    public const array TABS = ['overview', 'tasks', 'journal', 'billing', 'details'];
 
     public function index(): Response
     {
@@ -49,10 +51,10 @@ final class ClientsController extends Controller
         return response()->json($query->for(Auth::user()));
     }
 
-    /** Creating a client is a dialog on Klienci now; the old address opens it there. */
+    /** Creating a client is a dialog on Clients now; the old address opens it there. */
     public function create(): RedirectResponse
     {
-        return Redirect::route('clients.index', ['nowy' => 1]);
+        return Redirect::route('clients.index', ['new' => 1]);
     }
 
     public function store(ClientsRequest $request, ClientCreator $creator): RedirectResponse
@@ -60,40 +62,62 @@ final class ClientsController extends Controller
         $client = $creator->create(Auth::user()->account_id, $request->validated())['client'];
 
         // A fresh record is filled in next, so it lands on its data rather than the list.
-        return Redirect::route('clients.show', [$client, 'dane'])->with('success', translate_with_gender('created', 'Client'));
+        return Redirect::route('clients.show', [$client, 'details'])->with('success', translate_with_gender('created', 'Client'));
     }
 
     public function record(Client $client): RedirectResponse
     {
-        return Redirect::route('clients.show', [$client, 'przeglad']);
+        return Redirect::route('clients.show', [$client, 'overview']);
     }
 
     public function show(Client $client, string $tab): Response
     {
-        abort_if($tab === 'rozliczenia' && ! $client->account->shows('billing', Auth::user()), 404);
-        $since = $this->openRecord($client);
+        abort_if($tab === 'billing' && ! $client->account->shows('billing', Auth::user()), 404);
+        // The page reports its opening (view()) as of read_at, so a prefetch, a partial reload and a copy served from the cache read alike.
+        $readAt = CarbonImmutable::now('UTC')->startOfSecond();
+        $since = app(ClientViews::class)->since(Auth::user(), $client);
         $mode = app(ClientBillingMode::class)->of($client);
 
         return Inertia::render('clients/show', [
             'tab' => $tab,
-            // A closure, so Przegląd's SMS poll (a partial reload of overview) skips the header.
+            'read_at' => $readAt->getTimestamp(),
+            // A closure, so Overview's SMS poll (a partial reload of overview) skips the header.
             'client' => fn (): array => app(ClientHeader::class)->props($client, $mode),
             ...match ($tab) {
-                'przeglad' => app(ClientOverviewQuery::class)->props($client, $since, $mode),
-                'dziennik' => app(ClientJournalQuery::class)->props($client, $since, $this->queryString('praca'), $this->queryString('wpisy')),
-                'zadania' => app(ClientTasksQuery::class)->props($client, is_string(Request::query('wszystkie')) ? Request::query('wszystkie') : null, $mode),
-                'rozliczenia' => app(ClientBillingQuery::class)->props(
+                'overview' => app(ClientOverviewQuery::class)->props($client, $since, $mode),
+                'journal' => app(ClientJournalQuery::class)->props($client, $since, $this->queryString('work'), $this->queryString('notes'), $this->queryString('view')),
+                'tasks' => [
+                    ...app(ClientTasksQuery::class)->props($client, is_string(Request::query('expand')) ? Request::query('expand') : null, $mode),
+                    'parent_options' => Inertia::optional(fn (): array => app(ClientTasksQuery::class)->parentOptions($client)),
+                ],
+                'billing' => app(ClientBillingQuery::class)->props(
                     $client,
-                    $this->queryString('miesiace'),
+                    $this->queryString('ledger'),
                     $mode,
-                    $this->queryString('miesiac'),
+                    $this->queryString('month'),
                     $this->queryString('invoice_year'),
                     $this->queryString('invoice_month'),
                 ),
-                'dane' => app(ClientDetailsQuery::class)->props($client),
+                'details' => app(ClientDetailsQuery::class)->props($client),
                 default => [],
             },
         ]);
+    }
+
+    /**
+     * The record page reports each opening, also one shown from the prefetch cache without a request, as of when its
+     * data was read: however long ago, as a page restored from history reports its own reading and a view never moves
+     * back, but never ahead of this server's clock by more than READ_AT_SKEW_SECONDS.
+     */
+    public function view(HttpRequest $request, Client $client, ClientViews $views): HttpResponse
+    {
+        $now = CarbonImmutable::now('UTC')->getTimestamp();
+        $validated = $request->validate([
+            'read_at' => ['required', 'integer', 'max:'.($now + ClientViews::READ_AT_SKEW_SECONDS), 'min:'.($client->created_at?->getTimestamp() ?? 0)],
+        ]);
+        $views->open(Auth::user(), $client, CarbonImmutable::createFromTimestamp((int) $validated['read_at'], 'UTC'));
+
+        return response()->noContent();
     }
 
     /** What `crm brief --json` gives an agent, for pasting into an agent session. */
@@ -107,17 +131,17 @@ final class ClientsController extends Controller
     /** The documents and settings page is retired: every part of it lives on the record's tabs, so the old address opens the record. */
     public function edit(Client $client): RedirectResponse
     {
-        return Redirect::route('clients.show', [$client, 'przeglad']);
+        return Redirect::route('clients.show', [$client, 'overview']);
     }
 
     public function update(Client $client, ClientsRequest $request): RedirectResponse
     {
-        $client->update($request->validated());
+        $on = app(MonthCloseModule::class)->enrol($client, fn () => $client->update($request->validated()));
 
-        return Redirect::back()->with('success', translate_with_gender('updated', 'Client'));
+        return Redirect::back()->with('success', $on ? __('month_close_module_turned_on') : translate_with_gender('updated', 'Client'));
     }
 
-    public function updateReportBaseline(\Illuminate\Http\Request $request, Client $client): RedirectResponse
+    public function updateReportBaseline(HttpRequest $request, Client $client): RedirectResponse
     {
         $data = $request->validate([
             'report_baseline_markdown' => ['nullable', 'string', 'max:20000'],
@@ -136,13 +160,9 @@ final class ClientsController extends Controller
     {
         Gate::authorize('manage-account');
 
-        if (Request::boolean('delete_contacts')) {
-            $client->contacts()->delete();
-        }
-
         $client->delete();
 
-        return Redirect::route('clients.index')->with('success', translate_with_gender('deleted', 'Client'));
+        return Redirect::route('clients.index')->with('success', __('Client archived.'));
     }
 
     public function restore(Client $client): RedirectResponse
@@ -170,15 +190,15 @@ final class ClientsController extends Controller
 
         $next = $data['month_close_type'] ?? null;
         $updates = ['month_close_type' => $next];
-        // Newly typed into the close => included by default ("Strona pod
-        // opieką" implies month closing). An explicit uncheck survives
+        // Newly typed into the close => included by default (Maintenance
+        // site implies month closing). An explicit uncheck survives
         // maintenance<->gig switches because only null->typed flips it.
         if ($next !== null && $client->month_close_type === null) {
             $updates['include_in_month_close'] = true;
         }
-        $client->update($updates);
+        $on = app(MonthCloseModule::class)->enrol($client, fn () => $client->update($updates));
 
-        return Redirect::back();
+        return $on ? Redirect::back()->with('success', __('month_close_module_turned_on')) : Redirect::back();
     }
 
     public function updateReportMode(Client $client): RedirectResponse
@@ -211,17 +231,6 @@ final class ClientsController extends Controller
         $client->transitionTo($data['stage'], $note, Auth::user());
 
         return Redirect::back()->with('success', __('Stage updated.'));
-    }
-
-    /** A page the user opens records the view; a partial reload or a prefetch only reads where "nowe" starts. */
-    private function openRecord(Client $client): CarbonImmutable
-    {
-        $views = app(ClientViews::class);
-        $user = Auth::user();
-
-        return Request::hasHeader(Header::PARTIAL_COMPONENT) || Request::header('Purpose') === 'prefetch'
-            ? $views->since($user, $client)
-            : $views->open($user, $client);
     }
 
     private function queryString(string $key): ?string

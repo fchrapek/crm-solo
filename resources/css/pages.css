@@ -19,7 +19,7 @@
     max-width: 48rem;
 }
 
-/* Wide-main + short-rail record layout (client Dane / Raporty / Aktywność;
+/* Wide-main + short-rail record layout (client Details / Reports / Activity;
    the lead view shares the anatomy). Width comes from the enclosing tab
    column — this only splits it. */
 .recordColumns {

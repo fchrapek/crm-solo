@@ -29,7 +29,7 @@ final class MonthCloseController extends Controller
     private const string FIRST_PERIOD = '2026-06';
 
     /**
-     * Figma: Zamknięcie miesiąca, direction A. Every client in the period's close, one row each; the CRM tracks
+     * Figma: Month close, direction A. Every client in the period's close, one row each; the CRM tracks
      * the checklist, the work itself happens with the agent.
      */
     public function index(Request $request, MonthCloseWorklist $worklist): Response
@@ -43,7 +43,7 @@ final class MonthCloseController extends Controller
         ]);
     }
 
-    /** Figma: Zamknięcie miesiąca, the client card: the steps per site, then the client's own, beside the hours close. */
+    /** Figma: Month close, the client card: the steps per site, then the client's own, beside the hours close. */
     public function show(Request $request, Client $client, MonthCloseWorklist $worklist, SummaryEmails $emails): Response
     {
         $period = $this->resolvePeriod((string) $request->input('period', ''));

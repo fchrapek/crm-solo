@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
 
-/** Klient / Dane, Pola klienta: the fields, the assignee and the opt-out, through the writer the verbs use. */
+/** Client / Details, Client fields: the fields, the assignee and the opt-out, through the writer the verbs use. */
 final class ClientFieldValuesController extends Controller
 {
     public function update(Request $request, Client $client, ClientFieldWriter $writer, MessageSettings $messages): RedirectResponse

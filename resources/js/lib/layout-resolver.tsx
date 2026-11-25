@@ -9,7 +9,7 @@ export interface PageModule {
 }
 
 /** Login and the waitlist splash stand alone; every other page goes through the shell, which shows a guest the page alone. */
-const isBarePage = (pageName: string) => pageName === 'auth/login' || pageName === 'auth/czesc';
+const isBarePage = (pageName: string) => pageName === 'auth/login' || pageName === 'auth/waitlist';
 
 export function applyLayoutToPage(module: unknown, pageName: string): void {
     const page = (module as PageModule).default;

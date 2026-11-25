@@ -199,6 +199,30 @@ final class TrelloAdoptionTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_memory_the_process_holds_before_the_run_does_not_make_a_fast_run_heavy(): void
+    {
+        Log::spy();
+        Project::create(['account_id' => $this->account->id, 'name' => 'Board', 'trello_board_id' => 'board_first']);
+        $spent = str_repeat('x', 160 * 1048576);
+        unset($spent);
+        $held = str_repeat('x', 160 * 1048576);
+
+        $this->fakeTrelloWith(['board_first']);
+        $this->artisan('trello:sync', ['--force' => true, '--sync' => true])->assertSuccessful();
+
+        Log::shouldHaveReceived('log')->with('info', 'Trello sync run finished', Mockery::any())->once();
+        Log::shouldNotHaveReceived('log', ['warning', 'Trello sync run finished', Mockery::any()]);
+        unset($held);
+
+        $this->fakeTrelloWith(['board_first'], function (): void {
+            $heavy = str_repeat('x', 160 * 1048576);
+            unset($heavy);
+        });
+        $this->artisan('trello:sync', ['--force' => true, '--sync' => true])->assertSuccessful();
+
+        Log::shouldHaveReceived('log')->with('warning', 'Trello sync run finished', Mockery::on(fn (array $run): bool => $run['run_memory_mb'] > 150))->once();
+    }
+
     /**
      * Fake the two endpoints syncAllBoards walks: the board list, then per-board
      * detail, lists and cards. Every board gets exactly one card.

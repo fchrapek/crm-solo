@@ -10,7 +10,7 @@ import styles from './client-overview.module.css';
 import { orderInvoiceNumber, orderInvoiceState, orderStateLabel, orderTasksLine } from './order-format';
 import type { ClientOrder, OrderInvoice } from './types';
 
-/** The Zlecenie tile in place of Godziny: the order, its time and tasks, then the invoice as the figure. */
+/** The Order tile in place of Hours: the order, its time and tasks, then the invoice as the figure. */
 export function OrderSection({ order, locale }: { order: ClientOrder; locale: string }) {
     const { t } = useTranslation();
     const state = orderStateLabel(order.state, t);

@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
- * Aktywność on the task page: what happened on one task, newest first, each
+ * Activity on the task page: what happened on one task, newest first, each
  * event once. Logged time and notes come from their own rows (an agent's
  * audit rows for them are skipped), agent edits of the task and its brief
  * from the audit trail, and the owner's finish from the task itself, the

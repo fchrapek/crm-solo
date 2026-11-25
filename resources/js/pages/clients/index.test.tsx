@@ -8,7 +8,7 @@ import pl from '../../../../lang/pl.json';
 import { type PlaceLinkPill, type PlaceMenuPill } from '@/components/solo/shell/place';
 import { CLEAR_FILTERS, listQuery, type ListQuery } from './components/client-list/filters';
 import { setClientPinned } from './components/client-pin';
-import { ClientRow, FirstRun, OpenMonthsNote, openMonthsText, type ClientListRow } from './index';
+import { ClientRow, ClientTable, FirstRun, OpenMonthsNote, openMonthsText, type ClientListRow } from './index';
 import { clientListPlace, noClients } from './place';
 
 await i18next.use(initReactI18next).init({ lng: 'pl', resources: { pl: { translation: pl } }, interpolation: { escapeValue: false } });
@@ -25,6 +25,7 @@ const row: ClientListRow = {
     is_archived: false,
     is_pinned: true,
     agent_live: false,
+    agent_minutes: null,
     hours: { period: '2026-10', behind: false, has_retainer: true, used: 4, available: 10, remaining: 6, logged: 4 },
 };
 
@@ -41,7 +42,7 @@ describe('ClientRow', () => {
     test('a pinned client shows a small pin mark beside the name link, with no pin button, and the name still opens the record', () => {
         const html = rowHtml(row);
 
-        expect(html).toContain('href="/clients/7/przeglad"');
+        expect(html).toContain('href="/clients/7/overview"');
         expect(html).toMatch(/<\/a><span role="img" aria-label="Przypięty"[^>]*data-icon="pin">/);
         expect(html).not.toContain('<button');
     });
@@ -62,9 +63,27 @@ describe('ClientRow', () => {
         expect(html).toMatch(/data-tone="muted"[^>]*><span[^>]*>·</);
     });
 
-    test('a working agent is named in the row', () => {
-        expect(rowHtml({ ...row, agent_live: true })).toContain('Claude pracuje');
+    test('a working agent is a dot before the name that names the agent and its minutes, with no column of its own', () => {
+        const html = rowHtml({ ...row, agent_live: true, agent_minutes: 14 });
+
+        expect(html).toMatch(/<button type="button"[^>]*aria-label="Claude pracuje · 14 min"[^>]*><span[^>]*data-status="agent"/);
+        expect(html.match(/<td/g)).toHaveLength(4);
+        expect(html).not.toMatch(/<span class="[^"]*chip[^"]*">/);
         expect(rowHtml(row)).not.toContain('pracuje');
+        expect(rowHtml(row).match(/<td/g)).toHaveLength(4);
+    });
+
+    test('an agent without a known start is still named, without minutes', () => {
+        expect(rowHtml({ ...row, agent_live: true, agent_minutes: null })).toContain('aria-label="Claude pracuje"');
+    });
+});
+
+describe('ClientTable', () => {
+    test('the head has the name, the month, the open month and the balance, and no attention column', () => {
+        const html = renderToStaticMarkup(<ClientTable rows={[row]} period="2026-10" />);
+
+        expect(html.match(/<th[ >]/g)).toHaveLength(4);
+        expect(html).not.toContain('Uwaga');
     });
 });
 
@@ -148,7 +167,7 @@ describe('the place of Klienci', () => {
         expect(churned.href).toBe('/clients?stage=churned&cooperation_type=retainer&search=kawa');
     });
 
-    test('Współpraca is a menu pill: Wszyscy as the sum of the rows, types without clients left out, the current one marked', () => {
+    test('Cooperation is a menu pill: All clients as the sum of the rows, types without clients left out, the current one marked', () => {
         const [cooperation] = menus({ stage: 'paused', cooperation_type: 'retainer', search: '' });
 
         expect(cooperation.label).toBe('Współpraca: abonament');
@@ -210,7 +229,7 @@ describe('the place of Klienci', () => {
 });
 
 describe('the first run', () => {
-    test('an account with no client in any stage shows the dog looking up, one line and Nowy klient, and no pills', () => {
+    test('an account with no client in any stage shows the dog looking up, one line and New client, and no pills', () => {
         const empty = { active: 0, paused: 0, former: 0 };
         const html = renderToStaticMarkup(<FirstRun onCreate={() => {}} />);
 

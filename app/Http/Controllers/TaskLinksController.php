@@ -9,7 +9,7 @@ use App\Models\TaskLink;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
-/** Links under Zasoby. A link is the CRM's on a Trello card too; Trello never receives it. */
+/** Links under Resources. A link is the CRM's on a Trello card too; Trello never receives it. */
 final class TaskLinksController extends Controller
 {
     public function store(Request $request, Task $task): RedirectResponse

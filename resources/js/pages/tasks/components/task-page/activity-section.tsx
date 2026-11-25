@@ -18,7 +18,7 @@ import { LIVE_PROPS, type ActivityRow, type LiveAgent, type TaskActivityPage, ty
 /** The rows the tile shows; the server sends as many, or every row while the whole history is open. */
 export const PREVIEW_ROWS = 3;
 
-/** Figma: the agent chip of Aktywność while an agent's timer runs on the task. */
+/** Figma: the agent chip of Activity while an agent's timer runs on the task. */
 function LiveChip({ live, now }: { live: LiveAgent; now: number }) {
     const { t } = useTranslation();
 
@@ -34,7 +34,7 @@ interface RowsProps {
     now: number;
     clock: TaskClock;
     locale: string;
-    /** Given in the whole history: a logged time row offers Edytuj. */
+    /** Given in the whole history: a logged time row offers Edit. */
     onEdit?: (entry: EditableTimeEntry) => void;
 }
 
@@ -66,7 +66,7 @@ function Rows({ rows, now, clock, locale, onEdit }: RowsProps) {
     );
 }
 
-/** Figma: Cała historia (1095:50081): a dialog from 768 px, a sheet below it. */
+/** Figma: Whole history (1095:50081): a dialog from 768 px, a sheet below it. */
 function HistoryDialog({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
     const { t } = useTranslation();
     const wide = useSoloWide();
@@ -95,7 +95,7 @@ function HistoryDialog({ open, onClose, children }: { open: boolean; onClose: ()
 interface ActivitySectionProps {
     taskId: number;
     activity: TaskActivityPage;
-    /** The whole history is open (`?historia`): every row, in the dialog. */
+    /** The whole history is open (`?history`): every row, in the dialog. */
     full?: boolean;
     live: LiveAgent | null;
     clock: TaskClock;
@@ -104,7 +104,7 @@ interface ActivitySectionProps {
 }
 
 /**
- * Figma: Zadanie, the Aktywność tile (1094:40618) and Cała historia (1095:50081). The agent chip while an agent works,
+ * Figma: Task, the Activity tile (1094:40618) and Whole history (1095:50081). The agent chip while an agent works,
  * the latest three entries, then the whole history in a dialog, where a logged time row opens its edit form.
  */
 export function ActivitySection({ taskId, activity, full = false, live, clock, now, locale }: ActivitySectionProps) {
@@ -130,7 +130,7 @@ export function ActivitySection({ taskId, activity, full = false, live, clock, n
             {preview.length > 0 && (
                 <TileActions className={styles.historyAction}>
                     <SoloButtonLink
-                        href={tasks.show(taskId, { query: { historia: 1 } }).url}
+                        href={tasks.show(taskId, { query: { history: 1 } }).url}
                         only={['activity']}
                         preserveScroll
                         preserveState

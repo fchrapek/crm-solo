@@ -1,3 +1,4 @@
+import { router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -43,7 +44,7 @@ type Step = 'checking' | 'conflict_warning' | 'form';
  *   2. Form: description / start / end / billable. End time + duration are
  *      derived from each other; both submit cleanly.
  */
-/** Figma: Zaloguj czas, dialog 794:20596, sheet 794:57932; the running-timer step 800:21650, 800:21981. */
+/** Figma: Log time, dialog 794:20596, sheet 794:57932; the running-timer step 800:21650, 800:21981. */
 export function ManualTimeEntryDialog({ open, onOpenChange, task, onSaved }: Props) {
     const { t } = useTranslation();
     const [step, setStep] = useState<Step>('checking');
@@ -125,7 +126,7 @@ export function ManualTimeEntryDialog({ open, onOpenChange, task, onSaved }: Pro
                     end_time: localInputToIso(endTime),
                     billable,
                 }),
-            });
+            }).finally(() => router.flushAll());
             if (!res.ok) {
                 const body = await res.json().catch(() => ({ message: t('Failed to save entry') }));
                 if (body?.errors) {
@@ -260,7 +261,9 @@ export function RunningWarning({ running }: { running: RunningEntry[] }) {
             <ul className={styles.running}>
                 {running.map((entry) => (
                     <li key={entry.id} className={styles.runningRow}>
-                        <span className={styles.runningTitle}>{entry.task?.name ?? entry.description ?? t('(no task)')}</span>
+                        <span className={styles.runningTitle} title={entry.task?.name ?? entry.description ?? t('(no task)')}>
+                            {entry.task?.name ?? entry.description ?? t('(no task)')}
+                        </span>
                         {entry.start_time && (
                             <span className={styles.runningSince}>{t('since {{date}}', { date: clock.format(new Date(entry.start_time)) })}</span>
                         )}

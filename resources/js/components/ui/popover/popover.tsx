@@ -1,8 +1,8 @@
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import * as React from 'react';
 
-import { menuBoxClass } from '@/components/solo/menu';
-import { useSoloPortalSurface } from '@/components/solo/surface';
+import { menuBoxClass, menuCollisionPadding, readMenuFloor } from '@/components/solo/menu';
+import { useInSoloSurface, useSoloPortalSurface } from '@/components/solo/surface';
 import { cn } from '@/lib/utils';
 import styles from './popover.module.css';
 
@@ -19,12 +19,14 @@ function PopoverContent({
     align = 'center',
     sideOffset = 4,
     look = 'default',
+    collisionPadding,
     ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
     /** solo-menu: Figma Menu / Filter, the select menu's panel for choices that are not one value. */
     look?: 'default' | 'solo-menu';
 }) {
     const container = useSoloPortalSurface();
+    const inSolo = useInSoloSurface();
 
     return (
         <PopoverPrimitive.Portal container={container}>
@@ -32,6 +34,7 @@ function PopoverContent({
                 data-slot="popover-content"
                 align={align}
                 sideOffset={sideOffset}
+                collisionPadding={inSolo ? menuCollisionPadding(collisionPadding, readMenuFloor) : collisionPadding}
                 className={cn(styles.content, look === 'solo-menu' && [styles.soloMenu, menuBoxClass], className)}
                 {...props}
             />

@@ -688,7 +688,7 @@ final class ClientReportsControllerTest extends TestCase
 
         $this->actingAs($this->user)
             ->delete("/clients/{$this->client->id}/reports/{$report->id}")
-            ->assertRedirect("/clients/{$this->client->id}/rozliczenia");
+            ->assertRedirect("/clients/{$this->client->id}/billing");
 
         $this->assertDatabaseMissing('client_reports', ['id' => $report->id]);
     }

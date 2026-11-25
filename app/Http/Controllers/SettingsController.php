@@ -7,7 +7,10 @@ namespace App\Http\Controllers;
 use App\Models\AgentToken;
 use App\Models\Client;
 use App\Models\ClientFieldDefinition;
+use App\Models\IntakeForm;
 use App\Models\Integration;
+use App\Models\Lead;
+use App\Models\LeadIntake;
 use App\Models\MessageRule;
 use App\Models\MessageTemplate;
 use App\Models\OutboundMessage;
@@ -16,11 +19,15 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Services\Agent\AgentAbilities;
 use App\Services\Clients\Fields\ClientFieldDefinitions;
+use App\Services\Clients\MonthCloseWorklist;
 use App\Services\Integrations\Trello\TrelloListMapper;
+use App\Services\Leads\IntakeForms;
 use App\Services\Leads\LeadVocabulary;
 use App\Services\Messaging\MailDelivery;
 use App\Services\Messaging\MessageSettings;
+use App\Services\Messaging\Sender\AccountSenders;
 use App\Services\Messaging\SmsapiProvider;
+use App\Support\JsonSettings;
 use App\Support\LocalCalendar;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
@@ -28,53 +35,61 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Ustawienia: one page, one tab per area. Shipped defaults come from
- * config/*.php; only the account's customization is stored (settings table)
- * and merged over the defaults at boot. /settings is the phone's section list
- * and, from 768 px, the Konto tab, so it carries both.
+ * Settings: the account's, one page with a tab per area, for its owner only; a person's own settings are on My profile
+ * (ProfileController). /settings is the phone's section list and, from 768 px, the General tab, so it carries both.
  */
 final class SettingsController extends Controller
 {
-    public const array TABS = ['konto', 'wyglad', 'leady', 'pola-klienta', 'sms', 'email', 'integracje', 'agenci'];
-
-    /** A member's own settings; every other tab configures the account. */
-    public const array MEMBER_TABS = ['konto', 'wyglad'];
+    public const array TABS = ['general', 'leads', 'forms', 'messages', 'integrations'];
 
     public function index(): Response
     {
+        $this->ownerOnly();
+
         return Inertia::render('settings/index', [
             'tab' => null,
-            'is_owner' => (bool) Auth::user()->owner,
+            'intake_available' => ! config('app.demo'),
+            'read_only' => (bool) config('app.demo'),
             'summary' => $this->summary(),
-            ...$this->account(),
+            ...$this->general(),
         ]);
     }
 
     public function show(string $tab): Response
     {
-        if ($tab === 'agenci') {
-            Gate::authorize('manage-agent-tokens');
-        }
-        abort_unless(in_array($tab, self::MEMBER_TABS, true) || Gate::allows('manage-account'), 404);
-        abort_if($tab === 'email' && ! Auth::user()->account->hasFeature('billing'), 404);
+        $this->ownerOnly();
+        abort_if($tab === 'forms' && (bool) config('app.demo'), 404);
 
         return Inertia::render('settings/index', [
             'tab' => $tab,
-            'is_owner' => (bool) Auth::user()->owner,
+            'intake_available' => ! config('app.demo'),
+            'read_only' => (bool) config('app.demo'),
             ...match ($tab) {
-                'konto' => $this->account(),
-                'leady' => ['leadgen' => $this->leadgen()],
-                'pola-klienta' => ['client_fields' => $this->clientFields(), 'reserved_field_keys' => ClientFieldDefinition::RESERVED_KEYS],
-                'sms' => $this->messages(),
-                'email' => $this->emails(),
-                'integracje' => $this->integrations(),
-                'agenci' => $this->agents(),
+                'general' => $this->general(),
+                'leads' => ['leadgen' => $this->leadgen()],
+                'messages' => [...$this->messages(), ...(Auth::user()->account->hasFeature('billing') ? $this->emails() : [])],
+                'integrations' => [...$this->agents(), ...$this->integrations()],
+                'forms' => ['intake' => $this->intake(null)],
                 default => [],
             },
+        ]);
+    }
+
+    /** One website form's page under Forms: the tab's props with the form picked. */
+    public function form(int $form): Response
+    {
+        $accountId = Auth::user()->account_id;
+        abort_unless(IntakeForm::query()->where('account_id', $accountId)->whereKey($form)->exists(), 404);
+
+        return Inertia::render('settings/index', [
+            'tab' => 'forms',
+            'intake_available' => true,
+            'intake' => $this->intake($form),
         ]);
     }
 
@@ -108,13 +123,61 @@ final class SettingsController extends Controller
         return Redirect::back()->with('success', __('Settings saved'));
     }
 
-    /** @return array<string, mixed> */
-    private function account(): array
+    /** The account's modules, Account's Modules: Month close and Report baseline, both part of billing. */
+    public function updateModules(Request $request): RedirectResponse
+    {
+        abort_unless($this->seesBilled(), 404);
+        $validated = $request->validate([
+            'month_close' => ['sometimes', 'boolean'],
+            'report_baseline' => ['sometimes', 'boolean'],
+        ]);
+        $account = Auth::user()->account;
+        // Best effort: a client the close comes to hold later still shows its month close, whatever the switch says.
+        if (array_key_exists('month_close', $validated) && ! $validated['month_close'] && ($count = app(MonthCloseWorklist::class)->heldCount($account)) > 0) {
+            throw ValidationException::withMessages(['month_close' => trans_choice('month_close_in_use', $count, ['count' => $count])]);
+        }
+        JsonSettings::write('accounts', $account->id, array_map(fn (mixed $on): bool => (bool) $on, $validated));
+
+        return back();
+    }
+
+    /**
+     * The forms with their notice counts and failure reasons, the sender without its password, and what a form may name;
+     * never a stored secret.
+     *
+     * @return array<string, mixed>
+     */
+    private function intake(?int $formId): array
+    {
+        $accountId = Auth::user()->account_id;
+        $labels = LeadVocabulary::sourceLabels($accountId);
+
+        return [
+            'form_id' => $formId,
+            'forms' => app(IntakeForms::class)->list($accountId)['forms'],
+            'failures' => (object) app(IntakeForms::class)->failureReasons($accountId),
+            'sender' => app(AccountSenders::class)->describe($accountId),
+            'pipelines' => array_map(fn (string $pipeline): array => ['value' => $pipeline, 'label' => LeadVocabulary::pipelineLabel($accountId, $pipeline) ?? $pipeline], Lead::pipelines()),
+            'sources' => array_map(fn (string $source): array => ['value' => $source, 'label' => $labels[$source] ?? $source], LeadVocabulary::sources($accountId)),
+            'max_age_days' => LeadIntake::MAX_AGE_DAYS,
+        ];
+    }
+
+    private function seesBilled(): bool
+    {
+        return (bool) Auth::user()->owner && Auth::user()->account->shows('billing', Auth::user());
+    }
+
+    /**
+     * The General tab: the account's users, its modules and its client fields.
+     *
+     * @return array<string, mixed>
+     */
+    private function general(): array
     {
         $me = Auth::user();
 
         return [
-            'me' => ['id' => $me->id, 'first_name' => $me->first_name, 'last_name' => $me->last_name, 'email' => $me->email],
             'users' => $me->account->users()->withTrashed()->orderByName()->get()
                 ->map(fn (User $user): array => [
                     'id' => $user->id,
@@ -127,6 +190,34 @@ final class SettingsController extends Controller
                     'deleted_at' => $user->deleted_at,
                     'can_delete' => ! $user->isDemoUser() && ! $user->is($me) && $me->can('delete', $user),
                 ])->values(),
+            'modules' => $this->modules(),
+            'client_fields' => $this->clientFields(),
+            'reserved_field_keys' => ClientFieldDefinition::RESERVED_KEYS,
+        ];
+    }
+
+    /** The account's settings are its owner's; anyone else finds no such page. */
+    private function ownerOnly(): void
+    {
+        abort_unless(Gate::allows('manage-account'), 404);
+    }
+
+    /**
+     * The account's modules: the billing switches, the clients the close holds, and counts for the modules set up elsewhere.
+     *
+     * @return array{month_close: bool|null, month_close_in_use: int, report_baseline: bool|null, client_fields: int, sms_rules: int}
+     */
+    private function modules(): array
+    {
+        $account = Auth::user()->account;
+        $billed = $this->seesBilled();
+
+        return [
+            'month_close' => $billed ? $account->usesModule('month_close') : null,
+            'month_close_in_use' => $billed ? app(MonthCloseWorklist::class)->heldCount($account) : 0,
+            'report_baseline' => $billed ? $account->usesModule('report_baseline') : null,
+            'client_fields' => ClientFieldDefinition::query()->where('account_id', $account->id)->whereNull('archived_at')->count(),
+            'sms_rules' => MessageRule::query()->where('account_id', $account->id)->where('enabled', true)->count(),
         ];
     }
 
@@ -206,12 +297,14 @@ final class SettingsController extends Controller
     /** @return array<string, mixed> */
     private function emails(): array
     {
-        $live = app(MailDelivery::class)->mode() === MailDelivery::LIVE;
+        $mode = app(MailDelivery::class)->mode();
+        $live = $mode === MailDelivery::LIVE;
 
         return [
             'email_templates' => app(MessageSettings::class)->emailTemplates(Auth::user()->account_id),
             'email_sending' => [
                 'live' => $live,
+                'refused' => $mode === MailDelivery::REFUSED,
                 'from' => $live ? (string) config('mail.from.address') : null,
                 'bcc' => Auth::user()->email,
             ],
@@ -331,21 +424,25 @@ final class SettingsController extends Controller
     {
         $account = Auth::user()->account;
         $leadgen = $this->leadgen();
-        $tokens = Gate::allows('manage-agent-tokens') ? $this->liveTokens() : null;
-        $soonest = $tokens?->map(fn (AgentToken $token): ?int => $this->daysLeft($token))->filter(fn (?int $days): bool => $days !== null)->min();
+        $tokens = $this->liveTokens();
+        $soonest = $tokens->map(fn (AgentToken $token): ?int => $this->daysLeft($token))->filter(fn (?int $days): bool => $days !== null)->min();
 
         return [
             'users' => $account->users()->count(),
             'client_fields' => ClientFieldDefinition::query()->where('account_id', $account->id)->whereNull('archived_at')->count(),
             'message_rules' => MessageRule::query()->where('account_id', $account->id)->where('enabled', true)->count(),
-            'email_templates' => MessageTemplate::query()->where('account_id', $account->id)->where('channel', MessageTemplate::EMAIL)->count(),
+            'email_templates' => ! $account->hasFeature('billing') ? null : MessageTemplate::query()->where('account_id', $account->id)->where('channel', MessageTemplate::EMAIL)->count(),
             'default_sources' => count($leadgen['default_sources']),
             'custom_sources' => count($leadgen['custom_sources']),
             'connected' => config('app.demo') ? [] : $account->integrations()->get()
-                ->filter(fn (Integration $integration): bool => $integration->is_enabled && $integration->isConfigured())
-                ->map(fn (Integration $integration): string => Integration::PROVIDERS[$integration->provider]['name'] ?? $integration->provider)
+                ->filter(fn (Integration $integration): bool => isset(Integration::PROVIDERS[$integration->provider]) && $integration->is_enabled && $integration->isConfigured())
+                ->map(fn (Integration $integration): string => Integration::PROVIDERS[$integration->provider]['name'])
                 ->values(),
-            'tokens' => $tokens === null ? null : [
+            'forms' => ! config('app.demo') ? [
+                'count' => IntakeForm::query()->where('account_id', $account->id)->count(),
+                'sender' => app(AccountSenders::class)->find($account->id) !== null,
+            ] : null,
+            'tokens' => [
                 'count' => $tokens->count(),
                 'soonest_days' => $soonest,
             ],

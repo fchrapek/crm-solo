@@ -25,9 +25,9 @@ function stubRunning(entries: RunningEntry[] | 'pending') {
     };
 }
 
-/** Figma: Zaloguj czas. Phones open the sheet with the Cancel · Save header, from 768 px the dialog. */
+/** Figma: Log time. Phones open the sheet with the Cancel · Save header, from 768 px the dialog. */
 const meta = {
-    title: 'Zadania/Zaloguj czas',
+    title: 'Tasks/Log time',
     component: ManualTimeEntryDialog,
     args: { open: true, onOpenChange: () => {}, task: { id: 42, name: 'Aktualizacja cennika PDF', client: 'Pracownia Mebli' } },
     beforeEach: stubRunning([]),
@@ -37,12 +37,12 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-/** The form in the sheet: Anuluj and Zapisz in the header, the subtitle under the title. */
+/** The form in the sheet: Cancel and Save in the header, the subtitle under the title. */
 export const FormSheet: Story = {};
 
 export const FormDialog: Story = { globals: DESKTOP };
 
-/** A timer runs elsewhere: the warning comes first, Kontynuuj mimo to opens the form. */
+/** A timer runs elsewhere: the warning comes first, Continue anyway opens the form. */
 export const WarningSheet: Story = { beforeEach: stubRunning(running) };
 
 export const WarningDialog: Story = { beforeEach: stubRunning(running), globals: DESKTOP };

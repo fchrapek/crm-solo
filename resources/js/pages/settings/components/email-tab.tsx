@@ -18,7 +18,7 @@ import type { EmailSending, EmailTemplateRow } from '../types';
 import { RowButton, TileButton } from './parts';
 import styles from './tab.module.css';
 
-/** Figma: Ustawienia · Wiadomości e-mail (1091:24073, phone 1091:24343). How email goes out and the templates. */
+/** Figma: Settings · Wiadomości (1557:345386), the e-mail tiles under the SMS ones: how email goes out and the templates. */
 export function EmailTab({ sending, templates }: { sending: EmailSending; templates: EmailTemplateRow[] }) {
     const { t } = useTranslation();
     const [template, setTemplate] = useState<EmailTemplateRow | 'new' | null>(null);
@@ -31,8 +31,14 @@ export function EmailTab({ sending, templates }: { sending: EmailSending; templa
     return (
         <>
             <Tile kind="plain">
-                <TileHeader label={t('Sending')} />
-                {!sending.live && <Notice kind="warn">{t('Test sending: nothing goes to the client until you set a sender.')}</Notice>}
+                <TileHeader label={t('Email sending')} />
+                {!sending.live && (
+                    <Notice kind="warn">
+                        {sending.refused
+                            ? t('Sending is off on the server: nothing goes out.')
+                            : t('Test sending: nothing goes to the client until you set a sender.')}
+                    </Notice>
+                )}
                 <dl className={styles.kv}>
                     <KvRow
                         layout="tile"
@@ -60,7 +66,7 @@ export function EmailTab({ sending, templates }: { sending: EmailSending; templa
 
             <Tile kind="list">
                 <TileHeader
-                    label={t('Templates')}
+                    label={t('Email templates')}
                     count={templates.length}
                     end={<TileButton onClick={() => setTemplate('new')}>{t('New template')}</TileButton>}
                 />
@@ -104,7 +110,7 @@ type Draft = { name: string; subject: string; body: string; is_default: boolean 
 
 const EMPTY: Draft = { name: '', subject: '', body: '', is_default: false };
 
-/** Figma: Szablon e-mail (992:27078), sheet 992:27206. Subject and text with the tokens, inserted where the caret was, and the email as a client gets it. */
+/** Figma: Email template (992:27078), sheet 992:27206. Subject and text with the tokens, inserted where the caret was, and the email as a client gets it. */
 function EmailTemplateDialog({ template, count, onClose }: { template: EmailTemplateRow | 'new' | null; count: number; onClose: () => void }) {
     const { t } = useTranslation();
     const [draft, setDraft] = useState<Draft>(EMPTY);

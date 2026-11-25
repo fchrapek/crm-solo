@@ -2,6 +2,7 @@ import tasks from '@/routes/tasks';
 import { Link, type InertiaLinkProps } from '@inertiajs/react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLinkPrefetch } from './link-prefetch';
 import styles from './task-row.module.css';
 
 export interface DayTask {
@@ -12,13 +13,21 @@ export interface DayTask {
     client: string | null;
     project: string | null;
     done: boolean;
+    /** Open and on the Doing or Testing list. */
+    in_progress?: boolean;
     /** Done by a tick the CRM can take back; false for a card completed on its board. */
     can_untick?: boolean;
     minutes?: number;
     /** On the full list: already one of the day's picks. */
     picked?: boolean;
-    /** Off plan: the running timer on this task, if any. */
+    /** A suggestion: left over from today's plan. */
+    from_today?: boolean;
+    /** The due day, YYYY-MM-DD. */
+    due?: string | null;
+    /** The running timer on this task, if any. */
     running_id?: number | null;
+    /** Every finished entry on the task, any day. */
+    logged_minutes?: number;
 }
 
 interface TaskRowProps {
@@ -32,7 +41,7 @@ interface TaskRowProps {
     /** Where the title leads, e.g. the focus view of the running task; the task page by default. */
     href?: InertiaLinkProps['href'];
     due?: ReactNode;
-    /** done is the Done row in Podsumowanie's box, queue the timer's Queue row: title and one status, no client or project. */
+    /** done is the Done row in Summary's box, queue the timer's Queue row: title and one status, no client or project. */
     kind?: 'day' | 'client' | 'done' | 'queue';
     /** Queue row State=Current: the task the timer runs on. */
     current?: boolean;
@@ -45,7 +54,7 @@ const KIND_CLASS = { day: styles.day, client: styles.clientRow, done: styles.don
 
 /**
  * Figma: A2f / Task row; kind client is Client task row, done the Done row, queue the Queue row.
- * compact is the A2f / List row of Wszystkie zadania and Propozycje: the title, the project as end meta, one action.
+ * compact is the A2f / List row of All tasks and Suggestions: the title, the project as end meta, one action.
  */
 export function TaskRow({ task, onComplete, onUncomplete, trailing, compact, href, due, kind = 'day', current = false, plainDone = false, className }: TaskRowProps) {
     const { t } = useTranslation();
@@ -53,6 +62,7 @@ export function TaskRow({ task, onComplete, onUncomplete, trailing, compact, hre
     const where = brief ? '' : [task.client, task.project].filter(Boolean).join(' · ');
     const untick = task.done && task.can_untick && onUncomplete ? onUncomplete : undefined;
     const link = href ?? (task.task_id > 0 ? tasks.show(task.task_id) : undefined);
+    const prefetch = useLinkPrefetch();
 
     return (
         <li
@@ -84,7 +94,7 @@ export function TaskRow({ task, onComplete, onUncomplete, trailing, compact, hre
             <div className={styles.text}>
                 <p className={styles.title} title={task.name}>
                     {link ? (
-                        <Link href={link} className={styles.titleLink}>
+                        <Link href={link} prefetch={prefetch(link)} className={styles.titleLink}>
                             <span className={styles.titleText}>{task.name}</span>
                         </Link>
                     ) : (

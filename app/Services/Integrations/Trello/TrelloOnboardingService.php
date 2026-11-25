@@ -9,7 +9,6 @@ use App\Models\Integration;
 use App\Models\Project;
 use App\Models\Task;
 use Illuminate\Support\Facades\Log;
-use RuntimeException;
 
 final class TrelloOnboardingService
 {
@@ -33,7 +32,7 @@ final class TrelloOnboardingService
     public function onboard(Client $client, Integration $integration): Project
     {
         if (! $integration->isConfigured()) {
-            throw new RuntimeException('Trello integration is not configured.');
+            throw new TrelloLinkRefused(TrelloLinkRefused::NOT_CONFIGURED, 'Trello integration is not configured.');
         }
 
         $project = Project::create([
@@ -52,11 +51,11 @@ final class TrelloOnboardingService
     public function connectExistingProject(Project $project, Integration $integration): Project
     {
         if (! $integration->isConfigured()) {
-            throw new RuntimeException('Trello integration is not configured.');
+            throw new TrelloLinkRefused(TrelloLinkRefused::NOT_CONFIGURED, 'Trello integration is not configured.');
         }
 
         if ($project->trello_board_id !== null) {
-            throw new RuntimeException('Project is already connected to a Trello board.');
+            throw new TrelloLinkRefused(TrelloLinkRefused::ALREADY_LINKED, 'Project is already connected to a Trello board.');
         }
 
         return $this->attachBoard($project, $integration, $project->name);
@@ -75,11 +74,11 @@ final class TrelloOnboardingService
     public function linkExistingBoard(Project $project, Integration $integration, string $trelloBoardId): Project
     {
         if (! $integration->isConfigured()) {
-            throw new RuntimeException('Trello integration is not configured.');
+            throw new TrelloLinkRefused(TrelloLinkRefused::NOT_CONFIGURED, 'Trello integration is not configured.');
         }
 
         if ($project->trello_board_id !== null) {
-            throw new RuntimeException('Project is already connected to a Trello board.');
+            throw new TrelloLinkRefused(TrelloLinkRefused::ALREADY_LINKED, 'Project is already connected to a Trello board.');
         }
 
         $existing = Project::where('account_id', $project->account_id)
@@ -87,11 +86,20 @@ final class TrelloOnboardingService
             ->where('id', '!=', $project->id)
             ->first();
 
-        if ($existing !== null) {
-            if ($existing->client_id !== null) {
-                throw new RuntimeException('This Trello board is already linked to another project.');
-            }
+        if ($existing !== null && $existing->client_id !== null) {
+            throw new TrelloLinkRefused(TrelloLinkRefused::LINKED_ELSEWHERE, 'This Trello board is already linked to another project.', $existing);
+        }
 
+        $trello = new TrelloService($integration);
+
+        $boards = collect($trello->fetchBoards());
+        $board = $boards->firstWhere('id', $trelloBoardId);
+
+        if ($board === null) {
+            throw new TrelloLinkRefused(TrelloLinkRefused::BOARD_NOT_FOUND, 'Trello board not found on this account.');
+        }
+
+        if ($existing !== null) {
             // Orphan: move its tasks + settings into the target project, then
             // remove the orphan so the unique [account_id, trello_board_id]
             // constraint stays clean for the upcoming update.
@@ -103,15 +111,6 @@ final class TrelloOnboardingService
             }
 
             $existing->delete();
-        }
-
-        $trello = new TrelloService($integration);
-
-        $boards = collect($trello->fetchBoards());
-        $board = $boards->firstWhere('id', $trelloBoardId);
-
-        if ($board === null) {
-            throw new RuntimeException('Trello board not found on this account.');
         }
 
         // Set trello_board_id first so syncBoard finds *this* project rather

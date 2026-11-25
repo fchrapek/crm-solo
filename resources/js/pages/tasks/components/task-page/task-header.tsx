@@ -1,10 +1,14 @@
 import { Chip } from '@/components/solo/chip';
+import { useLinkPrefetch } from '@/components/solo/link-prefetch';
 import { Poster, SoloButton } from '@/components/solo/primitives';
 import { type PlaceResolver } from '@/components/solo/shell/place';
 import { Tile } from '@/components/solo/tile';
+import { dashboard } from '@/routes';
 import clients from '@/routes/clients';
 import day from '@/routes/day';
+import projectBoard from '@/routes/project-board';
 import tasks from '@/routes/tasks';
+import todayRoutes from '@/routes/today';
 import { Link, router } from '@inertiajs/react';
 import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +19,7 @@ import { TaskMenu } from './task-menu';
 import styles from './task-page.module.css';
 import type { TaskData } from './types';
 
-/** "Kopiuj dla agenta": the line that sends an agent to `crm task`, then a toast. */
+/** Copy for the agent: the line that sends an agent to `crm task`, then a toast. */
 export async function copyAgentPrompt(
     text: string,
     clipboard: Pick<Clipboard, 'writeText'> | undefined = globalThis.navigator?.clipboard,
@@ -109,14 +113,31 @@ function DoneAction({ task }: { task: TaskData }) {
 /** The line under the title: client, project, due day (vermilion once overdue), the parent task, Trello for a card. */
 export function TaskMeta({ task, today, locale }: { task: TaskData; today: string; locale: string }) {
     const { t } = useTranslation();
+    const prefetch = useLinkPrefetch();
+    const clientHref = task.client !== null ? clients.show({ client: task.client.id, tab: 'overview' }).url : null;
     const due = task.due_day !== null ? dueText(task.due_day, today, locale, t) : null;
     const parts = [
-        task.client !== null ? <span key="client">{task.client.short_name}</span> : null,
-        task.project !== null ? <span key="project">{task.project.name}</span> : null,
-        due !== null ? (
-            <span key="due" data-overdue={task.is_overdue || undefined}>
+        task.client !== null && clientHref !== null ? (
+            <Link key="client" href={clientHref} prefetch={prefetch(clientHref)} className={styles.metaLink} title={task.client.name}>
+                {task.client.short_name}
+            </Link>
+        ) : null,
+        task.project !== null && task.client !== null ? (
+            <Link key="project" href={projectBoard.show({ client: task.client.id, project: task.project.id }).url} className={styles.metaLink}>
+                {task.project.name}
+            </Link>
+        ) : task.project !== null ? (
+            <span key="project">{task.project.name}</span>
+        ) : null,
+        due !== null && task.due_day !== null ? (
+            <Link
+                key="due"
+                href={task.due_day === today ? dashboard().url : todayRoutes.day(task.due_day).url}
+                className={styles.metaLink}
+                data-overdue={task.is_overdue || undefined}
+            >
                 {task.is_overdue ? t('{{due}}, overdue', { due }) : due}
-            </span>
+            </Link>
         ) : null,
         task.parent_task !== null ? (
             <Link key="parent" href={tasks.show(task.parent_task.id).url} className={styles.metaLink}>
@@ -154,19 +175,21 @@ function StateChip({ task }: { task: TaskData }) {
 }
 
 /**
- * Figma: Zadanie, the head tile (1094:40618, phone 1094:40855; done 1094:41505). The title, the meta line and the
- * actions; on a phone the main button takes the row and Kopiuj dla agenta moves into "more".
+ * Figma: Task, the head tile (1094:40618, phone 1094:40855; done 1094:41505). The title, the meta line and the
+ * actions; on a phone the main button takes the row and Copy for the agent moves into "more".
  */
 export function TaskHeader({
     task,
     today,
     locale,
     parentOptions,
+    projectOptions,
 }: {
     task: TaskData;
     today: string;
     locale: string;
     parentOptions?: { id: number; name: string }[];
+    projectOptions?: { id: number; name: string }[];
 }) {
     const { t } = useTranslation();
     const copy = useCopyForAgent(task.id);
@@ -185,20 +208,17 @@ export function TaskHeader({
                 <SoloButton variant="secondary" size="control" className={styles.wideOnly} onClick={copy}>
                     {t('Copy for the agent')}
                 </SoloButton>
-                <TaskMenu task={task} parentOptions={parentOptions} onCopy={copy} />
+                <TaskMenu task={task} parentOptions={parentOptions} projectOptions={projectOptions} onCopy={copy} />
             </div>
         </Tile>
     );
 }
 
-/** The task's place: its client, Zadania, then the task itself. */
+/** The task's place: its client, Tasks, then the task itself. */
 export const taskPlace = (({ task }, { t }) => ({
     tokens: [
         ...(task.client
-            ? [
-                  clientToken(task.client, 'zadania', t),
-                  { label: t('Tasks'), href: clients.show({ client: task.client.id, tab: 'zadania' }).url },
-              ]
+            ? [clientToken(task.client, 'tasks', t), { label: t('Tasks'), href: clients.show({ client: task.client.id, tab: 'tasks' }).url }]
             : []),
         { label: task.name },
     ],

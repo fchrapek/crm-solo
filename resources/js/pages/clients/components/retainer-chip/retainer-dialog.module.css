@@ -2,10 +2,16 @@
     align-self: flex-start;
 }
 
+.moreGroup {
+    display: flex;
+    flex-direction: column;
+}
+
 .moreFields {
     display: flex;
     flex-direction: column;
     gap: 18px;
+    padding-top: 18px;
 }
 
 .positions {
@@ -78,4 +84,11 @@
 .actions {
     flex-direction: row;
     justify-content: flex-end;
+}
+
+/* the read-only list of a position's fields */
+.facts {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
 }

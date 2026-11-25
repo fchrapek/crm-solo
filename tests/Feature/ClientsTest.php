@@ -69,9 +69,9 @@ final class ClientsTest extends TestCase
 
         foreach ([false, false] as $pinned) {
             $this->actingAs($this->user)
-                ->from("/clients/{$client->id}/przeglad")
+                ->from("/clients/{$client->id}/overview")
                 ->put("/clients/{$client->id}/pin", ['pinned' => $pinned])
-                ->assertRedirect("/clients/{$client->id}/przeglad");
+                ->assertRedirect("/clients/{$client->id}/overview");
 
             $this->assertFalse($client->fresh()->is_pinned);
         }
@@ -103,18 +103,18 @@ final class ClientsTest extends TestCase
         $this->assertFalse($stranger->fresh()->is_pinned);
     }
 
-    public function test_deleting_a_client_keeps_its_contacts_unless_asked(): void
+    public function test_archiving_a_client_keeps_its_contacts_and_says_archived(): void
     {
         $client = $this->user->account->clients()->firstWhere('name', 'Apple');
         $contact = $this->user->account->contacts()->create(['client_id' => $client->id, 'first_name' => 'Ada', 'last_name' => 'Testowa']);
 
-        $this->actingAs($this->user)->delete("/clients/{$client->id}", ['delete_contacts' => false])->assertRedirect('/clients');
+        $this->actingAs($this->user)->delete("/clients/{$client->id}")->assertRedirect('/clients')->assertSessionHas('success', 'Client archived.');
 
         $this->assertSoftDeleted($client);
         $this->assertNotSoftDeleted($contact);
     }
 
-    public function test_deleting_a_client_can_take_its_contacts_along(): void
+    public function test_archiving_ignores_a_request_to_delete_the_contacts_too(): void
     {
         $client = $this->user->account->clients()->firstWhere('name', 'Apple');
         $contact = $this->user->account->contacts()->create(['client_id' => $client->id, 'first_name' => 'Ada', 'last_name' => 'Testowa']);
@@ -122,7 +122,7 @@ final class ClientsTest extends TestCase
         $this->actingAs($this->user)->delete("/clients/{$client->id}", ['delete_contacts' => true])->assertRedirect('/clients');
 
         $this->assertSoftDeleted($client);
-        $this->assertSoftDeleted($contact);
+        $this->assertNotSoftDeleted($contact);
     }
 
     public function test_new_client_defaults_to_active_stage(): void
@@ -133,7 +133,7 @@ final class ClientsTest extends TestCase
         ]);
 
         $client = $this->user->account->clients()->firstWhere('name', 'New Lead Ltd');
-        $response->assertRedirect("/clients/{$client->id}/dane");
+        $response->assertRedirect("/clients/{$client->id}/details");
         $this->assertSame('active', $client->lifecycle_stage);
         $this->assertCount(1, $client->lifecycleEvents);
         $this->assertSame('active', $client->lifecycleEvents->first()->to_stage);

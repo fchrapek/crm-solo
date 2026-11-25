@@ -440,7 +440,7 @@ final class ClosedPeriodPolicyTest extends TestCase
     {
         $first = Carbon::parse($period.'-01');
 
-        return $this->actingAs($this->user)->from("/clients/{$this->client->id}/rozliczenia")->post("/clients/{$this->client->id}/reports", [
+        return $this->actingAs($this->user)->from("/clients/{$this->client->id}/billing")->post("/clients/{$this->client->id}/reports", [
             'period_type' => 'month',
             'period_start' => $first->toDateString(),
             'period_end' => $first->copy()->endOfMonth()->toDateString(),

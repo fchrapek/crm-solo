@@ -18,8 +18,17 @@ describe('EmailTab', () => {
         expect(html).toContain('Wysyłka testowa: nic nie wyjdzie do klienta, dopóki nie ustawisz nadawcy.');
         expect(html).toContain('nie ustawiony');
         expect(html).toContain('owner@agency.test');
-        expect(html).toContain('Szablony1Nowy szablon');
+        expect(html).toContain('Szablony e-mail1Nowy szablon');
         expect(html).toContain('Domyślny');
+    });
+
+    test('a server that refuses to send says nothing goes out, not that it is a test', () => {
+        const html = text(
+            renderToStaticMarkup(<EmailTab sending={{ live: false, refused: true, from: null, bcc: 'owner@agency.test' }} templates={[]} />),
+        );
+
+        expect(html).toContain('Wysyłka jest wyłączona na serwerze: nic nie wyjdzie.');
+        expect(html).not.toContain('Wysyłka testowa');
     });
 
     test('a live sender shows its address and no test notice', () => {

@@ -141,6 +141,11 @@ return [
     |
     */
 
+    // The public docs site. Empty keeps the helper's docs links hidden until it is published.
+    'docs' => [
+        'url' => env('DOCS_URL', ''),
+    ],
+
     'turnstile' => [
         'site_key' => env('TURNSTILE_SITE_KEY', '0x4AAAAAAEDvi_D_T2D6Hxfn'),
         'secret' => env('TURNSTILE_SECRET'),

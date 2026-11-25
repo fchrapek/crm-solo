@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { fromDay, runningMinutesToday } from './dates';
+import { runningMinutesToday, weekdayDate } from './dates';
 
 const browserZone = process.env.TZ;
 
@@ -8,16 +8,11 @@ afterEach(() => {
     process.env.TZ = browserZone;
 });
 
-describe('where an earlier pick came from', () => {
-    const t = ((key: string, options?: { date?: string }) => (options?.date ? key.replace('{{date}}', options.date) : key)) as never;
-
-    test('names the weekday within the last week', () => {
-        expect(fromDay('2026-10-22', '2026-10-28', 'pl', t)).toBe('from Thursday');
-        expect(fromDay('2026-10-27', '2026-10-28', 'pl', t)).toBe('from Tuesday');
-    });
-
-    test('gives the date once a week has passed, so two Thursdays never read alike', () => {
-        expect(fromDay('2026-10-21', '2026-10-28', 'pl', t)).toBe('from 21.10');
+describe('the day an earlier pick came from', () => {
+    test('is a weekday and a date, with the year once it is another one', () => {
+        expect(weekdayDate('2026-11-19', 'pl', 2026)).toBe('czw. 19.11');
+        expect(weekdayDate('2025-12-30', 'pl', 2026)).toBe('wt. 30.12.2025');
+        expect(weekdayDate('2026-11-19', 'en', 2026)).toBe('Thu 11/19');
     });
 });
 

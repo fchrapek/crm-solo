@@ -1,0 +1,16 @@
+/* Figma: Mój profil. Phone first: the poster names the screen; from 768 px the command bar's token does. */
+.page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-12);
+}
+
+.poster {
+    padding-top: var(--role-space-8);
+}
+
+@media (min-width: 768px) {
+    .poster {
+        display: none;
+    }
+}

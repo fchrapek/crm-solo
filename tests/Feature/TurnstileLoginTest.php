@@ -85,6 +85,22 @@ final class TurnstileLoginTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_the_sign_in_limit_stands_before_the_turnstile_check(): void
+    {
+        config(['services.turnstile.secret' => 'test-secret']);
+        Http::fake(['challenges.cloudflare.com/*' => Http::response(['success' => false])]);
+        $attempt = fn (string $ip) => $this->withServerVariables(['REMOTE_ADDR' => $ip])->from('/login')
+            ->post('/login', ['email' => 'guess@example.com', 'password' => 'wrong', 'cf-turnstile-response' => 'a-token']);
+
+        foreach (range(1, 10) as $ignored) {
+            $attempt('198.51.100.1')->assertSessionHasErrors('cf-turnstile-response');
+        }
+        $attempt('198.51.100.1')->assertRedirect('/login')->assertSessionHas('error')->assertSessionDoesntHaveErrors('cf-turnstile-response');
+        Http::assertSentCount(10);
+
+        $attempt('198.51.100.2')->assertSessionHasErrors('cf-turnstile-response');
+    }
+
     public function test_login_is_rejected_when_siteverify_errors(): void
     {
         config(['services.turnstile.secret' => 'test-secret']);

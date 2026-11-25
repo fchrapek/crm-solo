@@ -1,4 +1,4 @@
-/* Figma: Dziś. Phone: the heading on the page, then the tiles 12 apart; from 768 px the heading moves into the day's tile; from 1100 px the side column stands beside it. */
+/* Figma: Today. Phone: the heading on the page, then the tiles 12 apart; from 768 px the heading moves into the day's tile; from 1100 px the side column stands beside it. */
 .day {
     display: flex;
     flex-direction: column;
@@ -13,10 +13,16 @@
     padding-top: var(--role-space-8);
 }
 
+/* the day heading's lines in whole pixels, so the tiles under it and every rule in them start on a pixel */
+.heading > h1,
+.summaryHead > h1 {
+    line-height: round(calc(var(--solo-caps-leading) * 1em), 1px);
+}
+
 .meta {
     margin: 0;
     color: var(--role-text-secondary);
-    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    font: 400 var(--solo-text-meta) / 18px var(--solo-font-text);
 }
 
 /* under a tile's top the first row has no line above it */
@@ -42,7 +48,7 @@
     font: 600 var(--solo-text-control) / 1.4 var(--solo-font-text);
 }
 
-/* Figma: Podsumowanie. The heading on the page, four number tiles (two by two until 1100 px), then the plan and the side tiles. */
+/* Figma: Summary. The heading on the page, four number tiles (two by two until 1100 px), then the plan and the side tiles. */
 .summary {
     display: flex;
     flex-direction: column;
@@ -85,7 +91,7 @@
     min-width: 0;
 }
 
-/* Wszystkie zadania: what is picked and hidden, then the list's own actions; Gotowe ends the row */
+/* All tasks: what is picked and hidden, then the list's own actions; Done ends the row */
 .listHead {
     display: flex;
     flex-direction: column;
@@ -243,4 +249,28 @@
     .stats > * {
         flex-basis: 0;
     }
+}
+
+/* a moved task: the arrow where a tick would be */
+.movedTitle {
+    display: inline-flex;
+    gap: var(--role-space-12);
+    align-items: center;
+}
+
+/* the switch between running timers, in the timer tile's top corner */
+.timerTile {
+    position: relative;
+}
+
+.timerSwitch {
+    position: absolute;
+    top: var(--role-space-12);
+    right: var(--role-space-12);
+}
+
+/* a row that only says the day is empty, before its buttons */
+.quietTitle {
+    color: var(--role-text-secondary);
+    font-weight: 400;
 }

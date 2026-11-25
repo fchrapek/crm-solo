@@ -20,11 +20,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
+use Tests\Feature\Concerns\TimesOutThePlanLock;
 use Tests\TestCase;
 
 final class TodayTest extends TestCase
 {
     use RefreshDatabase;
+    use TimesOutThePlanLock;
 
     private Account $account;
 
@@ -86,7 +88,7 @@ final class TodayTest extends TestCase
         Task::create(['project_id' => $this->project->id, 'name' => 'Ticked', 'is_completed' => true]);
         $this->pick($picked);
 
-        $this->actingAs($this->user)->get('/zadania')
+        $this->actingAs($this->user)->get('/all-tasks')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('today/tasks', false)
                 ->where('target', 'today')
@@ -97,37 +99,37 @@ final class TodayTest extends TestCase
                 ->where('groups.0.tasks', fn ($tasks) => collect($tasks)->pluck('picked', 'name')->all() === ['Picked one' => true, 'Still open' => false])
             );
 
-        $this->actingAs($this->user)->get('/zadania?na=jutro')
+        $this->actingAs($this->user)->get('/all-tasks?for=tomorrow')
             ->assertInertia(fn (Assert $page) => $page->where('target', 'tomorrow')->where('date', '2026-09-17'));
     }
 
     public function test_the_full_list_can_pick_for_any_plannable_date_and_falls_back_to_today(): void
     {
-        $this->actingAs($this->user)->get('/zadania?na=2026-09-25')
+        $this->actingAs($this->user)->get('/all-tasks?for=2026-09-25')
             ->assertInertia(fn (Assert $page) => $page->where('target', 'date')->where('date', '2026-09-25')->where('lastPlannable', '2026-09-27'));
 
         foreach (['2026-09-28', '2026-09-15', 'soon'] as $outside) {
-            $this->actingAs($this->user)->get("/zadania?na={$outside}")
+            $this->actingAs($this->user)->get("/all-tasks?for={$outside}")
                 ->assertInertia(fn (Assert $page) => $page->where('target', 'today')->where('date', '2026-09-16'));
         }
 
         // Carbon would roll 31 September over to 1 October, inside the window.
         Carbon::setTestNow(Carbon::parse('2026-09-28 08:00:00', 'UTC'));
         foreach (['2026-09-31', '2026-02-29'] as $overflow) {
-            $this->actingAs($this->user)->get("/zadania?na={$overflow}")
+            $this->actingAs($this->user)->get("/all-tasks?for={$overflow}")
                 ->assertInertia(fn (Assert $page) => $page->where('target', 'today')->where('date', '2026-09-28'));
         }
     }
 
     public function test_the_trail_views_open_without_writing_anything(): void
     {
-        $this->actingAs($this->user)->get('/?widok=gotowe')
+        $this->actingAs($this->user)->get('/?view=summary')
             ->assertInertia(fn (Assert $page) => $page->where('state', 'done')->where('closed', false));
         $this->assertSame(0, DayClose::count());
 
         $this->actingAs($this->user)->post('/day/close');
 
-        $this->actingAs($this->user)->get('/?widok=dzis')
+        $this->actingAs($this->user)->get('/?view=today')
             ->assertInertia(fn (Assert $page) => $page->where('state', 'paper')->where('closed', true));
         $this->actingAs($this->user)->get('/')
             ->assertInertia(fn (Assert $page) => $page->where('state', 'done')->where('closed', true));
@@ -146,7 +148,7 @@ final class TodayTest extends TestCase
                 ->where('running.task_id', $task->id)
             );
 
-        $this->actingAs($this->user)->get('/?widok=timer')
+        $this->actingAs($this->user)->get('/?view=timer')
             ->assertInertia(fn (Assert $page) => $page->where('state', 'timer'));
     }
 
@@ -162,7 +164,7 @@ final class TodayTest extends TestCase
         $this->actingAs($this->user)->get('/')
             ->assertInertia(fn (Assert $page) => $page->where('state', 'paper')->has('timers', 2));
 
-        $this->actingAs($this->user)->get("/?widok=timer&timer={$first}")
+        $this->actingAs($this->user)->get("/?view=timer&timer={$first}")
             ->assertInertia(fn (Assert $page) => $page->where('state', 'timer')->where('running.task', 'Landing pages'));
     }
 
@@ -316,11 +318,227 @@ final class TodayTest extends TestCase
 
     public function test_the_focus_view_falls_back_to_the_list_without_a_timer(): void
     {
-        $this->actingAs($this->user)->get('/?widok=timer')
+        $this->actingAs($this->user)->get('/?view=timer')
             ->assertInertia(fn (Assert $page) => $page->where('state', 'paper'));
     }
 
-    public function test_a_day_holds_at_most_five_picks(): void
+    public function test_picking_a_task_for_another_day_moves_it_and_today_keeps_the_history(): void
+    {
+        $task = $this->task('Moved on');
+        $stays = $this->task('Stays');
+        $this->pick($task);
+        $this->pick($stays);
+        TimeEntry::create([
+            'account_id' => $this->account->id, 'project_id' => $this->project->id, 'task_id' => $task->id,
+            'description' => 'Earlier', 'start_time' => now()->subHours(1), 'end_time' => now()->subMinutes(35), 'duration_minutes' => 25,
+        ]);
+
+        $this->actingAs($this->user)->post('/day/picks', ['task_id' => $task->id, 'date' => '2026-09-17'])->assertSessionHasNoErrors();
+
+        $this->assertSame('2026-09-17', DayPick::where('task_id', $task->id)->whereDate('date', '2026-09-16')->first()->moved_to->toDateString());
+        $this->actingAs($this->user)->get('/')
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('picks', 1)
+                ->where('picks.0.name', 'Stays')
+                ->has('offPlan', 0)
+                ->has('carried', 0)
+                ->has('moved', 1)
+                ->where('moved.0.name', 'Moved on')
+                ->where('moved.0.minutes', 25)
+                ->where('moved.0.moved_to', '2026-09-17'));
+    }
+
+    public function test_a_plan_change_while_another_holds_the_plan_answers_with_a_message_not_an_error_page(): void
+    {
+        $task = $this->task('Busy');
+        $this->pick($task);
+        $this->planLockTimesOut();
+
+        $this->actingAs($this->user)->post('/day/picks', ['task_id' => $task->id, 'date' => '2026-09-17'])
+            ->assertRedirect()->assertSessionHasErrors(['task_id' => 'The plan is being changed. Try again.']);
+        $this->actingAs($this->user)->post('/day/close')->assertRedirect()->assertSessionHasErrors(['close' => 'The plan is being changed. Try again.']);
+        $this->assertSame(1, DayPick::live()->where('task_id', $task->id)->whereDate('date', '2026-09-16')->count());
+    }
+
+    public function test_a_move_may_go_past_next_week_and_coming_back_restores_the_days_own_pick(): void
+    {
+        $task = $this->task('Far ahead');
+        $this->pick($task);
+
+        $this->actingAs($this->user)->post('/day/picks', ['task_id' => $this->task('New')->id, 'date' => '2026-10-20'])->assertSessionHasErrors('task_id');
+        $this->actingAs($this->user)->post('/day/picks', ['task_id' => $task->id, 'date' => '2026-10-20'])->assertSessionHasNoErrors();
+        $this->assertSame(1, DayPick::live()->where('task_id', $task->id)->count());
+
+        $this->pick($task);
+
+        $live = DayPick::live()->where('task_id', $task->id)->get();
+        $this->assertSame(['2026-09-16'], $live->map(fn (DayPick $pick) => $pick->date->toDateString())->all());
+        $this->assertSame('2026-09-16', DayPick::where('task_id', $task->id)->whereDate('date', '2026-10-20')->first()->moved_to->toDateString());
+        $this->assertSame(2, DayPick::where('task_id', $task->id)->count());
+    }
+
+    public function test_a_task_moved_off_a_day_is_no_longer_picked_there_and_can_be_picked_back(): void
+    {
+        $task = $this->task('Moves on');
+        $this->pick($task, '2026-09-17');
+        $this->pick($task, '2026-09-18');
+
+        $this->actingAs($this->user)->get('/all-tasks?for=tomorrow')
+            ->assertInertia(fn (Assert $page) => $page->where('groups.0.tasks.0.name', 'Moves on')->where('groups.0.tasks.0.picked', false));
+        $this->actingAs($this->user)->get('/tomorrow')
+            ->assertInertia(fn (Assert $page) => $page->has('picks', 0)->where('suggestions.tasks.0.name', 'Moves on'));
+
+        $this->pick($task, '2026-09-17');
+
+        $this->assertSame(['2026-09-17'], DayPick::live()->where('task_id', $task->id)->get()->map(fn (DayPick $pick) => $pick->date->toDateString())->all());
+        $this->actingAs($this->user)->get('/all-tasks?for=tomorrow')
+            ->assertInertia(fn (Assert $page) => $page->where('groups.0.tasks.0.picked', true));
+    }
+
+    public function test_a_pick_moved_off_today_no_longer_leads_the_suggestions_as_left_over(): void
+    {
+        $task = $this->task('Was today');
+        $this->pick($task);
+        $this->pick($task, '2026-09-18');
+
+        $this->actingAs($this->user)->get('/tomorrow')
+            ->assertInertia(fn (Assert $page) => $page->where('suggestions.leftover', 0));
+    }
+
+    public function test_a_pick_moved_past_next_week_can_be_removed_there_and_moved_again(): void
+    {
+        $task = $this->task('Far ahead');
+        $this->pick($task);
+        $this->pick($task, '2026-10-20');
+        $far = DayPick::live()->where('task_id', $task->id)->sole();
+
+        $this->pick($task, '2026-10-21');
+        $this->assertSame(['2026-10-21'], DayPick::live()->where('task_id', $task->id)->get()->map(fn (DayPick $pick) => $pick->date->toDateString())->all());
+        $this->assertSame('2026-10-21', $far->fresh()->moved_to->toDateString());
+
+        $this->actingAs($this->user)->delete('/day/picks/'.DayPick::live()->where('task_id', $task->id)->sole()->id)->assertSessionHasNoErrors();
+        $this->assertSame(0, DayPick::live()->where('task_id', $task->id)->count());
+    }
+
+    public function test_a_past_days_pick_still_cannot_be_removed(): void
+    {
+        $pick = $this->pastPick($this->task('Monday'), '2026-09-14');
+
+        $this->actingAs($this->user)->delete("/day/picks/{$pick->id}")->assertSessionHasErrors('task_id');
+        $this->assertNotNull($pick->fresh());
+    }
+
+    public function test_a_day_ahead_says_whether_it_takes_new_picks_and_the_full_list_returns_to_it(): void
+    {
+        $this->actingAs($this->user)->get('/day/2026-09-25')
+            ->assertInertia(fn (Assert $page) => $page->component('today/plan')->where('plannable', true));
+        $this->actingAs($this->user)->get('/day/2026-10-20')
+            ->assertInertia(fn (Assert $page) => $page->component('today/plan')->where('plannable', false));
+        $this->actingAs($this->user)->get('/tomorrow')
+            ->assertInertia(fn (Assert $page) => $page->where('plannable', true));
+
+        $this->actingAs($this->user)->get('/all-tasks?for=2026-09-25&from=day')
+            ->assertInertia(fn (Assert $page) => $page->where('date', '2026-09-25')->where('target', 'date')->where('back', 'day'));
+        $this->actingAs($this->user)->get('/all-tasks?for=2026-09-25')
+            ->assertInertia(fn (Assert $page) => $page->where('back', null));
+        $this->actingAs($this->user)->post('/day/picks', ['task_id' => $this->task('Friday next')->id, 'date' => '2026-09-25'])->assertSessionHasNoErrors();
+        $this->assertSame('2026-09-25', DayPick::query()->sole()->date->toDateString());
+    }
+
+    public function test_a_past_days_month_tile_keeps_today_as_today(): void
+    {
+        $this->actingAs($this->user)->get('/day/2026-09-14')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('month.month', '2026-09-01')
+                ->where('month.days.13.state', 'open')
+                ->where('month.days.15.state', 'today')
+                ->where('month.days.14.state', 'open'));
+
+        $this->actingAs($this->user)->get('/day/2026-08-12')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('month.month', '2026-08-01')
+                ->where('month.days.11.state', 'open')
+                ->where('month.days.12.state', 'open')
+                ->where('month.days', fn ($days) => collect($days)->whereIn('state', ['today', 'stamped', 'future'])->isEmpty()));
+    }
+
+    public function test_the_rest_of_the_week_lists_each_day_with_its_picks(): void
+    {
+        $this->pastPick($this->task('Thursday one'), '2026-09-17');
+
+        $this->actingAs($this->user)->get('/')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('moveDays', [
+                    ['date' => '2026-09-17', 'picks' => 1],
+                    ['date' => '2026-09-18', 'picks' => 0],
+                    ['date' => '2026-09-19', 'picks' => 0],
+                    ['date' => '2026-09-20', 'picks' => 0],
+                ]));
+    }
+
+    public function test_a_past_day_opens_as_its_summary_with_that_days_plan_time_and_neighbours(): void
+    {
+        $task = $this->task('Monday work');
+        $this->pastPick($task, '2026-09-14');
+        TimeEntry::create([
+            'account_id' => $this->account->id, 'project_id' => $this->project->id, 'task_id' => $task->id, 'description' => 'Work',
+            'start_time' => '2026-09-14 08:00:00', 'end_time' => '2026-09-14 09:15:00', 'duration_minutes' => 75,
+        ]);
+        $this->actingAs($this->user)->postJson("/tasks/{$this->task('Running now')->id}/time-entries/start");
+
+        $this->actingAs($this->user)->get('/day/2026-09-14')->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('today/index')
+                ->where('state', 'done')
+                ->where('date', '2026-09-14')
+                ->where('picks.0.name', 'Monday work')
+                ->where('picks.0.minutes', 75)
+                ->has('offPlan', 0)
+                ->where('totals.logged_minutes', 75)
+                ->where('day', ['date' => '2026-09-14', 'prev' => null, 'next' => '2026-09-15', 'today' => '2026-09-16'])
+                ->where('month.days.13.minutes', 75));
+    }
+
+    public function test_a_day_ahead_opens_as_its_plan_and_today_is_the_home_screen(): void
+    {
+        $task = $this->task('Friday');
+        $this->pastPick($task, '2026-09-18');
+
+        $this->actingAs($this->user)->get('/day/2026-09-18')->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('today/plan')
+                ->where('date', '2026-09-18')
+                ->where('picks.0.name', 'Friday')
+                ->where('day.next', '2026-09-19'));
+
+        $this->actingAs($this->user)->get('/day/2026-09-16')->assertRedirect('/');
+        $this->actingAs($this->user)->get('/day/2026-02-30')->assertNotFound();
+    }
+
+    public function test_an_earlier_day_can_be_closed_and_reopened_by_its_date_even_with_a_timer_running(): void
+    {
+        $this->actingAs($this->user)->postJson("/tasks/{$this->task()->id}/time-entries/start");
+
+        $this->actingAs($this->user)->from('/day/2026-09-15')->post('/day/close', ['date' => '2026-09-15'])->assertRedirect('/day/2026-09-15');
+        $this->assertTrue(DayClose::whereDate('date', '2026-09-15')->exists());
+        $this->assertFalse(DayClose::whereDate('date', '2026-09-16')->exists());
+
+        $this->actingAs($this->user)->from('/day/2026-09-15')->delete('/day/close', ['date' => '2026-09-15'])->assertRedirect('/day/2026-09-15');
+        $this->assertFalse(DayClose::whereDate('date', '2026-09-15')->exists());
+        $this->actingAs($this->user)->post('/day/close', ['date' => '2026-09-17'])->assertSessionHasErrors('date');
+    }
+
+    public function test_a_closed_weekend_day_counts_and_grows_the_months_total(): void
+    {
+        $before = app(DayPlanner::class)->month($this->account->id, \Carbon\CarbonImmutable::parse('2026-09-16'));
+        DayClose::create(['account_id' => $this->account->id, 'date' => '2026-09-12', 'closed_at' => now()]);
+        $after = app(DayPlanner::class)->month($this->account->id, \Carbon\CarbonImmutable::parse('2026-09-16'));
+
+        $this->assertSame([0, 22], [$before['closed'], $before['weekdays']]);
+        $this->assertSame([1, 23], [$after['closed'], $after['weekdays']]);
+    }
+
+    public function test_a_full_day_still_takes_a_sixth_pick(): void
     {
         foreach (range(1, 5) as $i) {
             $this->pick($this->task("T{$i}"));
@@ -328,9 +546,32 @@ final class TodayTest extends TestCase
 
         $this->actingAs($this->user)
             ->post('/day/picks', ['task_id' => $this->task('Sixth')->id, 'date' => '2026-09-16'])
-            ->assertSessionHasErrors('task_id');
+            ->assertSessionHasNoErrors();
 
-        $this->assertSame(5, DayPick::count());
+        $this->assertSame(6, DayPick::count());
+        $this->assertSame([1, 2, 3, 4, 5, 6], DayPick::orderBy('slot')->pluck('slot')->all());
+    }
+
+    public function test_the_full_day_warning_is_on_until_the_user_turns_it_off(): void
+    {
+        $this->actingAs($this->user)->get('/')->assertInertia(fn (Assert $page) => $page->where('maxPicks', 5)->where('warnFull', true));
+
+        $this->actingAs($this->user)->patch('/profile/tasks', ['warn_full_day' => false])->assertSessionHasNoErrors();
+
+        $this->actingAs($this->user)->get('/')->assertInertia(fn (Assert $page) => $page->where('warnFull', false));
+        $this->actingAs($this->user)->get('/profile')->assertInertia(fn (Assert $page) => $page->where('task_settings.warn_full_day', false));
+    }
+
+    public function test_billed_time_on_tasks_is_the_owners_switch_and_a_member_has_none(): void
+    {
+        $this->actingAs($this->user)->get('/profile')->assertInertia(fn (Assert $page) => $page->where('task_settings.show_billed_on_tasks', false));
+        $this->actingAs($this->user)->patch('/profile/tasks', ['show_billed_on_tasks' => true])->assertSessionHasNoErrors();
+        $this->assertTrue($this->user->fresh()->prefers('show_billed_on_tasks'));
+        $this->assertTrue($this->user->fresh()->prefers('warn_full_day'));
+
+        $member = User::factory()->create(['account_id' => $this->account->id, 'owner' => false]);
+        $this->actingAs($member)->get('/profile')->assertInertia(fn (Assert $page) => $page->where('task_settings.show_billed_on_tasks', null));
+        $this->actingAs($member)->patch('/profile/tasks', ['show_billed_on_tasks' => true])->assertForbidden();
     }
 
     public function test_the_same_task_cannot_be_picked_twice_for_a_day(): void
@@ -388,6 +629,38 @@ final class TodayTest extends TestCase
         $this->assertNotNull($old->fresh()->dismissed_at);
     }
 
+    public function test_a_pick_on_the_doing_or_testing_list_is_marked_in_progress_until_done(): void
+    {
+        $doing = $this->task('Doing');
+        $doing->update(['list_name' => 'Doing']);
+        $todo = $this->task('Todo');
+        $finished = $this->task('Finished');
+        foreach ([$doing, $todo, $finished] as $task) {
+            $this->pick($task);
+        }
+        $finished->update(['list_name' => 'Testing', 'finished_at' => now()]);
+
+        $this->actingAs($this->user)->get('/')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('picks', fn ($picks) => collect($picks)->pluck('in_progress', 'name')->sortKeys()->all() === ['Doing' => true, 'Finished' => false, 'Todo' => false]));
+    }
+
+    public function test_a_carried_task_with_time_today_shows_only_as_off_plan_work(): void
+    {
+        $task = $this->task('From Monday');
+        $this->pastPick($task, '2026-09-15');
+        TimeEntry::create([
+            'account_id' => $this->account->id, 'project_id' => $this->project->id, 'task_id' => $task->id,
+            'description' => 'Earlier', 'start_time' => now()->subHours(1), 'end_time' => now()->subMinutes(35), 'duration_minutes' => 25,
+        ]);
+
+        $this->actingAs($this->user)->get('/')
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('carried', 0)
+                ->has('offPlan', 1)
+                ->where('offPlan.0.name', 'From Monday'));
+    }
+
     public function test_a_done_or_repicked_task_is_not_carried(): void
     {
         $done = $this->task('Done since');
@@ -411,16 +684,16 @@ final class TodayTest extends TestCase
         $this->actingAs($this->user)->post('/day/hidden-groups/toggle', ['project_id' => $board->id, 'list_name' => 'Raport'])->assertRedirect();
 
         $names = fn ($page) => collect($page['props']['groups'])->flatMap(fn ($g) => collect($g['tasks'])->pluck('name'))->sort()->values()->all();
-        $page = $this->actingAs($this->user)->get('/zadania')->viewData('page');
+        $page = $this->actingAs($this->user)->get('/all-tasks')->viewData('page');
         $this->assertSame(['Plain work', 'Real work'], $names($page));
         $this->assertSame(['groups' => 1, 'tasks' => 2], $page['props']['hidden']);
         $this->assertContains(['project_id' => $board->id, 'list_name' => 'Raport', 'label' => 'Raport · Board', 'client_id' => $board->client_id, 'client' => 'ACME', 'count' => 2, 'hidden' => true], $page['props']['hideable']);
 
-        $revealed = $this->actingAs($this->user)->get('/zadania?ukryte=1')->viewData('page');
+        $revealed = $this->actingAs($this->user)->get('/all-tasks?hidden=1')->viewData('page');
         $this->assertCount(4, $names($revealed));
 
         $this->actingAs($this->user)->delete('/day/hidden-groups')->assertRedirect();
-        $this->assertCount(4, $names($this->actingAs($this->user)->get('/zadania')->viewData('page')));
+        $this->assertCount(4, $names($this->actingAs($this->user)->get('/all-tasks')->viewData('page')));
     }
 
     public function test_a_hidden_project_stays_out_of_the_plan_suggestions_and_toggles_back(): void
@@ -428,10 +701,10 @@ final class TodayTest extends TestCase
         $this->task('Hidden away');
         $this->actingAs($this->user)->post('/day/hidden-groups/toggle', ['project_id' => $this->project->id]);
 
-        $this->actingAs($this->user)->get('/jutro')->assertInertia(fn (Assert $page) => $page->where('suggestions.open', 0));
+        $this->actingAs($this->user)->get('/tomorrow')->assertInertia(fn (Assert $page) => $page->where('suggestions.open', 0));
 
         $this->actingAs($this->user)->post('/day/hidden-groups/toggle', ['project_id' => $this->project->id]);
-        $this->actingAs($this->user)->get('/jutro')->assertInertia(fn (Assert $page) => $page->where('suggestions.open', 1));
+        $this->actingAs($this->user)->get('/tomorrow')->assertInertia(fn (Assert $page) => $page->where('suggestions.open', 1));
     }
 
     public function test_a_group_is_one_row_however_often_it_is_toggled(): void
@@ -474,7 +747,7 @@ final class TodayTest extends TestCase
         }
 
         DB::enableQueryLog();
-        $this->actingAs($this->user)->get('/tydzien')->assertInertia(fn (Assert $page) => $page->where('days.2.picks.0.minutes', 5));
+        $this->actingAs($this->user)->get('/week')->assertInertia(fn (Assert $page) => $page->where('days.2.picks.0.minutes', 5));
         $this->assertLessThan(25, count(DB::getQueryLog()));
     }
 
@@ -501,7 +774,7 @@ final class TodayTest extends TestCase
         Task::create(['project_id' => $board->id, 'name' => 'Real work', 'list_name' => 'Doing']);
         $this->task('Plain work');
         $this->actingAs($this->user)->post('/day/hidden-groups/toggle', ['project_id' => $board->id, 'list_name' => 'Raport']);
-        $hidden = fn () => $this->actingAs($this->user)->get('/zadania')->viewData('page')['props']['hidden'];
+        $hidden = fn () => $this->actingAs($this->user)->get('/all-tasks')->viewData('page')['props']['hidden'];
 
         $this->actingAs($this->user)->post('/day/hidden-groups/client', ['client_id' => $this->project->client_id])->assertRedirect();
         $this->assertSame(['groups' => 3, 'tasks' => 3], $hidden());
@@ -536,7 +809,7 @@ final class TodayTest extends TestCase
         $this->pastPick($this->task('Left on Tuesday'), '2026-09-15');
         $this->pick($this->task('For Friday'), '2026-09-18');
 
-        $this->actingAs($this->user)->get('/tydzien')
+        $this->actingAs($this->user)->get('/week')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('today/week')
                 ->where('week', 'this')
@@ -548,7 +821,7 @@ final class TodayTest extends TestCase
                 ->where('days.4.picks.0.name', 'For Friday')
                 ->where('days.6.date', '2026-09-20'));
 
-        $this->actingAs($this->user)->get('/tydzien?nastepny=1')
+        $this->actingAs($this->user)->get('/week?next=1')
             ->assertInertia(fn (Assert $page) => $page->where('week', 'next')->where('days.0.date', '2026-09-21')->where('days.6.plannable', true));
     }
 
@@ -571,7 +844,7 @@ final class TodayTest extends TestCase
         $this->actingAs($this->user)->post('/day/close')->assertSessionHasErrors('close');
         $this->assertSame(0, DayClose::count());
 
-        $this->actingAs($this->user)->get('/?widok=timer')
+        $this->actingAs($this->user)->get('/?view=timer')
             ->assertInertia(fn (Assert $page) => $page->where('state', 'timer')->where('running.task', $task->name));
     }
 
@@ -595,13 +868,13 @@ final class TodayTest extends TestCase
 
     public function test_every_day_view_knows_whether_today_is_closed(): void
     {
-        foreach (['/tydzien', '/jutro', '/zadania'] as $view) {
+        foreach (['/week', '/tomorrow', '/all-tasks'] as $view) {
             $this->actingAs($this->user)->get($view)->assertInertia(fn (Assert $page) => $page->where('closed', false));
         }
 
         $this->actingAs($this->user)->post('/day/close');
 
-        foreach (['/?widok=dzis', '/tydzien', '/jutro', '/zadania'] as $view) {
+        foreach (['/?view=today', '/week', '/tomorrow', '/all-tasks'] as $view) {
             $this->actingAs($this->user)->get($view)->assertInertia(fn (Assert $page) => $page->where('closed', true));
         }
     }
@@ -637,7 +910,7 @@ final class TodayTest extends TestCase
     {
         $this->pick($this->task('For tomorrow'), '2026-09-17');
 
-        $this->actingAs($this->user)->get('/jutro')
+        $this->actingAs($this->user)->get('/tomorrow')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('today/plan', false)
                 ->where('date', '2026-09-17')
@@ -657,7 +930,7 @@ final class TodayTest extends TestCase
         $this->pick($done);
         $done->update(['is_completed' => true]);
 
-        $this->actingAs($this->user)->get('/jutro')
+        $this->actingAs($this->user)->get('/tomorrow')
             ->assertInertia(fn (Assert $page) => $page
                 ->where('suggestions.tasks', fn ($tasks) => collect($tasks)->pluck('name')->all() === ['Left over today', 'Due soon', 'Due later'])
                 ->where('suggestions.leftover', 1)
@@ -672,7 +945,7 @@ final class TodayTest extends TestCase
         Task::create(['project_id' => $this->project->id, 'name' => 'Due today', 'due_date' => '2026-09-16']);
         Task::create(['project_id' => $this->project->id, 'name' => 'Finished late', 'due_date' => '2026-09-01', 'is_completed' => true]);
 
-        $this->actingAs($this->user)->get('/?widok=gotowe')
+        $this->actingAs($this->user)->get('/?view=summary')
             ->assertInertia(fn (Assert $page) => $page->where('overdue', ['count' => 2, 'oldest' => '2026-09-10']));
     }
 
@@ -680,7 +953,7 @@ final class TodayTest extends TestCase
     {
         Task::create(['project_id' => $this->project->id, 'name' => 'Oldest', 'due_date' => '2026-09-10']);
 
-        $this->actingAs($this->user)->get('/?widok=dzis')
+        $this->actingAs($this->user)->get('/?view=today')
             ->assertInertia(fn (Assert $page) => $page->where('state', 'paper')->where('overdue', null));
     }
 
@@ -771,7 +1044,7 @@ final class TodayTest extends TestCase
                 ->where('offPlan.0.running_id', $offPlanTimer)
                 ->where('looseTimers', fn ($rows) => collect($rows)->pluck('id')->sort()->values()->all() === [$second, $taskless])
             );
-        $this->actingAs($this->user)->get('/?widok=gotowe')
+        $this->actingAs($this->user)->get('/?view=summary')
             ->assertInertia(fn (Assert $page) => $page->where('state', 'done')->has('looseTimers', 2));
     }
 

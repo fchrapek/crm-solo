@@ -4,7 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { ListTableCell } from './list-table';
 
-const pages = ['clients/index.tsx', 'contacts/index.tsx', 'leads/index.tsx'].map((page) => readFileSync(`${import.meta.dir}/../../pages/${page}`, 'utf8'));
+const read = (page: string) => readFileSync(`${import.meta.dir}/../../pages/${page}`, 'utf8');
+const pages = ['clients/index.tsx', 'leads/index.tsx'].map(read);
 
 describe('a list table title', () => {
     test('a truncating name sits in a box that gives up its width, so a long name never widens the table past its tile', () => {
@@ -27,9 +28,10 @@ describe('a list table title', () => {
         expect(css.match(/\.truncate \{([^}]*)\}/)?.[1]).toContain('contain: inline-size');
     });
 
-    test('the clients, contacts and leads lists cut their names', () => {
+    test('the clients and leads lists cut their names; contacts, with three columns, show every name whole', () => {
         for (const page of pages) {
             expect(page).toContain('<ListTableCell kind="title" truncate>');
         }
+        expect(read('contacts/index.tsx')).not.toContain('<ListTableCell kind="title" truncate>');
     });
 });

@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { Icon } from '@/components/ui/icon';
+import { fullText } from '@/lib/plain-text';
 import { cn } from '@/lib/utils';
 import styles from './alert.module.css';
 
@@ -37,7 +38,7 @@ function Alert({ className, variant = 'default', children, ...props }: AlertProp
 }
 
 function AlertTitle({ className, ...props }: React.ComponentProps<'div'>) {
-    return <div data-slot="alert-title" className={cn(styles.title, className)} {...props} />;
+    return <div data-slot="alert-title" className={cn(styles.title, className)} title={fullText(props.children)} {...props} />;
 }
 
 function AlertDescription({ className, ...props }: React.ComponentProps<'div'>) {

@@ -18,6 +18,8 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\Agent\TimeEntryRecord;
+use App\Services\Clients\LoggedTimeFreeze;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -65,6 +67,15 @@ final class AgentTimeEntriesTest extends TestCase
     {
         Carbon::setTestNow();
         parent::tearDown();
+    }
+
+    public function test_a_closed_month_refusal_names_the_close_button_in_the_owners_language(): void
+    {
+        $closed = ['reason' => LoggedTimeFreeze::CLOSED, 'month' => '2026-09'];
+
+        $this->assertSame('2026-09 is closed (Close the month): reopen it in the app to change its time.', TimeEntryRecord::lockedReason($closed));
+        app()->setLocale('pl');
+        $this->assertSame('2026-09 is closed (Zamknij miesiąc): reopen it in the app to change its time.', TimeEntryRecord::lockedReason($closed));
     }
 
     public function test_an_entry_counts_on_the_warsaw_day_it_started_and_shows_local_times(): void

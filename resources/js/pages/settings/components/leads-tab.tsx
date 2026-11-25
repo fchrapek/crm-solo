@@ -15,7 +15,7 @@ import styles from './tab.module.css';
 
 type Source = { slug: string; label: string };
 
-/** Figma: Ustawienia / Leady (466:7756), phones 473:8510. Every change saves the whole custom list, as before. */
+/** Figma: Settings / Leads (466:7756), phones 473:8510. Every change saves the whole custom list, as before. */
 export function LeadsTab({ leadgen }: { leadgen: LeadgenSettings }) {
     const { t } = useTranslation();
     const label = useLeadLabel();

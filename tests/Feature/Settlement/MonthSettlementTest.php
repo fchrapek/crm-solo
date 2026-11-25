@@ -346,17 +346,17 @@ final class MonthSettlementTest extends TestCase
     private function close(string $period, ?string $hash = null): \Illuminate\Testing\TestResponse
     {
         return $this->actingAs($this->user)
-            ->from("/clients/{$this->client->id}/rozliczenia")
+            ->from("/clients/{$this->client->id}/billing")
             ->post("/clients/{$this->client->id}/months/{$period}/close", ['preview_hash' => $hash ?? $this->hash($period)])
-            ->assertRedirect("/clients/{$this->client->id}/rozliczenia");
+            ->assertRedirect("/clients/{$this->client->id}/billing");
     }
 
     private function reopen(string $period, int $closureId): \Illuminate\Testing\TestResponse
     {
         return $this->actingAs($this->user)
-            ->from("/clients/{$this->client->id}/rozliczenia")
+            ->from("/clients/{$this->client->id}/billing")
             ->delete("/clients/{$this->client->id}/months/{$period}/close", ['closure_id' => $closureId])
-            ->assertRedirect("/clients/{$this->client->id}/rozliczenia");
+            ->assertRedirect("/clients/{$this->client->id}/billing");
     }
 
     private function settle(string $period): ClientMonthClosure

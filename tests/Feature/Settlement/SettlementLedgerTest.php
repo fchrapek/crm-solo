@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Support\Header;
 use Tests\TestCase;
 
-/** Rozliczenia's ledger: settlement and report delivery as separate facts per month. */
+/** Billing's ledger: settlement and report delivery as separate facts per month. */
 final class SettlementLedgerTest extends TestCase
 {
     use RefreshDatabase;
@@ -124,7 +124,7 @@ final class SettlementLedgerTest extends TestCase
         $this->assertSame('2', $this->billing()['ledger']['next']);
     }
 
-    public function test_starsze_pages_through_every_month_closure_only_rows_included_and_ends_on_the_entry_row(): void
+    public function test_older_pages_through_every_month_closure_only_rows_included_and_ends_on_the_entry_row(): void
     {
         $this->setUpSettlement(baseline: '2025-03', nowUtc: '2026-10-20 10:00:00');
         $this->retainer(10, '2025-01-01');
@@ -155,7 +155,7 @@ final class SettlementLedgerTest extends TestCase
     {
         $stranger = User::factory()->create(['account_id' => Account::create(['name' => 'Other'])->id, 'owner' => true]);
 
-        $this->actingAs($stranger)->get("/clients/{$this->client->id}/rozliczenia?miesiace=2")->assertNotFound();
+        $this->actingAs($stranger)->get("/clients/{$this->client->id}/billing?ledger=2")->assertNotFound();
     }
 
     /** @return array<string, mixed> */
@@ -168,7 +168,7 @@ final class SettlementLedgerTest extends TestCase
                 Header::PARTIAL_COMPONENT => 'clients/show',
                 Header::PARTIAL_ONLY => 'billing_ledger',
             ])
-            ->get("/clients/{$this->client->id}/rozliczenia?miesiace={$next}")
+            ->get("/clients/{$this->client->id}/billing?ledger={$next}")
             ->assertOk()
             ->assertJsonMissingPath('props.billing')
             ->json('props.billing_ledger');
@@ -177,7 +177,7 @@ final class SettlementLedgerTest extends TestCase
     /** @return array<string, mixed> */
     private function billing(): array
     {
-        $props = $this->actingAs($this->user)->get("/clients/{$this->client->id}/rozliczenia")->assertOk()->viewData('page')['props'];
+        $props = $this->actingAs($this->user)->get("/clients/{$this->client->id}/billing")->assertOk()->viewData('page')['props'];
 
         return [...$props['billing'], 'ledger' => $props['billing_ledger']];
     }

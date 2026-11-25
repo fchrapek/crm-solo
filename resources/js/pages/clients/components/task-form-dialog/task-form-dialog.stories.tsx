@@ -3,9 +3,9 @@ import { TaskFormDialog } from './task-form-dialog';
 
 const DESKTOP = { viewport: { value: 'desktop', isRotated: false } };
 
-/** Figma: Nowe zadanie. sheet is on for the Solo pages: phones get the Cancel · Save sheet, from 768 px the dialog. */
+/** Figma: New task. sheet is on for the Solo pages: phones get the Cancel · Save sheet, from 768 px the dialog. */
 const meta = {
-    title: 'Zadania/Nowe zadanie',
+    title: 'Tasks/New task',
     component: TaskFormDialog,
     args: {
         open: true,
@@ -25,7 +25,7 @@ export const Sheet: Story = {};
 
 export const Dialog: Story = { globals: DESKTOP };
 
-/** From a page that spans projects: Projekt comes first. */
+/** From a page that spans projects: Project comes first. */
 export const PicksAProject: Story = {
     args: {
         projectId: undefined,

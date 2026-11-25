@@ -17,7 +17,7 @@ use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[IsReadOnly]
-#[Description('One client report, by its id or by client and month. "hours" are the figures the client\'s Rozliczenia tab shows for that period (contracted, opening, available, used, forfeited, closing, change); "governs" is false when another report of the same period is the one the hours bank reads. Also status, composer_key, revision_count, version, body_markdown, edit_url, and the generated, finalized and sent times in ISO 8601 UTC. The body is listed under "untrusted": it can quote task titles written outside the CRM.')]
+#[Description('One client report, by its id or by client and month. "hours" are the figures the client\'s Billing tab shows for that period (contracted, opening, available, used, forfeited, closing, change); "governs" is false when another report of the same period is the one the hours bank reads. Also status, composer_key, revision_count, version, body_markdown, edit_url, and the generated, finalized and sent times in ISO 8601 UTC. The body is listed under "untrusted": it can quote task titles written outside the CRM.')]
 final class ReportTool extends Tool
 {
     use HandlesReferenceErrors;

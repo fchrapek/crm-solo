@@ -20,8 +20,8 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * The project page (Figma 770:56830): the Zadania lanes narrowed to one project, and a Projekt column with its
- * Trello state, this month's hours and the project's actions, reached from the projects on Dziennik.
+ * The project page (Figma 770:56830): the Tasks lanes narrowed to one project, and a Project column with its
+ * Trello state, this month's hours and the project's actions, reached from the projects on Journal.
  */
 final class ProjectBoardController extends Controller
 {
@@ -35,7 +35,7 @@ final class ProjectBoardController extends Controller
         $month = LocalCalendar::currentMonth();
         [$from, $until] = LocalCalendar::monthRange($month);
         $trello = Auth::user()->account->integrations()->where('provider', 'trello')->where('is_enabled', true)->first();
-        $expanded = Request::query('wszystkie');
+        $expanded = Request::query('expand');
         $agentTimer = TimeEntry::query()
             ->where('account_id', $client->account_id)
             ->where('project_id', $project->id)
@@ -80,7 +80,8 @@ final class ProjectBoardController extends Controller
             ],
             ...app(ClientTasksQuery::class)->forProject($client, $project, is_string($expanded) ? $expanded : null),
             'projects' => app(ClientTasksQuery::class)->projects($client, ClientBillingMode::RETAINER),
-            'open_tasks_count' => app(ClientTasksQuery::class)->visibleOpenTasks($client, ClientBillingMode::RETAINER)->count(),
+            'parent_options' => Inertia::optional(fn (): array => app(ClientTasksQuery::class)->parentOptions($client, $project)),
+            'open_tasks_count' => app(ClientTasksQuery::class)->visibleOpenTasks($client)->count(),
             'trelloEnabled' => ! config('app.demo') && ($trello?->isConfigured() ?? false),
             'trelloActions' => ! config('app.demo'),
         ]);

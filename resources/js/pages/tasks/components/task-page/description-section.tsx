@@ -29,8 +29,8 @@ export function MarkdownPreview({ markdown }: { markdown: string }) {
 }
 
 /**
- * Figma: Zadanie, the Opis tile (1094:40618; in edit 1094:41102). A CRM task edits in place (Edytuj, then Podgląd of
- * the draft, or Dodaj opis while there is none); a card's description is Trello's, read here and edited there.
+ * Figma: Task, the Description tile (1094:40618; in edit 1094:41102). A CRM task edits in place (Edit, then Preview of
+ * the draft, or Add description while there is none); a card's description is Trello's, read here and edited there.
  */
 export function DescriptionSection({ task }: { task: TaskData }) {
     const { t } = useTranslation();

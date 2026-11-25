@@ -28,7 +28,7 @@ final class InfaktService
     /** Default line-item wording for a maintenance draft invoice (overridable per client). */
     public const DEFAULT_MAINTENANCE_DESCRIPTION = 'Utrzymanie strony i wsparcie techniczne';
 
-    /** VAT rate for maintenance services (netto retainer + 23% at invoice level). */
+    /** VAT rate for maintenance services (net retainer + 23% at invoice level). */
     public const MAINTENANCE_VAT_SYMBOL = '23';
 
     /**
@@ -161,7 +161,7 @@ final class InfaktService
     }
 
     /**
-     * sourceRefusal as a code the Rozliczenia block can name: not_vat, draft, advance, settles_advance, or null.
+     * sourceRefusal as a code the Billing block can name: not_vat, draft, advance, settles_advance, or null.
      *
      * @param  array<string, mixed>  $invoice
      */
@@ -290,7 +290,7 @@ final class InfaktService
 
     /**
      * The client's invoices a copy may start from (VAT, issued, not an advance or final), newest first, as listed:
-     * what the Rozliczenia picker offers and what `last` takes the first of.
+     * what the Billing picker offers and what `last` takes the first of.
      *
      * @return Collection<int, array<string, mixed>>
      *
@@ -430,7 +430,7 @@ final class InfaktService
     /**
      * Build (but do not send) the draft payloads for a client — one per invoice
      * group. Pure; used for dry-run preview and by createDraftMaintenanceInvoices.
-     * Reads the client's active abonament positions: positions sharing an
+     * Reads the client's active retainer positions: positions sharing an
      * `invoice_group` land on one invoice, different groups become separate
      * invoices. Only fee-bearing positions are billed — a 0-fee position (e.g.
      * an included dev-hours allowance) is tracked for reports but never emitted
@@ -458,7 +458,7 @@ final class InfaktService
             ->filter(fn (ClientRetainer $p): bool => $p->monthly_fee !== null && (float) $p->monthly_fee > 0);
 
         if ($positions->isEmpty()) {
-            throw new RuntimeException("Refusing: no active fee-bearing abonament position for {$client->name} on {$saleDate->toDateString()}.");
+            throw new RuntimeException("Refusing: no active fee-bearing retainer position for {$client->name} on {$saleDate->toDateString()}.");
         }
 
         $default = $client->maintenance_invoice_description ?: self::DEFAULT_MAINTENANCE_DESCRIPTION;

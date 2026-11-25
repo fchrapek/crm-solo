@@ -1,0 +1,333 @@
+/* Figma: 1F, the add-or-pick field (1412:21781, 1412:21953, phone sheet 1413:23155). */
+
+/* at rest: one quiet row, a plus and the words in secondary ink; its rule as far in as the rows' rules */
+.resting {
+    position: relative;
+    list-style: none;
+}
+
+.resting::after {
+    content: '';
+    position: absolute;
+    inset: auto var(--role-space-12) 0;
+    height: var(--role-stroke-rule);
+    background: var(--role-rule);
+}
+
+.restingButton {
+    display: flex;
+    align-items: center;
+    gap: var(--role-space-12);
+    width: 100%;
+    min-height: 56px;
+    padding: 0 var(--role-space-12);
+    border: 0;
+    border-radius: var(--role-radius-sm);
+    background: none;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-row) / 1.35 var(--solo-font-text);
+    text-align: left;
+    cursor: pointer;
+}
+
+.restingButton:hover {
+    color: var(--role-text-primary);
+}
+
+.restingButton:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: -2px;
+}
+
+.restingNote {
+    margin-inline-start: auto;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    white-space: nowrap;
+}
+
+.plus {
+    flex: none;
+    color: var(--role-text-secondary);
+}
+
+/* open from 768 px: the plus stays, the field takes the row */
+.open {
+    display: flex;
+    align-items: center;
+    gap: var(--role-space-12);
+    min-height: 64px;
+    padding: var(--role-space-8) var(--role-space-12);
+    list-style: none;
+}
+
+.input {
+    flex: 1 1 auto;
+}
+
+/* the menu under the field, as wide as the field */
+:global([data-day]) .menu.menu {
+    --solo-pop-width: var(--role-stroke-rule);
+    --solo-pop-border: var(--role-rule);
+    --solo-pop-radius: var(--role-radius-md);
+    --solo-pop-shadow: var(--role-shadow);
+    --solo-pop-bg: var(--role-tile);
+
+    display: flex;
+    flex-direction: column;
+    width: var(--radix-popover-trigger-width);
+    max-height: min(560px, 70dvh);
+    overflow-y: auto;
+    padding: var(--role-space-4);
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+}
+
+.head {
+    margin: 0;
+    padding: var(--role-space-12) var(--role-space-12) var(--role-space-4);
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-label) / normal var(--solo-font-text);
+}
+
+/* an option: on a phone the title over its context line, from 768 px one line with the end meta */
+.option {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-height: 56px;
+    padding: var(--role-space-8) var(--role-space-12);
+    border-radius: var(--role-radius-sm);
+    color: var(--role-text-primary);
+    cursor: pointer;
+}
+
+.option[data-highlighted] {
+    background: var(--role-hover);
+}
+
+.optionTitle {
+    min-width: 0;
+    font: 600 var(--solo-text-row) / 1.3 var(--solo-font-text);
+    overflow-wrap: anywhere;
+}
+
+.optionMeta {
+    min-width: 0;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+/* on a phone the client and project read as one line of text that wraps; from 768 px each part cuts itself */
+.optionMeta span {
+    display: inline;
+}
+
+.newOption {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--role-space-8);
+}
+
+.newIcon {
+    flex: none;
+}
+
+/* Goes to: the caption and the project pill, on their own line under New */
+.target {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--role-space-4) var(--role-space-8);
+    padding: 0 var(--role-space-12) var(--role-space-8);
+}
+
+.targetCaption {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.targetPill.targetPill {
+    max-width: 100%;
+    height: auto;
+    min-height: var(--solo-touch);
+    padding-inline: var(--role-space-12);
+    white-space: normal;
+    text-align: left;
+}
+
+.targetLabel {
+    overflow-wrap: anywhere;
+}
+
+.chevron {
+    flex: none;
+    color: var(--role-text-secondary);
+}
+
+.warn {
+    display: flex;
+    align-items: center;
+    gap: var(--role-space-12);
+    margin: 0 0 var(--role-space-4);
+    padding: var(--role-space-12);
+    border-radius: var(--role-radius-sm);
+    background: var(--role-hover);
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-control) / 1.4 var(--solo-font-text);
+}
+
+.warn svg {
+    flex: none;
+}
+
+.error {
+    margin: 0;
+    padding: var(--role-space-4) var(--role-space-12) var(--role-space-8);
+    color: var(--role-text-over);
+    font: 400 var(--solo-text-control) / 1.4 var(--solo-font-text);
+}
+
+.footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--role-space-12);
+    margin-top: var(--role-space-4);
+    padding: var(--role-space-8) var(--role-space-12) var(--role-space-4);
+    border-top: var(--role-stroke-rule) solid var(--role-rule);
+}
+
+.hints {
+    margin: 0;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-label) / normal var(--solo-font-text);
+}
+
+.footerLink {
+    flex: none;
+    color: var(--role-text-primary);
+    font: 600 var(--solo-text-label) / normal var(--solo-font-text);
+    text-decoration: none;
+}
+
+.footerLink:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+/* the phone sheet: the field on top, the results under it */
+.sheet {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-8);
+}
+
+/* the project search: a popover from 768 px, in place in the phone sheet */
+:global([data-day]) .picker.picker {
+    --solo-pop-width: var(--role-stroke-rule);
+    --solo-pop-border: var(--role-rule);
+    --solo-pop-radius: var(--role-radius-md);
+    --solo-pop-shadow: var(--role-shadow);
+    --solo-pop-bg: var(--role-tile);
+
+    width: 336px;
+    max-height: min(480px, 70dvh);
+}
+
+.pickerBody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-8);
+}
+
+.pickerInline {
+    flex: 1 0 100%;
+    padding-top: var(--role-space-4);
+}
+
+.pickerList {
+    display: flex;
+    flex-direction: column;
+}
+
+.pickerOption {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--role-space-8);
+}
+
+.pickerOption[data-chosen] {
+    background: var(--role-selection);
+    color: var(--role-selection-text);
+}
+
+.nested {
+    padding-inline-start: var(--role-space-24);
+}
+
+.empty {
+    margin: 0;
+    padding: var(--role-space-8) var(--role-space-12);
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-control) / 1.4 var(--solo-font-text);
+}
+
+@media (min-width: 768px) {
+    .restingButton {
+        min-height: 56px;
+        font-size: var(--solo-text-row);
+    }
+
+    .option {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--role-space-12);
+        min-height: 40px;
+        padding-block: var(--role-space-4);
+    }
+
+    .optionTitle {
+        flex: 1 1 auto;
+        font-size: var(--solo-text-control);
+    }
+
+    .optionMeta > span {
+        display: grid;
+    }
+
+    .optionMeta {
+        flex: 0 1 auto;
+        margin-inline-start: auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .taskOption .optionTitle {
+        flex: 0 1 auto;
+        min-width: 45%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .newOption {
+        min-height: 44px;
+    }
+
+    .targetPill.targetPill {
+        min-height: var(--role-control);
+    }
+
+    .warn {
+        padding: var(--role-space-8) var(--role-space-12);
+    }
+}

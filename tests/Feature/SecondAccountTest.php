@@ -171,8 +171,8 @@ final class SecondAccountTest extends TestCase
         MonthCloseRun::create(['account_id' => $this->pilot->account_id, 'client_id' => $client->id, 'period' => '2026-09', 'close_type' => 'maintenance', 'status' => 'open']);
         Invoice::create(['account_id' => $this->pilot->account_id, 'client_id' => $client->id, 'external_id' => 'k-1', 'number' => '1/09/2026', 'status' => 'paid', 'invoice_date' => '2026-09-05', 'gross_price' => 100]);
 
-        $this->actingAs($this->pilot)->get("/clients/{$client->id}/rozliczenia")->assertNotFound();
-        $this->actingAs($this->pilot)->get("/clients/{$client->id}/dane")->assertOk();
+        $this->actingAs($this->pilot)->get("/clients/{$client->id}/billing")->assertNotFound();
+        $this->actingAs($this->pilot)->get("/clients/{$client->id}/details")->assertOk();
         $this->assertCount(0, app(TodayDigest::class)->build($this->pilot->account_id)['month_close_open']);
         $this->assertSame([], app(GlobalSearch::class)->search($this->pilot->account_id, '1/09/2026', group: 'invoices')['groups']);
 
@@ -184,9 +184,9 @@ final class SecondAccountTest extends TestCase
     public function test_server_configuration_shows_only_to_the_operator_accounts_owner(): void
     {
         $member = User::factory()->create(['account_id' => $this->operator->account_id, 'owner' => false]);
-        $this->actingAs($member)->get('/settings/integracje')->assertNotFound();
+        $this->actingAs($member)->get('/settings/integrations')->assertNotFound();
 
-        $this->actingAs($this->pilot)->get('/settings/integracje')->assertOk()->assertInertia(fn (Assert $page) => $page->where('server', null));
-        $this->actingAs($this->operator)->get('/settings/integracje')->assertOk()->assertInertia(fn (Assert $page) => $page->whereType('server', 'array'));
+        $this->actingAs($this->pilot)->get('/settings/integrations')->assertOk()->assertInertia(fn (Assert $page) => $page->where('server', null));
+        $this->actingAs($this->operator)->get('/settings/integrations')->assertOk()->assertInertia(fn (Assert $page) => $page->whereType('server', 'array'));
     }
 }

@@ -14,7 +14,7 @@ use App\Support\LegalName;
 use App\Support\LocalCalendar;
 use Carbon\CarbonInterface;
 
-/** "Zamknij miesiąc": freezes a client's month in the hours bank, and reopens the latest one; every write is one event. */
+/** Close the month: freezes a client's month in the hours bank, and reopens the latest one; every write is one event. */
 final class MonthSettlement
 {
     public function __construct(

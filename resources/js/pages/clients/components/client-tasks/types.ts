@@ -1,14 +1,19 @@
-export type LaneKey = 'doing' | 'testing' | 'todo';
+export type LaneKey = 'doing' | 'testing' | 'todo' | 'other';
 
 export interface ClientTaskRow {
     task_id: number;
     name: string;
+    in_progress?: boolean;
     /** The project the task belongs to. */
     project?: string | null;
     done: boolean;
     can_untick: boolean;
     /** Y-m-d in the display timezone. */
     due: string | null;
+    /** The task's list on its board. */
+    list?: string | null;
+    /** Every finished entry on the task, any day. */
+    minutes?: number;
     /** The owner's running timer on this task, the one Stop closes. */
     running_id: number | null;
     /** ISO start of that timer, for the elapsed time phones show. */
@@ -24,6 +29,9 @@ export interface TaskProject {
     name: string;
     open: number;
     is_private: boolean;
+    /** In the month close, while the account has the module on. */
+    in_month_close: boolean;
+    repositories: number;
 }
 
 export interface ClientTaskLane {

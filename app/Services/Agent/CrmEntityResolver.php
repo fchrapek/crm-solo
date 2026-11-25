@@ -192,6 +192,7 @@ final class CrmEntityResolver
     public function dayPick(int $accountId, string $date, string $needle): DayPick
     {
         $picks = DayPick::query()
+            ->live()
             ->where('account_id', $accountId)
             ->whereDate('date', $date)
             ->with('task.project:id,name')

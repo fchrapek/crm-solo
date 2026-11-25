@@ -4,7 +4,7 @@ import { ResourcesSection } from './resources-section';
 import { resources } from './story-fixtures';
 
 const meta = {
-    title: 'Zadania/Zadanie/Zasoby',
+    title: 'Tasks/Task/Resources',
     component: ResourcesSection,
     decorators: [mainColumn],
     args: { taskId: 42, resources },

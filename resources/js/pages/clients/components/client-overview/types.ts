@@ -1,4 +1,6 @@
+import type { ClientCurrency } from '@/types';
 import type { ClientCard, MessageRow } from '../client-fields';
+import type { Retainer } from '../retainer-chip';
 import type { ProjectDialogValues } from '../project-form-dialog/project-form-dialog';
 
 export interface OverviewHours {
@@ -17,7 +19,7 @@ export interface OverviewHours {
 }
 
 export interface ClientOverview {
-    /** The account's fields marked for Przegląd, with the assignee; null when the account has no fields. */
+    /** The account's fields marked for Overview, with the assignee; null when the account has no fields. */
     card: ClientCard | null;
     /** The client's failed, scheduled and sent-today text messages, latest first, null alongside card. */
     sms: MessageRow[] | null;
@@ -25,7 +27,7 @@ export interface ClientOverview {
     sms_pending?: number;
     /** Every failed one, until it is sent again or cancelled. */
     sms_failed?: number;
-    /** A message still waits or is being sent, so Przegląd polls for its outcome. */
+    /** A message still waits or is being sent, so Overview polls for its outcome. */
     sms_live?: boolean;
     report_due: { period: string; report_id: number | null; status: 'draft' | 'finalized' | null } | null;
     month_close: { period: string; started: boolean; done: number; total: number } | null;
@@ -33,6 +35,8 @@ export interface ClientOverview {
     journal: { since: string; since_today: boolean; count: number };
     /** Null in the order layout, which has no hours bank. */
     hours: OverviewHours | null;
+    /** The retainer's positions, for the read-only Retainer dialog; absent in the order layout. */
+    retainer?: { positions: Retainer[]; active_ids: number[]; currency: ClientCurrency } | null;
     order: ClientOrder | null;
     order_waiting: { task: OrderWaitingTask | null; invoice: OrderWaitingInvoice | null } | null;
     settlement: OverviewSettlement | null;

@@ -45,10 +45,10 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-/** Width=Hug: the settings toggles (Wygląd). */
+/** Width=Hug: the settings toggles (Appearance). */
 export const WidthHug: Story = {};
 
-/** Width=Full: the phone day trail, links across the column, Podsumowanie hugging its label. */
+/** Width=Full: the phone day trail, links across the column, Summary hugging its label. */
 export const WidthFull: Story = {
     render: () => <SegmentedControl label="Dzień" width="full" current="step" value="today" options={DAY(false)} />,
 };

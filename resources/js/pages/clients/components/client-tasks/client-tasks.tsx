@@ -2,26 +2,27 @@ import { ActionMenuItem } from '@/components/solo/action-menu';
 import { HeaderAction, useInHeaderMenu } from '@/components/solo/client-header';
 import { KvRow } from '@/components/solo/kv-row';
 import { SoloButton, SoloButtonLink } from '@/components/solo/primitives';
-import { Row } from '@/components/solo/row';
+import { listDetails, type RowDetail, Row } from '@/components/solo/row';
 import { RowMenu } from '@/components/solo/row-menu';
 import { GroupHeading, Tile, TileGrid, TileHeader, TileInset, TileNote, TileRows, TileStack } from '@/components/solo/tile';
 import { Icon } from '@/components/ui/icon';
+import { InfoHint } from '@/components/ui/info-hint';
 import { useLiveReload } from '@/hooks/use-live-reload';
-import { useNow } from '@/hooks/use-now';
 import { useTimerActions } from '@/hooks/use-timer-actions';
-import { durationText, minutesSince, shortDate } from '@/lib/dates';
+import { durationText, shortDate } from '@/lib/dates';
 import clients from '@/routes/clients';
 import day from '@/routes/day';
 import projectBoard from '@/routes/project-board';
 import taskRoutes from '@/routes/tasks';
-import { router } from '@inertiajs/react';
-import { createContext, type ReactNode, useContext, useState } from 'react';
+import { router, usePage } from '@inertiajs/react';
+import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { hoursNumber, localeOf } from '../client-list/format';
 import { CopyContextAction } from '../client-overview/copy-context-action';
 import { ProjectFormDialog } from '../project-form-dialog';
 import { TaskFormDialog } from '../task-form-dialog';
+import type { TaskParentOption } from '../task-form-dialog/task-form-dialog';
 import styles from './client-tasks.module.css';
 import { homePath, type TickedRow, withTicked } from './format';
 import type { ClientTaskLane, ClientTaskRow, ClientTasks, LaneKey, OrderDoneRow, OrderTasks, RetainerTasks, TaskProject } from './types';
@@ -35,12 +36,14 @@ const LANE_LABEL: Record<LaneKey, string> = {
     doing: 'In progress',
     testing: 'Testing',
     todo: 'To do',
+    other: 'Other lists',
 };
 
 const LANE_ALL: Record<LaneKey, string> = {
     doing: 'All in progress',
     testing: 'All in testing',
     todo: 'All to do',
+    other: 'All on other lists',
 };
 
 const ORDER_ALL: Record<'open' | 'done' | 'time', string> = {
@@ -58,12 +61,12 @@ const LIVE_PROPS = ['tasks', 'client', 'project'];
 interface ClientTasksTabProps {
     clientId: number;
     tasks: ClientTasks;
-    /** The Nowe zadanie dialog, opened from the record frame. */
+    /** The New task dialog, opened from the record frame. */
     creating?: boolean;
     onCreatingChange?: (open: boolean) => void;
-    /** The project page's Projekt tiles in place of the project list and Dla agentów. */
+    /** The project page's Project tiles in place of the project list and For agents. */
     side?: ReactNode;
-    /** Where a part's "all" row goes; the client's Zadania tab by default. */
+    /** Where a part's "all" row goes; the client's Tasks tab by default. */
     partHref?: (part: TasksPart) => string;
 }
 
@@ -71,10 +74,17 @@ interface ClientTasksTabProps {
 const ProjectNames = createContext(true);
 
 /**
- * Figma: Klient · Zadania (1091:11504, phone 1091:11845). Every lane at once as a group of rows, then what is done;
+ * Figma: Client · Tasks (1091:11504, phone 1091:11845). Every lane at once as a group of rows, then what is done;
  * beside them the client's projects and what an agent needs. An order client reads one list and its time.
  */
 export function ClientTasksTab({ clientId, tasks, creating = false, onCreatingChange = () => undefined, side, partHref }: ClientTasksTabProps) {
+    const parentOptions = (usePage().props as { parent_options?: TaskParentOption[] }).parent_options;
+    // Asked for when the form opens: the list of every open task is only needed there.
+    useEffect(() => {
+        if (creating && parentOptions === undefined) {
+            router.reload({ only: ['parent_options'] });
+        }
+    }, [creating, parentOptions]);
     useLiveReload(LIVE_PROPS, creating);
 
     return (
@@ -90,6 +100,7 @@ export function ClientTasksTab({ clientId, tasks, creating = false, onCreatingCh
                     onOpenChange={onCreatingChange}
                     mode="create"
                     projects={tasks.projects}
+                    parentOptions={parentOptions}
                     initial={{ list_name: 'To-Do', is_reportable: tasks.reportable_by_default }}
                     sheet
                 />
@@ -135,8 +146,8 @@ function LaneTasksView({
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);
     const { ticked, tick, untick } = useTicks();
-    const allHref = partHref ?? ((part: TasksPart) => clients.show({ client: clientId, tab: 'zadania' }, { query: { wszystkie: part } }).url);
-    // A task ticked on this visit keeps its place in its lane, so it is not listed a second time under Zrobione.
+    const allHref = partHref ?? ((part: TasksPart) => clients.show({ client: clientId, tab: 'tasks' }, { query: { expand: part } }).url);
+    // A task ticked on this visit keeps its place in its lane, so it is not listed a second time under Done.
     const done = tasks.done.rows.filter((row) => ticked[row.task_id] === undefined);
 
     return (
@@ -207,11 +218,13 @@ interface TaskGroupProps {
 function TaskGroup({ label, lane, rows, locale, all, empty, onTick, onUntick }: TaskGroupProps) {
     const { t } = useTranslation();
     const { pending, start, stop } = useTimerActions();
+    const named = useContext(ProjectNames);
+    const details = listDetails(rows.map((row) => taskLineDetails(row, named, locale, t)));
 
     return (
         <>
             <GroupHeading label={label} note={lane.count} />
-            {rows.length === 0 ? (
+            {lane.count === 0 && rows.length === 0 ? (
                 <TileInset>
                     <TileNote>{empty ?? t('No tasks on this list.')}</TileNote>
                 </TileInset>
@@ -221,6 +234,7 @@ function TaskGroup({ label, lane, rows, locale, all, empty, onTick, onUntick }: 
                         <TaskLine
                             key={row.task_id}
                             row={row}
+                            details={details[index]}
                             locale={locale}
                             pending={pending}
                             onTick={() => onTick(row, index)}
@@ -280,18 +294,29 @@ function taskCheck(row: ClientTaskRow, t: Translate, onTick: (() => void) | unde
 
     return {
         done: row.done,
+        progress: row.in_progress,
         label: `${row.done ? (untick ? t('Mark as not done') : t('Done')) : t('Mark as done')}: ${row.name}`,
         onToggle: row.done ? untick : onTick,
     };
 }
 
-/** Whole minutes of the owner's running timer, never negative. */
-export function elapsedText(row: Pick<ClientTaskRow, 'running_id' | 'running_since'>, now: number | null, t: Translate): string | null {
-    return row.running_id !== null && row.running_since !== null && now !== null ? durationText(minutesSince(row.running_since, now), t) : null;
+/** The board's own lists by their lane names; any other list reads as it is named. */
+const LIST_LABEL: Record<string, string> = { 'To-Do': 'To do', Doing: 'In progress', Testing: 'Testing' };
+
+/** An open task's details: its project unless the page is the project's (then no Project column at all), due day, list and logged time. */
+export function taskLineDetails(row: Pick<ClientTaskRow, 'project' | 'due' | 'list' | 'minutes'>, named: boolean, locale: string, t: Translate): RowDetail[] {
+    return [
+        ...(named ? [{ label: t('Project'), value: row.project }] : []),
+        { label: t('Due'), value: row.due ? shortDate(row.due, locale, new Date().getFullYear()) : null, short: true },
+        { label: t('List'), value: row.list ? (LIST_LABEL[row.list] ? t(LIST_LABEL[row.list]) : row.list) : null },
+        { label: t('Time'), value: row.minutes ? durationText(row.minutes, t) : null, short: true },
+    ];
 }
 
 interface TaskLineProps {
     row: ClientTaskRow;
+    /** The row's details with its list's columns (`listDetails`); a row alone builds its own. */
+    details?: RowDetail[];
     locale: string;
     pending: boolean;
     onTick: () => void;
@@ -301,28 +326,25 @@ interface TaskLineProps {
 }
 
 /**
- * Figma: Row + more. The owner's timer shows its time and Stop; an agent at work is named and gets no Start;
- * any other open task starts with one click. Na dziś sits in the row's menu and a picked task says so.
+ * Figma: Row + more, Shared · Row details (1557:286018). The owner's timer shows its dot, its time and Stop; an agent at
+ * work is named and gets no Start; any other open task starts with one click. The chevron opens the project, due day,
+ * list and logged time. For today sits in the row's menu and a picked task says so.
  */
-export function TaskLine({ row, locale, pending, onTick, onUntick, onStart, onStop }: TaskLineProps) {
+export function TaskLine({ row, details, locale, pending, onTick, onUntick, onStart, onStop }: TaskLineProps) {
     const { t } = useTranslation();
-    const now = useNow(15_000);
     const named = useContext(ProjectNames);
     const running = row.running_id !== null && !row.done;
-    const elapsed = running ? elapsedText(row, now, t) : null;
     const agent = row.agent_live && !row.done ? t('{{agent}} working', { agent: 'claude' }) : null;
-    const due = row.due && !row.done ? shortDate(row.due, locale, new Date().getFullYear()) : undefined;
 
     return (
         <Row
             check={taskCheck(row, t, onTick, onUntick)}
             title={row.name}
             href={taskRoutes.show(row.task_id)}
-            time={running ? (elapsed ?? undefined) : due}
-            timeTone={running ? 'over' : 'neutral'}
-            timeWide={!running}
+            running={running ? row.running_since : undefined}
             meta={agent}
-            wideMeta={[named ? row.project : null, row.picked && !row.done ? t('Picked') : null].filter(Boolean).join(' · ') || undefined}
+            wideMeta={row.picked && !row.done ? t('Picked') : undefined}
+            details={details ?? taskLineDetails(row, named, locale, t)}
             action={
                 row.done ? undefined : running ? (
                     <SoloButton variant="stop" size="control" disabled={pending} onClick={() => onStop(row.running_id!)}>
@@ -352,7 +374,18 @@ export function TaskLine({ row, locale, pending, onTick, onUntick, onStart, onSt
     );
 }
 
-/** Figma: Tile / list · Projekty. Every project of the client with its open tasks; a row opens the project's page. */
+/** "Trello · w zamknięciu · 1 repozytorium": what stands behind a project, in a few words. */
+export function projectFacts(project: Pick<TaskProject, 'is_private' | 'in_month_close' | 'repositories'>, t: Translate): string {
+    return [
+        project.is_private ? t('private') : 'Trello',
+        project.in_month_close ? t('in the close') : null,
+        project.repositories > 0 ? t('repository_count', { count: project.repositories }) : t('no repository'),
+    ]
+        .filter(Boolean)
+        .join(' · ');
+}
+
+/** Figma: Tile / list · Projects (11A). Every project of the client with its open tasks and, in the (i), what stands behind it; a row opens the project's page. */
 export function ProjectsTile({ clientId, projects }: { clientId: number; projects: TaskProject[] }) {
     const { t } = useTranslation();
     const [creating, setCreating] = useState(false);
@@ -372,11 +405,10 @@ export function ProjectsTile({ clientId, projects }: { clientId: number; project
                 {projects.map((project) => (
                     <Row
                         key={project.id}
-                        wrap
                         title={project.name}
                         href={projectBoard.show({ client: clientId, project: project.id })}
                         meta={project.open}
-                        wideMeta={project.is_private ? t('private') : 'Trello'}
+                        action={<InfoHint label={`${t('About the project')}: ${project.name}`}>{projectFacts(project, t)}</InfoHint>}
                     />
                 ))}
             </TileRows>
@@ -398,7 +430,7 @@ async function copyBrief(clientId: number, t: Translate) {
     }
 }
 
-/** Figma: Tile · Dla agentów. Where each project's working copy lives, and the command that hands an agent the client. */
+/** Figma: Tile · For agents. Where each project's working copy lives, and the command that hands an agent the client. */
 export function AgentsTile({ clientId, repositories }: { clientId: number; repositories: { path: string; project: string }[] }) {
     const { t } = useTranslation();
 
@@ -428,7 +460,7 @@ function OrderTasksView({ clientId, tasks }: { clientId: number; tasks: OrderTas
     const locale = localeOf(i18n.language);
     const tick = (row: ClientTaskRow) => router.post(day.tasks.complete(row.task_id).url, {}, { preserveScroll: true });
     const untick = (row: ClientTaskRow) => router.delete(day.tasks.uncomplete(row.task_id).url, { preserveScroll: true });
-    const allHref = (part: 'open' | 'done' | 'time') => clients.show({ client: clientId, tab: 'zadania' }, { query: { wszystkie: part } }).url;
+    const allHref = (part: 'open' | 'done' | 'time') => clients.show({ client: clientId, tab: 'tasks' }, { query: { expand: part } }).url;
     const moreTime = tasks.time.count - tasks.time.rows.length;
 
     return (
@@ -463,7 +495,7 @@ function OrderTasksView({ clientId, tasks }: { clientId: number; tasks: OrderTas
                     ) : (
                         <dl className={styles.lines}>
                             {tasks.time.rows.map((entry) => (
-                                <KvRow key={entry.id} layout="tile" label={`${shortDate(entry.date, locale)} · ${entry.label}`}>
+                                <KvRow key={entry.id} layout="tile" figure label={`${shortDate(entry.date, locale)} · ${entry.label}`}>
                                     {durationText(entry.minutes, t)}
                                 </KvRow>
                             ))}
@@ -482,7 +514,7 @@ function OrderTasksView({ clientId, tasks }: { clientId: number; tasks: OrderTas
 
 export type TasksAction = 'brief' | 'new' | 'copy';
 
-/** From 768 px: the agent command, then Nowe zadanie. A phone has Nowe zadanie as its main button and the two copies behind "more". */
+/** From 768 px: the agent command, then New task. A phone has New task as its main button and the two copies behind "more". */
 export function tasksActionOrder(inMenu: boolean, canCreate: boolean): TasksAction[] {
     const order: TasksAction[] = inMenu ? ['brief', 'copy'] : ['brief', 'new'];
 

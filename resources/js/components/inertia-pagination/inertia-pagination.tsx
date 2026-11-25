@@ -19,7 +19,7 @@ interface InertiaPaginationProps {
     className?: string;
     /**
      * Partial-visit options forwarded to every page link. Set these when the
-     * paginated list lives inside a tabbed page (e.g. client Aktywność) so a
+     * paginated list lives inside a tabbed page (e.g. client Activity) so a
      * page flip reloads only its prop and keeps the surrounding React state.
      */
     only?: string[];

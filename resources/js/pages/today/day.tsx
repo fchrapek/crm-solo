@@ -1,32 +1,44 @@
 import { ActionMenuItem } from '@/components/solo/action-menu';
 import { Chip } from '@/components/solo/chip';
-import { MonthCard } from '@/components/solo/month-card';
-import { Poster, SoloButton, SoloButtonLink, Stat } from '@/components/solo/primitives';
-import { Row } from '@/components/solo/row';
+import { IconButton } from '@/components/solo/icon-button';
+import { SoloButton, SoloButtonLink, Stat } from '@/components/solo/primitives';
+import { listDetails, type RowDetail, Row, rowParts } from '@/components/solo/row';
+import { Elapsed } from '@/components/solo/elapsed';
 import { RowMenu } from '@/components/solo/row-menu';
+import { TimerSwitch } from '@/components/solo/shell/timer-switch';
 import { type DayTask } from '@/components/solo/task-row';
-import { GroupHeading, Tile, TileActions, TileGrid, TileInset, TileRows, TileStack } from '@/components/solo/tile';
-import { elapsedClock, useElapsed } from '@/hooks/use-elapsed';
+import { FoldingGroup, GroupHeading, Tile, TileActions, TileGrid, TileInset, TileRows, TileStack } from '@/components/solo/tile';
 import { useTimerActions } from '@/hooks/use-timer-actions';
-import { durationText, fromDay, longDate, parseDay, weekdayName } from '@/lib/dates';
+import { durationText, parseDay, shortDate, weekdayDate, weekdayName } from '@/lib/dates';
 import { dashboard } from '@/routes';
 import day from '@/routes/day';
 import tasks from '@/routes/tasks';
 import today from '@/routes/today';
 import { router, usePage } from '@inertiajs/react';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
+import { AddOrPick } from './add-or-pick';
+import { DayHeading, DayMonth } from './day-header';
 import styles from './day.module.css';
 import { type Running, type TodayProps } from './index';
+import { PickMenu } from './pick-menu';
 
-export const focusView = (timerId: number) => dashboard({ query: { widok: 'timer', timer: timerId } });
+export const focusView = (timerId: number) => dashboard({ query: { view: 'timer', timer: timerId } });
 const keep = { preserveScroll: true };
 
-/** A running timer's time, read out as hours and minutes. */
-export function Elapsed({ startedAt }: { startedAt: string }) {
+/** Figma: Today rows (1165:70988). Start and stop of a row's timer as icons; every other row button stays text. */
+export function RowStart({ taskId, name }: { taskId: number; name: string }) {
     const { t } = useTranslation();
-    const elapsed = useElapsed(startedAt);
+    const { pending, start } = useTimerActions();
 
-    return <span aria-label={t('{{h}} h {{m}} min elapsed', { h: elapsed.h, m: elapsed.m })}>{elapsedClock(elapsed)}</span>;
+    return <IconButton icon="play" look="outline" size="row" filled label={`${t('Start')}: ${name}`} disabled={pending} onClick={() => start(taskId)} />;
+}
+
+export function RowStop({ timerId, name }: { timerId: number; name: string }) {
+    const { t } = useTranslation();
+    const { pending, stop } = useTimerActions();
+
+    return <IconButton icon="stop" look="stop" size="row" filled label={`${t('Stop')}: ${name}`} disabled={pending} onClick={() => stop(timerId)} />;
 }
 
 export function StopButton({ timerId, onColour = false }: { timerId: number; onColour?: boolean }) {
@@ -40,6 +52,28 @@ export function StopButton({ timerId, onColour = false }: { timerId: number; onC
     );
 }
 
+/** The add row's quiet end meta: the free places, "day full" at the limit, and past it how many over the plan (when the warning is on). */
+export function placesNote(picked: number, max: number, warn: boolean, t: TFunction): string {
+    if (picked < max) return t('{{count}} free slots', { count: max - picked });
+
+    return picked > max && warn ? t('{{count}} over the plan', { count: picked - max }) : t('day full');
+}
+
+/** A task row's details: where it belongs, its due day and the time logged on it. */
+export function taskDetails(task: Pick<DayTask, 'client' | 'project' | 'due' | 'logged_minutes'>, t: TFunction, locale: string, from?: string): RowDetail[] {
+    return [
+        { label: t('detail_client'), value: task.client },
+        { label: t('Project'), value: task.project },
+        { label: t('Due'), value: task.due ? shortDate(task.due, locale) : null, short: true },
+        ...(from === undefined ? [] : [{ label: t('From day'), value: from, short: true }]),
+        { label: t('Time'), value: task.logged_minutes ? durationText(task.logged_minutes, t) : null, short: true },
+    ];
+}
+
+/** The running timer a task row shows, among the account's running timers. */
+export const timerOf = <T extends { id: number }>(row: Pick<DayTask, 'running_id'>, timers: T[]): T | undefined =>
+    row.running_id ? timers.find((timer) => timer.id === row.running_id) : undefined;
+
 /** The tick of a task row: a done task unticks only when the CRM set the tick. */
 export function useTaskCheck() {
     const { t } = useTranslation();
@@ -49,6 +83,7 @@ export function useTaskCheck() {
 
         return {
             done: task.done,
+            progress: task.in_progress,
             label: `${task.done ? (untick ? t('Mark as not done') : t('Done')) : t('Mark as done')}: ${task.name}`,
             onToggle: task.done ? untick : onComplete,
         };
@@ -56,12 +91,21 @@ export function useTaskCheck() {
 }
 
 /** Figma: Tile / timer. The running timer beside the day from 768 px; a phone has the row and the strip, never a third. */
-export function TimerTile({ running }: { running: Pick<Running, 'id' | 'started_at' | 'task' | 'client'> }) {
+export function TimerTile({
+    running,
+    timers = [],
+}: {
+    running: Pick<Running, 'id' | 'started_at' | 'task' | 'client'>;
+    timers?: Pick<Running, 'id' | 'started_at' | 'task' | 'client'>[];
+}) {
     const { t } = useTranslation();
     const what = [running.task ?? t('Untitled session'), running.client].filter(Boolean).join(' · ');
 
     return (
         <Tile kind="timer" className={styles.timerTile} aria-label={t('Timer running')}>
+            <div className={styles.timerSwitch}>
+                <TimerSwitch timers={timers} shown={running.id} />
+            </div>
             <Stat kind="tile" tone="on-colour" label={t('Timer running')} value={<Elapsed startedAt={running.started_at} />} sub={what} />
             <StopButton timerId={running.id} onColour />
         </Tile>
@@ -69,32 +113,40 @@ export function TimerTile({ running }: { running: Pick<Running, 'id' | 'started_
 }
 
 /**
- * Figma: Dziś (1075:578, phone 1075:780). The day's tile: the weekday, the picks with their tick and timer, the next
+ * Figma: Today (1075:578, phone 1075:780). The day's tile: the weekday, the picks with their tick and timer, the next
  * pick, what waits from earlier days, work off the plan, the close and tomorrow; beside it the timer and the month.
  */
-export function DayView({ date, picks, maxPicks, month, closed, timers, running, offPlan, looseTimers, carried, tomorrowPicks }: TodayProps) {
+export function DayView({
+    date,
+    picks,
+    maxPicks,
+    warnFull,
+    moveDays,
+    month,
+    closed,
+    timers,
+    running,
+    offPlan,
+    looseTimers,
+    carried,
+}: TodayProps) {
     const { t, i18n } = useTranslation();
     const errors = usePage().props.errors as Record<string, string>;
-    const { pending, start } = useTimerActions();
     const check = useTaskCheck();
-    const free = maxPicks - picks.length;
-    const timerOf = (row: DayTask) => (row.running_id ? timers.find((timer) => timer.id === row.running_id) : undefined);
     const pick = (taskId: number) => router.post(day.picks.store().url, { task_id: taskId, date }, keep);
+    const [pickDetails, offPlanDetails] = [picks, offPlan].map((rows) => listDetails(rows.map((row) => taskDetails(row, t, i18n.language))));
+    const thisYear = parseDay(date).getFullYear();
+    const carriedDetails = listDetails(carried.map((row) => taskDetails(row, t, i18n.language, weekdayDate(row.from, i18n.language, thisYear))));
 
     return (
         <main>
             <TileGrid>
                 <section className={styles.day}>
-                    <header className={styles.heading}>
-                        <Poster>{weekdayName(parseDay(date), i18n.language)}</Poster>
-                        <p className={styles.meta}>
-                            {longDate(date, i18n.language)} · {t('{{count}} of {{max}} picked', { count: picks.length, max: maxPicks })}
-                        </p>
-                    </header>
+                    <DayHeading inTile title={weekdayName(parseDay(date), i18n.language)} />
                     <Tile kind="list" as="div" className={styles.dayList}>
                         <TileRows className={styles.picks}>
-                            {picks.map((row) => {
-                                const timer = timerOf(row);
+                            {picks.map((row, index) => {
+                                const timer = timerOf(row, timers);
 
                                 return (
                                     <Row
@@ -102,46 +154,48 @@ export function DayView({ date, picks, maxPicks, month, closed, timers, running,
                                         check={check(row, () => row.id && router.post(day.picks.complete(row.id).url, {}, keep))}
                                         title={row.name}
                                         href={timer ? focusView(timer.id) : tasks.show(row.task_id)}
-                                        time={
-                                            timer ? (
-                                                <Elapsed startedAt={timer.started_at} />
-                                            ) : row.done && row.minutes ? (
-                                                durationText(row.minutes, t)
-                                            ) : undefined
-                                        }
-                                        timeTone={timer ? 'over' : 'neutral'}
-                                        wideMeta={row.client}
+                                        running={timer?.started_at}
+                                        time={row.minutes ? durationText(row.minutes, t) : undefined}
+                                        timeTone="quiet"
+                                        details={pickDetails[index]}
                                         action={
                                             timer ? (
-                                                <StopButton timerId={timer.id} />
+                                                <RowStop timerId={timer.id} name={row.name} />
                                             ) : row.done ? undefined : (
-                                                <SoloButton variant="secondary" size="control" disabled={pending} onClick={() => start(row.task_id)}>
-                                                    {t('Start')}
-                                                </SoloButton>
+                                                <RowStart taskId={row.task_id} name={row.name} />
                                             )
                                         }
                                         more={
-                                            timer || row.done ? undefined : (
-                                                <RowMenu name={row.name}>
-                                                    <ActionMenuItem onSelect={() => row.id && router.delete(day.picks.destroy(row.id).url, keep)}>
-                                                        {t('Remove from today')}
-                                                    </ActionMenuItem>
-                                                </RowMenu>
+                                            timer || row.done || row.id === undefined ? undefined : (
+                                                <PickMenu
+                                                    pickId={row.id}
+                                                    taskId={row.task_id}
+                                                    name={row.name}
+                                                    date={date}
+                                                    days={moveDays}
+                                                    max={maxPicks}
+                                                />
                                             )
                                         }
                                     />
                                 );
                             })}
-                            {free > 0 && (
+                            {closed ? (
                                 <Row
-                                    title={picks.length === 0 ? t('Pick the first task') : t('Pick another')}
-                                    meta={<span className={styles.phoneOnly}>{t('{{count}} free', { count: free })}</span>}
-                                    wideMeta={t('{{count}} free slots', { count: free })}
-                                    action={
-                                        <SoloButtonLink href={today.tasks()} variant="secondary" size="control">
-                                            {t('Add')}
-                                        </SoloButtonLink>
+                                    title={
+                                        <span className={styles.quietTitle}>
+                                            {t('{{count}} of {{max}} picked', { count: picks.length, max: maxPicks })}
+                                        </span>
                                     }
+                                />
+                            ) : (
+                                <AddOrPick
+                                    date={date}
+                                    picked={picks.length}
+                                    maxPicks={maxPicks}
+                                    warnFull={warnFull}
+                                    listHref={today.tasks().url}
+                                    note={placesNote(picks.length, maxPicks, warnFull, t)}
                                 />
                             )}
                         </TileRows>
@@ -151,17 +205,16 @@ export function DayView({ date, picks, maxPicks, month, closed, timers, running,
                             </TileInset>
                         )}
                         {carried.length > 0 && (
-                            <>
-                                <GroupHeading label={t('From earlier days')} note={carried.length} />
+                            <FoldingGroup label={t('From earlier days')} note={carried.length}>
                                 <TileRows>
-                                    {carried.map((row) => (
+                                    {carried.map((row, index) => (
                                         <Row
                                             key={row.id}
                                             title={row.name}
                                             href={tasks.show(row.task_id)}
-                                            wideMeta={[row.client, fromDay(row.from, date, i18n.language, t)].filter(Boolean).join(' · ')}
+                                            details={carriedDetails[index]}
                                             action={
-                                                <SoloButton variant="secondary" size="control" disabled={free <= 0} onClick={() => pick(row.task_id)}>
+                                                <SoloButton variant="quiet" size="control" onClick={() => pick(row.task_id)}>
                                                     {t('For today')}
                                                 </SoloButton>
                                             }
@@ -175,14 +228,14 @@ export function DayView({ date, picks, maxPicks, month, closed, timers, running,
                                         />
                                     ))}
                                 </TileRows>
-                            </>
+                            </FoldingGroup>
                         )}
                         {offPlan.length > 0 && (
                             <>
                                 <GroupHeading label={t('Off plan')} note={offPlan.length} />
                                 <TileRows>
-                                    {offPlan.map((row) => {
-                                        const timer = timerOf(row);
+                                    {offPlan.map((row, index) => {
+                                        const timer = timerOf(row, timers);
 
                                         return (
                                             <Row
@@ -190,26 +243,13 @@ export function DayView({ date, picks, maxPicks, month, closed, timers, running,
                                                 check={check(row, () => router.post(day.tasks.complete(row.task_id).url, {}, keep))}
                                                 title={row.name}
                                                 href={timer ? focusView(timer.id) : tasks.show(row.task_id)}
-                                                time={
-                                                    timer ? (
-                                                        <Elapsed startedAt={timer.started_at} />
-                                                    ) : row.minutes ? (
-                                                        durationText(row.minutes, t)
-                                                    ) : undefined
-                                                }
-                                                timeTone={timer ? 'over' : 'neutral'}
-                                                wideMeta={row.client}
-                                                action={
-                                                    timer ? (
-                                                        <StopButton timerId={timer.id} />
-                                                    ) : !row.done && free > 0 ? (
-                                                        <SoloButton variant="secondary" size="control" onClick={() => pick(row.task_id)}>
-                                                            {t('To the plan')}
-                                                        </SoloButton>
-                                                    ) : undefined
-                                                }
+                                                running={timer?.started_at}
+                                                time={row.minutes ? durationText(row.minutes, t) : undefined}
+                                                timeTone="quiet"
+                                                details={offPlanDetails[index]}
+                                                action={timer ? <RowStop timerId={timer.id} name={row.name} /> : undefined}
                                                 more={
-                                                    timer && !row.done && free > 0 ? (
+                                                    !row.done ? (
                                                         <RowMenu name={row.name}>
                                                             <ActionMenuItem onSelect={() => pick(row.task_id)}>{t('To the plan')}</ActionMenuItem>
                                                         </RowMenu>
@@ -230,16 +270,15 @@ export function DayView({ date, picks, maxPicks, month, closed, timers, running,
                                             key={timer.id}
                                             title={timer.task ?? t('Untitled session')}
                                             href={focusView(timer.id)}
-                                            time={<Elapsed startedAt={timer.started_at} />}
-                                            timeTone="over"
-                                            wideMeta={[timer.client, timer.project].filter(Boolean).join(' · ')}
-                                            action={<StopButton timerId={timer.id} />}
+                                            running={timer.started_at}
+                                            wideMeta={rowParts([timer.client, timer.project])}
+                                            action={<RowStop timerId={timer.id} name={timer.task ?? t('Untitled session')} />}
                                         />
                                     ))}
                                 </TileRows>
                             </>
                         )}
-                        <TileActions>
+                        <TileActions apart>
                             {closed ? (
                                 <span className={styles.closed}>
                                     <Chip status="done">{t('Day closed')}</Chip>
@@ -255,7 +294,7 @@ export function DayView({ date, picks, maxPicks, month, closed, timers, running,
                                 </SoloButton>
                             )}
                             <SoloButtonLink href={today.plan()} variant="secondary" size="control">
-                                {tomorrowPicks > 0 ? t('Edit the plan') : t('Plan tomorrow')}
+                                {t('Plan for tomorrow')}
                             </SoloButtonLink>
                         </TileActions>
                         {errors.close && (
@@ -266,8 +305,8 @@ export function DayView({ date, picks, maxPicks, month, closed, timers, running,
                     </Tile>
                 </section>
                 <TileStack as="aside">
-                    {running && <TimerTile running={running} />}
-                    <MonthCard look="tile" month={month} />
+                    {running && <TimerTile running={running} timers={timers} />}
+                    <DayMonth month={month} date={date} />
                 </TileStack>
             </TileGrid>
         </main>

@@ -8,6 +8,7 @@ use App\Models\Account;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -30,6 +31,24 @@ final class ShellTimerTest extends TestCase
         $client = Client::create(['account_id' => $account->id, 'name' => 'ACME', 'type' => 'business']);
         $project = Project::create(['account_id' => $account->id, 'client_id' => $client->id, 'name' => 'Site']);
         $this->task = Task::create(['account_id' => $account->id, 'project_id' => $project->id, 'name' => 'Invoice correction']);
+    }
+
+    public function test_with_two_timers_the_shell_lists_both_and_shows_the_newest_or_the_one_asked_for(): void
+    {
+        $older = TimeEntry::startFor($this->task);
+        $this->travel(5)->minutes();
+        $second = Task::create(['project_id' => $this->task->project_id, 'name' => 'Gallery fix']);
+        $newer = TimeEntry::startFor($second);
+
+        $this->actingAs($this->user)->get('/settings/general')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('timer.id', $newer->id)
+                ->where('timers', fn ($timers) => collect($timers)->pluck('id')->all() === [$newer->id, $older->id]));
+
+        $this->actingAs($this->user)->get("/settings/general?timer={$older->id}")
+            ->assertInertia(fn (Assert $page) => $page->where('timer.id', $older->id)->has('timers', 2));
+        $this->actingAs($this->user)->get('/settings/general?timer=999999')
+            ->assertInertia(fn (Assert $page) => $page->where('timer.id', $newer->id));
     }
 
     public function test_every_page_carries_the_running_timer_for_the_shell(): void

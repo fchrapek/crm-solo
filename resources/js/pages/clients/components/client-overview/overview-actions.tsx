@@ -7,11 +7,11 @@ import { CopyContextAction } from './copy-context-action';
 
 export type OverviewAction = 'copy' | 'report' | 'pin';
 
-/** From 768 px: Kopiuj, Generuj, the pin. On a phone Kopiuj is the main button, so the "more" menu holds the rest. An order client has no report. */
-export function overviewActionOrder(inMenu: boolean, mode: ClientHeaderData['billing_mode']): OverviewAction[] {
+/** From 768 px: Copy, Generate, the pin. On a phone Copy is the main button, so the "more" menu holds the rest. An order client has no report, and neither has a viewer without billing. */
+export function overviewActionOrder(inMenu: boolean, mode: ClientHeaderData['billing_mode'], billing = true): OverviewAction[] {
     const order: OverviewAction[] = inMenu ? ['report', 'pin'] : ['copy', 'report', 'pin'];
 
-    return mode === 'retainer' ? order : order.filter((action) => action !== 'report');
+    return mode === 'retainer' && billing ? order : order.filter((action) => action !== 'report');
 }
 
 export function OverviewActions({ client }: { client: ClientHeaderData }) {
@@ -20,7 +20,7 @@ export function OverviewActions({ client }: { client: ClientHeaderData }) {
 
     return (
         <>
-            {overviewActionOrder(inMenu, client.billing_mode).map((action) =>
+            {overviewActionOrder(inMenu, client.billing_mode, client.billing !== false).map((action) =>
                 action === 'copy' ? (
                     <CopyContextAction key="copy" clientId={client.id} />
                 ) : action === 'report' ? (

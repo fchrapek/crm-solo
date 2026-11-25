@@ -1,0 +1,39 @@
+/* The /waitlist splash: the login screen's frame (login.module.css) plus these few pieces. */
+/* Off-screen rather than display:none, which some bots skip. */
+.honeypot {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
+.signIn {
+    margin: 0;
+    font: 400 var(--solo-text-control) / 1.3 var(--solo-font-text);
+    text-align: center;
+}
+
+@media (min-width: 768px) {
+    .signIn {
+        text-align: left;
+    }
+}
+
+.signIn a {
+    margin-left: var(--role-space-8);
+    color: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.signIn a:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.signIn a:focus-visible {
+    outline: var(--role-stroke-focus) solid currentColor;
+    outline-offset: 3px;
+}

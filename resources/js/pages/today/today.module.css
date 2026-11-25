@@ -1,4 +1,4 @@
-/* The timer focus view (/?widok=timer): the earlier content on a vermilion tile inside the shell, until its fate is decided. */
+/* The timer focus view (/?view=timer): the earlier content on a vermilion tile inside the shell, until its fate is decided. */
 .timer {
     padding: var(--role-space-24) var(--role-space-16);
     border-radius: var(--role-radius-lg);

@@ -12,7 +12,7 @@ use App\Services\Agent\MonthCloseReader;
 use App\Services\Agent\ReferenceException;
 use Illuminate\Console\Command;
 
-/** Agent verb: one report with the hours the Rozliczenia tab shows for its period. The body is fenced. */
+/** Agent verb: one report with the hours the Billing tab shows for its period. The body is fenced. */
 #[AccountScope(AccountScope::ACTING)]
 final class CrmReport extends Command
 {

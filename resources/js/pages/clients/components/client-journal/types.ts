@@ -8,8 +8,12 @@ export interface JournalWorkRow {
     title: string | null;
     subtitle: string | null;
     via: string | null;
+    /** The task the work was logged on, the row's page. */
+    task_id?: number | null;
     minutes: number | null;
     running: boolean;
+    /** ISO start of the running timer. */
+    running_since?: string | null;
     writes: number | null;
     is_new: boolean;
     /** The row is one finished time entry: what its editor needs. */
@@ -70,7 +74,7 @@ export interface JournalProject {
     trello_url: string | null;
 }
 
-/** One cursor page; "Starsze" asks for the page after `next` and the client appends its rows. */
+/** One cursor page; Older asks for the page after `next` and the client appends its rows. */
 export interface JournalPage<T> {
     rows: T[];
     next: string | null;
@@ -81,6 +85,8 @@ export interface ClientJournal {
     since_today: boolean;
     summary: { rows: number; notes: number; person_minutes: number; field_changes?: number; sms?: number };
     stage: { stage: LifecycleStage; since: string | null; retainer_from: string | null };
+    /** Every entry the relationship list holds, for Whole relationship and the sub-view's head. */
+    notes_total?: number;
     period: string;
     projects: JournalProject[];
     /** The client's tasks a time entry can be tied to. */

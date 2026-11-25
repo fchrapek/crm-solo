@@ -78,14 +78,14 @@ describe('ClientOverviewTab', () => {
     test('the Figma state reads as the frame does', () => {
         const html = render(busy);
         expect(html).toContain('Raport za wrzesień');
-        expect(html).toContain('href="/clients/7/rozliczenia?miesiac=2026-09"');
+        expect(html).toContain('href="/clients/7/billing?month=2026-09"');
         expect(html).toContain('Wygeneruj');
         expect(html).toContain('Zamknięcie września, 0 z 15');
         expect(html).toContain('href="/month-close?period=2026-09"');
         expect(html).toContain('12 w toku');
-        expect(html).toContain('href="/clients/7/zadania"');
+        expect(html).toContain('href="/clients/7/tasks"');
         expect(html).toContain('4 nowe od 28.09');
-        expect(html).toContain('href="/clients/7/dziennik"');
+        expect(html).toContain('href="/clients/7/journal"');
         expect(html).toContain('+30,0 h');
         expect(html).toContain('−9,5 h');
         expect(html).toContain('−36,5 h');
@@ -193,7 +193,7 @@ describe('Przegląd for a client in the order layout', () => {
             .replace(/<[^>]+>/g, '')
             .replace(/[\u00a0\u202f]/g, ' ');
 
-    test('the Zlecenie block takes the place of the hours, with no report, close or balance', () => {
+    test('the Order block takes the place of the hours, with no report, close or balance', () => {
         const text = textOf({ ...quiet, order });
 
         expect(text).toContain('Zlecenie');
@@ -244,7 +244,7 @@ describe('Czeka na ciebie for an order client', () => {
     });
     const text = (overview: ClientOverview) => render(overview).replace(/<[^>]+>/g, '');
 
-    test('the next dated task waits with Start and an unpaid invoice with Otwórz', () => {
+    test('the next dated task waits with Start and an unpaid invoice with Open', () => {
         const html = render(
             waiting({
                 task: { task_id: 4, name: 'Raport z audytu', due: '2026-10-09', running_id: null },
@@ -283,7 +283,7 @@ describe('Przegląd hours tile', () => {
         expect(html).not.toContain('aria-haspopup="dialog"');
     });
 
-    test('an open month adds the note and one Zamknij miesiąc under the ledger', () => {
+    test('an open month adds the note and one Close the month under the ledger', () => {
         const html = render(behind);
 
         expect(html).toContain('Jest już październik · wrzesień jeszcze otwarty');
@@ -298,7 +298,7 @@ describe('Przegląd hours tile', () => {
         expect(html).not.toMatch(/data-tone="over"[^>]*>\+14/);
     });
 
-    test('an order client gets Zlecenie with no balance, and its task waits with one Start', () => {
+    test('an order client gets Order with no balance, and its task waits with one Start', () => {
         const html = render({
             ...quiet,
             hours: null,
@@ -317,17 +317,22 @@ describe('Przegląd hours tile', () => {
     test('a waiting row that only leads somewhere is a link, and a button stays where it does something', () => {
         const html = render(busy);
 
-        expect(html).toMatch(/Raport za wrzesień<\/span><a[^>]*href="\/clients\/7\/rozliczenia\?miesiac=2026-09"[^>]*>Wygeneruj<\/a>/);
+        expect(html).toMatch(/Raport za wrzesień<\/span><a[^>]*href="\/clients\/7\/billing\?month=2026-09"[^>]*>Wygeneruj<\/a>/);
         expect(html).toMatch(/<a[^>]*href="\/month-close\?period=2026-09"[^>]*>Zamknięcie września, 0 z 15<\/a>/);
-        expect(html).toMatch(/<a[^>]*href="\/clients\/7\/zadania"[^>]*>12 w toku<\/a>/);
+        expect(html).toMatch(/<a[^>]*href="\/clients\/7\/tasks"[^>]*>12 w toku<\/a>/);
         expect(html).not.toContain('>Otwórz<');
     });
 
-    test('a phone keeps Kopiuj as its main button, so the "more" menu holds Generuj raport and the pin; an order client has no report', () => {
+    test('a phone keeps Copy as its main button, so the "more" menu holds Generate report and the pin; an order client has no report', () => {
         expect(overviewActionOrder(true, 'retainer')).toEqual(['report', 'pin']);
         expect(overviewActionOrder(false, 'retainer')).toEqual(['copy', 'report', 'pin']);
         expect(overviewActionOrder(true, 'order')).toEqual(['pin']);
         expect(overviewActionOrder(false, 'order')).toEqual(['copy', 'pin']);
+    });
+
+    test('a viewer without billing (a member) gets no Generate report, which would lead to a Billing tab they cannot open', () => {
+        expect(overviewActionOrder(false, 'retainer', false)).toEqual(['copy', 'pin']);
+        expect(overviewActionOrder(true, 'retainer', false)).toEqual(['pin']);
     });
 });
 
@@ -367,7 +372,7 @@ describe('Przegląd SMS for an account with client fields', () => {
         expect(render({ ...card, sms: [card.sms![0]], sms_pending: 0 })).toContain('SMS · 1 nieudana<');
     });
 
-    test('a failed text waits for you as one row with its reason in a hint and Wyślij ponownie', () => {
+    test('a failed text waits for you as one row with its reason in a hint and Send again', () => {
         const html = render(card);
         const waiting = html.slice(html.indexOf('Czeka na ciebie'), html.indexOf('Pola klienta'));
 
@@ -377,7 +382,7 @@ describe('Przegląd SMS for an account with client fields', () => {
         expect(waiting).not.toContain('Invalid phone number');
     });
 
-    test('a member sees the failed and the scheduled text without Wyślij ponownie or Anuluj; the owner has both', () => {
+    test('a member sees the failed and the scheduled text without Send again or Cancel; the owner has both', () => {
         const member = renderToStaticMarkup(<ClientOverviewTab clientId={7} overview={card} manage={false} />);
 
         expect(member).toContain('Nieudany SMS: Potwierdzenie');

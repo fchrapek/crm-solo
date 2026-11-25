@@ -40,7 +40,7 @@ export function ReopenMonthDialog({
         router.delete(clientMonths.reopen([clientId, target.period]).url, {
             data: { closure_id: target.closure_id },
             preserveScroll: true,
-            // The phone flow returns to the Bank godzin sheet, which lives in the page's state.
+            // The phone flow returns to the Hours bank sheet, which lives in the page's state.
             preserveState: true,
             onSuccess: () => onOpenChange(false),
             onFinish: () => setProcessing(false),

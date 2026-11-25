@@ -119,8 +119,12 @@ final readonly class ReportContext
         return max(0.0, round($this->actualHours - $available, 2));
     }
 
+    /** The client's baseline while the account has Report baseline on: a text the owner cannot see on Billing never reaches a report. */
     public function reportBaselineMarkdown(): ?string
     {
+        if (! $this->client->account->showsReportBaseline()) {
+            return null;
+        }
         $value = $this->client->report_baseline_markdown;
 
         return $value !== null && mb_trim($value) !== '' ? $value : null;

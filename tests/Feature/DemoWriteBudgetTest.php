@@ -10,6 +10,7 @@ use App\Models\ClientReport;
 use App\Models\ClientReportRevision;
 use App\Models\Integration;
 use App\Models\User;
+use App\Support\DemoRows;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -35,7 +36,8 @@ final class DemoWriteBudgetTest extends TestCase
         $account = Account::create(['name' => 'Demo', 'is_test' => true]);
         $this->user = User::factory()->create(['account_id' => $account->id, 'owner' => true]);
         $this->client = $account->clients()->create(['name' => 'Przykładowa firma']);
-        config(['app.demo' => true, 'app.demo_writes.per_minute' => 30, 'app.demo_writes.per_hour' => 40, 'app.demo_writes.max_text_kb' => 16]);
+        DemoRows::record($account);
+        config(['app.demo' => true, 'app.demo_writes.per_minute' => 30, 'app.demo_writes.per_hour' => 40, 'app.demo_writes.max_text_kb' => 16, 'app.demo_rows.per_table' => 1000]);
     }
 
     /** @return array<string, array{0: array<string, mixed>}> */
@@ -84,6 +86,28 @@ final class DemoWriteBudgetTest extends TestCase
         $this->noteFrom('198.51.100.1', 'too many')->assertSessionHas('error');
 
         $this->noteFrom('198.51.100.2', 'other visitor')->assertSessionMissing('error');
+    }
+
+    public function test_all_visitors_together_share_one_hourly_budget(): void
+    {
+        config(['app.demo_writes.total_per_hour' => 3]);
+
+        foreach (['198.51.100.1', '198.51.100.2', '198.51.100.3'] as $ip) {
+            $this->noteFrom($ip, 'note')->assertSessionMissing('error');
+        }
+
+        $this->noteFrom('198.51.100.4', 'one too many')->assertSessionHas('error');
+        $this->actingAs($this->user)->withServerVariables(['REMOTE_ADDR' => '198.51.100.4'])->get('/')->assertOk();
+    }
+
+    public function test_one_ipv6_network_is_one_visitor(): void
+    {
+        config(['app.demo_writes.per_minute' => 1]);
+
+        $this->noteFrom('2001:db8:1:2::1', 'first')->assertSessionMissing('error');
+        $this->noteFrom('2001:db8:1:2:aaaa:bbbb:cccc:dddd', 'same network')->assertSessionHas('error');
+
+        $this->noteFrom('2001:db8:1:3::1', 'another network')->assertSessionMissing('error');
     }
 
     public function test_reading_login_and_logout_are_not_budgeted(): void

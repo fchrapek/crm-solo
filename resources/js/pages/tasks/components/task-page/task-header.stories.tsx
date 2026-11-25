@@ -3,7 +3,7 @@ import { clock, task, trelloTask } from './story-fixtures';
 import { TaskHeader } from './task-header';
 
 const meta = {
-    title: 'Zadania/Zadanie/Header',
+    title: 'Tasks/Task/Header',
     component: TaskHeader,
     args: { task, today: clock.today, locale: 'pl' },
     render: (args, { globals }) => <TaskHeader {...args} locale={globals.locale} />,

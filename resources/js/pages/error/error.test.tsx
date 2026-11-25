@@ -1,12 +1,13 @@
-import { describe, expect, mock, test } from 'bun:test';
+import * as inertia from '@inertiajs/react';
+import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 import i18next from 'i18next';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { initReactI18next } from 'react-i18next';
 
 import pl from '../../../../lang/pl.json';
 
-const inertia = { ...(await import('@inertiajs/react')) };
-mock.module('@inertiajs/react', () => ({ ...inertia, Head: () => null }));
+spyOn(inertia, 'Head').mockImplementation((() => null) as unknown as typeof inertia.Head);
+afterAll(() => mock.restore());
 const { default: ErrorPage } = await import('./error');
 
 await i18next.use(initReactI18next).init({ lng: 'pl', resources: { pl: { translation: pl } }, interpolation: { escapeValue: false } });

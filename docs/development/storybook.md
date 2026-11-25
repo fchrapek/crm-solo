@@ -21,11 +21,11 @@ The tree mirrors the sections of the Figma library (page Components · A2f), so 
 | Group | Holds | Figma |
 |---|---|---|
 | `Solo/…` | Shared primitives: Button, Stage pill, Field, Section head, Section toggle, Poster, Stat, Segmented control, Bottom action, Bottom sheet, Month card, Day status, Agent chip, Live line, Actor mark, Icon | The A2f / primitives of the same name (Stat covers Stat and Stat row, Bottom sheet its three headers, Month card its Day tiles) |
-| `Zadania/…` | The task views: Task row, Done row, Queue row, Task meta, the Zadanie sections (`Zadania/Zadanie/Czas`), the Zaloguj czas and Nowe zadanie dialogs | A2f / Task row, Done row, Queue row, Task meta; the Zadanie, Zaloguj czas and Nowe zadanie frames |
-| `Dziś/…` | Day-screen parts: Propozycje, Free slots, Timer queue, Podsumowanie list | A2f / Free slots; the Plan jutro, Timer A2 and Podsumowanie frames |
+| `Tasks/…` | The task views: Task row, Done row, Queue row, Task meta, the task page sections (`Tasks/Task/Time`), the Log time and New task dialogs | A2f / Task row, Done row, Queue row, Task meta; the Zadanie, Zaloguj czas and Nowe zadanie frames |
+| `Today/…` | Day-screen parts: Suggestions, Free slots, Timer queue, Summary list | A2f / Free slots; the Plan jutro, Timer A2 and Podsumowanie frames |
 | `Redesign/…` | The rail and search redesign's parts: Tile, Row, Chip, Button (size control), Pills, Command bar, Timer strip, Helper, Hours bar, Month tile | Page `Redesign · Szyna i wyszukiwarka`, components holder 1066:2 |
 
-A row component has its own entry per Figma variant set (Task row, Done row, Queue row) even when the code is one `TaskRow` with a `kind`. A composed part of a day screen (Timer queue, Podsumowanie list) sits under `Dziś/` beside the rows it is made of.
+A row component has its own entry per Figma variant set (Task row, Done row, Queue row) even when the code is one `TaskRow` with a `kind`. A composed part of a day screen (Timer queue, Summary list) sits under `Today/` beside the rows it is made of.
 
 ## Toolbar
 

@@ -8,11 +8,11 @@
 }
 
 .overlay[data-state="open"] {
-  animation: fadeIn var(--duration-150) var(--ease-out);
+  animation: fadeIn var(--motion-slow) var(--ease-standard);
 }
 
 .overlay[data-state="closed"] {
-  animation: fadeOut var(--duration-150) var(--ease-in);
+  animation: fadeOut var(--motion-slow-exit) var(--ease-exit);
 }
 
 .content {
@@ -39,11 +39,11 @@
 }
 
 .content[data-state="open"] {
-  animation: fadeIn var(--duration-200) var(--ease-out), zoomIn var(--duration-200) var(--ease-out);
+  animation: panelIn var(--motion-slow) var(--ease-standard);
 }
 
 .content[data-state="closed"] {
-  animation: fadeOut var(--duration-200) var(--ease-in), zoomOut var(--duration-200) var(--ease-in);
+  animation: panelOut var(--motion-slow-exit) var(--ease-exit);
 }
 
 .header {
@@ -100,22 +100,12 @@
   }
 }
 
-@keyframes zoomIn {
-  from {
-    transform: translate(-50%, -50%) scale(0.95);
-  }
-  to {
-    transform: translate(-50%, -50%) scale(1);
-  }
+@keyframes panelIn {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)); }
 }
 
-@keyframes zoomOut {
-  from {
-    transform: translate(-50%, -50%) scale(1);
-  }
-  to {
-    transform: translate(-50%, -50%) scale(0.95);
-  }
+@keyframes panelOut {
+  to { opacity: 0; transform: translate(-50%, calc(-50% + 8px)); }
 }
 
 /* Solo: under a Solo page the portal container is a [data-day] surface (components/solo/surface.tsx) */
@@ -125,8 +115,9 @@
 
 :global([data-day]) .content {
   gap: 18px;
+  overflow: hidden;
   padding: 28px 28px var(--solo-space-5);
-  border: var(--solo-pop-width, 2px) solid var(--solo-pop-border, var(--solo-fg));
+  border: 0;
   border-radius: var(--solo-dialog-radius, var(--solo-radius-xl));
   background-color: var(--solo-dialog-bg, var(--solo-pop-bg, var(--solo-bg)));
   color: var(--solo-fg);
@@ -154,15 +145,15 @@
   font-size: var(--solo-text-sub);
 }
 
-/* Figma: ActionRow. Anuluj is the quiet button: no edge, the hover fill instead. */
+/* Figma: ActionRow on the tone band, as in every dialog; Cancel is the quiet button */
 :global([data-day]) .footer {
-  --solo-pill-edge: transparent;
-  --solo-pill-edge-hover: transparent;
   --solo-pill-weight: 600;
   --solo-pill-hover: var(--role-hover);
+  --solo-pill-edge: transparent;
+  --solo-pill-edge-hover: transparent;
 
   gap: var(--solo-space-2);
+  margin: calc(var(--role-space-24) - 18px) -28px calc(-1 * var(--solo-space-5));
+  padding: var(--role-space-16) 28px var(--role-space-20);
+  background-color: var(--solo-field-bg);
 }
-
-/* Ink's shape, so it pairs with the Outline cancel, in the accent */
-

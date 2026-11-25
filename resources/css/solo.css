@@ -69,11 +69,6 @@
 }
 
 :root {
-    /* motion: a hover enters faster than it leaves (Figma: Ruch · hover) */
-    --solo-motion-in: 120ms;
-    --solo-motion-out: 160ms;
-    --solo-ease: cubic-bezier(0.2, 0, 0, 1);
-
     /* primitives */
     --solo-paper: #f3ede2;
     --solo-ink: #151412;
@@ -142,7 +137,7 @@
     --solo-button-md: 0.9375rem;
     --solo-button-lg: 1.0625rem;
     /* Solo / Mobile text styles */
-    /* Phone title: the record name under a phone back bar (Zadanie, Projekt, Klient) */
+    /* Phone title: the record name under a phone back bar (Task, Project, Client) */
     --solo-mobile-title: 1.75rem;
     --solo-mobile-body: 1.0625rem;
     --solo-mobile-sheet-title: 1.125rem;
@@ -198,7 +193,7 @@
 }
 
 /*
- * Redesign "Szyna i wyszukiwarka": the Figma role variables (collection A2f, modes Paper light and Paper dark).
+ * Redesign Rail and search: the Figma role variables (collection A2f, modes Paper light and Paper dark).
  * Figma role/x is --role-x; space/n, radius/n and stroke/n are --role-space-n, --role-radius-n and --role-stroke-n.
  * Cobalt is the command bar and the current selection only; vermilion is running time and over the limit only.
  */
@@ -258,6 +253,10 @@
 
     /* controls: 44 px on the phone, 40 px from 768 px */
     --role-control: 44px;
+    --role-control-inset: 18px;
+    /* a row's details from 768 px: a text column shares the width between a floor and a cap, a date or a duration keeps a narrow fixed one */
+    --role-detail-text: minmax(4rem, 15rem);
+    --role-detail-short: 5.5rem;
     --shell-rail: 80px;
     --shell-margin: 16px;
     --shell-gap: 12px;
@@ -266,6 +265,8 @@
     --shell-strip: 0px;
     --shell-dock: 0px;
     --shell-helper: 0px;
+    /* the helper's dog from 768 px */
+    --shell-dog: 112px;
 }
 
 .dark {
@@ -351,9 +352,9 @@
     --solo-ok: var(--solo-green);
     --solo-warn: var(--solo-amber);
     --solo-error: var(--solo-red);
-    --solo-field-bg: var(--role-field);
+    /* a field is filled with the page tone on its tile and has no edge at rest; the dialog footer sits on the same tone */
+    --solo-field-bg: var(--role-page);
     --solo-field-fg: var(--role-text-primary);
-    --solo-field-border: var(--role-field-edge);
     --solo-agent: var(--solo-cobalt);
     --solo-on-agent: var(--solo-paper);
 
@@ -383,7 +384,6 @@
     --solo-ok: var(--solo-paper);
     --solo-warn: var(--solo-paper);
     --solo-error: var(--solo-paper);
-    --solo-field-border: var(--solo-paper);
     --solo-agent: var(--solo-paper);
     --solo-on-agent: var(--solo-vermilion);
 }
@@ -422,7 +422,7 @@
 :root {
     --solo-grid-margin: 16px;
     --solo-display-clock: 10rem;
-    /* two poster sizes: Display for moment screens (GOTOWE., 404), Heading for every other title, weekdays and record names included */
+    /* two poster sizes: Display for moment screens (DONE., 404), Heading for every other title, weekdays and record names included */
     --solo-poster-display: 5.5rem;
     --solo-poster-heading: 3rem;
     /* a long record name steps down to this, never below */
@@ -479,8 +479,7 @@
 
 /*
  * On phones the fixed parts stack over the page end, bottom up: the tab bar, a page's floating button or bottom action
- * (--shell-dock), the timer strip while a timer runs (--shell-strip). The shell clears them all; the helper button ends the page in the
- * flow and sticks above them (--shell-helper is room a fixed part of its own may claim).
+ * (--shell-dock), the timer strip while a timer runs (--shell-strip), the helper button (--shell-helper). The shell clears them all.
  */
 :root:has([data-solo-fab]) {
     --shell-dock: var(--solo-fab-clearance);
@@ -498,8 +497,24 @@
     --shell-strip: 64px;
 }
 
+/* :where keeps the selector no stronger than the reset from 768 px below */
+:root:has([data-shell-helper]:where([data-phone])) {
+    --shell-helper: 64px;
+}
+
 [data-shell] {
     padding-bottom: calc(var(--solo-tab-bar-clearance) + var(--shell-dock) + var(--shell-strip) + var(--shell-helper));
+}
+
+/* the bars a menu must not run under, registered as a length so the menus read it resolved (components/solo/menu.ts) */
+@property --menu-floor {
+    syntax: '<length>';
+    inherits: true;
+    initial-value: 0px;
+}
+
+:root {
+    --menu-floor: calc(var(--solo-tab-bar-clearance) + var(--shell-dock) + var(--shell-strip));
 }
 
 @media (min-width: 768px) {
@@ -507,23 +522,24 @@
         --shell-dock: 0px;
         --shell-strip: 0px;
         --shell-helper: 0px;
+        --menu-floor: 0px;
     }
 
     [data-shell] {
         padding-bottom: var(--role-space-32);
     }
 
-    /* the hint bubble never covers a row action: the page ends above it */
-    [data-shell]:has([data-shell-hint]) {
-        padding-bottom: 140px;
+    /* neither the dog nor its line covers a row action: the page ends above them */
+    [data-shell]:has([data-shell-helper][data-desktop]) {
+        padding-bottom: calc(var(--role-space-16) + var(--shell-dog) + var(--role-space-24));
     }
 }
 
 /* Page-to-page navigation (Inertia viewTransition, off for reduced motion in app.tsx): the content cross-fades, the masthead and tab bar stay put. */
 ::view-transition-old(root),
 ::view-transition-new(root) {
-    animation-duration: var(--duration-150);
-    animation-timing-function: var(--ease-out);
+    animation-duration: var(--motion-fast);
+    animation-timing-function: var(--ease-standard);
 }
 
 ::view-transition-group(solo-masthead),
@@ -540,25 +556,44 @@
     display: none;
 }
 
-/* Hover and focus states ease instead of snapping; zero specificity, so a component's own transition still wins. The focus outline is not animated. */
-@media (prefers-reduced-motion: no-preference) {
-    :where([data-day] *) {
-        transition-duration: var(--solo-motion-out);
-        transition-property: color, background-color, border-color, text-decoration-color, box-shadow, opacity;
-        transition-timing-function: var(--solo-ease);
-    }
+/* Colour states fade over --motion-fast; zero specificity, so a component's own transition still wins. Focus, a press, a keyboard highlight and disabled change at once. */
+:where([data-day] *) {
+    transition-duration: var(--motion-fast);
+    transition-property: color, background-color, border-color, text-decoration-color, box-shadow, opacity;
+    transition-timing-function: var(--ease-standard);
+}
 
-    :where([data-day] *):where(:hover, :focus-visible) {
-        transition-duration: var(--solo-motion-in);
-    }
-
-    :where([data-day] *):where(:active) {
-        transition-duration: 0s;
-    }
+:where([data-day] *):where(:focus-visible, :active, :disabled, [aria-disabled='true'], [data-disabled], [data-highlighted], [data-selected], [aria-selected='true']) {
+    transition-duration: 0s;
 }
 
 /* resolved on each surface, so the pill's edge follows that surface's ink */
 [data-day] {
     --solo-pill-edge: var(--solo-fg-muted);
     --solo-pill-edge-hover: var(--solo-fg);
+}
+
+/* Figma: a dialog's and a sheet's scrollbar, 4 px in the rule colour, in the margin beside the fields; the gutter stays, so the fields never shift. A footer inside the scroll gets none: its tone band runs to the dialog's edge. */
+[data-day] :is([data-slot='dialog-body'], [data-slot='sheet-body'], [data-slot='dialog-scroll']:not(:has(> [data-slot='dialog-form'], [data-slot='dialog-footer']))) {
+    scrollbar-gutter: stable;
+}
+
+[data-day] :is([data-slot='dialog-body'], [data-slot='sheet-body'], [data-slot='dialog-scroll']:not(:has(> [data-slot='dialog-form'])))::-webkit-scrollbar {
+    width: 4px;
+}
+
+[data-day] :is([data-slot='dialog-body'], [data-slot='sheet-body'], [data-slot='dialog-scroll']:not(:has(> [data-slot='dialog-form'])))::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+[data-day] :is([data-slot='dialog-body'], [data-slot='sheet-body'], [data-slot='dialog-scroll']:not(:has(> [data-slot='dialog-form'])))::-webkit-scrollbar-thumb {
+    border-radius: 2px;
+    background: var(--role-rule);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+    [data-day] :is([data-slot='dialog-body'], [data-slot='sheet-body'], [data-slot='dialog-scroll']:not(:has(> [data-slot='dialog-form']))) {
+        scrollbar-color: var(--role-rule) transparent;
+        scrollbar-width: thin;
+    }
 }

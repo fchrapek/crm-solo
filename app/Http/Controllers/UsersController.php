@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Str;
 
-/** The writes behind Ustawienia · Konto (profile and Użytkownicy). */
+/** The writes behind Settings · Account (profile and Users). */
 final class UsersController extends Controller
 {
     public function store(UserRequest $request): RedirectResponse

@@ -1,6 +1,6 @@
 import { ActionMenuItem } from '@/components/solo/action-menu';
-import { MonthCard, type MonthData } from '@/components/solo/month-card';
-import { Poster, SoloButton, SoloButtonLink } from '@/components/solo/primitives';
+import { type MonthData } from '@/components/solo/month-card';
+import { SoloButton, SoloButtonLink } from '@/components/solo/primitives';
 import { Row } from '@/components/solo/row';
 import { RowMenu } from '@/components/solo/row-menu';
 import { Pills } from '@/components/solo/shell/pills';
@@ -8,15 +8,20 @@ import { type PlaceResolver } from '@/components/solo/shell/place';
 import { SoloSurface } from '@/components/solo/surface';
 import { type DayTask } from '@/components/solo/task-row';
 import { GroupHeading, Tile, TileGrid, TileInset, TileNote, TileRows, TileStack } from '@/components/solo/tile';
-import { capitalize, dayMonth, durationText, longDate, parseDay, shortDate, weekdayName } from '@/lib/dates';
+import { useSoloWide } from '@/components/solo/use-solo-wide';
+import { capitalize, durationText, parseDay, shortDate, weekdayName } from '@/lib/dates';
 import day from '@/routes/day';
 import tasks from '@/routes/tasks';
 import today from '@/routes/today';
 import { type SharedData } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AddOrPick } from './add-or-pick';
 import { TimerTile } from './day';
+import { DayHeading, DayMonth } from './day-header';
 import styles from './day.module.css';
+import { freeNote, PickedCount } from './picked';
 import { dayPills } from './place';
 
 interface WeekDay {
@@ -32,6 +37,7 @@ interface WeekProps {
     closed: boolean;
     week: 'this' | 'next';
     maxPicks: number;
+    warnFull: boolean;
     month: MonthData;
     days: WeekDay[];
     [key: string]: unknown;
@@ -40,24 +46,49 @@ interface WeekProps {
 const keep = { preserveScroll: true };
 
 /**
- * Figma: Tydzień, one date (1091:28683). Its picks under the date and its count; a day below five picks offers
- * Wybierz. A past day's unfinished pick stays on its day, takeable into today or droppable.
+ * Figma: Week, one date (1091:28683). Its picks under the date and its count; a day below five picks offers
+ * Choose. A past day's unfinished pick stays on its day, takeable into today or droppable.
  */
-export function DaySection({ entry, today: todayDate, maxPicks }: { entry: WeekDay; today: string; maxPicks: number }) {
+export function DaySection({ entry, today: todayDate, maxPicks, warnFull }: { entry: WeekDay; today: string; maxPicks: number; warnFull: boolean }) {
     const { t, i18n } = useTranslation();
+    const wide = useSoloWide();
     const past = entry.date < todayDate;
     const isToday = entry.date === todayDate;
     const done = entry.picks.filter((pick) => pick.done).length;
     const free = maxPicks - entry.picks.length;
     const count =
-        past && entry.picks.length === 0
-            ? undefined
-            : past
-              ? t('{{done}} of {{count}} done', { done, count: entry.picks.length })
-              : t('{{count}} of {{max}} picked', { count: entry.picks.length, max: maxPicks });
-    const pickHref = isToday ? today.tasks().url : today.tasks({ query: { na: entry.date } }).url;
-    const canPick = entry.plannable && !entry.closed && free > 0;
+        past && entry.picks.length === 0 ? undefined : past ? (
+            t('{{done}} of {{count}} done', { done, count: entry.picks.length })
+        ) : (
+            <PickedCount count={entry.picks.length} max={maxPicks} warn={warnFull} />
+        );
+    const pickHref = isToday ? today.tasks().url : today.tasks({ query: { for: entry.date } }).url;
+    const canPick = entry.plannable && !entry.closed;
     const empty = entry.picks.length === 0;
+    const [adding, setAdding] = useState(false);
+    const writeIn = useRef<HTMLButtonElement>(null);
+    const actions = (
+        <>
+            <SoloButton ref={writeIn} variant="quiet" size="control" onClick={() => setAdding(true)}>
+                {t('Write in a task')}
+            </SoloButton>
+            <SoloButtonLink href={pickHref} variant="secondary" size="control">
+                {t('Choose')}
+            </SoloButtonLink>
+        </>
+    );
+    const addField = canPick && (
+        <AddOrPick
+            date={entry.date}
+            picked={entry.picks.length}
+            maxPicks={maxPicks}
+            warnFull={warnFull}
+            listHref={pickHref}
+            opened={adding}
+            onClose={() => setAdding(false)}
+            opener={writeIn}
+        />
+    );
 
     return (
         <>
@@ -66,17 +97,18 @@ export function DaySection({ entry, today: todayDate, maxPicks }: { entry: WeekD
                 note={shortDate(entry.date, i18n.language)}
                 current={isToday ? t('today') : undefined}
                 quiet={past}
-                end={
-                    empty && canPick ? (
-                        <SoloButtonLink href={pickHref} variant="secondary" size="control">
-                            {t('Choose')}
-                        </SoloButtonLink>
-                    ) : (
-                        count
-                    )
-                }
+                end={count}
             />
-            {empty ? (
+            {empty && canPick ? (
+                <TileRows>
+                    {adding && wide ? (
+                        addField
+                    ) : (
+                        <Row title={<span className={styles.quietTitle}>{t('Nothing planned')}</span>} stack action={actions} />
+                    )}
+                    {!wide && addField}
+                </TileRows>
+            ) : empty ? (
                 <TileInset>
                     <TileNote>{t('Nothing planned')}</TileNote>
                 </TileInset>
@@ -128,18 +160,19 @@ export function DaySection({ entry, today: todayDate, maxPicks }: { entry: WeekD
                             />
                         );
                     })}
-                    {canPick && (
-                        <Row
-                            title={t('Pick another')}
-                            meta={<span className={styles.phoneOnly}>{t('{{count}} free', { count: free })}</span>}
-                            wideMeta={t('{{count}} free slots', { count: free })}
-                            action={
-                                <SoloButtonLink href={pickHref} variant="secondary" size="control">
-                                    {t('Add')}
-                                </SoloButtonLink>
-                            }
-                        />
-                    )}
+                    {canPick &&
+                        (adding && wide ? (
+                            addField
+                        ) : (
+                            <Row
+                                title={t('Pick another')}
+                                meta={free > 0 ? <span className={styles.phoneOnly}>{freeNote(t, free, warnFull, true)}</span> : undefined}
+                                wideMeta={freeNote(t, free, warnFull)}
+                                stack
+                                action={actions}
+                            />
+                        ))}
+                    {!wide && addField}
                 </TileRows>
             )}
         </>
@@ -147,33 +180,29 @@ export function DaySection({ entry, today: todayDate, maxPicks }: { entry: WeekD
 }
 
 /**
- * Figma: Tydzień (1091:28683, phone 1091:29016). Seven dates, Monday first, in one tile; this week or the next as a
- * second row of pills; beside them the running timer and the month.
+ * Figma: Week (1091:28683, phone 1091:29016; the head 1516:27842, W1). Seven dates, Monday first, in one tile; this
+ * week or the next as a second row of pills; beside them the running timer and the month tile naming the week's dates.
  */
 export default function Week() {
-    const { today: todayDate, week, maxPicks, month, days, timer } = usePage<SharedData & WeekProps>().props;
+    const { today: todayDate, week, maxPicks, warnFull, month, days, timer } = usePage<SharedData & WeekProps>().props;
     const errors = usePage().props.errors as Record<string, string>;
-    const { t, i18n } = useTranslation();
-    const range =
-        days.length > 0 ? `${dayMonth(parseDay(days[0].date), i18n.language)} – ${longDate(days[days.length - 1].date, i18n.language)}` : null;
+    const { t } = useTranslation();
 
     return (
         <SoloSurface day="paper">
             <Head title={t('Week')} />
             <main className={styles.summary}>
-                <header className={styles.summaryHead}>
-                    <Poster>{t('Week')}</Poster>
-                    {range !== null && <p className={styles.meta}>{range}</p>}
+                <DayHeading title={t('Week')}>
                     <div className={styles.headPills}>
                         <Pills
                             label={t('Week')}
                             items={[
                                 { label: t('This week'), href: today.week(), active: week === 'this' },
-                                { label: t('Next week'), href: today.week({ query: { nastepny: 1 } }), active: week === 'next' },
+                                { label: t('Next week'), href: today.week({ query: { next: 1 } }), active: week === 'next' },
                             ]}
                         />
                     </div>
-                </header>
+                </DayHeading>
                 <TileGrid>
                     <Tile kind="list">
                         {errors.task_id && (
@@ -182,12 +211,12 @@ export default function Week() {
                             </TileInset>
                         )}
                         {days.map((entry) => (
-                            <DaySection key={entry.date} entry={entry} today={todayDate} maxPicks={maxPicks} />
+                            <DaySection key={entry.date} entry={entry} today={todayDate} maxPicks={maxPicks} warnFull={warnFull} />
                         ))}
                     </Tile>
                     <TileStack as="aside">
                         {timer && <TimerTile running={timer} />}
-                        <MonthCard look="tile" month={month} />
+                        <DayMonth month={month} date={days[0]?.date ?? todayDate} until={days[days.length - 1]?.date} />
                     </TileStack>
                 </TileGrid>
             </main>

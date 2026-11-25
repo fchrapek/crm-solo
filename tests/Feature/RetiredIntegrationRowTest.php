@@ -49,7 +49,7 @@ final class RetiredIntegrationRowTest extends TestCase
     public function test_integrations_page_lists_only_known_providers(): void
     {
         $this->actingAs($this->user)
-            ->get('/settings/integracje')
+            ->get('/settings/integrations')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('settings/index')

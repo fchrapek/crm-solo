@@ -2,7 +2,7 @@ import { router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button } from '@/components/ui/button';
+import { SoloButton } from '@/components/solo/primitives';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -128,6 +128,7 @@ export function ConnectTrelloDialog({ open, onOpenChange, projectId }: Props) {
                             aria-selected={mode === 'create'}
                             className={`${styles.modeButton} ${mode === 'create' ? styles.modeButtonActive : ''}`}
                             onClick={() => handleModeSelect('create')}
+                            title={t('Create new board')}
                             disabled={submitting}
                         >
                             {t('Create new board')}
@@ -138,6 +139,7 @@ export function ConnectTrelloDialog({ open, onOpenChange, projectId }: Props) {
                             aria-selected={mode === 'link'}
                             className={`${styles.modeButton} ${mode === 'link' ? styles.modeButtonActive : ''}`}
                             onClick={() => handleModeSelect('link')}
+                            title={t('Link existing board')}
                             disabled={submitting}
                         >
                             {t('Link existing board')}
@@ -156,6 +158,7 @@ export function ConnectTrelloDialog({ open, onOpenChange, projectId }: Props) {
                             {!loadingBoards && !boardsError && boards !== null && boards.length > 0 && (
                                 <Select value={selectedBoardId} onValueChange={setSelectedBoardId} disabled={submitting}>
                                     <SelectTrigger
+                                        look="solo"
                                         className={styles.boardSelectTrigger}
                                         title={boards.find((board) => board.id === selectedBoardId)?.name}
                                     >
@@ -171,7 +174,7 @@ export function ConnectTrelloDialog({ open, onOpenChange, projectId }: Props) {
                                                     : '';
                                             return (
                                                 <SelectItem key={board.id} value={board.id} disabled={isLinked} className={styles.boardSelectItem}>
-                                                    <span className={styles.boardOptionText}>
+                                                    <span className={styles.boardOptionText} title={`${board.name}${workspaceSuffix}${linkedSuffix}`}>
                                                         {board.name}
                                                         {workspaceSuffix}
                                                         {linkedSuffix}
@@ -187,12 +190,12 @@ export function ConnectTrelloDialog({ open, onOpenChange, projectId }: Props) {
                 </div>
 
                 <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+                    <SoloButton variant="pill" type="button" onClick={() => onOpenChange(false)} disabled={submitting}>
                         {t('Cancel')}
-                    </Button>
-                    <Button type="button" onClick={handleSubmit} disabled={!canSubmit}>
+                    </SoloButton>
+                    <SoloButton variant="ink" size="md" type="button" onClick={handleSubmit} disabled={!canSubmit}>
                         {submitting ? t('Connecting…') : t('Connect')}
-                    </Button>
+                    </SoloButton>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

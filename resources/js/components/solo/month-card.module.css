@@ -100,7 +100,7 @@
     box-shadow: inset 0 0 0 1px var(--solo-fg);
 }
 
-/* Figma: "Cały miesiąc ↓", a typed arrow in Semi Bold 13 with the underline, on the tiles' left edge */
+/* Figma: Whole month ↓, a typed arrow in Semi Bold 13 with the underline, on the tiles' left edge */
 .whole {
     justify-self: start;
     padding: 0;
@@ -123,7 +123,7 @@
     display: none;
 }
 
-/* Figma: Popover / Cały miesiąc (Size=Compact): the whole month at the 36 px tile, with its legend */
+/* Figma: Popover / Whole month (Size=Compact): the whole month at the 36 px tile, with its legend */
 :global([data-day]) .popover {
     display: grid;
     width: auto;
@@ -143,19 +143,32 @@
     display: inline;
 }
 
-/* Figma: Tile · Miesiąc, the day marks: 20 px, 6 px apart, wrapping */
+/* Figma: Tile · Month, the day marks: 20 px, 6 px apart, wrapping */
+/* every day of the month in two rows, each a link to its day; a weekend day is a day like any other */
 .marks {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    display: grid;
+    /* half the month's days, set by the tile */
+    --marks-columns: 16;
+
+    grid-template-columns: repeat(var(--marks-columns), minmax(0, 1fr));
+    gap: 4px;
+    align-self: stretch;
+    width: 100%;
 }
 
 .mark {
-    flex: none;
-    width: 20px;
-    height: 20px;
+    aspect-ratio: 1;
     border-radius: var(--role-radius-xs);
     background: var(--role-rule);
+}
+
+.mark:hover {
+    box-shadow: inset 0 0 0 var(--role-stroke-outline) var(--role-text-primary);
+}
+
+.mark:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: 2px;
 }
 
 .mark[data-state='closed'] {
@@ -166,7 +179,7 @@
     background: var(--role-selection);
 }
 
-/* Figma: Cały miesiąc. A popover on the tile's fill with a 1 px rule from 768 px; the same calendar in a sheet below it. */
+/* Figma: Whole month. A popover on the tile's fill with a 1 px rule from 768 px; the same calendar in a sheet below it. */
 :global([data-day]) .monthPopover {
     display: flex;
     flex-direction: column;
@@ -194,6 +207,40 @@
     margin: 0;
     color: var(--role-text-secondary);
     font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.pickHead {
+    display: flex;
+    align-items: center;
+    gap: var(--role-space-4);
+}
+
+.pickHead .calendarTitle {
+    flex: 1 1 auto;
+}
+
+/* a day to choose: the cell as a button */
+.pick {
+    text-decoration: none;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+
+.pick:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: 2px;
+}
+
+.pick:disabled {
+    cursor: default;
+    opacity: 0.45;
+}
+
+.pick:not(:disabled, [data-state='today']):hover {
+    box-shadow: inset 0 0 0 var(--role-stroke-outline) var(--role-text-primary);
+    color: var(--role-text-primary);
 }
 
 /* DayCell: 40 px, seven across; on a phone they spread over the sheet */

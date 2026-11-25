@@ -80,19 +80,19 @@ function draftOf(contact: ContactRecord | null | undefined): Draft {
 interface ContactDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    /** Klient Dane: the client the new contact belongs to, with no Klient field. */
+    /** Client Details: the client the new contact belongs to, with no Client name field. */
     clientId?: number;
-    /** Kontakty: the clients the Klient field offers. */
+    /** Contacts: the clients the Client name field offers. */
     clients?: { id: number; name: string }[];
     /** Edit this contact instead of adding one. */
     contact?: ContactRecord | null;
-    /** Kontakty: Usuń kontakt (the caller confirms) or, for a deleted contact, Przywróć. */
+    /** Contacts: Delete contact (the caller confirms) or, for a deleted contact, Restore contact. */
     onRemove?: (contact: ContactRecord) => void;
 }
 
 /**
- * Figma: Kontakty 477:8906 (Nowy kontakt) and 477:8940 (Edytuj kontakt); a
- * bottom sheet on phones (477:8986, 477:9101). Also Klient Dane's Nowy kontakt.
+ * Figma: Contacts 477:8906 (New contact) and 477:8940 (Edit contact); a
+ * bottom sheet on phones (477:8986, 477:9101). Also Client Details's New contact.
  */
 export function ContactDialog({ open, onOpenChange, clientId, clients, contact, onRemove }: ContactDialogProps) {
     const { t } = useTranslation();

@@ -14,9 +14,9 @@ const done: DayTask = {
 
 const noop = () => {};
 
-/** Figma: A2f / Done row in the Accent block on Podsumowanie (Surface=Done). */
+/** Figma: A2f / Done row in the Accent block on Summary (Surface=Done). */
 const meta = {
-    title: 'Zadania/Done row',
+    title: 'Tasks/Done row',
     component: TaskRow,
     args: { kind: 'done', task: done, trailing: '1 h 08', onComplete: noop, onUncomplete: noop },
     globals: { day: 'done' },

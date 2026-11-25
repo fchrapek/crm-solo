@@ -3,7 +3,7 @@
     justify-content: flex-end;
 }
 
-/* Figma: Edytuj zadanie, the report switch: the label with the switch at the row's end, the hint under them */
+/* Figma: Edit task, the report switch: the label with the switch at the row's end, the hint under them */
 .reportable {
     display: flex;
     flex-direction: column;

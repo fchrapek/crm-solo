@@ -52,7 +52,7 @@ export function useStatusLabel() {
     };
 }
 
-/** Why a send failed, for the hint beside "nieudana". */
+/** Why a send failed, for the hint beside failed. */
 export function useFailureReason() {
     const { t } = useTranslation();
 
@@ -111,9 +111,9 @@ const CHIP: Record<MessageStatus, ChipStatus> = {
 };
 
 /**
- * Figma: SMS · kolejka, the row (1094:43607). The time, the text that opens the details, the client when the list
+ * Figma: SMS queue, the row (1094:43607). The time, the text that opens the details, the client when the list
  * spans clients, the status as a chip. A failed text has the ink dot and its reason on a line of its own: there is
- * no error red. With manage the row carries its one action: Anuluj on a scheduled text, Wyślij ponownie on a failed one.
+ * no error red. With manage the row carries its one action: Cancel on a scheduled text, Send again on a failed one.
  */
 export function MessageList({
     rows,
@@ -195,7 +195,7 @@ export function MessageList({
     );
 }
 
-/** Figma: SMS zaplanowany (sheet z Anuluj), 607:6040. A failed one is sent again from here (the sheet is the confirmation) or cancelled. */
+/** Figma: Scheduled SMS (sheet with Cancel), 607:6040. A failed one is sent again from here (the sheet is the confirmation) or cancelled. */
 function MessageDialog({ message, manage, onClose }: { message: MessageRow | null; manage: boolean; onClose: () => void }) {
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);
@@ -224,7 +224,7 @@ function MessageDialog({ message, manage, onClose }: { message: MessageRow | nul
             onSubmit={submit}
             actions={(size) => (
                 <>
-                    <SoloButton variant="outline" size={size} onClick={onClose}>
+                    <SoloButton variant="pill" onClick={onClose}>
                         {t('Close')}
                     </SoloButton>
                     {pending && (
@@ -234,7 +234,7 @@ function MessageDialog({ message, manage, onClose }: { message: MessageRow | nul
                     )}
                     {failed && (
                         <>
-                            <SoloButton variant="outline" size={size} onClick={cancel}>
+                            <SoloButton variant="pill" onClick={cancel}>
                                 {t('Cancel the SMS')}
                             </SoloButton>
                             <SoloButton type="submit" variant="ink" size={size}>
@@ -250,7 +250,7 @@ function MessageDialog({ message, manage, onClose }: { message: MessageRow | nul
                     <dl className={styles.details}>
                         {current.client !== null && (
                             <KvRow label={t('Client name')} layout="split">
-                                <Link href={clients.show({ client: current.client_id, tab: 'dziennik' }).url}>{current.client}</Link>
+                                <Link href={clients.show({ client: current.client_id, tab: 'journal' }).url}>{current.client}</Link>
                             </KvRow>
                         )}
                         <KvRow label={t('When')} layout="split">

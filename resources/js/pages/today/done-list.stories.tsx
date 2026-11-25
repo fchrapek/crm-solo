@@ -3,9 +3,9 @@ import { Tile } from '@/components/solo/tile';
 import { PlanRows } from './summary';
 import { picks } from './story-fixtures';
 
-/** Figma: Podsumowanie, the day's picks in the plan tile. */
+/** Figma: Summary, the day's picks in the plan tile. */
 const meta = {
-    title: 'Dziś/Podsumowanie list',
+    title: 'Today/Summary list',
     component: PlanRows,
     args: { picks, timers: [] },
     decorators: [

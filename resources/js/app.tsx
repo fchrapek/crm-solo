@@ -1,5 +1,6 @@
 import '../css/app.css';
 
+import { forgetPrefetchedPages } from '@/components/solo/link-prefetch';
 import { initializeTheme } from '@/hooks/use-appearance';
 import { initializeTheme as initializeVisualTheme } from '@/hooks/use-theme';
 import { loadAccessLoginOnRefusal } from '@/lib/access-login';
@@ -31,6 +32,7 @@ const appName = import.meta.env.VITE_APP_NAME || 'CRM Solo';
 void createInertiaApp({
     title: (title) => `${title} - ${appName}`,
     defaults: {
+        prefetch: { cacheFor: '10s' },
         // Only page-to-page navigation cross-fades; polls, filters, partial reloads and reduced motion swap in place.
         visitOptions: (_href, options) => ({
             ...options,
@@ -91,3 +93,4 @@ void createInertiaApp({
 initializeTheme();
 initializeVisualTheme();
 loadAccessLoginOnRefusal();
+forgetPrefetchedPages();

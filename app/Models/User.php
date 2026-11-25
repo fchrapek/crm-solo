@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\JsonSettings;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -21,6 +22,9 @@ final class User extends Authenticatable
 
     /** The shared login DemoSeeder creates on the public demo. */
     public const DEMO_EMAIL = 'demo@crm-solo.test';
+
+    /** Preferences a user sets for themself, with what holds until they choose. */
+    public const array PREFERENCES = ['warn_full_day' => true, 'show_billed_on_tasks' => false, 'helper_desktop' => true, 'helper_phone' => false];
 
     /**
      * The attributes that are mass assignable.
@@ -102,6 +106,18 @@ final class User extends Authenticatable
             ->when($filters['trashed'] ?? null, fn ($query, $trashed) => $this->applyTrashedFilter($query, $trashed));
     }
 
+    public function prefers(string $key): bool
+    {
+        return (bool) ($this->settings[$key] ?? self::PREFERENCES[$key]);
+    }
+
+    public function setPreference(string $key, bool $value): void
+    {
+        JsonSettings::write('users', $this->id, [$key => $value]);
+        $this->settings = [...($this->settings ?? []), $key => $value];
+        $this->syncOriginalAttribute('settings');
+    }
+
     /**
      * Get the attributes that should be cast.
      *
@@ -112,6 +128,7 @@ final class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'settings' => 'array',
         ];
     }
 

@@ -1,4 +1,4 @@
-/* Figma: Klienci. Phone first: the title, its button, then the tiles 12 apart; from 768 px the button sits at the title's end. */
+/* Figma: Clients. Phone first: the title, its button, then the tiles 12 apart; from 768 px the button sits at the title's end. */
 .page {
     display: flex;
     flex-direction: column;
@@ -50,11 +50,30 @@
     border-radius: var(--role-radius-xs);
 }
 
-/* a phone has no column for the agent chip: the dot stands before the name, and the pin before it too */
+/* the dot stands before the name; its button reaches into the cell padding, never over the name */
 .agentDot {
     display: flex;
     flex: none;
+    align-items: center;
+    justify-content: flex-end;
     order: -2;
+    width: var(--role-space-24);
+    height: var(--role-control);
+    margin: calc(-1 * var(--role-space-16)) 0 calc(-1 * var(--role-space-16)) calc(-1 * var(--role-space-16));
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: default;
+}
+
+.agentDot:focus-visible {
+    outline: none;
+}
+
+.agentDot:focus-visible > span {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: 2px;
 }
 
 .pin {
@@ -119,7 +138,6 @@
         padding-top: 0;
     }
 
-    .agentDot,
     .phoneOnly,
     .phoneColumn {
         display: none;
@@ -161,9 +179,5 @@
 
     .colBalance {
         width: 100px;
-    }
-
-    .colFlag {
-        width: 170px;
     }
 }

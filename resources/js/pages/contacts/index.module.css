@@ -1,4 +1,4 @@
-/* Figma: Kontakty. Phone first: the title, its button, then the tiles 12 apart; from 768 px the button sits at the title's end. */
+/* Figma: Contacts. Phone first: the title, its button, then the tiles 12 apart; from 768 px the button sits at the title's end. */
 .page {
     display: flex;
     flex-direction: column;

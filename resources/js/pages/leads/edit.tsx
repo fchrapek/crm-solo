@@ -6,6 +6,7 @@ import { ActionMenu, ActionMenuItem } from '@/components/solo/action-menu';
 import { Chip } from '@/components/solo/chip';
 import { fieldControl, SoloField, SoloFieldRow, SoloInput, SoloTextarea } from '@/components/solo/field';
 import { IconButton } from '@/components/solo/icon-button';
+import { useLinkPrefetch } from '@/components/solo/link-prefetch';
 import { SoloButton, soloButtonClass } from '@/components/solo/primitives';
 import { type PlaceResolver } from '@/components/solo/shell/place';
 import { SoloSurface } from '@/components/solo/surface';
@@ -35,6 +36,7 @@ interface PipelineMeta {
 
 interface LeadData {
     id: number;
+    deleted_at: string | null;
     pipeline: string;
     name: string;
     company: string | null;
@@ -83,11 +85,13 @@ const jsonHeaders = () => ({
 });
 
 /**
- * Figma: Leady · karta leada (1094:36641, phone 1094:36990). The stage as the primary verb in the head, fields that
+ * Figma: Leads · lead card (1094:36641, phone 1094:36990). The stage as the primary verb in the head, fields that
  * save on blur (no Save button), score ticks that persist at once, and the append-only stage history.
  */
 export default function Edit({ lead, pipelines, source_labels, events, tier_thresholds }: EditPageProps) {
     const { t, i18n } = useTranslation();
+    const prefetch = useLinkPrefetch();
+    const clientHref = lead.client ? clients.show({ client: lead.client.id, tab: 'overview' }).url : null;
     const label = useLeadLabel();
     const [confirmDelete, setConfirmDelete] = React.useState(false);
     const [confirmConvert, setConfirmConvert] = React.useState(false);
@@ -132,6 +136,7 @@ export default function Edit({ lead, pipelines, source_labels, events, tier_thre
             headers: jsonHeaders(),
             body: JSON.stringify({ ...nextForm, score_factors: nextFactors }),
         })
+            .finally(() => router.flushAll())
             .then(async (res) => {
                 if (res.status === 422) {
                     const body = (await res.json()) as { errors?: Record<string, string[]> };
@@ -204,15 +209,22 @@ export default function Edit({ lead, pipelines, source_labels, events, tier_thre
                         <div className={styles.head} data-fill="">
                             <h1 className={styles.title}>{title}</h1>
                             <ActionMenu trigger={<IconButton icon="more" look="outline" label={t('More actions')} />}>
-                                <ActionMenuItem onSelect={() => setConfirmDelete(true)}>{t('Delete lead')}</ActionMenuItem>
+                                {lead.deleted_at ? (
+                                    <ActionMenuItem onSelect={() => router.put(leads.restore(lead.id).url, {}, { preserveScroll: true })}>
+                                        {t('Restore lead')}
+                                    </ActionMenuItem>
+                                ) : (
+                                    <ActionMenuItem onSelect={() => setConfirmDelete(true)}>{t('Delete lead')}</ActionMenuItem>
+                                )}
                             </ActionMenu>
                         </div>
                         <div className={styles.chips}>
+                            {lead.deleted_at && <Chip status="open">{t('deleted_lead_chip')}</Chip>}
                             <TierBadge tier={derived.tier} total={derived.score_total} routing={derived.tier_routing} />
                             {multiBrand && <Chip status="agent">{label('pipeline', lead.pipeline, pipeline?.label)}</Chip>}
                             <span className={styles.meta}>{label('source', lead.source, source_labels?.[lead.source])}</span>
-                            {lead.client && (
-                                <Link className={styles.clientLink} href={clients.show({ client: lead.client.id, tab: 'przeglad' }).url}>
+                            {lead.client && clientHref && (
+                                <Link className={styles.clientLink} href={clientHref} prefetch={prefetch(clientHref)}>
                                     {lead.client.name}
                                 </Link>
                             )}

@@ -22,7 +22,7 @@ interface Props {
     entry?: EditedEntry | null;
 }
 
-/** "Nowy wpis" and "Edytuj wpis": the journal note the journal and `crm note` write; a bottom sheet on phones. */
+/** New entry and Edit entry: the journal note the journal and `crm note` write; a bottom sheet on phones. */
 export function JournalEntryDialog({ clientId, open, onOpenChange, entry = null }: Props) {
     const { t } = useTranslation();
     const [note, setNote] = useState('');

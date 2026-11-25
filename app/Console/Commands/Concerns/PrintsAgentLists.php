@@ -73,6 +73,9 @@ trait PrintsAgentLists
     private function planLines(array $plan): array
     {
         $lines = ['Plan for '.$plan['day'].' ('.$plan['date'].'), '.count($plan['picks']).' of '.$plan['max_picks'].($plan['closed'] ? ', day closed' : '').':'];
+        if (($plan['warning'] ?? null) !== null) {
+            $lines[] = 'Warning: '.$plan['warning'];
+        }
         foreach ($plan['picks'] as $pick) {
             $lines[] = "  #{$pick['task_id']} [".$this->literal($pick['client'] ?? 'no client').'] '.$this->literal($pick['name'])
                 .($pick['done'] ? ' (done)' : '').($pick['minutes'] > 0 ? " {$pick['minutes']} min" : '');

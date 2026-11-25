@@ -351,14 +351,14 @@ final class InfaktInvoiceCopyTest extends TestCase
         $this->assertSame(4, DB::table('infakt_draft_requests')->count());
     }
 
-    public function test_rozliczenia_shows_each_invoice_group_with_what_it_would_copy(): void
+    public function test_billing_shows_each_invoice_group_with_what_it_would_copy(): void
     {
         Carbon::setTestNow('2026-12-02 10:00:00');
         $this->chainOctober();
         InfaktDraftRequest::query()->where('invoice_group', 2)->delete();
         Invoice::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'external_id' => '20000501', 'external_uuid' => 'cuw-1510', 'number' => '15/10/2026', 'status' => 'sent', 'net_price' => 300000, 'sale_date' => '2026-10-31']);
 
-        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/rozliczenia")->assertInertia(fn (Assert $page) => $page
+        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/billing")->assertInertia(fn (Assert $page) => $page
             ->where('billing.invoice_drafts.period', '2026-11')
             ->where('billing.invoice_drafts.groups.0', [
                 'group' => 1, 'projects' => ['sklepdemo'], 'state' => 'ready', 'net' => 300000, 'currency' => 'PLN', 'chained' => true, 'reason' => null,
@@ -375,9 +375,9 @@ final class InfaktInvoiceCopyTest extends TestCase
         $this->chainOctober();
         InfaktDraftRequest::query()->where('invoice_group', 2)->delete();
 
-        $this->actingAs($this->owner)->from("/clients/{$this->client->id}/rozliczenia")
+        $this->actingAs($this->owner)->from("/clients/{$this->client->id}/billing")
             ->post("/clients/{$this->client->id}/invoice-drafts", ['period' => '2026-11', 'like' => 'last'])
-            ->assertRedirect("/clients/{$this->client->id}/rozliczenia")
+            ->assertRedirect("/clients/{$this->client->id}/billing")
             ->assertSessionHas('error', 'Drafted in Infakt: sklepdemo. Pick the invoice to copy for: tutaj site.');
 
         $this->assertSame([1], InfaktDraftRequest::query()->where('period', '2026-11')->pluck('invoice_group')->all());
@@ -395,7 +395,7 @@ final class InfaktInvoiceCopyTest extends TestCase
         $listed = $this->actingAs($this->owner)->getJson("/clients/{$this->client->id}/invoice-drafts/sources")->assertOk();
         $this->assertSame(['16/10/2026'], array_column($listed->json('invoices'), 'number'));
 
-        $this->from("/clients/{$this->client->id}/rozliczenia")
+        $this->from("/clients/{$this->client->id}/billing")
             ->post("/clients/{$this->client->id}/invoice-drafts", ['period' => '2026-11', 'group' => 2, 'like' => '16/10/2026'])
             ->assertSessionHas('success', 'The invoice draft for November 2026 is in Infakt. Nothing was sent.');
 
@@ -435,7 +435,7 @@ final class InfaktInvoiceCopyTest extends TestCase
         $this->chainOctober();
         Invoice::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'external_id' => '20000502', 'external_uuid' => 'site-1610', 'number' => '16/10/2026', 'status' => 'draft', 'net_price' => 150000]);
 
-        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/rozliczenia")->assertInertia(fn (Assert $page) => $page
+        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/billing")->assertInertia(fn (Assert $page) => $page
             ->where('billing.invoice_drafts.groups.0.state', 'ready')
             ->where('billing.invoice_drafts.groups.0.net', null)
             ->where('billing.invoice_drafts.groups.1.state', 'needs_source')
@@ -448,9 +448,9 @@ final class InfaktInvoiceCopyTest extends TestCase
         $this->client->retainers()->where('project_id', $this->site->id)->delete();
         $this->fakeInfaktInvoices([$this->issuedInvoice('eat-1510', '15/10/2026', 250000, 'Utrzymanie sklepdemo', ['invoice_date' => '2026-10-31', 'payment_date' => '2026-11-14'])]);
 
-        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/rozliczenia")
+        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/billing")
             ->assertInertia(fn (Assert $page) => $page->where('billing.invoice_drafts.groups.0.state', 'needs_source'));
-        $this->from("/clients/{$this->client->id}/rozliczenia")->post("/clients/{$this->client->id}/invoice-drafts", ['period' => '2026-11', 'like' => 'last'])
+        $this->from("/clients/{$this->client->id}/billing")->post("/clients/{$this->client->id}/invoice-drafts", ['period' => '2026-11', 'like' => 'last'])
             ->assertSessionHas('error', 'Pick the invoice to copy for: sklepdemo.');
         $this->assertCount(0, $this->infaktPosts());
 
@@ -464,7 +464,7 @@ final class InfaktInvoiceCopyTest extends TestCase
         config(['app.demo' => true]);
         Http::fake();
 
-        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/rozliczenia")
+        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/billing")
             ->assertInertia(fn (Assert $page) => $page->where('billing.invoice_drafts', null));
 
         Http::assertNothingSent();
@@ -478,7 +478,7 @@ final class InfaktInvoiceCopyTest extends TestCase
         $this->infaktInvoices['draft-ref-9'] = $this->issuedInvoice('draft-ref-9', '', 250000, 'Utrzymanie sklepdemo', ['status' => 'draft', 'number' => null]);
         InfaktDraftRequest::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'period' => '2026-11', 'invoice_group' => 1, 'source' => 'copy', 'project_ids' => [$this->eat->id], 'status' => InfaktDraftRequest::STATUS_SUBMITTED, 'attempt' => 1, 'task_reference' => 'ref-9']);
 
-        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/rozliczenia")
+        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/billing")
             ->assertInertia(fn (Assert $page) => $page->where('billing.invoice_drafts.groups.0.state', 'drafted')->where('billing.invoice_drafts.groups.0.net', 250000));
 
         $this->assertSame([InfaktDraftRequest::STATUS_CREATED, 'draft-ref-9'], [InfaktDraftRequest::query()->where('period', '2026-11')->sole()->status, InfaktDraftRequest::query()->where('period', '2026-11')->sole()->invoice_uuid]);
@@ -501,8 +501,8 @@ final class InfaktInvoiceCopyTest extends TestCase
         $this->chainOctober();
         $this->client->retainers()->update(['monthly_fee' => 0]);
 
-        $this->verb(['Polska', '--period=2026-11', '--like=last', '--json'])->assertHeader('X-Crm-Exit', '1')->assertSee('no active fee-bearing abonament position');
-        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/rozliczenia")
+        $this->verb(['Polska', '--period=2026-11', '--like=last', '--json'])->assertHeader('X-Crm-Exit', '1')->assertSee('no active fee-bearing retainer position');
+        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/billing")
             ->assertInertia(fn (Assert $page) => $page->where('billing.invoice_drafts', null));
         $this->assertCount(0, $this->infaktPosts());
     }
@@ -515,12 +515,12 @@ final class InfaktInvoiceCopyTest extends TestCase
             Invoice::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'external_id' => $id, 'external_uuid' => $uuid, 'number' => $number, 'status' => 'sent', 'kind' => 'vat', 'net_price' => $net]);
         }
 
-        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/rozliczenia")
+        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/billing")
             ->assertInertia(fn (Assert $page) => $page->where('billing.invoice_drafts.groups.1.state', 'ready'));
-        $this->from("/clients/{$this->client->id}/rozliczenia")->post("/clients/{$this->client->id}/invoice-drafts", ['period' => '2026-11', 'group' => 2, 'like' => 'last'])
+        $this->from("/clients/{$this->client->id}/billing")->post("/clients/{$this->client->id}/invoice-drafts", ['period' => '2026-11', 'group' => 2, 'like' => 'last'])
             ->assertSessionHas('error');
 
-        $this->get("/clients/{$this->client->id}/rozliczenia")->assertInertia(fn (Assert $page) => $page
+        $this->get("/clients/{$this->client->id}/billing")->assertInertia(fn (Assert $page) => $page
             ->where('billing.invoice_drafts.groups.1.state', 'needs_source')
             ->where('billing.invoice_drafts.groups.1.reason', 'settles_advance')
             ->where('billing.invoice_drafts.groups.0.state', 'ready')
@@ -535,7 +535,7 @@ final class InfaktInvoiceCopyTest extends TestCase
         Invoice::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'external_id' => '20000501', 'external_uuid' => 'cuw-1510', 'number' => '15/10/2026', 'status' => 'sent', 'kind' => 'correction', 'net_price' => 300000]);
         Invoice::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'external_id' => '20000502', 'external_uuid' => 'site-1610', 'number' => '16/10/2026', 'status' => 'sent', 'kind' => 'vat', 'parent_external_id' => '20000777', 'net_price' => 150000]);
 
-        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/rozliczenia")->assertInertia(fn (Assert $page) => $page
+        $this->actingAs($this->owner)->get("/clients/{$this->client->id}/billing")->assertInertia(fn (Assert $page) => $page
             ->where('billing.invoice_drafts.groups.0.reason', 'not_vat')
             ->where('billing.invoice_drafts.groups.1.reason', 'settles_advance')
             ->where('billing.invoice_drafts.groups.1.state', 'needs_source'));

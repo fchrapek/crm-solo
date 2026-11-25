@@ -15,7 +15,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
-/** Ustawienia: client fields and text messages edited in the app, through the services the verbs use. */
+/** Settings: client fields and text messages edited in the app, through the services the verbs use. */
 final class MessageAndFieldSettingsTest extends TestCase
 {
     use RefreshDatabase;
@@ -32,7 +32,7 @@ final class MessageAndFieldSettingsTest extends TestCase
 
     public function test_the_fields_tab_lists_the_account_fields_and_a_new_one_is_added(): void
     {
-        $this->actingAs($this->user)->get('/settings/pola-klienta')->assertOk()
+        $this->actingAs($this->user)->get('/settings/general')->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('client_fields.0.key', 'visit_at')->where('client_fields.0.on_overview', true));
 
         $this->actingAs($this->user)->put('/settings/client-fields/visit_status', [
@@ -72,7 +72,7 @@ final class MessageAndFieldSettingsTest extends TestCase
         ])->assertSessionHasNoErrors();
         $this->assertNull($rule->fresh()->trigger_config['at'], 'an empty time clears it');
 
-        $this->actingAs($this->user)->get('/settings/sms')->assertOk()
+        $this->actingAs($this->user)->get('/settings/messages')->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('templates.0.rules', 1)->where('rules.0.offset_minutes', -2880)->where('sending.ascii', false));
 
         $this->actingAs($this->user)->delete("/settings/sms/templates/{$template->key}")->assertSessionHasErrors('form');

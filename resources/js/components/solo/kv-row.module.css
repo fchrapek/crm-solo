@@ -192,6 +192,11 @@
     text-align: right;
 }
 
+.row[data-layout='tile'] .value[data-figure] {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
 .row[data-layout='tile'] .value[data-tone='muted'] {
     color: var(--role-text-secondary);
     font-weight: 400;

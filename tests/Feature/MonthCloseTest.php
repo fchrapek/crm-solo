@@ -38,7 +38,7 @@ final class MonthCloseTest extends TestCase
             'owner' => true,
         ]);
 
-        // Maintenance site (abonament cohort) — full checklist.
+        // Maintenance site (retainer cohort) — full checklist.
         $this->site = $this->user->account->clients()->create([
             'name' => 'Roofs Ltd',
             'month_close_type' => MonthCloseRun::TYPE_MAINTENANCE,
@@ -596,7 +596,7 @@ final class MonthCloseTest extends TestCase
         $this->assertSame(['Agency X', 'Roofs Ltd', 'Still Owes August'], $names('2026-08'));
     }
 
-    public function test_month_close_lists_exactly_the_clients_the_klienci_note_counts(): void
+    public function test_month_close_lists_exactly_the_clients_the_clients_note_counts(): void
     {
         $this->travelTo(Carbon::parse('2026-10-20 10:00:00', 'UTC'));
         $account = $this->user->account;

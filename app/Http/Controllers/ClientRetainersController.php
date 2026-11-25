@@ -14,7 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 
-/** A client's abonament positions (`client_retainers`): the dialog's side of RetainerPositions. */
+/** A client's retainer positions (`client_retainers`): the dialog's side of RetainerPositions. */
 final class ClientRetainersController extends Controller
 {
     public function __construct(

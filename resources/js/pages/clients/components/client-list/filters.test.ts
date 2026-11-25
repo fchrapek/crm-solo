@@ -4,7 +4,7 @@ import { type CooperationCounts, cooperationOptions, listQuery, PHONE_STAGES } f
 const counts: CooperationCounts = { all: 10, retainer: 6, hourly: 3, project: 0, one_off: 0, none: 1 };
 
 describe('cooperationOptions', () => {
-    test('Wszyscy leads and equals the sum of the rows under it, the untyped clients included', () => {
+    test('All clients leads and equals the sum of the rows under it, the untyped clients included', () => {
         const options = cooperationOptions(counts, null);
 
         expect(options.map(({ value, count }) => [value, count])).toEqual([

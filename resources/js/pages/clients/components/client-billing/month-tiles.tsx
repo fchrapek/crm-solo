@@ -1,68 +1,100 @@
+import { MarkdownView } from '@/components/markdown-view';
 import { Chip } from '@/components/solo/chip';
 import { KvRow } from '@/components/solo/kv-row';
 import { Notice } from '@/components/solo/notice';
 import { SoloButton, SoloButtonLink, Stat } from '@/components/solo/primitives';
+import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
 import { Row } from '@/components/solo/row';
+import { useHelperAction } from '@/components/solo/shell/helper/actions';
 import { Tile, TileActions, TileHeader, TileInset, TileNote, TileRows } from '@/components/solo/tile';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Icon } from '@/components/ui/icon';
 import { InfoHint } from '@/components/ui/info-hint';
-import { monthGenitive, monthName, shortDate } from '@/lib/dates';
+import { capitalize, monthGenitive, monthName, shortDate } from '@/lib/dates';
 import clientReports from '@/routes/client-reports';
 import clientSummaryEmails from '@/routes/client-summary-emails';
 import monthClose from '@/routes/month-close';
 import { router } from '@inertiajs/react';
 import type { TFunction } from 'i18next';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { emailStep, type SummaryEmailState } from '../../../month-close/steps';
 import { SummaryEmailDialog } from '../../../month-close/summary-email-dialog';
 import { hoursNumber, hoursTerms } from '../client-list/format';
 import { nextPeriod } from '../client-overview/format';
+import { BaselineDialog } from '../details-tab/baseline-dialog';
 import { GenerateReportDialog } from '../generate-report-dialog';
 import { taskTip } from './billed-format';
 import { readOnlyLine } from './billed-time-dialog';
 import styles from './client-billing.module.css';
-import { balanceCaption, billedCaption, forfeitedOf, moneyOf, positionSummary, reportChip, reportState, usedSourceKey } from './format';
-import type { BilledTaskRow, BillingMonth, LedgerRow, RetainerBilling } from './types';
+import { billedCaption, moneyOf, monthNote, positionSummary, reportChip, reportState } from './format';
+import { balanceSub, billedSub, carriedCaption, carriedOf } from './month-figures';
+import type { BilledTaskRow, BillingMonth, ReportBaseline, RetainerBilling } from './types';
 
 const hours = (value: number, locale: string, signed = false) => `${hoursNumber(value, locale, signed)}\u00a0h`;
 
-/** Figma: the four number tiles of the month. A month outside the bank (no package) has no pool and no balance to show. */
+export interface StatTile {
+    label: string;
+    value: string;
+    tone: 'neutral' | 'over';
+    /** What the (i) beside the label says: the caption a tile used to carry under its figure. */
+    hint: string;
+}
+
+/** The month's number tiles, which add up to the balance; without a package, real and billed time only. */
+export function statTiles(month: BillingMonth, running: boolean, locale: string, t: TFunction): StatTile[] {
+    const figures = month.figures;
+    const billed = figures.billed ?? figures.used;
+
+    if (!figures.has_retainer) {
+        return [
+            {
+                label: t('Real time'),
+                value: hours(figures.real, locale),
+                tone: 'neutral',
+                hint: t(running ? 'stat_real_so_far' : 'stat_real_logged'),
+            },
+            { label: t('Billed time'), value: hours(billed, locale), tone: 'neutral', hint: billedCaption(figures, locale, t) },
+        ];
+    }
+    const carried = carriedOf(figures);
+
+    return [
+        {
+            label: t('Package'),
+            value: figures.contracted !== null ? `${hoursTerms(figures.contracted, locale)}\u00a0h` : '·',
+            tone: 'neutral',
+            hint: t('stat_per_month'),
+        },
+        {
+            label: t('From previous months'),
+            value: hours(carried, locale, true),
+            tone: carried < 0 ? 'over' : 'neutral',
+            hint: carriedCaption(figures, locale, t),
+        },
+        { label: t('Billed time'), value: hours(billed, locale), tone: 'neutral', hint: billedSub(figures, locale, t) },
+        {
+            label: figures.closed ? t('stat_balance_opening', { month: monthGenitive(nextPeriod(month.period), locale) }) : t('Balance'),
+            value: hours(figures.closing, locale, true),
+            tone: figures.closing < 0 ? 'over' : 'neutral',
+            hint: balanceSub(month.period, figures, locale, t),
+        },
+    ];
+}
+
+/** Figma 8C (1461:768): the number tiles, the figure alone with its caption behind the (i) by the label, opened by a tap on a phone. */
 export function MonthStats({ month, running, locale }: { month: BillingMonth; running: boolean; locale: string }) {
     const { t } = useTranslation();
-    const figures = month.figures;
+    const tiles = statTiles(month, running, locale, t);
 
     return (
-        <div className={styles.stats} data-count={figures.has_retainer ? 4 : 2}>
-            {figures.has_retainer && (
-                <Tile kind="plain" as="div">
-                    <Stat
-                        kind="tile"
-                        label={t('Package')}
-                        value={figures.contracted !== null ? `${hoursTerms(figures.contracted, locale)}\u00a0h` : '·'}
-                        sub={t('stat_per_month')}
-                    />
+        <div className={styles.stats} data-count={tiles.length}>
+            {tiles.map((tile) => (
+                <Tile key={tile.label} kind="plain" as="div">
+                    <Stat kind="tile" label={tile.label} value={tile.value} tone={tile.tone} hint={{ label: tile.label, text: tile.hint }} />
                 </Tile>
-            )}
-            <Tile kind="plain" as="div">
-                <Stat kind="tile" label={t('Real time')} value={hours(figures.real, locale)} sub={t(running ? 'stat_real_so_far' : 'stat_real_logged')} />
-            </Tile>
-            <Tile kind="plain" as="div">
-                <Stat kind="tile" label={t('Billed time')} value={hours(figures.billed ?? figures.used, locale)} sub={billedCaption(figures, locale, t)} />
-            </Tile>
-            {figures.has_retainer && (
-                <Tile kind="plain" as="div">
-                    <Stat
-                        kind="tile"
-                        label={t(running ? 'stat_balance_today' : 'stat_balance_after')}
-                        value={hours(figures.closing, locale, true)}
-                        tone={figures.closing < 0 ? 'over' : 'neutral'}
-                        sub={balanceCaption(figures, locale, t)}
-                    />
-                </Tile>
-            )}
+            ))}
         </div>
     );
 }
@@ -71,7 +103,7 @@ export function taskTitle(task: Pick<BilledTaskRow, 'task'>, t: (key: string) =>
     return task.task !== '' ? task.task : t('Time without a task');
 }
 
-/** Figma: Zadania września. The month's tasks in both values; Zmień opens the task's billed time, and a month that cannot change says what locks it. */
+/** Figma: Tasks of September, the month's tasks in both values, with the way back to a draft when the report locks them. */
 export function MonthTasks({
     month,
     locale,
@@ -81,7 +113,7 @@ export function MonthTasks({
     month: BillingMonth;
     locale: string;
     onChange: (task: BilledTaskRow) => void;
-    /** The existing reopen of what locks the month, when the page has one to offer. */
+    /** Back to a draft for the report that locks the month, when the page has one to offer. */
     onReopen?: () => void;
 }) {
     const { t } = useTranslation();
@@ -146,12 +178,12 @@ export function MonthTasks({
                     <Row title={t('Total')} time={both(figures.real, figures.billed ?? figures.used)} className={styles.total} />
                 </TileRows>
             )}
-            {!editable && (
+            {!editable && figures.closure_id === null && (
                 <TileInset className={styles.locked}>
                     <Notice kind="lock">{readOnlyLine(figures, locale, t)}</Notice>
                     {onReopen !== undefined && (
                         <SoloButton variant="secondary" size="control" onClick={onReopen}>
-                            {figures.closure_id !== null ? t('Reopen this month') : t('Reopen the report')}
+                            {t('Reopen the report')}
                         </SoloButton>
                     )}
                 </TileInset>
@@ -160,7 +192,7 @@ export function MonthTasks({
     );
 }
 
-/** Figma: Raport, the month's report in its states: to generate, a draft, to recalculate, ready to send, sent. */
+/** Figma: Report, the month's report in its states: to generate, a draft, to recalculate, ready to send, sent. */
 export function ReportTile({ clientId, month, running, locale }: { clientId: number; month: BillingMonth; running: boolean; locale: string }) {
     const { t } = useTranslation();
     const [generating, setGenerating] = useState(false);
@@ -171,6 +203,13 @@ export function ReportTile({ clientId, month, running, locale }: { clientId: num
     const chip = reportChip(month, running, locale, t);
     const name = monthName(month.period, locale);
     const open = report !== null ? clientReports.edit([clientId, report.id]).url : '';
+    const generates = state === 'running' || state === 'to_generate';
+    useHelperAction(
+        'client-report',
+        useCallback(() => {
+            if (generates) setGenerating(true);
+        }, [generates]),
+    );
 
     function regenerate() {
         if (report === null) {
@@ -210,8 +249,13 @@ export function ReportTile({ clientId, month, running, locale }: { clientId: num
             {state === 'stale' && <Notice kind="warn">{t('report_tile_stale')}</Notice>}
             {state === 'finalized' && <Notice kind="lock">{t('report_tile_finalized')}</Notice>}
             <TileActions>
-                {(state === 'running' || state === 'to_generate') && (
-                    <SoloButton variant={state === 'running' ? 'secondary' : 'primary'} size="control" aria-haspopup="dialog" onClick={() => setGenerating(true)}>
+                {generates && (
+                    <SoloButton
+                        variant={state === 'running' ? 'secondary' : 'primary'}
+                        size="control"
+                        aria-haspopup="dialog"
+                        onClick={() => setGenerating(true)}
+                    >
                         {t('Generate a report')}
                     </SoloButton>
                 )}
@@ -251,7 +295,13 @@ export function ReportTile({ clientId, month, running, locale }: { clientId: num
                     </SoloButtonLink>
                 )}
             </TileActions>
-            <GenerateReportDialog open={generating} onOpenChange={setGenerating} clientId={clientId} composers={month.composers} period={month.period} />
+            <GenerateReportDialog
+                open={generating}
+                onOpenChange={setGenerating}
+                clientId={clientId}
+                composers={month.composers}
+                period={month.period}
+            />
             <ConfirmDialog
                 open={confirm === 'regenerate'}
                 onOpenChange={(next) => !next && setConfirm(null)}
@@ -289,7 +339,14 @@ export function emailLook(state: SummaryEmailState | undefined, due: boolean, lo
     }
 
     const step = emailStep(state, locale, t);
-    const notice = status === 'test_sent' ? t('email_notice_test') : status === 'failed' ? t('email_notice_failed') : status === 'unconfirmed' ? t('email_notice_unconfirmed') : undefined;
+    const notice =
+        status === 'test_sent'
+            ? t('email_notice_test')
+            : status === 'failed'
+              ? t('email_notice_failed')
+              : status === 'unconfirmed'
+                ? t('email_notice_unconfirmed')
+                : undefined;
 
     return {
         chip: { status: status === 'sent' ? 'done' : step.tone !== undefined ? 'waiting' : 'open', label: step.meta },
@@ -324,7 +381,11 @@ export function EmailTile({
 
     const start = () =>
         state?.status === undefined || state.status === null
-            ? router.post(clientSummaryEmails.store({ client: clientId, period }).url, {}, { preserveScroll: true, preserveState: true, onSuccess: () => setOpen(true) })
+            ? router.post(
+                  clientSummaryEmails.store({ client: clientId, period }).url,
+                  {},
+                  { preserveScroll: true, preserveState: true, onSuccess: () => setOpen(true) },
+              )
             : setOpen(true);
 
     return (
@@ -349,106 +410,171 @@ export function EmailTile({
     );
 }
 
-/** Figma: Miesiąc. The month's lines of the hours bank, then closing it, reopening it and the way to its checklist. */
-export function MonthTile({
+/** The month's settlement as its chip reads: closed, in progress, or ended and still open; null for a month outside settlement. */
+export function monthChip(
+    month: Pick<BillingMonth, 'settlement'>,
+    running: boolean,
+    t: TFunction,
+): { status: 'done' | 'open'; label: string } | null {
+    if (month.settlement.state === 'closed') {
+        return { status: 'done', label: t('ledger_closed_undated') };
+    }
+    if (running) {
+        return { status: 'open', label: t('month_running') };
+    }
+
+    return month.settlement.state === 'open' ? { status: 'open', label: t('ledger_open') } : null;
+}
+
+/** Figma 8C: Month status, how the month stands under its name with its close, reopen and checklist. */
+export function MonthStatus({
     clientId,
     month,
-    row,
     running,
-    behind,
+    current,
+    earlier,
     locale,
     onClose,
     onReopen,
 }: {
     clientId: number;
     month: BillingMonth;
-    /** The month's row of the bank when the loaded pages hold it: it says whether the month owes a close and can reopen. */
-    row: LedgerRow | undefined;
     running: boolean;
-    /** The month still open behind the one in progress. */
-    behind: string | null;
+    /** The month in progress. */
+    current: string;
+    /** An earlier month still open, which closes first. */
+    earlier: string | null;
     locale: string;
     onClose: () => void;
     onReopen: () => void;
 }) {
     const { t } = useTranslation();
-    const figures = month.figures;
-    const forfeited = forfeitedOf(figures);
-    const source = usedSourceKey(month);
-    const closable = !running && !figures.closed && row?.settlement === 'open';
-    const reopenable = figures.closed && row !== undefined && row.closure_id !== null;
-    const chip = figures.closed
-        ? { status: 'done' as const, label: figures.closed_on !== null ? t('ledger_closed', { date: shortDate(figures.closed_on, locale) }) : t('ledger_closed_undated') }
-        : running
-          ? { status: 'open' as const, label: t('month_running') }
-          : row?.settlement === 'open'
-            ? { status: 'open' as const, label: t('ledger_open') }
-            : null;
+    // Closing and reopening follow the month's settlement, not its package: a month can owe a close without a retainer.
+    const closable = !running && month.settlement.state === 'open';
+    const reopenable = month.settlement.closure_id !== null;
+    const chip = monthChip(month, running, t);
     const checklist = month.checklist;
+    const notice =
+        earlier === null
+            ? null
+            : running
+              ? t('month_tile_close_behind', { month: monthName(earlier, locale) })
+              : closable
+                ? t('month_close_earlier_first', {
+                      earlier: capitalize(monthName(earlier, locale)),
+                      earlierName: monthName(earlier, locale),
+                      month: monthName(month.period, locale),
+                  })
+                : null;
 
     return (
-        <Tile kind="plain" className={styles.fill}>
-            <TileHeader label={t('Month')} end={chip !== null ? <Chip status={chip.status}>{chip.label}</Chip> : undefined} />
-            {figures.has_retainer ? (
-                <dl className={styles.ledger}>
-                    <KvRow layout="tile" label={t('Package')}>
-                        {hours(figures.contracted ?? 0, locale, true)}
-                    </KvRow>
-                    <KvRow layout="tile" label={t('From previous months')} tone={figures.opening < 0 ? 'over' : undefined}>
-                        {hours(figures.opening, locale, true)}
-                    </KvRow>
-                    {forfeited > 0 && (
-                        <KvRow layout="tile" label={t('Over the rollover cap')}>
-                            {hours(-forfeited, locale, true)}
-                        </KvRow>
-                    )}
-                    <KvRow layout="tile" label={source !== null ? `${t('Worked')} · ${t(source)}` : t('Worked')}>
-                        {hours(-figures.used, locale, true)}
-                    </KvRow>
-                    <KvRow
-                        layout="tile"
-                        total
-                        label={running ? t('stat_balance_today') : t('Balance → opening of {{month}}', { month: monthGenitive(nextPeriod(month.period), locale) })}
-                        tone={figures.closing < 0 ? 'over' : undefined}
+        <div className={styles.status}>
+            <div className={styles.statusLine}>
+                <p className={styles.statusNote}>{monthNote(month, current, locale, t)}</p>
+                {chip !== null && <Chip status={chip.status}>{chip.label}</Chip>}
+                {closable && (
+                    <SoloButton
+                        variant="secondary"
+                        size="control"
+                        aria-haspopup="dialog"
+                        disabled={notice !== null}
+                        onClick={onClose}
+                        className={styles.statusButton}
                     >
-                        {hours(figures.closing, locale, true)}
-                    </KvRow>
-                </dl>
+                        {t('Close the month')}
+                    </SoloButton>
+                )}
+                {reopenable && (
+                    <SoloButton variant="secondary" size="control" aria-haspopup="dialog" onClick={onReopen} className={styles.statusButton}>
+                        {t('Reopen the month')}
+                    </SoloButton>
+                )}
+                {checklist !== null && (
+                    <SoloButtonLink
+                        variant="quiet"
+                        size="control"
+                        href={monthClose.show(clientId, { query: { period: month.period } }).url}
+                        className={styles.statusButton}
+                    >
+                        {t('checklist_progress', { done: checklist.done, total: checklist.total })}
+                    </SoloButtonLink>
+                )}
+            </div>
+            {notice !== null && <Notice kind="warn">{notice}</Notice>}
+        </div>
+    );
+}
+
+/** Figma 11A: Report baseline, one row per section, read whole in Show and changed in Edit. */
+export function BaselineTile({ clientId, baseline }: { clientId: number; baseline: ReportBaseline }) {
+    const { t } = useTranslation();
+    const [dialog, setDialog] = useState<'show' | 'edit' | null>(null);
+    const written = baseline.markdown !== null && baseline.markdown.trim() !== '';
+
+    return (
+        <Tile kind="plain">
+            <TileHeader
+                label={t('Report baseline')}
+                count={written ? baseline.sections.length : undefined}
+                end={
+                    written ? (
+                        <SoloButton variant="secondary" size="control" aria-haspopup="dialog" onClick={() => setDialog('show')}>
+                            {t('Show')}
+                        </SoloButton>
+                    ) : undefined
+                }
+            />
+            {written ? (
+                <ul className={styles.baselineRows} data-fill="">
+                    {baseline.sections.map((section, index) => (
+                        <Row
+                            key={index}
+                            rule={index > 0}
+                            wrap
+                            title={section.title ?? t('Without a heading')}
+                            meta={section.items > 0 ? t('baseline_items', { count: section.items }) : undefined}
+                        />
+                    ))}
+                </ul>
             ) : (
-                <TileNote>{t('No retainer, so every logged hour counts.')}</TileNote>
+                <TileNote>{t('Not set')}</TileNote>
             )}
-            {running && figures.has_retainer && (
-                <TileNote>
-                    {behind !== null
-                        ? t('month_tile_close_behind', { month: monthName(behind, locale) })
-                        : t('month_tile_running')}
-                </TileNote>
-            )}
-            {figures.closed && <TileNote>{t('month_tile_frozen')}</TileNote>}
-            {(closable || reopenable || checklist !== null) && (
-                <TileActions className={styles.atEnd}>
-                    {closable && (
-                        <SoloButton variant="secondary" size="control" aria-haspopup="dialog" onClick={onClose}>
-                            {t('Close the month')}
+            <TileActions>
+                <SoloButton variant="quiet" size="control" aria-haspopup="dialog" onClick={() => setDialog('edit')}>
+                    {t('Edit')}
+                </SoloButton>
+            </TileActions>
+            <ResponsiveDialog
+                open={dialog === 'show'}
+                onOpenChange={(open) => setDialog(open ? 'show' : null)}
+                title={t('Report baseline')}
+                onSubmit={(event) => event.preventDefault()}
+                actions={(size) => (
+                    <>
+                        <SoloButton variant="quiet" size={size === 'touch' ? 'touch' : 'control'} onClick={() => setDialog('edit')}>
+                            {t('Edit')}
                         </SoloButton>
-                    )}
-                    {reopenable && (
-                        <SoloButton variant="secondary" size="control" aria-haspopup="dialog" onClick={onReopen}>
-                            {t('Reopen the month')}
+                        <SoloButton variant="ink" size={size === 'touch' ? 'touch' : 'control'} onClick={() => setDialog(null)}>
+                            {t('Close')}
                         </SoloButton>
-                    )}
-                    {checklist !== null && (
-                        <SoloButtonLink variant="quiet" size="control" href={monthClose.show(clientId, { query: { period: month.period } }).url}>
-                            {t('checklist_progress', { done: checklist.done, total: checklist.total })}
-                        </SoloButtonLink>
-                    )}
-                </TileActions>
-            )}
+                    </>
+                )}
+            >
+                <div className={styles.baselineText}>
+                    <MarkdownView>{baseline.markdown ?? ''}</MarkdownView>
+                </div>
+            </ResponsiveDialog>
+            <BaselineDialog
+                clientId={clientId}
+                baseline={baseline.markdown}
+                open={dialog === 'edit'}
+                onOpenChange={(open) => setDialog(open ? 'edit' : null)}
+            />
         </Tile>
     );
 }
 
-/** Figma: Abonament. The positions in force today, what happens past the package and since when; Zmień opens the retainer dialog. */
+/** Figma: Retainer. The positions in force today, what happens past the package and since when; Change opens the retainer dialog. */
 export function RetainerTile({ retainer, locale, onChange }: { retainer: RetainerBilling['retainer']; locale: string; onChange: () => void }) {
     const { t } = useTranslation();
     const several = retainer.active.length > 1;
@@ -472,7 +598,7 @@ export function RetainerTile({ retainer, locale, onChange }: { retainer: Retaine
             ) : (
                 <dl className={styles.ledger}>
                     {retainer.active.map((position) => (
-                        <KvRow key={position.id} layout="tile" label={positionSummary(position, several, locale, t)}>
+                        <KvRow key={position.id} layout="tile" figure label={positionSummary(position, several, locale, t)}>
                             {position.monthly_fee !== null
                                 ? t('{{money}} net / mo', { money: moneyOf(position.monthly_fee, position.currency, locale, true) })
                                 : '·'}

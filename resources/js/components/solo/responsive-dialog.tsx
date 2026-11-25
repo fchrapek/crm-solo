@@ -10,7 +10,7 @@ interface ResponsiveDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     title: ReactNode;
-    /** A shorter title for the sheet header, where Anuluj and the submit share the line. */
+    /** A shorter title for the sheet header, where Cancel and the submit share the line. */
     sheetTitle?: ReactNode;
     description?: ReactNode;
     onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -18,7 +18,7 @@ interface ResponsiveDialogProps {
     actions: (size: ResponsiveDialogSize) => ReactNode;
     /** False keeps the dialog on phones too, for a caller outside the Solo pages. */
     sheet?: boolean;
-    /** save: the sheet puts Anuluj and the submit in its header instead of the footer (Figma 347:5096). */
+    /** save: the sheet puts Cancel and the submit in its header instead of the footer (Figma 347:5096). */
     sheetAction?: 'close' | 'save';
     saveLabel?: ReactNode;
     saving?: boolean;

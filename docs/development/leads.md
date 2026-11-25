@@ -88,9 +88,32 @@ Routes: `resource('leads')` without `show`, plus `PATCH /leads/{lead}/stage`,
 
 ## Capture paths
 
+- **Website forms** (`POST /intake/{key}`, any account): a site posts JSON
+  and the form row decides the account, pipeline and source. The lead's
+  `external_ref` is `form-{form id}-{idempotency key}`; the note holds the
+  message, language, page and form name in Polish, and ends with
+  `Zgoda marketingowa: nie zbierana`. A browser post needs a listed Origin
+  and, outside local and testing, Turnstile with the form's own secret. A
+  replay of the same key answers 200, the same key with another payload 409,
+  and a filled honeypot (`website`) 201 with nothing stored. A repeat email
+  makes a new lead. A server can post too, with `Authorization: Bearer` and
+  the form's webhook secret (`intake-form:webhook-secret`); keys beyond the
+  known fields land in the note under `Dodatkowe pola` (the note's labels are lang keys read in Polish, `FormIntake::NOTE_LOCALE`, whatever the visitor's or the owner's locale). Each new lead queues
+  a notice to the form's notify-to address through the account's own sender
+  (`lead-intake:notify-pending` every 5 minutes, `lead-intake:status` for the
+  counts). The owner manages forms and the sender in Ustawienia, Formularze
+  (`/settings/forms`): create and edit, the snippet, the Turnstile and
+  webhook secrets (set, replace, clear; the webhook secret shows once), the
+  sender with a write-only password and a throttled test, the notice counts
+  and Ponów nieudane per form. It goes through the same services as the
+  commands (`IntakeForms`, `IntakeFormSecrets`, `AccountSenders`,
+  `SenderTests`, `LeadNotices`); agents never write a secret. Setup and
+  limits: `setup.md`, Website forms; models: `data-models.md`; server
+  commands: `hosting.md`, Mail.
+
 - The form, `crm lead-capture` and the MCP `lead_capture` tool (full model
   validation). The verb and the tool go through `App\Services\Leads\LeadCapture`.
-- The closed-mode splash (`/czesc`, source `waitlist`) through the same
+- The closed-mode splash (`/waitlist`, source `waitlist`) through the same
   service, deduped on email per account. Setup: `setup.md`, Closed mode.
 - `php artisan kiwwwi:sync-leads`, every 15 minutes when
   `KIWWWI_LEADS_*` is configured: pulls form submissions from a WordPress

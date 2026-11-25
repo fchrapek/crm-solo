@@ -127,8 +127,8 @@ function LinkDialog({ taskId, open, onOpenChange }: { taskId: number; open: bool
 type Removal = { kind: 'file'; item: ResourceFile } | { kind: 'link'; item: ResourceLink };
 
 /**
- * Figma: Zadanie, the Zasoby tile (1094:40618), Dodaj zasób (1095:50622) and Dodaj link (1095:50855). Files, images
- * and links as rows; Dodaj is a menu from 768 px and a sheet below it. Uploads and links are the CRM's on a card too;
+ * Figma: Task, the Resources tile (1094:40618), Add a resource (1095:50622) and Add a link (1095:50855). Files, images
+ * and links as rows; Add is a menu from 768 px and a sheet below it. Uploads and links are the CRM's on a card too;
  * files pulled from the card and its link attachments are read only.
  */
 export function ResourcesSection({ taskId, resources }: { taskId: number; resources: TaskResources }) {

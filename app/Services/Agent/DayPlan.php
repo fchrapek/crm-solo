@@ -6,6 +6,7 @@ namespace App\Services\Agent;
 
 use App\Models\Task;
 use App\Services\Day\DayPlanner;
+use App\Services\Day\PlanBusy;
 use App\Support\LocalCalendar;
 use Carbon\CarbonImmutable;
 use Illuminate\Validation\ValidationException;
@@ -24,12 +25,16 @@ final class DayPlan
 
     /**
      * From today to the end of next week, named (today, tomorrow) or as YYYY-MM-DD; today when nothing is given.
+     * `$existing` reads a day an existing pick sits on: any day from today, as a moved pick may be further ahead.
      *
      * @throws AgentRefusal
      */
-    public function day(?string $value): CarbonImmutable
+    public function day(?string $value, bool $existing = false): CarbonImmutable
     {
         $date = $value === null || mb_trim($value) === '' ? LocalCalendar::today() : AgentDates::day($value, 'day');
+        if ($existing && $date->toDateString() >= LocalCalendar::today()->toDateString()) {
+            return $date;
+        }
         if (! $this->planner->isPlannable($date)) {
             throw AgentRefusal::invalid('A plan is for today up to the end of next week.', ['field' => 'day', 'last' => $this->planner->lastPlannableDay()->toDateString()]);
         }
@@ -58,6 +63,7 @@ final class DayPlan
             },
             'closed' => $this->planner->isClosed($accountId, $date),
             'max_picks' => DayPlanner::MAX_PICKS,
+            'warning' => $picks->count() > DayPlanner::MAX_PICKS ? 'The day holds '.$picks->count().' picks, more than '.DayPlanner::MAX_PICKS.'.' : null,
             'picks' => $picks->map(fn (array $pick): array => [
                 'task_id' => $pick['task_id'],
                 'name' => $pick['name'],
@@ -81,6 +87,8 @@ final class DayPlan
 
         try {
             $this->planner->pick($accountId, $date, (int) $picked->id);
+        } catch (PlanBusy $e) {
+            throw new AgentRefusal(AgentRefusal::REFUSED, (string) collect($e->errors())->flatten()->first(), ['retry' => true, 'plan' => $this->read($accountId, $date)]);
         } catch (ValidationException $e) {
             throw AgentRefusal::invalid((string) collect($e->errors())->flatten()->first(), ['plan' => $this->read($accountId, $date)]);
         }
@@ -99,6 +107,8 @@ final class DayPlan
 
         try {
             $this->planner->unpick($accountId, $pick);
+        } catch (PlanBusy $e) {
+            throw new AgentRefusal(AgentRefusal::REFUSED, (string) collect($e->errors())->flatten()->first(), ['retry' => true, 'plan' => $this->read($accountId, $date)]);
         } catch (ValidationException $e) {
             throw AgentRefusal::invalid((string) collect($e->errors())->flatten()->first(), ['plan' => $this->read($accountId, $date)]);
         }

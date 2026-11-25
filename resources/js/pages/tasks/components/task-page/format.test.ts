@@ -111,7 +111,7 @@ describe('labels', () => {
         expect(dueText('2027-01-15', '2026-10-08', 'pl', t)).toBe('do 15.01.2027');
     });
 
-    test('Kopiuj dla agenta sends the agent to crm task in both languages', () => {
+    test('Copy for the agent sends the agent to crm task in both languages', () => {
         expect(agentPrompt(36, t)).toBe('Pracuj nad zadaniem 36 z CRM Solo (crm task 36)');
         expect(agentPrompt(36, tEn)).toBe('Work on task 36 from CRM Solo (crm task 36)');
     });

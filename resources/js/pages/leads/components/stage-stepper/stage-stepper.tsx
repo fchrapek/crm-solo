@@ -13,7 +13,7 @@ interface Props {
 }
 
 /**
- * Figma: Options (track), Etap. The pipeline as a row of pills: moving stage is the primary verb on a lead, so it
+ * Figma: Options (track), Stage. The pipeline as a row of pills: moving stage is the primary verb on a lead, so it
  * stands in the head, in the board's order.
  */
 export function StageStepper({ stages, current, stageLabels, onSelect, disabled }: Props) {

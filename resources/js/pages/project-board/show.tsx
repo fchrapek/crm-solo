@@ -64,7 +64,7 @@ interface ProjectPageProps {
 type Dialog = 'edit' | 'connect' | 'mapping' | 'disconnect' | 'delete' | null;
 
 /**
- * Figma: Projekt (1091:23179, phone 1091:23482). The Zadania groups for one project; beside them the project's
+ * Figma: Project (1091:23179, phone 1091:23482). The Tasks groups for one project; beside them the project's
  * facts and its repositories. The client's other projects are the page's pills.
  */
 export default function ProjectPage() {
@@ -73,7 +73,7 @@ export default function ProjectPage() {
     const [dialog, setDialog] = useState<Dialog>(null);
     const [creating, setCreating] = useState(false);
     const canCreate = tasks.projects.length > 0;
-    const zadania = clients.show({ client: client.id, tab: 'zadania' }).url;
+    const tasksHref = clients.show({ client: client.id, tab: 'tasks' }).url;
     const now = useNow(15_000);
     const agent = project.live_agent;
     const agentMinutes = agent !== null && now !== null ? minutesSince(agent.started_at, now) : null;
@@ -105,7 +105,7 @@ export default function ProjectPage() {
                     tasks={tasks}
                     creating={creating}
                     onCreatingChange={setCreating}
-                    partHref={(part) => projectBoard.show({ client: client.id, project: project.id }, { query: { wszystkie: part } }).url}
+                    partHref={(part) => projectBoard.show({ client: client.id, project: project.id }, { query: { expand: part } }).url}
                     side={
                         <>
                             <ProjectTile project={project} onEdit={() => setDialog('edit')} />
@@ -152,7 +152,7 @@ export default function ProjectPage() {
                 description={t('All tasks in this project will be deleted permanently. This cannot be undone.')}
                 confirmLabel={t('Delete project')}
                 variant="destructive"
-                onConfirm={() => router.delete(`/projects/${project.id}`, { onSuccess: () => router.visit(zadania) })}
+                onConfirm={() => router.delete(`/projects/${project.id}`, { onSuccess: () => router.visit(tasksHref) })}
             />
         </SoloSurface>
     );
@@ -161,8 +161,8 @@ export default function ProjectPage() {
 ProjectPage.place = projectPlace satisfies PlaceResolver<ProjectPageProps>;
 
 /**
- * From 768 px: Synchronizuj, the "more" menu and Nowe zadanie. A phone has Nowe zadanie as its main button, so its
- * "more" menu holds Edytuj, Synchronizuj and the rest.
+ * From 768 px: Synchronize, the "more" menu and New task. A phone has New task as its main button, so its
+ * "more" menu holds Edit project, Sync Now and the rest.
  */
 function ProjectActions({
     project,
@@ -239,7 +239,7 @@ function syncedText(synced: Date, locale: string, t: ReturnType<typeof useTransl
     return sameDay ? t('today {{time}}', { time }) : `${synced.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' })} ${time}`;
 }
 
-/** Figma: Tile · Projekt. The project's facts: its board, the last sync, this month's hours, the month-close flag and the backup folder. */
+/** Figma: Tile · Project. The project's facts: its board, the last sync, this month's hours, the month-close flag and the backup folder. */
 function ProjectTile({ project, onEdit }: { project: ProjectData; onEdit: () => void }) {
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);
@@ -287,7 +287,7 @@ function ProjectTile({ project, onEdit }: { project: ProjectData; onEdit: () => 
     );
 }
 
-/** Figma: Tile / list · Repozytoria. The working copies an agent reads from: add, edit and unlink, with the way to the remote. */
+/** Figma: Tile / list · Repositories. The working copies an agent reads from: add, edit and unlink, with the way to the remote. */
 function RepositoriesTile({ projectId, repositories }: { projectId: number; repositories: RepositoryDialogValues[] }) {
     const { t } = useTranslation();
     const [editing, setEditing] = useState<RepositoryDialogValues | 'new' | null>(null);
@@ -335,9 +335,13 @@ function RepositoriesTile({ projectId, repositories }: { projectId: number; repo
                             )}
                             {repo.remote_url && (
                                 <KvRow layout="tile" label={t('Remote URL')}>
-                                    <a href={repo.remote_url} target="_blank" rel="noopener noreferrer">
-                                        {remoteName(repo.remote_url)} ↗
-                                    </a>
+                                    {/^https?:\/\//i.test(repo.remote_url) ? (
+                                        <a href={repo.remote_url} target="_blank" rel="noopener noreferrer">
+                                            {remoteName(repo.remote_url)} ↗
+                                        </a>
+                                    ) : (
+                                        <span title={repo.remote_url}>{remoteName(repo.remote_url)}</span>
+                                    )}
                                 </KvRow>
                             )}
                         </dl>

@@ -12,8 +12,8 @@
   font-size: var(--font-size-base);
   box-shadow: var(--shadow-xs);
   transition-property: color, box-shadow;
-  transition-duration: var(--duration-150);
-  transition-timing-function: var(--ease-in-out);
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-standard);
   outline: none;
   resize: vertical;
 }

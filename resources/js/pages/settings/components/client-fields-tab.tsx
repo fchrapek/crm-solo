@@ -27,7 +27,7 @@ export const FIELD_TYPE_LABEL: Record<FieldType, string> = {
 
 const hasOptions = (type: FieldType) => type === 'select' || type === 'multiselect';
 
-/** Figma: Ustawienia · Pola klienta (1091:12988, phone 1091:13262). The built-in fields, the account's fields, then the archived ones. */
+/** Figma: Settings · Ogólne (1557:345025), under Moduły. The built-in fields, the account's fields, then the archived ones. */
 export function ClientFieldsTab({ fields, reserved }: { fields: FieldDefinition[]; reserved: string[] }) {
     const { t } = useTranslation();
     const [editing, setEditing] = useState<FieldDefinition | 'new' | null>(null);
@@ -52,7 +52,7 @@ export function ClientFieldsTab({ fields, reserved }: { fields: FieldDefinition[
 
     return (
         <>
-            <Tile kind="list">
+            <Tile kind="list" id="client-fields">
                 <TileHeader label={t('Built in')} count={2} end={<InfoHint>{t('Every client has these two; they cannot be removed.')}</InfoHint>} />
                 <TileRows>
                     <Row rule={false} title={t('Assignee')} meta={<InfoHint>{t('One user of the account per client.')}</InfoHint>} />
@@ -91,6 +91,18 @@ export function ClientFieldsTab({ fields, reserved }: { fields: FieldDefinition[
     );
 }
 
+/** Figma: Settings · Ogólne, Jak działają pola. What a field is, beside the users. */
+export function FieldsHelpTile() {
+    const { t } = useTranslation();
+
+    return (
+        <Tile kind="plain">
+            <TileHeader label={t('How fields work')} />
+            <TileNote>{t('fields_help_note')}</TileNote>
+        </Tile>
+    );
+}
+
 type Draft = {
     label: string;
     type: FieldType;
@@ -103,7 +115,7 @@ const BLANK_OPTION = { key: '', label: '', stored: false };
 const EMPTY: Draft = { label: '', type: 'select', options: [BLANK_OPTION], required: false, on_overview: false };
 
 /**
- * Figma: Dialog / Edytuj pole (598:52), sheet 598:18709. Keys come from the labels and stay hidden:
+ * Figma: Dialog / Edit field (598:52), sheet 598:18709. Keys come from the labels and stay hidden:
  * the field's and each option's key are fixed once saved, their labels change.
  */
 function FieldDialog({ field, taken, onClose }: { field: FieldDefinition | 'new' | null; taken: string[]; onClose: () => void }) {
@@ -283,7 +295,7 @@ function FieldDialog({ field, taken, onClose }: { field: FieldDefinition | 'new'
                             {!option.stored && (
                                 <IconButton
                                     icon="close"
-                                    size="sm"
+                                    look="quiet"
                                     label={t('Remove option')}
                                     onClick={() => setOptions(draft.options.filter((_, at) => at !== index))}
                                     disabled={processing}

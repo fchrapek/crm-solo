@@ -51,7 +51,7 @@ final class ClientTasksTest extends TestCase
     public function test_only_the_tasks_tab_computes_the_lanes(): void
     {
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/zadania")
+            ->get("/clients/{$this->client->id}/tasks")
             ->assertInertia(fn (Assert $page) => $page
                 ->component('clients/show')
                 ->where('tasks.expanded', null)
@@ -62,7 +62,7 @@ final class ClientTasksTest extends TestCase
             );
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/przeglad")
+            ->get("/clients/{$this->client->id}/overview")
             ->assertInertia(fn (Assert $page) => $page->missing('tasks'));
     }
 
@@ -104,16 +104,16 @@ final class ClientTasksTest extends TestCase
         }
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/zadania?wszystkie=Backlog")
+            ->get("/clients/{$this->client->id}/tasks?expand=Backlog")
             ->assertInertia(fn (Assert $page) => $page->where('tasks.expanded', null)->has('tasks.lanes.0.rows', 5));
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/zadania?wszystkie[]=doing")
+            ->get("/clients/{$this->client->id}/tasks?expand[]=doing")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page->where('tasks.expanded', null));
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/zadania?wszystkie=doing")
+            ->get("/clients/{$this->client->id}/tasks?expand=doing")
             ->assertInertia(fn (Assert $page) => $page->where('tasks.expanded', 'doing')->has('tasks.lanes.0.rows', 7));
     }
 
@@ -131,10 +131,25 @@ final class ClientTasksTest extends TestCase
         $lanes = $this->lanes();
 
         $this->assertSame(['Open'], array_column($lanes[0]['rows'], 'name'));
-        $this->assertSame([1, 0, 0], array_column($lanes, 'count'));
+        $this->assertSame([1, 0, 0, 1], array_column($lanes, 'count'));
     }
 
-    public function test_a_task_without_a_list_waits_in_to_do_and_only_backlog_stays_out(): void
+    public function test_backlog_and_custom_lists_wait_closed_in_a_fourth_group_that_opens_whole(): void
+    {
+        $this->assertCount(3, $this->lanes());
+
+        $this->task('In backlog', 'Backlog');
+        $this->task('Waiting on the client', 'Klient czeka');
+
+        $closed = $this->lanes()[3];
+        $this->assertSame(['other', 2, []], [$closed['key'], $closed['count'], $closed['rows']]);
+
+        $open = app(ClientTasksQuery::class)->props($this->client->fresh(), 'other')['tasks'];
+        $this->assertSame('other', $open['expanded']);
+        $this->assertEqualsCanonicalizing(['In backlog', 'Waiting on the client'], array_column($open['lanes'][3]['rows'], 'name'));
+    }
+
+    public function test_a_task_without_a_list_waits_in_to_do_and_backlog_in_the_other_lists(): void
     {
         $this->task('Listed', 'To-Do', ['position' => 1]);
         Task::create(['project_id' => $this->project->id, 'name' => 'Unlisted', 'source' => 'manual', 'position' => 2]);
@@ -147,10 +162,10 @@ final class ClientTasksTest extends TestCase
         $lanes = $this->lanes();
 
         $this->assertSame(['Listed', 'Unlisted'], array_column($lanes[2]['rows'], 'name'));
-        $this->assertSame([1, 1, 2], array_column($lanes, 'count'));
+        $this->assertSame([1, 1, 2, 2], array_column($lanes, 'count'));
     }
 
-    public function test_the_tab_badge_counts_exactly_what_the_lanes_show_so_backlog_and_other_lists_stay_out(): void
+    public function test_the_tab_badge_counts_every_open_task_the_groups_show(): void
     {
         $this->task('Listed', 'To-Do');
         Task::create(['project_id' => $this->project->id, 'name' => 'Unlisted', 'source' => 'manual']);
@@ -162,11 +177,11 @@ final class ClientTasksTest extends TestCase
         $this->task('Waiting on the client', 'Klient czeka');
         $this->task('Ticked', 'Doing', ['finished_at' => now()]);
 
-        foreach (['zadania', 'przeglad', 'dane'] as $tab) {
+        foreach (['tasks', 'overview', 'details'] as $tab) {
             $props = $this->actingAs($this->user)->get("/clients/{$this->client->id}/{$tab}")->viewData('page')['props'];
-            $this->assertSame(4, $props['client']['open_tasks_count'], $tab);
-            if ($tab === 'zadania') {
-                $this->assertSame(4, array_sum(array_column($props['tasks']['lanes'], 'count')));
+            $this->assertSame(7, $props['client']['open_tasks_count'], $tab);
+            if ($tab === 'tasks') {
+                $this->assertSame(7, array_sum(array_column($props['tasks']['lanes'], 'count')));
             }
         }
     }
@@ -221,7 +236,7 @@ final class ClientTasksTest extends TestCase
         $this->assertSame($idle->id, $rows['Idle']['task_id']);
     }
 
-    public function test_na_dzis_on_a_row_picks_the_task_for_today_and_the_row_then_says_picked(): void
+    public function test_for_today_on_a_row_picks_the_task_for_today_and_the_row_then_says_picked(): void
     {
         $task = $this->task('Pick me', 'Doing');
 
@@ -234,7 +249,7 @@ final class ClientTasksTest extends TestCase
     public function test_the_tasks_tab_sends_the_same_props_and_queries_whatever_the_phone_asks_for(): void
     {
         $this->task('Doing 1', 'Doing');
-        $url = "/clients/{$this->client->id}/zadania";
+        $url = "/clients/{$this->client->id}/tasks";
         $this->actingAs($this->user)->get($url)->assertOk();
 
         [$plain, $plainQueries] = $this->measured($url);
@@ -269,9 +284,9 @@ final class ClientTasksTest extends TestCase
         $entry = TimeEntry::startFor($task);
 
         $this->actingAs($this->user)
-            ->from("/clients/{$this->client->id}/zadania")
+            ->from("/clients/{$this->client->id}/tasks")
             ->post("/day/tasks/{$task->id}/complete")
-            ->assertRedirect("/clients/{$this->client->id}/zadania");
+            ->assertRedirect("/clients/{$this->client->id}/tasks");
 
         $this->assertNotNull($entry->fresh()->end_time);
         $this->assertSame('Done', $task->fresh()->list_name);
@@ -324,6 +339,30 @@ final class ClientTasksTest extends TestCase
         $this->assertSame(['General', 'Site'], array_column($tasks['projects'], 'name'));
     }
 
+    public function test_an_open_row_carries_its_list_and_the_time_logged_on_it_and_another_accounts_time_never_counts(): void
+    {
+        $worked = $this->task('Worked on', 'Doing', ['position' => 1]);
+        $this->task('Untouched', 'Doing', ['position' => 2]);
+        $unlisted = $this->task('No list', 'To-Do', ['list_name' => null]);
+        $other = Account::create(['name' => 'Other']);
+        foreach ([[$this->account->id, 70], [$this->account->id, 20], [$other->id, 300]] as [$account, $minutes]) {
+            TimeEntry::create([
+                'account_id' => $account, 'client_id' => $this->client->id, 'project_id' => $this->project->id, 'task_id' => $worked->id,
+                'start_time' => Carbon::parse('2026-10-01 08:00:00', 'UTC'), 'end_time' => Carbon::parse('2026-10-01 08:00:00', 'UTC')->addMinutes($minutes),
+                'duration_minutes' => $minutes,
+            ]);
+        }
+        TimeEntry::startFor($worked);
+
+        $lanes = collect($this->lanes())->keyBy('key');
+        $doing = collect($lanes['doing']['rows'])->keyBy('name');
+        $todo = collect($lanes['todo']['rows'])->keyBy('name');
+
+        $this->assertSame([90, 'Doing'], [$doing['Worked on']['minutes'], $doing['Worked on']['list']]);
+        $this->assertSame(0, $doing['Untouched']['minutes']);
+        $this->assertSame([$unlisted->id, 'To-Do'], [$todo['No list']['task_id'], $todo['No list']['list']]);
+    }
+
     public function test_another_accounts_projects_tasks_and_repositories_never_appear(): void
     {
         $other = Account::create(['name' => 'Other']);
@@ -348,7 +387,7 @@ final class ClientTasksTest extends TestCase
         $other = Account::create(['name' => 'Other']);
         $stranger = User::factory()->create(['account_id' => $other->id, 'owner' => true]);
 
-        $this->actingAs($stranger)->get("/clients/{$this->client->id}/zadania")->assertNotFound();
+        $this->actingAs($stranger)->get("/clients/{$this->client->id}/tasks")->assertNotFound();
         $this->actingAs($stranger)->post("/day/tasks/{$task->id}/complete")->assertNotFound();
         $this->actingAs($stranger)->delete("/day/tasks/{$task->id}/complete")->assertNotFound();
         $this->actingAs($stranger)->postJson("/tasks/{$task->id}/time-entries/start", ['request_id' => 'abababab-1111-4111-8111-abababababab'])->assertNotFound();
@@ -370,8 +409,8 @@ final class ClientTasksTest extends TestCase
 
         $this->assertSame(['On the site' => 'Site', 'Also on the board' => 'Board'], collect($tasks['lanes'][0]['rows'])->pluck('project', 'name')->all());
         $this->assertSame([
-            ['id' => $board->id, 'name' => 'Board', 'open' => 2, 'is_private' => false],
-            ['id' => $this->project->id, 'name' => 'Site', 'open' => 1, 'is_private' => true],
+            ['id' => $board->id, 'name' => 'Board', 'open' => 2, 'is_private' => false, 'in_month_close' => false, 'repositories' => 0],
+            ['id' => $this->project->id, 'name' => 'Site', 'open' => 1, 'is_private' => true, 'in_month_close' => false, 'repositories' => 0],
         ], array_values(array_filter($tasks['projects'], fn (array $project): bool => $project['name'] !== 'General')));
         $this->assertSame(0, collect($tasks['projects'])->firstWhere('name', 'General')['open']);
     }

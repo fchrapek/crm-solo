@@ -87,7 +87,7 @@ final class PasswordChangeTest extends TestCase
         $this->assertNotSame($tokenBefore, $fresh->remember_token);
 
         $this->app['auth']->forgetGuards();
-        $this->get('/settings/konto')->assertOk();
+        $this->get('/profile')->assertOk();
         $this->assertAuthenticatedAs($fresh);
     }
 
@@ -96,7 +96,7 @@ final class PasswordChangeTest extends TestCase
         $otherDevice = $this->sessionOf($this->owner);
 
         $this->restoreSession($otherDevice);
-        $this->get('/settings/konto')->assertOk();
+        $this->get('/profile')->assertOk();
         $otherDevice = session()->all();
 
         $this->restoreSession([]);
@@ -108,7 +108,7 @@ final class PasswordChangeTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $this->restoreSession($otherDevice);
-        $this->get('/settings/konto')->assertRedirect('/login');
+        $this->get('/profile')->assertRedirect('/login');
         $this->assertGuest();
     }
 

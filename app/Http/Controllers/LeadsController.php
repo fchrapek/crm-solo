@@ -100,7 +100,8 @@ final class LeadsController extends Controller
 
     public function store(LeadsRequest $request): RedirectResponse
     {
-        $lead = Auth::user()->account->leads()->create($request->validated());
+        // With its capture line or not at all: the funnel is counted from those lines.
+        $lead = DB::transaction(fn () => Auth::user()->account->leads()->create($request->validated()));
 
         return Redirect::route('leads.edit', $lead)->with('success', __('Lead captured'));
     }
@@ -158,11 +159,13 @@ final class LeadsController extends Controller
         $stage = $validated['stage'] ?? null;
         unset($validated['stage'], $validated['pipeline'], $validated['source']);
 
-        $lead->update($validated);
+        DB::transaction(function () use ($lead, $validated, $stage): void {
+            $lead->update($validated);
 
-        if ($stage !== null && $stage !== $lead->stage) {
-            $lead->transitionTo($stage, null, Auth::user());
-        }
+            if ($stage !== null && $stage !== $lead->stage) {
+                $lead->transitionTo($stage, null, Auth::user());
+            }
+        });
 
         // The record view saves per field (on blur / on score tick) via fetch,
         // so it needs the re-derived numbers back without a redirect+flash —
@@ -253,7 +256,7 @@ final class LeadsController extends Controller
         }
 
         if ($lead->client_id !== null) {
-            return Redirect::route('clients.show', [$lead->client_id, 'przeglad']);
+            return Redirect::route('clients.show', [$lead->client_id, 'overview']);
         }
 
         $client = DB::transaction(function () use ($lead): Client {
@@ -271,7 +274,7 @@ final class LeadsController extends Controller
             return $client;
         });
 
-        return Redirect::route('clients.show', [$client->id, 'dane'])
+        return Redirect::route('clients.show', [$client->id, 'details'])
             ->with('success', __('Lead converted to client'));
     }
 

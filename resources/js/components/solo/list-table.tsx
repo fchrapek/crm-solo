@@ -1,4 +1,5 @@
 import type { HTMLAttributes, TdHTMLAttributes, ThHTMLAttributes } from 'react';
+import { fullText } from '@/lib/plain-text';
 import styles from './list-table.module.css';
 
 /**
@@ -45,7 +46,13 @@ export function ListTableCell({ kind = 'text', tone, align = 'start', wide = fal
             className={[styles.cell, className].filter(Boolean).join(' ')}
             {...rest}
         >
-            {truncate ? <div className={styles.truncate}>{children}</div> : children}
+            {truncate ? (
+                <div className={styles.truncate} title={fullText(children)}>
+                    {children}
+                </div>
+            ) : (
+                children
+            )}
         </td>
     );
 }

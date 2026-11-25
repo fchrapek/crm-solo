@@ -31,7 +31,7 @@ const EXPIRY = [
 ] as const;
 
 /**
- * Figma: Ustawienia · Agenci (1092:26787, phone 1092:27008). The owner's agent
+ * Figma: Settings · Integracje (1557:345598), Tokeny agentów. The owner's agent
  * tokens: the plain token arrives once, in the create response, and is never
  * sent again; the list shows names, abilities, last use and expiry only.
  */
@@ -51,7 +51,7 @@ export function AgentsTab({ tokens, abilities, today, demo }: { tokens: AgentTok
         <>
             <Tile kind="list">
                 <TileHeader
-                    label={t('Tokens')}
+                    label={t('Agent tokens')}
                     count={tokens.length}
                     end={demo ? undefined : <TileButton onClick={() => setCreating(true)}>{t('New token')}</TileButton>}
                 />
@@ -138,7 +138,7 @@ function AbilityChecks({
 
 const NEW = { name: '', abilities: [READ], expires: '90', current_password: '' };
 
-/** Nowy token: the form, then the token itself, shown this once with Kopiuj. Closing forgets it. */
+/** New agent token: the form, then the token itself, shown this once with Copy. Closing forgets it. */
 function CreateTokenDialog({ open, abilities, onClose }: { open: boolean; abilities: string[]; onClose: () => void }) {
     const { t } = useTranslation();
     const [draft, setDraft] = useState(NEW);
@@ -292,7 +292,7 @@ function CreateTokenDialog({ open, abilities, onClose }: { open: boolean; abilit
     );
 }
 
-/** Zmień uprawnienia (read stays), and on phones Unieważnij at the end of the sheet. */
+/** Change abilities (read stays), and on phones Revoke token at the end of the sheet. */
 function EditTokenDialog({
     token,
     abilities,

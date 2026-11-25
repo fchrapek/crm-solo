@@ -62,8 +62,8 @@ final class IntegrationCredentialsUpdateTest extends TestCase
         $integration = $this->configured($provider);
 
         $this->actingAs($this->user)
-            ->from('/settings/integracje')->put("/integrations/{$provider}", $payload)
-            ->assertRedirect('/settings/integracje');
+            ->from('/settings/integrations')->put("/integrations/{$provider}", $payload)
+            ->assertRedirect('/settings/integrations');
 
         $integration->refresh();
         $this->assertFalse($integration->is_enabled, 'the rest of the form still saves');

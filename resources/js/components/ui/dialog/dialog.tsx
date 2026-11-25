@@ -43,9 +43,9 @@ function DialogContent({
     size,
     ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
-    /** wide: 640 px, for a list with end meta (Cała historia). */
+    /** wide: 640 px, for a list with end meta (Whole history). */
     size?: 'wide';
-    /** false: no × in the corner, for a dialog that closes another way (the ⌘K palette's Esc and Anuluj). */
+    /** false: no × in the corner, for a dialog that closes another way (the ⌘K palette's Esc and Cancel). */
     closeButton?: boolean;
 }) {
     const { t } = useTranslation();
@@ -60,7 +60,7 @@ function DialogContent({
                 data-size={size}
                 {...props}
             >
-                <div className={styles.scroll}>{children}</div>
+                <div className={styles.scroll} data-slot="dialog-scroll">{children}</div>
                 {closeButton && (
                     <DialogPrimitive.Close className={styles.closeButton}>
                         <Icon name="close" size={16} />

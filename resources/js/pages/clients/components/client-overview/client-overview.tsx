@@ -2,6 +2,7 @@ import { HoursBar } from '@/components/solo/hours-bar';
 import { KvRow } from '@/components/solo/kv-row';
 import { SoloButton, soloButtonClass, SoloButtonLink, Stat } from '@/components/solo/primitives';
 import { Row } from '@/components/solo/row';
+import { useHelperAction } from '@/components/solo/shell/helper/actions';
 import { Tile, TileGrid, TileHeader, TileInset, TileNote, TileRows, TileStack } from '@/components/solo/tile';
 import { InfoHint } from '@/components/ui/info-hint';
 import { useLiveReload } from '@/hooks/use-live-reload';
@@ -9,31 +10,45 @@ import { monthGenitive, monthName, shortDate } from '@/lib/dates';
 import clientReports from '@/routes/client-reports';
 import clients from '@/routes/clients';
 import monthClose from '@/routes/month-close';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { monthUrl } from '../client-billing/format';
 import { type ClientCard, ClientFieldsDialog, MessageList, type MessageRow, ResendAction, useFailureReason } from '../client-fields';
 import { hoursNumber, localeOf } from '../client-list/format';
 import { CloseMonthDialog } from '../month-settlement';
+import { RetainerDetailsDialog, RetainerDialog } from '../retainer-chip';
 import styles from './client-overview.module.css';
 import { nextPeriod } from './format';
 import { OrderSection } from './order-section';
 import { OrderWaitingRows } from './order-waiting';
 import type { ClientOverview, OverviewHours, OverviewSettlement } from './types';
 
-/** Where a report is generated: Rozliczenia on the report's month, or on the month the client owes next. */
+/** Where a report is generated: Billing on the report's month, or on the month the client owes next. */
 export function reportFlowUrl(clientId: number, period?: string): string {
-    return period !== undefined ? monthUrl(clientId, period) : clients.show({ client: clientId, tab: 'rozliczenia' }).url;
+    return period !== undefined ? monthUrl(clientId, period) : clients.show({ client: clientId, tab: 'billing' }).url;
 }
 
 const openButton = soloButtonClass({ variant: 'secondary', size: 'control' });
 
 /**
- * Figma: Klient · Przegląd (1089:10002, phone 1089:10236). What waits for you, the way into Zadania and Dziennik, and
+ * Figma: Client · Overview (1089:10002, phone 1089:10236). What waits for you, the way into Tasks and Journal, and
  * beside them the month's hours (or the order, or the account's own fields).
  */
 /** `manage` is false for a member, who reads the client's text messages but cannot cancel or resend one. */
-export function ClientOverviewTab({ clientId, overview, manage = true }: { clientId: number; overview: ClientOverview; manage?: boolean }) {
+export function ClientOverviewTab({
+    clientId,
+    clientName = '',
+    overview,
+    retainerTerms = false,
+    manage = true,
+}: {
+    clientId: number;
+    clientName?: string;
+    overview: ClientOverview;
+    /** The header's `retainer_terms`: the Hours tile shows its Retainer button. */
+    retainerTerms?: boolean;
+    manage?: boolean;
+}) {
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);
     const { report_due: report, month_close: close, doing_count: doing, journal } = overview;
@@ -91,7 +106,7 @@ export function ClientOverviewTab({ clientId, overview, manage = true }: { clien
                     <TileRows>
                         <Row
                             title={doing > 0 ? t('{{count}} in progress', { count: doing }) : t('Nothing in progress')}
-                            href={clients.show({ client: clientId, tab: 'zadania' }).url}
+                            href={clients.show({ client: clientId, tab: 'tasks' }).url}
                         />
                     </TileRows>
                 </Tile>
@@ -108,7 +123,7 @@ export function ClientOverviewTab({ clientId, overview, manage = true }: { clien
                                       ? t('{{count}} new since {{date}}', { count: journal.count, date: since })
                                       : t('Nothing new since {{date}}', { date: since })
                             }
-                            href={clients.show({ client: clientId, tab: 'dziennik' }).url}
+                            href={clients.show({ client: clientId, tab: 'journal' }).url}
                         />
                     </TileRows>
                 </Tile>
@@ -128,7 +143,15 @@ export function ClientOverviewTab({ clientId, overview, manage = true }: { clien
                 ) : (
                     overview.hours !== null &&
                     overview.settlement !== null && (
-                        <HoursSection clientId={clientId} hours={overview.hours} settlement={overview.settlement} locale={locale} />
+                        <HoursSection
+                            clientId={clientId}
+                            clientName={clientName}
+                            hours={overview.hours}
+                            settlement={overview.settlement}
+                            retainer={overview.retainer}
+                            terms={retainerTerms}
+                            locale={locale}
+                        />
                     )
                 )}
             </TileStack>
@@ -154,7 +177,7 @@ function FailedSmsRow({ row, manage }: { row: MessageRow; manage: boolean }) {
     );
 }
 
-/** The account's fields marked for Przegląd, the assignee, then what SMS failed or waits. */
+/** The account's fields marked for Overview, the assignee, then what SMS failed or waits. */
 function CardSection({
     clientId,
     card,
@@ -173,7 +196,7 @@ function CardSection({
     const { t } = useTranslation();
     const [editing, setEditing] = useState(false);
     const scheduled = t(card.sms_opt_out ? 'held_count' : 'scheduled_count', { count: pending });
-    // On a phone the failed count alone, so the head leaves room for Dziennik.
+    // On a phone the failed count alone, so the head leaves room for Journal.
     const head =
         failed > 0 ? (
             <>
@@ -212,7 +235,7 @@ function CardSection({
                     <TileHeader
                         label={head}
                         end={
-                            <SoloButtonLink href={clients.show({ client: clientId, tab: 'dziennik' }).url} variant="secondary" size="control">
+                            <SoloButtonLink href={clients.show({ client: clientId, tab: 'journal' }).url} variant="secondary" size="control">
                                 {t('Journal')}
                             </SoloButtonLink>
                         }
@@ -232,20 +255,33 @@ function reportTitle(status: 'draft' | 'finalized' | null): string {
     return status === 'finalized' ? 'Report for {{month}}, ready to send' : 'Report for {{month}}';
 }
 
-/** Figma: Tile · Godziny. The month's hours against what the client can draw on, the ledger, and the balance the next month starts with. */
+/** Figma: Tile · Hours. The month's hours against what the client can draw on, the ledger, and the balance the next month starts with. */
 function HoursSection({
     clientId,
+    clientName,
     hours,
     settlement,
+    retainer,
+    terms,
     locale,
 }: {
     clientId: number;
+    clientName: string;
     hours: OverviewHours;
     settlement: OverviewSettlement;
+    retainer: ClientOverview['retainer'];
+    terms: boolean;
     locale: string;
 }) {
     const { t } = useTranslation();
     const [closing, setClosing] = useState(false);
+    const [dialog, setDialog] = useState<'details' | 'edit' | null>(null);
+    useHelperAction(
+        'retainer-terms',
+        useCallback(() => {
+            if (terms) setDialog('details');
+        }, [terms]),
+    );
     const behind = settlement.open_behind && hours.period === settlement.active_period;
     const h = (value: number, signed = false) => `${hoursNumber(value, locale, signed)} h`;
     const over = hours.remaining < 0;
@@ -278,21 +314,21 @@ function HoursSection({
                 <HoursBar used={hours.used} available={hours.available} size="tile" />
             </div>
             <dl className={styles.ledger}>
-                <KvRow layout="tile" label={t('Package')}>
+                <KvRow layout="tile" figure label={t('Package')}>
                     {h(hours.contracted ?? 0, true)}
                 </KvRow>
-                <KvRow layout="tile" label={t('From previous months')}>
+                <KvRow layout="tile" figure label={t('From previous months')}>
                     {h(hours.carried, true)}
                 </KvRow>
                 {hours.forfeited > 0 && (
-                    <KvRow layout="tile" label={t('Over the rollover cap')}>
+                    <KvRow layout="tile" figure label={t('Over the rollover cap')}>
                         {h(-hours.forfeited, true)}
                     </KvRow>
                 )}
-                <KvRow layout="tile" label={t('Worked')}>
+                <KvRow layout="tile" figure label={t('Worked')}>
                     {h(-hours.used, true)}
                 </KvRow>
-                <KvRow layout="tile" label={t('Balance for {{month}}', { month: next })} tone={over ? 'over' : undefined}>
+                <KvRow layout="tile" figure label={t('Balance for {{month}}', { month: next })} tone={over ? 'over' : undefined}>
                     {h(hours.remaining, true)}
                 </KvRow>
             </dl>
@@ -304,10 +340,40 @@ function HoursSection({
                             month: monthName(settlement.active_period, locale),
                         })}
                     </TileNote>
+                    <CloseMonthDialog clientId={clientId} period={settlement.active_period} open={closing} onOpenChange={setClosing} />
+                </>
+            )}
+            <div className={styles.hoursActions}>
+                {behind && (
                     <SoloButton variant="secondary" size="control" onClick={() => setClosing(true)}>
                         {t('Close the month')}
                     </SoloButton>
-                    <CloseMonthDialog clientId={clientId} period={settlement.active_period} open={closing} onOpenChange={setClosing} />
+                )}
+                {terms && (
+                    <SoloButton variant="secondary" size="control" onClick={() => setDialog('details')}>
+                        {t('Retainer')}
+                    </SoloButton>
+                )}
+            </div>
+            {retainer && (
+                <>
+                    <RetainerDetailsDialog
+                        open={dialog === 'details'}
+                        onOpenChange={(open) => setDialog(open ? 'details' : null)}
+                        clientName={clientName}
+                        retainers={retainer.positions}
+                        activeIds={retainer.active_ids}
+                        onEdit={() => setDialog('edit')}
+                    />
+                    <RetainerDialog
+                        open={dialog === 'edit'}
+                        onOpenChange={(open) => setDialog(open ? 'edit' : null)}
+                        clientId={clientId}
+                        clientCurrency={retainer.currency}
+                        retainers={retainer.positions}
+                        activeIds={retainer.active_ids}
+                        sheet
+                    />
                 </>
             )}
         </Tile>

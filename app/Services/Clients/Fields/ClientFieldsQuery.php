@@ -58,21 +58,6 @@ final class ClientFieldsQuery
         ];
     }
 
-    /** @return list<array<string, mixed>> newest first */
-    public function history(Client $client, int $limit = 5): array
-    {
-        $fields = $this->definitions($client->account_id)->keyBy('key');
-
-        return ClientFieldEvent::query()
-            ->where('client_id', $client->id)
-            ->with('user:id,first_name,last_name')
-            ->latest('id')
-            ->limit($limit)
-            ->get()
-            ->map(fn (ClientFieldEvent $event): array => $this->event($event, $fields->get($event->field_key)))
-            ->values()->all();
-    }
-
     /** @return array<string, mixed> */
     public function event(ClientFieldEvent $event, ?ClientFieldDefinition $field): array
     {
@@ -93,7 +78,7 @@ final class ClientFieldsQuery
     }
 
     /**
-     * The client's messages, latest planned time first. For Przegląd only what waits,
+     * The client's messages, latest planned time first. For Overview only what waits,
      * what failed (until it is sent again or cancelled) and what went out today.
      *
      * @return list<array<string, mixed>>

@@ -40,7 +40,7 @@ use Tests\Feature\Concerns\CallsAgentSurfaces;
 use Tests\TestCase;
 
 /**
- * The task page (Zadanie): what it shows, who it says did what, and the
+ * The task page (Task): what it shows, who it says did what, and the
  * writes it makes through the shared paths, Trello's fields left alone.
  */
 final class TaskPageTest extends TestCase
@@ -90,6 +90,24 @@ final class TaskPageTest extends TestCase
             'an unknown agent' => ['aider laptop', 'Aider'],
             'no token' => [null, 'Agent'],
         ];
+    }
+
+    public function test_billed_time_shows_only_to_an_owner_who_switched_it_on_and_only_for_a_task_with_time_this_month(): void
+    {
+        $this->task->update(['is_reportable' => true]);
+        $this->entry(90, '2026-10-07 08:00:00');
+
+        $this->page()->assertInertia(fn (Assert $page) => $page->where('billed', null));
+
+        $this->owner->setPreference('show_billed_on_tasks', true);
+        $this->page()->assertInertia(fn (Assert $page) => $page
+            ->where('billed.client_id', $this->client->id)
+            ->where('billed.period', '2026-10')
+            ->where('billed.hours', fn ($hours) => abs($hours - 1.5) < 0.001)
+            ->where('billed.locked', false));
+
+        $other = Task::create(['project_id' => $this->project->id, 'name' => 'No time', 'source' => 'manual']);
+        $this->actingAs($this->owner)->get(route('tasks.show', $other))->assertInertia(fn (Assert $page) => $page->where('billed', null));
     }
 
     public function test_the_page_counts_today_in_the_display_timezone_and_the_total_of_closed_time(): void
@@ -216,7 +234,7 @@ final class TaskPageTest extends TestCase
         $this->asAgent($token, fn () => $this->task->update(['name' => 'Cennik PDF jesień']));
         Carbon::setTestNow('2026-10-08 10:00:00');
 
-        $this->page(['historia' => 1])->assertInertia(fn (Assert $page) => $page
+        $this->page(['history' => 1])->assertInertia(fn (Assert $page) => $page
             ->where('activity.more', false)
             ->where('activity.rows', function ($rows): bool {
                 $summary = collect($rows)->map(fn ($row) => [$row['kind'], $row['actor']['kind'], $row['actor']['name'], $row['fields'], $row['minutes'], $row['text'], $row['time']])->all();
@@ -271,14 +289,14 @@ final class TaskPageTest extends TestCase
         $this->page()->assertInertia(fn (Assert $page) => $page->where('brief.last_change.actor', ['kind' => 'owner', 'name' => null])->where('brief.last_change.time', '12:20'));
     }
 
-    public function test_the_preview_keeps_the_three_latest_rows_and_cala_historia_loads_every_row(): void
+    public function test_the_preview_keeps_the_three_latest_rows_and_whole_history_loads_every_row(): void
     {
         for ($i = 0; $i < 60; $i++) {
             $this->entry(10, Carbon::parse('2026-10-01 08:00:00')->addHours($i)->toDateTimeString());
         }
 
         $this->page()->assertInertia(fn (Assert $page) => $page->has('activity.rows', 3)->where('activity.more', true));
-        $this->page(['historia' => 1])->assertInertia(fn (Assert $page) => $page->has('activity.rows', 60)->where('activity.more', false));
+        $this->page(['history' => 1])->assertInertia(fn (Assert $page) => $page->has('activity.rows', 60)->where('activity.more', false));
     }
 
     public function test_rows_at_one_instant_keep_one_order_and_none_is_lost(): void

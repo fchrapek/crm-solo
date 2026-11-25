@@ -134,6 +134,15 @@ final class DemoSeederTest extends TestCase
         $this->assertSame(240000, $client->invoices()->sole()->gross_price);
     }
 
+    public function test_the_demo_account_shows_the_report_baseline_it_seeds(): void
+    {
+        $this->seed(DemoSeeder::class);
+
+        $client = Client::query()->whereNotNull('report_baseline_markdown')->firstOrFail();
+
+        $this->assertTrue($client->account->showsReportBaseline());
+    }
+
     public function test_demo_reset_refuses_outside_demo_mode(): void
     {
         $this->artisan('demo:reset')->assertFailed();

@@ -1,16 +1,23 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fieldControl, SoloField, SoloFieldRow, SoloInput, SoloTextarea } from './field';
+import { Tile } from './tile';
 
+/** Fields sit on a tile or a dialog: their fill is the page tone, so on the bare page they would vanish. */
 const meta = {
     title: 'Solo/Field',
     component: SoloField,
     args: { label: 'Tytuł', htmlFor: 'title', children: null },
+    decorators: [
+        (Story) => (
+            <Tile kind="plain" style={{ maxWidth: 520 }}>
+                <Story />
+            </Tile>
+        ),
+    ],
     render: (args) => (
-        <div style={{ maxWidth: 472 }}>
-            <SoloField {...args}>
-                <SoloInput {...fieldControl(args.htmlFor, args.error)} placeholder="Krótka etykieta widoczna na liście" />
-            </SoloField>
-        </div>
+        <SoloField {...args}>
+            <SoloInput {...fieldControl(args.htmlFor, args.error)} placeholder="Krótka etykieta widoczna na liście" />
+        </SoloField>
     ),
 } satisfies Meta<typeof SoloField>;
 
@@ -22,9 +29,29 @@ export const Input: Story = {};
 
 export const WithError: Story = { args: { error: 'Podaj tytuł.' } };
 
+/** Figma B, Filled on tone: empty, filled, error and disabled; hover and focus show on the pointer and the keyboard. */
+export const States: Story = {
+    render: () => (
+        <div style={{ display: 'grid', gap: 'var(--solo-space-4)' }}>
+            <SoloField label="Pusty" htmlFor="s-empty">
+                <SoloInput id="s-empty" placeholder="Np. Aktualizacja cennika" />
+            </SoloField>
+            <SoloField label="Wypełniony" htmlFor="s-filled">
+                <SoloInput id="s-filled" defaultValue="Aktualizacja cennika PDF" />
+            </SoloField>
+            <SoloField label="Błąd" htmlFor="s-error" error="Wpisz nazwę zadania.">
+                <SoloInput {...fieldControl('s-error', 'Wpisz nazwę zadania.')} defaultValue="Aktualizacja cennika PDF" />
+            </SoloField>
+            <SoloField label="Wyłączony" htmlFor="s-disabled">
+                <SoloInput id="s-disabled" defaultValue="Aktualizacja cennika PDF" disabled />
+            </SoloField>
+        </div>
+    ),
+};
+
 export const Form: Story = {
     render: () => (
-        <div style={{ display: 'grid', gap: 'var(--solo-space-4)', maxWidth: 472 }}>
+        <div style={{ display: 'grid', gap: 'var(--solo-space-4)' }}>
             <SoloField label="Tytuł" htmlFor="f-title">
                 <SoloInput id="f-title" placeholder="Krótka etykieta widoczna na liście" />
             </SoloField>

@@ -27,7 +27,7 @@ const contact = {
 const table = (rows: never[]) => renderToStaticMarkup(<ContactTable rows={rows} onOpen={() => {}} onRestore={() => {}} />);
 
 describe('Kontakty', () => {
-    test('Kontakty and Leady are sibling pills and the command bar narrows the list, keeping the deleted in view', () => {
+    test('Contacts and Leads are sibling pills and the command bar narrows the list, keeping the deleted in view', () => {
         const place = contactsPlace({ filters: { search: '', trashed: 'with' } }, context);
 
         expect(place.tokens).toBeUndefined();
@@ -41,13 +41,13 @@ describe('Kontakty', () => {
     test('a row names the person as a button that opens the contact, links the client and shows the first e-mail from 768 px', () => {
         const html = table([contact]);
 
-        expect(html).toMatch(/<button[^>]*>Anna Testowa<\/button>/);
-        expect(html).toMatch(/<a href="\/clients\/7\/przeglad"[^>]*>Fundacja Testowa<\/a>/);
+        expect(html).toMatch(/<button[^>]*title="Anna Testowa"[^>]*>Anna Testowa<\/button>/);
+        expect(html).toMatch(/<a title="Fundacja Testowa" href="\/clients\/7\/overview"[^>]*>Fundacja Testowa<\/a>/);
         expect(html).toMatch(/data-wide=""[^>]*>anna@example\.test/);
         expect(html).not.toContain('Przywróć');
     });
 
-    test('a contact without a client says so, and a deleted one carries its chip and Przywróć', () => {
+    test('a contact without a client says so, and a deleted one carries its chip and Restore', () => {
         const html = table([{ ...(contact as object), client: null, deleted_at: '2026-11-01' } as never]);
 
         expect(html).toContain('Bez klienta');

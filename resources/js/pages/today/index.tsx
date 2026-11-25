@@ -14,7 +14,8 @@ import { type SharedData } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 import { DayView } from './day';
-import { dayPills } from './place';
+import { type MoveDay } from './pick-menu';
+import { dayLabel, dayPills, dayPlace, type DayNav } from './place';
 import { SummaryView } from './summary';
 import styles from './today.module.css';
 
@@ -24,6 +25,7 @@ export interface Running {
     task_id: number | null;
     task: string | null;
     client: string | null;
+    project_id?: number | null;
     project: string | null;
 }
 
@@ -32,6 +34,9 @@ export interface Overdue {
     oldest: string | null;
 }
 
+/** A pick that left the day for another, with its time on the day. */
+export type MovedTask = DayTask & { moved_to: string };
+
 export interface TodayProps {
     state: DayState;
     closed: boolean;
@@ -39,6 +44,11 @@ export interface TodayProps {
     /** The UTC instant the display calendar's day began. */
     dayStart: string;
     maxPicks: number;
+    warnFull: boolean;
+    /** Set when the page shows another day than today. */
+    day?: DayNav;
+    moveDays: MoveDay[];
+    moved: MovedTask[];
     picks: DayTask[];
     month: MonthData;
     totals: { logged_minutes: number; clients: number };
@@ -57,13 +67,13 @@ export interface TodayProps {
 
 export default function Today() {
     const props = usePage<SharedData & TodayProps>().props;
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     // Every prop follows from the date and the running timers, so the whole page reloads.
     useLiveReload();
 
     return (
         <SoloSurface day="paper">
-            <Head title={t('Today')} />
+            <Head title={props.day ? dayLabel(props.day.date, i18n.language) : t('Today')} />
             {props.state === 'timer' && props.running ? <TimerState {...props} running={props.running} /> : null}
             {props.state === 'done' ? <SummaryView {...props} /> : null}
             {props.state === 'paper' ? <DayView {...props} /> : null}
@@ -71,9 +81,8 @@ export default function Today() {
     );
 }
 
-Today.place = ((props, { t }) => ({
-    pills: dayPills(props.state === 'done' ? 'done' : 'today', t, props.closed),
-})) satisfies PlaceResolver<TodayProps>;
+Today.place = ((props, context) =>
+    props.day ? dayPlace(props.day, context) : { pills: dayPills(props.state === 'done' ? 'done' : 'today', context.t, props.closed) }) satisfies PlaceResolver<TodayProps>;
 
 /** Minutes logged today plus the running timers that started today, from the display calendar's midnight the server sends. */
 function useTodayTotal(dayStart: string, loggedMinutes: number, timers: Running[]): number {
@@ -91,8 +100,8 @@ function useTodayTotal(dayStart: string, loggedMinutes: number, timers: Running[
 }
 
 /**
- * Figma: Timer A2, the side column. The day's picks as Queue rows: done with its duration, the running one "w toku"
- * on the tint, the next open one "następne", the rest bare.
+ * Figma: Timer A2, the side column. The day's picks as Queue rows: done with its duration, the running one "in progress"
+ * on the tint, the next open one "next", the rest bare.
  */
 export function TimerQueue({ picks, runningTaskId }: { picks: DayTask[]; runningTaskId: number | null }) {
     const { t } = useTranslation();
@@ -148,8 +157,14 @@ function TimerState({ running, picks, dayStart, totals, timers }: TodayProps & {
             <SoloSurface day="timer" className={`${splitClass} ${styles.timer}`}>
                 <div className={`${splitMainClass} ${styles.timerMain}`}>
                     <div className={styles.timerTask}>
-                        <h1 className={styles.taskTitle}>{running.task ?? t('Untitled session')}</h1>
-                        {where && <p className={styles.where}>{where}</p>}
+                        <h1 className={styles.taskTitle} title={running.task ?? t('Untitled session')}>
+                            {running.task ?? t('Untitled session')}
+                        </h1>
+                        {where && (
+                            <p className={styles.where} title={where}>
+                                {where}
+                            </p>
+                        )}
                     </div>
                     <div className={styles.clockBlock}>
                         <p className={styles.clock} aria-label={t('{{h}} h {{m}} min elapsed', { h, m })}>

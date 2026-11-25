@@ -15,7 +15,7 @@ ENV PATH="/root/.bun/bin:${PATH}"
 WORKDIR /app
 
 # Copy composer files and install PHP deps (needed for wayfinder)
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --ignore-platform-reqs
 
@@ -33,7 +33,8 @@ RUN bun run build:ssr
 # ===========================================
 # Stage 2: Install PHP dependencies
 # ===========================================
-FROM composer:2 AS composer
+# A minor tag, never composer:2: the image brings its own PHP, and 2.8's is 8.4 with mbstring, as the app runs.
+FROM composer:2.8 AS composer
 
 WORKDIR /app
 
@@ -67,7 +68,7 @@ COPY --from=composer /app /var/www/html
 COPY --from=frontend /app/public/build /var/www/html/public/build
 
 # Stages 1 and 2 skip platform checks; this fails the build when a required extension is missing.
-RUN --mount=from=composer:2,source=/usr/bin/composer,target=/usr/local/bin/composer \
+RUN --mount=from=composer:2.8,source=/usr/bin/composer,target=/usr/local/bin/composer \
     composer check-platform-reqs --no-dev
 
 # Create storage directories

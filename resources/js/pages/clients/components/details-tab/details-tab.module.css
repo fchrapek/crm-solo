@@ -1,4 +1,4 @@
-/* Figma: Klient · Dane. Tiles, rows and KV rows are parts; this styles what sits inside them. */
+/* Figma: Client · Details. Tiles, rows and KV rows are parts; this styles what sits inside them. */
 .list {
     display: flex;
     flex-direction: column;
@@ -27,11 +27,6 @@
     display: none;
 }
 
-.baseline {
-    color: var(--role-text-primary);
-    font: 400 var(--solo-text-control) / 1.4 var(--solo-font-text);
-}
-
 /* the phone's native file picker, in the field's type */
 .file {
     max-width: 100%;
@@ -39,15 +34,6 @@
     font: 400 var(--solo-text-control) / 1.4 var(--solo-font-text);
 }
 
-.check {
-    display: flex;
-    align-items: center;
-    gap: var(--role-space-8);
-    min-height: var(--role-control);
-    color: var(--role-text-primary);
-    font: 400 var(--solo-text-control) / 1.4 var(--solo-font-text);
-    cursor: pointer;
-}
 
 @media (min-width: 768px) {
     .wideOnly {
@@ -57,4 +43,11 @@
     .phoneOnly {
         display: none;
     }
+}
+
+/* Client fields' header: Change history beside Edit */
+.headerActions {
+    display: flex;
+    align-items: center;
+    gap: var(--role-space-8);
 }

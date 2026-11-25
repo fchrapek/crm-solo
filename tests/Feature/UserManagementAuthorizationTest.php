@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\ReadOnlyInDemo;
 use App\Models\Account;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -84,11 +85,23 @@ final class UserManagementAuthorizationTest extends TestCase
             'owner' => true,
         ]);
 
-        foreach ([
+        $changes = [
             ['email' => 'mine@example.com'],
             ['password' => 'a-new-long-password', 'current_password' => 'demo-password'],
             ['owner' => false],
-        ] as $change) {
+        ];
+
+        $this->actingAs($demo)
+            ->put("/users/{$demo->id}", $this->payload($demo, $changes[0]))
+            ->assertRedirect()
+            ->assertSessionHas('error', 'Settings are read-only in the demo.');
+        $this->actingAs($demo)->delete("/users/{$demo->id}")
+            ->assertSessionHas('error', 'Settings are read-only in the demo.');
+
+        // The login's own refusal stands behind the read-only settings, so it is asked without them.
+        $this->withoutMiddleware(ReadOnlyInDemo::class);
+
+        foreach ($changes as $change) {
             $this->actingAs($demo)
                 ->put("/users/{$demo->id}", $this->payload($demo, $change))
                 ->assertRedirect()

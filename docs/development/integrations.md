@@ -1,6 +1,6 @@
 # Integrations
 
-Three providers, configured per account in Ustawienia · Integracje (`/settings/integracje`; the old `/integrations` URLs redirect there): Infakt, Trello and SMSAPI
+Three providers, configured per account in Ustawienia · Integracje (`/settings/integrations`; the old `/integrations` URLs redirect there): Infakt, Trello and SMSAPI
 (`Integration::PROVIDERS`). Credentials are encrypted
 ([data-models.md](data-models.md#integration)). Setting up the Trello app
 itself: [../integrations/trello-setup.md](../integrations/trello-setup.md).
@@ -104,8 +104,9 @@ task there, and the old task stays with its client, time and reports and is
 archived like any card that left its board. Time entries are never moved.
 
 **Card details on open**: checklists, comments and files are fetched when an
-agent opens the task (`crm task`), not by the board sync, with backoff and a
-stop for gone cards. Files land as task attachments once, within the type and
+agent opens the task (`crm task`), or behind the task page when it is opened or
+prefetched on hover (`RefreshTaskCardDetailsJob`, one per card in flight), not
+by the board sync, with backoff and a stop for gone cards. Files land as task attachments once, within the type and
 size caps. All card text is untrusted data for agents.
 
 ### Skipped columns
@@ -141,6 +142,18 @@ synced; only a missing or archived project stops it. `POST
 /projects/{project}/disconnect-trello` clears the board id, URL and Trello
 settings and keeps the synced tasks as history.
 
+Both modes go through the `trello` task source provider into
+`TrelloOnboardingService`, and the connection they use is
+`Integration::configuredTrello()`. A link is refused before anything changes
+(`TrelloLinkRefused`: not configured, already linked, held by another
+client's project, board not visible), so a board held by a client-less project
+is taken over only once the board is known to exist. The link picker's list is
+`TrelloBoardPicker`. Agents do the same through `crm trello-links`,
+`trello-board-create` and `trello-board-link` and the MCP tools
+`trello_links`, `trello_board_create` and `trello_board_link`
+(`write:trello` for the two writes; [agent-crm-interface.md](agent-crm-interface.md#verbs)).
+Disconnecting has no agent verb: it stays the owner's action in the app.
+
 ### List mapping
 
 `project.settings.trello_list_mapping` maps a Trello **list id** (not its
@@ -155,7 +168,7 @@ plus `settings.custom_lanes`, which the dialog can extend.
 
 ## SMSAPI (text messages)
 
-The account's SMSAPI.pl OAuth token (scope SMS only) is the integration's API token. Saving it sends nothing: the account switches in Ustawienia · Wiadomości SMS · Wysyłka ("Wysyłka przez", with a confirm) or with `crm message-sending --provider=smsapi`, both refused until the integration is connected and on, and `SmsapiProvider` then posts each due message to `sms.do` with the message id as `idx`. A refusal is recorded as `SMSAPI <code>: <message>` on the message; no answer is recorded as failed because the text may have gone out. Nothing is resent on its own: "Wyślij ponownie" (Przegląd, Dziennik, /sms, `crm message-resend`) puts the same row back to pending and keeps the failure as `previous_error`; after no answer it asks first. A failed message waits in the client's Czeka na ciebie and in `crm today` until it is sent again or cancelled. `SMSAPI_TEST=1` sends `test=1`: SMSAPI checks token, number, text and the account limit and sends nothing, and the message is stored as `simulated` with SMSAPI's id. A new SMSAPI account sends only to its registration number until it is activated (error 98). Delivery callbacks and a sender name come with the hosted account. No `check_idx`: message ids repeat between installs sharing one SMSAPI account, and the dispatcher's claim already sends a message once.
+The account's SMSAPI.pl OAuth token (scope SMS only) is the integration's API token. Saving it sends nothing: the account switches in Ustawienia · Wiadomości · Wysyłka SMS ("Wysyłka przez", with a confirm) or with `crm message-sending --provider=smsapi`, both refused until the integration is connected and on, and `SmsapiProvider` then posts each due message to `sms.do` with the message id as `idx`. A refusal is recorded as `SMSAPI <code>: <message>` on the message; no answer is recorded as failed because the text may have gone out. Nothing is resent on its own: "Wyślij ponownie" (Przegląd, Dziennik, /sms, `crm message-resend`) puts the same row back to pending and keeps the failure as `previous_error`; after no answer it asks first. A failed message waits in the client's Czeka na ciebie and in `crm today` until it is sent again or cancelled. `SMSAPI_TEST=1` sends `test=1`: SMSAPI checks token, number, text and the account limit and sends nothing, and the message is stored as `simulated` with SMSAPI's id. A new SMSAPI account sends only to its registration number until it is activated (error 98). Delivery callbacks and a sender name come with the hosted account. No `check_idx`: message ids repeat between installs sharing one SMSAPI account, and the dispatcher's claim already sends a message once.
 
 ## Project board
 

@@ -22,9 +22,11 @@ export interface ClientDetails {
     include_in_month_close: boolean;
     ssh_config: string | null;
     maintenance_invoice_description: string | null;
-    report_baseline_markdown: string | null;
     notes: string | null;
     archived: boolean;
+    has_report_baseline: boolean;
+    /** The account's modules a client's Dane shows: their tile and their ⋯ menu entries appear only while on. */
+    modules: { month_close: boolean; report_baseline: boolean };
 }
 
 export interface ClientDocumentRow {

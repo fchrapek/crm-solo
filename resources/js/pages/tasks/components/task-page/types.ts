@@ -122,7 +122,7 @@ export interface ActivityRow extends Stamp {
 }
 
 export interface TaskActivityPage {
-    /** Newest first: the preview, or every row with ?historia. */
+    /** Newest first: the preview, or every row with ?history. */
     rows: ActivityRow[];
     more: boolean;
 }
@@ -141,9 +141,19 @@ export interface TaskClock {
     now: string;
 }
 
+/** This month's billed hours of the task, sent only to an owner who switched them on. */
+export interface TaskBilled {
+    client_id: number;
+    period: string;
+    hours: number;
+    /** The month is closed or its report is out: the figure cannot change. */
+    locked: boolean;
+}
+
 export interface TaskPageProps {
     task: TaskData;
     time: TaskTime;
+    billed: TaskBilled | null;
     brief: TaskBriefData;
     card: TaskCard | null;
     resources: TaskResources;
@@ -152,8 +162,10 @@ export interface TaskPageProps {
     clock: TaskClock;
     /** Sent only when the edit form asks: the project's other tasks. */
     parent_options?: { id: number; name: string }[];
+    /** The client's projects the task may move to, asked for when Edit opens. */
+    project_options?: { id: number; name: string }[];
     [key: string]: unknown;
 }
 
 /** The props that change while the page is open: timers, agent writes, the card cache and the day. */
-export const LIVE_PROPS: string[] = ['task', 'time', 'brief', 'card', 'resources', 'activity', 'live', 'clock'] satisfies (keyof TaskPageProps)[];
+export const LIVE_PROPS: string[] = ['task', 'time', 'billed', 'brief', 'card', 'resources', 'activity', 'live', 'clock'] satisfies (keyof TaskPageProps)[];

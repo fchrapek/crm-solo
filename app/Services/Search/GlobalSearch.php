@@ -11,6 +11,7 @@ use App\Models\Invoice;
 use App\Models\Lead;
 use App\Services\Agent\ClientDirectory;
 use App\Services\Agent\TaskList;
+use App\Support\LikePattern;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 
@@ -36,7 +37,7 @@ final class GlobalSearch
     ) {}
 
     /**
-     * @return array{query: string, archived: bool, groups: list<array{group: string, total: int, items: list<array<string, mixed>>}>}
+     * @return array{query: string, archived: bool, groups: list<array{group: string, total: int, items: list<array<string, mixed>>}>, archived_total: int}
      */
     public function search(int $accountId, string $query, bool $archived = false, ?string $group = null): array
     {
@@ -48,9 +49,23 @@ final class GlobalSearch
         $limit = count($groups) === 1 ? self::MORE : self::PER_GROUP;
 
         if (mb_strlen($query) < self::MIN_LENGTH) {
-            return ['query' => $query, 'archived' => $archived, 'groups' => []];
+            return ['query' => $query, 'archived' => $archived, 'groups' => [], 'archived_total' => 0];
         }
 
+        $results = $this->groups($groups, $accountId, $query, $archived, $limit);
+        $archivedTotal = $results === [] && ! $archived
+            ? array_sum(array_column($this->groups($groups, $accountId, $query, true, 1), 'total'))
+            : 0;
+
+        return ['query' => $query, 'archived' => $archived, 'groups' => $results, 'archived_total' => $archivedTotal];
+    }
+
+    /**
+     * @param  list<string>  $groups
+     * @return list<array{group: string, total: int, items: list<array<string, mixed>>}>
+     */
+    private function groups(array $groups, int $accountId, string $query, bool $archived, int $limit): array
+    {
         $results = [];
         foreach ($groups as $name) {
             $found = match ($name) {
@@ -66,7 +81,7 @@ final class GlobalSearch
             }
         }
 
-        return ['query' => $query, 'archived' => $archived, 'groups' => $results];
+        return $results;
     }
 
     /** @return array{total: int, items: list<array<string, mixed>>} */
@@ -80,7 +95,7 @@ final class GlobalSearch
                 id: $client['id'],
                 title: $client['name'],
                 client: null,
-                url: route('clients.show', [$client['id'], 'przeglad'], false),
+                url: route('clients.show', [$client['id'], 'overview'], false),
                 archived: $client['archived'],
                 detail: ['type' => $client['type'], 'stage' => $client['stage']],
             ), $result['clients']),
@@ -118,7 +133,7 @@ final class GlobalSearch
             id: $contact->id,
             title: mb_trim($contact->first_name.' '.$contact->last_name),
             client: $contact->client?->name,
-            url: route('contacts.index', ['kontakt' => $contact->id], false),
+            url: route('contacts.index', ['contact' => $contact->id], false),
             archived: $contact->trashed(),
             detail: ['email' => $contact->emails[0] ?? null],
         ));
@@ -163,12 +178,11 @@ final class GlobalSearch
     /** @return array{total: int, items: list<array<string, mixed>>} */
     private function invoices(int $accountId, string $query, bool $archived, int $limit): array
     {
-        $like = $this->like($query);
         $found = Invoice::query()
             ->where('account_id', $accountId)
             ->where(fn (Builder $q) => $q
-                ->where('number', 'like', $like)
-                ->orWhere('client_company_name', 'like', $like)
+                ->tap(fn (Builder $number) => LikePattern::where($number, 'number', $query))
+                ->tap(fn (Builder $company) => LikePattern::orWhere($company, 'client_company_name', $query))
                 ->orWhereHas('client', fn (Builder $client) => $this->clientNamed($client, $query, $archived)))
             ->when(! $archived, fn (Builder $q) => $q->where(fn (Builder $live) => $live->whereNull('client_id')->orWhereHas('client')))
             ->with(['client' => fn ($client) => $client->withTrashed()->select('id', 'name')]);
@@ -177,7 +191,7 @@ final class GlobalSearch
             id: $invoice->id,
             title: (string) $invoice->number,
             client: $invoice->client?->name ?? $invoice->client_company_name,
-            url: $invoice->client_id !== null ? route('clients.show', [$invoice->client_id, 'rozliczenia'], false).'#faktura-'.$invoice->id : null,
+            url: $invoice->client_id !== null ? route('clients.show', [$invoice->client_id, 'billing'], false) : null,
             archived: $invoice->client?->trashed() ?? false,
             detail: [
                 'invoice_date' => $invoice->invoice_date?->toDateString(),
@@ -190,12 +204,7 @@ final class GlobalSearch
 
     private function clientNamed(Builder $client, string $query, bool $archived): void
     {
-        $client->where('name', 'like', $this->like($query))->when($archived, fn (Builder $q) => $q->withTrashed());
-    }
-
-    private function like(string $query): string
-    {
-        return '%'.addcslashes($query, '\\%_').'%';
+        LikePattern::where($client, 'name', $query)->when($archived, fn (Builder $q) => $q->withTrashed());
     }
 
     /**

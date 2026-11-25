@@ -4,7 +4,7 @@ import { sideColumn } from './story-columns';
 import { activity, clock, live, NOW } from './story-fixtures';
 
 const meta = {
-    title: 'Zadania/Zadanie/Aktywność',
+    title: 'Tasks/Task/Activity',
     component: ActivitySection,
     decorators: [sideColumn],
     args: { taskId: 42, activity, live: null, clock, now: NOW, locale: 'pl' },

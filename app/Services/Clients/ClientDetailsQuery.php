@@ -5,18 +5,18 @@ declare(strict_types=1);
 namespace App\Services\Clients;
 
 use App\Models\Client;
-use App\Models\ClientFieldEvent;
 use App\Models\Contact;
 use App\Models\Project;
 use App\Services\Clients\Fields\ClientFieldsQuery;
 use App\Support\LocalCalendar;
+use Illuminate\Support\Facades\Auth;
 
 final class ClientDetailsQuery
 {
     /**
      * Dane: the client's data, contacts, documents and the month close and report settings the old edit page held.
      *
-     * @return array{card: array<string, mixed>|null, field_history: list<array<string, mixed>>, details: array<string, mixed>, contacts: list<array<string, mixed>>, documents: list<array<string, mixed>>}
+     * @return array{card: array<string, mixed>|null, details: array<string, mixed>, contacts: list<array<string, mixed>>, documents: list<array<string, mixed>>}
      */
     public function props(Client $client): array
     {
@@ -24,11 +24,10 @@ final class ClientDetailsQuery
 
         $fields = app(ClientFieldsQuery::class);
         $uses = $fields->uses($client->account_id);
+        $billed = $client->account->shows('billing', Auth::user());
 
         return [
             'card' => $uses ? $fields->card($client) : null,
-            'field_history' => $uses ? $fields->history($client) : [],
-            'field_history_count' => $uses ? ClientFieldEvent::query()->where('client_id', $client->id)->count() : 0,
             'details' => [
                 'type' => $client->type ?? 'business',
                 'name' => $client->name,
@@ -51,9 +50,14 @@ final class ClientDetailsQuery
                 'include_in_month_close' => (bool) $client->include_in_month_close,
                 'ssh_config' => $client->ssh_config,
                 'maintenance_invoice_description' => $client->maintenance_invoice_description,
-                'report_baseline_markdown' => $client->report_baseline_markdown,
                 'notes' => $client->notes,
                 'archived' => $client->trashed(),
+                'has_report_baseline' => $client->report_baseline_markdown !== null && mb_trim($client->report_baseline_markdown) !== '',
+                // A module's tile and menu entries show while the account has it on, the month close also for a client it holds.
+                'modules' => [
+                    'month_close' => $billed && ($client->account->usesModule('month_close') || app(MonthCloseWorklist::class)->holds($client)),
+                    'report_baseline' => $billed && $client->account->usesModule('report_baseline'),
+                ],
             ],
             'stage' => app(ClientJournalQuery::class)->stage($client),
             'projects' => $client->projects()

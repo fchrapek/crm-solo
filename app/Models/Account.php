@@ -9,6 +9,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 final class Account extends Model
 {
@@ -16,6 +17,9 @@ final class Account extends Model
 
     /** Modules the account can switch off; one missing from settings.features is on. */
     public const array FEATURES = ['billing'];
+
+    /** The account's optional modules, each a switch in Settings, Account; a new account starts with every one off. */
+    public const array MODULES = ['month_close', 'report_baseline'];
 
     protected $fillable = [
         'name',
@@ -51,6 +55,17 @@ final class Account extends Model
     public function features(?User $viewer = null): array
     {
         return array_combine(self::FEATURES, array_map(fn (string $feature): bool => $this->shows($feature, $viewer), self::FEATURES));
+    }
+
+    public function usesModule(string $module): bool
+    {
+        return in_array($module, self::MODULES, true) && ($this->settings[$module] ?? false) === true;
+    }
+
+    /** Report baseline on Billing. */
+    public function showsReportBaseline(): bool
+    {
+        return $this->usesModule('report_baseline');
     }
 
     /** The first month (YYYY-MM) whose retainer months must be settled; an account without the setting starts in the local month it was created. */
@@ -102,6 +117,12 @@ final class Account extends Model
     public function integrations(): HasMany
     {
         return $this->hasMany(Integration::class);
+    }
+
+    protected static function booted(): void
+    {
+        // The day plan takes turns on this row's lock, so no plan change ever has to insert it.
+        self::created(fn (Account $account) => DB::table('day_plan_locks')->insertOrIgnore(['account_id' => $account->id]));
     }
 
     protected function casts(): array

@@ -1,3 +1,4 @@
+import { router } from '@inertiajs/react';
 import { useEchoPublic } from '@laravel/echo-react';
 import { toast } from 'sonner';
 
@@ -26,6 +27,7 @@ export function ReverbNotificationListener() {
                     uuid={uuid}
                     onProgress={(event) => setProgress(uuid, event.current, event.total)}
                     onCompleted={(event) => {
+                        router.flushAll();
                         if (event.status === 'error') {
                             toast.error(event.message);
                         } else {

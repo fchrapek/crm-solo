@@ -22,7 +22,7 @@ interface IconProps extends Omit<HTMLAttributes<HTMLSpanElement>, 'children'> {
 /** Fluent paths from ./fluent (scripts/fluent-icons.mjs). Decorative unless given a label. */
 export function Icon({ name, size = 20, filled = false, className, ...rest }: IconProps) {
     const labelled = rest['aria-label'] !== undefined || rest['aria-labelledby'] !== undefined;
-    const glyph: { regular: Record<IconSize, string[]>; filled?: Record<IconSize, string[]> } = FLUENT[name];
+    const glyph: { regular: Record<IconSize, string[]>; filled?: Record<IconSize, string[]>; box?: Partial<Record<IconSize, string>> } = FLUENT[name];
 
     return (
         <span
@@ -32,7 +32,7 @@ export function Icon({ name, size = 20, filled = false, className, ...rest }: Ic
             className={cn(styles.icon, className)}
             data-icon={name}
         >
-            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} fill="currentColor" aria-hidden="true">
+            <svg width={size} height={size} viewBox={glyph.box?.[size] ?? `0 0 ${size} ${size}`} fill="currentColor" aria-hidden="true">
                 {((filled && glyph.filled) || glyph.regular)[size].map((d) => (
                     <path key={d} d={d} />
                 ))}

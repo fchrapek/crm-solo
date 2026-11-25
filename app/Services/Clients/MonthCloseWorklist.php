@@ -8,6 +8,7 @@ use App\Models\Account;
 use App\Models\Client;
 use App\Models\MonthCloseRun;
 use App\Support\LocalCalendar;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /** Who is in a period's month close: enrolled clients, an unfinished run of the period, and clients still owing that hours month. */
 final class MonthCloseWorklist
@@ -21,15 +22,8 @@ final class MonthCloseWorklist
      */
     public function rows(Account $account, string $period): array
     {
-        $states = $this->bank->settlements($account->clients()->pluck('id')->map(intval(...))->all());
-        $owing = $this->owingHours($states, $period);
-
-        // A client taken out of the close keeps an unfinished run of the period reachable.
-        $clients = $account->clients()
-            ->where(fn ($query) => $query
-                ->where(fn ($enrolled) => $enrolled->whereNotNull('month_close_type')->where('include_in_month_close', true))
-                ->orWhereHas('monthCloseRuns', fn ($run) => $run->where('period', $period)->where('status', '!=', MonthCloseRun::STATUS_COMPLETED))
-                ->orWhereIn('id', $owing))
+        $states = $this->states($account);
+        $clients = $this->held($account, $states, $period)
             ->orderBy('name')
             ->with([
                 'monthCloseSites:id,client_id,name',
@@ -46,6 +40,42 @@ final class MonthCloseWorklist
             'template_total' => count(MonthCloseRun::stepTemplateFor($client)),
             'can_start_checklist' => $client->month_close_type !== null && $client->include_in_month_close,
         ])->values()->all();
+    }
+
+    /** How many clients the close holds in any period: the set the Month close switch refuses to leave behind. */
+    public function heldCount(Account $account): int
+    {
+        return $this->held($account, $this->states($account), null)->count();
+    }
+
+    /** Whether the close holds this client in any period, so its close settings stay in sight even with the module off. */
+    public function holds(Client $client): bool
+    {
+        return $this->held($client->account, $this->bank->settlements([$client->id]), null)->whereKey($client->id)->exists();
+    }
+
+    /**
+     * Enrolled clients, an unfinished run and clients still owing an hours month: one period's, or any period's without one.
+     *
+     * @param  array<int, ClientSettlementState>  $states
+     * @return HasMany<Client, Account>
+     */
+    private function held(Account $account, array $states, ?string $period): HasMany
+    {
+        $owing = $this->owingHours($states, $period);
+
+        // A client taken out of the close keeps an unfinished run of the period reachable.
+        return $account->clients()
+            ->where(fn ($query) => $query
+                ->where(fn ($enrolled) => $enrolled->whereNotNull('month_close_type')->where('include_in_month_close', true))
+                ->orWhereHas('monthCloseRuns', fn ($run) => $run->when($period !== null, fn ($one) => $one->where('period', $period))->where('status', '!=', MonthCloseRun::STATUS_COMPLETED))
+                ->orWhereIn('id', $owing));
+    }
+
+    /** @return array<int, ClientSettlementState> */
+    private function states(Account $account): array
+    {
+        return $this->bank->settlements($account->clients()->pluck('id')->map(intval(...))->all());
     }
 
     /**
@@ -86,13 +116,13 @@ final class MonthCloseWorklist
     }
 
     /**
-     * Clients whose hours month still owed is this one, the same set the Klienci note counts for it.
+     * Clients whose hours month still owed is this one (any one without a period), the same set the Clients note counts.
      *
      * @param  array<int, ClientSettlementState>  $states
      * @return list<int>
      */
-    private function owingHours(array $states, string $period): array
+    private function owingHours(array $states, ?string $period): array
     {
-        return array_keys(array_filter($states, fn (ClientSettlementState $state): bool => $state->openBehind() && $state->activePeriod === $period));
+        return array_keys(array_filter($states, fn (ClientSettlementState $state): bool => $state->openBehind() && ($period === null || $state->activePeriod === $period)));
     }
 }

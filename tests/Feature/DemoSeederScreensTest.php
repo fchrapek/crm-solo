@@ -188,7 +188,7 @@ final class DemoSeederScreensTest extends TestCase
         $this->assertEquals($draft->actual_hours * 60, $minutes, 'last month\'s entries match its draft report');
 
         $project = $formularz->project;
-        foreach (['/', '/jutro', '/zadania', '/month-close', "/clients/{$project->client_id}/projects/{$project->id}", "/tasks/{$formularz->id}"] as $page) {
+        foreach (['/', '/tomorrow', '/all-tasks', '/month-close', "/clients/{$project->client_id}/projects/{$project->id}", "/tasks/{$formularz->id}"] as $page) {
             $this->actingAs($owner)->get($page)->assertOk();
         }
     }
@@ -203,7 +203,7 @@ final class DemoSeederScreensTest extends TestCase
         $this->assertFalse(TimeEntry::query()->whereNull('end_time')->exists(), 'no timer runs all day on the demo');
         $this->assertNull(AgentToken::query()->sole()->revoked_at);
 
-        $this->actingAs($owner)->get(route('tasks.show', ['task' => $card, 'historia' => 1]))
+        $this->actingAs($owner)->get(route('tasks.show', ['task' => $card, 'history' => 1]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('tasks/show')

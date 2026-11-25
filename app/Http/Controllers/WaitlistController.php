@@ -30,7 +30,7 @@ final class WaitlistController extends Controller
         // A broken target shows on the first page load, not after a visitor typed an email.
         $this->target();
 
-        return Inertia::render('auth/czesc', [
+        return Inertia::render('auth/waitlist', [
             'joined' => (bool) $request->session()->get(self::JOINED, false),
             'turnstileSiteKey' => Turnstile::siteKey(),
         ]);
@@ -52,7 +52,7 @@ final class WaitlistController extends Controller
             ]);
         }
 
-        return redirect()->route('czesc')->with(self::JOINED, true);
+        return redirect()->route('waitlist')->with(self::JOINED, true);
     }
 
     /**

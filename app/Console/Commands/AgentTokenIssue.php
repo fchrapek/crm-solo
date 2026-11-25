@@ -22,7 +22,7 @@ final class AgentTokenIssue extends Command
     protected $signature = 'agent-tokens:issue
         {user : The user the token acts as: id or email}
         {name : What holds the token, e.g. "claude-code macbook"}
-        {--ability=* : read, write:notes, write:tasks, write:time, write:leads, write:month-close, write:clients, write:messages, write:reports, write:invoice-drafts, write:billing, or write for every write group (default: read)}
+        {--ability=* : read, write:notes, write:tasks, write:time, write:leads, write:month-close, write:clients, write:messages, write:reports, write:invoice-drafts, write:billing, write:trello, write:intake (only by name), or write for every other write group (default: read)}
         {--days= : Days until it expires (default AGENT_TOKEN_DAYS)}
         {--no-expiry : Never expires; revoke it by hand}
         {--to-file= : Write the token to this file (mode 0600) instead of printing it}';
@@ -102,31 +102,53 @@ final class AgentTokenIssue extends Command
     }
 
     /**
-     * An empty 0600 file at $path, created before the token exists. PHP's
-     * fopen resolves symlinks first, so the file is made under a private
-     * temporary name and hard-linked into place: link() fails on anything
-     * already at the path, a dangling symlink included, and never follows it.
+     * An empty 0600 file at $path, created before the token exists. PHP
+     * resolves a symlink before fopen's 'x' (and, on ZTS builds, before
+     * link()), so the opened file is accepted only once lstat shows it is
+     * the regular file at $path itself.
      *
      * @return resource|null
      */
     private function claimFile(string $path)
     {
-        $staging = @tempnam(dirname($path), '.crm-token-');
-        if ($staging === false) {
+        clearstatcache();
+        if (is_link($path) || file_exists($path)) {
             return null;
         }
 
-        $handle = @fopen($staging, 'r+');
-        $claimed = $handle !== false && @link($staging, $path);
-        @unlink($staging);
-        if (! $claimed) {
-            if ($handle !== false) {
-                fclose($handle);
+        $umask = umask(0077);
+        $handle = @fopen($path, 'x');
+        umask($umask);
+        if ($handle === false) {
+            return null;
+        }
+
+        $opened = fstat($handle);
+        clearstatcache();
+        $found = @lstat($path);
+        if ($opened !== false && $found !== false && $this->sameFile($opened, $found)
+            && ($found['mode'] & 0170000) === 0100000 && $found['nlink'] === 1 && $found['uid'] === posix_geteuid()) {
+            return $handle;
+        }
+
+        fclose($handle);
+        if ($opened !== false) {
+            if ($found !== false && $this->sameFile($opened, $found)) {
+                @unlink($path);
+            } elseif (($target = realpath($path)) !== false && ($at = @stat($target)) !== false && $this->sameFile($opened, $at)) {
+                @unlink($target);
             }
-
-            return null;
         }
 
-        return $handle;
+        return null;
+    }
+
+    /**
+     * @param  array<int|string, int>  $a
+     * @param  array<int|string, int>  $b
+     */
+    private function sameFile(array $a, array $b): bool
+    {
+        return $a['dev'] === $b['dev'] && $a['ino'] === $b['ino'];
     }
 }

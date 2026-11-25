@@ -14,7 +14,8 @@
         align-items: center;
         justify-content: space-between;
         width: var(--shell-rail);
-        padding: var(--role-space-16) 0;
+        /* the first field starts level with the command bar: 28 here and its item's 4 */
+        padding: 28px 0 var(--role-space-16);
         overflow-y: auto;
         background: var(--role-rail);
         color: var(--role-text-primary);
@@ -28,14 +29,6 @@
     align-items: center;
     gap: var(--role-space-8);
     width: 100%;
-}
-
-.logo {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 60px;
 }
 
 .item {
@@ -75,7 +68,6 @@
 }
 
 .item:focus-visible,
-.logo:focus-visible,
 .timer:focus-visible,
 .avatar:focus-visible {
     outline: var(--role-stroke-focus) solid var(--role-focus-ring);
@@ -137,7 +129,41 @@
     cursor: pointer;
 }
 
+.avatar[data-current] {
+    border-color: var(--role-selection);
+    background: var(--role-selection);
+    color: var(--role-selection-text);
+}
+
 .avatar:focus-visible {
     border-radius: var(--role-radius-full);
     outline-offset: 2px;
+}
+
+/* Figma: Menu · Account. The rules stand only under the header and above Log out, not between the rows. */
+.accountMenu {
+    --solo-menu-rule: transparent;
+}
+
+.account {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-4);
+    padding: 0 0 var(--role-space-8);
+    overflow-wrap: anywhere;
+}
+
+.accountName {
+    color: var(--role-text-primary);
+    font: 600 var(--solo-text-cell) / 1.3 var(--solo-font-text);
+}
+
+.accountMeta {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.accountRole {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-label) / 1.4 var(--solo-font-text);
 }

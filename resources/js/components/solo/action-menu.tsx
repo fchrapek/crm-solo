@@ -1,7 +1,7 @@
 import { Link, type InertiaLinkProps } from '@inertiajs/react';
 import type { ComponentProps, ReactNode } from 'react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuPortal, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { menuLabelClass } from './menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuPortal, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { menuChipClass, menuChipsClass, menuGroupLabelClass, menuLabelClass, menuValueClass } from './menu';
 import styles from './mobile.module.css';
 
 interface ActionMenuProps {
@@ -29,7 +29,7 @@ export function ActionMenu({ trigger, children, align = 'end', open, onOpenChang
 
 type ItemProps = Omit<ComponentProps<typeof DropdownMenuItem>, 'children' | 'asChild'> & {
     icon?: ReactNode;
-    /** agent: the cobalt item that opens agent material, such as Dla agentów. */
+    /** agent: the cobalt item that opens agent material, such as For agents. */
     tone?: 'agent';
     children: ReactNode;
 };
@@ -40,6 +40,31 @@ export function ActionMenuItem({ icon, tone, children, ...rest }: ItemProps) {
         <DropdownMenuItem data-tone={tone} {...rest}>
             {icon}
             <span className={menuLabelClass}>{children}</span>
+        </DropdownMenuItem>
+    );
+}
+
+/** A quiet heading over a group of the menu's items, such as Modules and Client on a client's Details. */
+export function ActionMenuHeading({ children }: { children: ReactNode }) {
+    return <DropdownMenuLabel className={menuGroupLabelClass}>{children}</DropdownMenuLabel>;
+}
+
+/** A labelled row of choices inside the menu, such as the days a pick can move to. */
+export function ActionMenuGroup({ label, children }: { label: ReactNode; children: ReactNode }) {
+    return (
+        <>
+            <DropdownMenuLabel className={menuGroupLabelClass}>{label}</DropdownMenuLabel>
+            <div className={menuChipsClass}>{children}</div>
+        </>
+    );
+}
+
+/** One choice of a group: a chip with a quiet figure after its label. */
+export function ActionMenuChip({ value, children, ...rest }: ItemProps & { value?: ReactNode }) {
+    return (
+        <DropdownMenuItem className={menuChipClass} {...rest}>
+            {children}
+            {value !== undefined && <span className={menuValueClass}>{value}</span>}
         </DropdownMenuItem>
     );
 }

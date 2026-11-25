@@ -17,7 +17,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 
 /**
- * The month close as agents read it: the worklist, a client's reports with the hours the Rozliczenia tab shows, and
+ * The month close as agents read it: the worklist, a client's reports with the hours the Billing tab shows, and
  * what closing a month would freeze. The same services as the pages, inside the acting account, never a write.
  */
 final class MonthCloseReader

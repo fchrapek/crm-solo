@@ -7,6 +7,7 @@ namespace App\Services\Tasks;
 use App\Models\AgentAuditEvent;
 use App\Models\AgentToken;
 use App\Models\DayPick;
+use App\Models\Project;
 use App\Models\Task;
 use App\Models\TaskAttachment;
 use App\Models\TaskBrief;
@@ -15,13 +16,14 @@ use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\Agent\AgentName;
 use App\Services\Agent\TaskRecord;
+use App\Services\Clients\BilledTime;
 use App\Support\LegalName;
 use App\Support\LocalCalendar;
 use Carbon\CarbonInterface;
 use Inertia\Inertia;
 
 /**
- * The props of the task page (Figma: Zadanie). Read only; every write the
+ * The props of the task page (Figma: Task). Read only; every write the
  * page makes goes through the shared writers.
  */
 final class TaskPage
@@ -46,16 +48,42 @@ final class TaskPage
         return [
             'task' => $this->task($task),
             'time' => $this->time($task),
+            'billed' => $this->billed($task, $viewer),
             'brief' => $this->brief($task, $viewer),
             'card' => $this->card($task),
             'resources' => $this->resources($task),
             'activity' => $this->activity->forTask($task, $activityLimit, $viewer->id),
             'live' => $this->activity->live($task),
             'parent_options' => Inertia::optional(fn (): array => $this->parentOptions($task)),
+            'project_options' => Inertia::optional(fn (): array => $this->projectOptions($task)),
             'clock' => [
                 'today' => LocalCalendar::today()->toDateString(),
                 'now' => now()->toIso8601String(),
             ],
+        ];
+    }
+
+    /**
+     * This month's billed hours of the task, for an owner who asked to see them here; null hides the row.
+     *
+     * @return array{client_id: int, period: string, hours: float, locked: bool}|null
+     */
+    private function billed(Task $task, User $viewer): ?array
+    {
+        $client = $task->project?->client;
+        if ($client === null || ! $viewer->owner || ! $viewer->prefers('show_billed_on_tasks') || ! $client->account->shows('billing', $viewer)) {
+            return null;
+        }
+
+        $period = LocalCalendar::currentMonth();
+        $figures = app(BilledTime::class)->figures($client, $period);
+        $row = collect($figures['tasks'])->firstWhere('task_id', $task->id);
+
+        return $row === null ? null : [
+            'client_id' => $client->id,
+            'period' => $period,
+            'hours' => (float) $row['billed'],
+            'locked' => $figures['refusal'] !== null,
         ];
     }
 
@@ -77,7 +105,7 @@ final class TaskPage
             'is_done' => $task->isDone(),
             'can_unfinish' => $task->canUnfinish(),
             'is_archived' => $task->isArchived(),
-            'picked_today' => DayPick::where('task_id', $task->id)->whereDate('date', LocalCalendar::today()->toDateString())->exists(),
+            'picked_today' => DayPick::live()->where('task_id', $task->id)->whereDate('date', LocalCalendar::today()->toDateString())->exists(),
             'due_date' => $task->due_date?->toIso8601String(),
             'due_day' => $task->dueDay(),
             'is_overdue' => $task->isOverdue(),
@@ -124,6 +152,26 @@ final class TaskPage
      *
      * @return list<array{id: int, name: string}>
      */
+    private function projectOptions(Task $task): array
+    {
+        $project = $task->project;
+        if ($project === null || $project->client_id === null) {
+            return [];
+        }
+
+        return Project::query()
+            ->where('account_id', $project->account_id)
+            ->where('client_id', $project->client_id)
+            ->where(fn ($q) => $q->whereNull('archived_at')->orWhere('id', $project->id))
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (Project $option): array => ['id' => $option->id, 'name' => $option->name])
+            ->all();
+    }
+
+    /**
+     * @return list<array{id: int, name: string}>
+     */
     private function parentOptions(Task $task): array
     {
         return Task::query()
@@ -160,7 +208,7 @@ final class TaskPage
             'day_start' => $dayStart->toIso8601String(),
             'own_running' => $own !== null ? ['id' => $own->id, 'started_at' => $own->start_time?->toIso8601String()] : null,
             'running' => $running->map(fn (TimeEntry $entry): string => (string) $entry->start_time?->toIso8601String())->values(),
-            // the newest running timer's start as the display timezone's clock, for the Czas label
+            // the newest running timer's start as the display timezone's clock, for the Time label
             'running_since' => $running->first()?->start_time?->setTimezone(LocalCalendar::timezone())->format('H:i'),
         ];
     }
@@ -268,7 +316,7 @@ final class TaskPage
     }
 
     /**
-     * Zasoby: files, images that render as thumbnails, then links (the CRM's
+     * Resources: files, images that render as thumbnails, then links (the CRM's
      * own, then the card's link attachments, read only).
      *
      * @return array<string, mixed>

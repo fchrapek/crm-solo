@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { spanMinutes } from './time-entry-edit-dialog';
 
 describe('Edytuj wpis czasu', () => {
-    test('the span under Koniec is the whole minutes between the two fields', () => {
+    test('the span under End time is the whole minutes between the two fields', () => {
         expect(spanMinutes('2026-10-28T10:15', '2026-10-28T10:57')).toBe(42);
         expect(spanMinutes('2026-10-28T23:30', '2026-10-29T00:15')).toBe(45);
     });

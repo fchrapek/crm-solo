@@ -33,6 +33,7 @@ use App\Services\Agent\TaskBriefWriter;
 use App\Services\Clients\MonthSettlement;
 use App\Services\Day\DayPlanner;
 use App\Services\Tasks\TaskCompletion;
+use App\Support\DemoRows;
 use App\Support\LocalCalendar;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
@@ -79,7 +80,7 @@ final class DemoSeeder extends Seeder
             'name' => 'Brzoza Digital',
             'is_test' => true,
             // Two elapsed months owe a close, so the backlog, both kinds of closure and an ended retainer all show.
-            'settings' => ['settlement_from' => $this->monthsAgo(2)->format('Y-m')],
+            'settings' => ['settlement_from' => $this->monthsAgo(2)->format('Y-m'), 'month_close' => true, 'report_baseline' => true],
         ]);
 
         $this->owner = $this->account->users()->create([
@@ -103,6 +104,8 @@ final class DemoSeeder extends Seeder
         $this->seedAgentWork();
         $this->seedCardTask();
         $this->seedDays();
+
+        DemoRows::record($this->account);
 
         $this->command->info('');
         $this->command->info('Demo data seeded for account "Brzoza Digital".');
@@ -373,13 +376,13 @@ MD,
             'created_at' => now()->subDays(3)->setTime(16, 10),
         ]);
 
-        // Invoices: monthly retainer billing across 2026 (netto in whole zł).
+        // Invoices: monthly retainer billing across 2026 (net in whole zł).
         $this->makeInvoice($client, '2026-02-05', 1390, true);
         $this->makeInvoice($client, '2026-03-05', 1390, true);
         $this->makeInvoice($client, '2026-04-06', 1390, true);
         $this->makeInvoice($client, '2026-05-05', 1390, true);
-        $this->makeInvoice($client, '2026-06-05', 1525, true); // + nadwyżka godzin
-        $this->makeInvoice($client, '2026-07-06', 1390, false); // wystawiona, niezapłacona
+        $this->makeInvoice($client, '2026-06-05', 1525, true); // + hours overage
+        $this->makeInvoice($client, '2026-07-06', 1390, false); // issued, unpaid
 
         // Month-close: maintenance run for last month, in progress.
         $run = MonthCloseRun::startFor($client, LocalCalendar::previousMonth());
@@ -444,7 +447,7 @@ MD,
         $this->makeInvoice($client, '2026-04-08', 960, true);  // 6 h
         $this->makeInvoice($client, '2026-05-07', 720, true);  // 4,5 h
         $this->makeInvoice($client, '2026-06-09', 1120, true); // 7 h
-        $this->makeInvoice($client, '2026-07-07', 480, false); // 3 h, niezapłacona
+        $this->makeInvoice($client, '2026-07-07', 480, false); // 3 h, unpaid
 
         $this->tasks['blik'] = $blik;
 
@@ -498,9 +501,9 @@ MD,
             $this->makeTime($client, $strona, null, 'Makiety strony głównej', $slot[1], $slot[0]);
         }
 
-        // Invoices: project billed in milestones (etapy).
-        $this->makeInvoice($client, '2026-05-12', 3200, true);  // etap 1: makiety i struktura
-        $this->makeInvoice($client, '2026-06-18', 4000, false); // etap 2: wdrożenie (niezapłacona)
+        // Invoices: project billed in milestones.
+        $this->makeInvoice($client, '2026-05-12', 3200, true);  // milestone 1: mockups and structure
+        $this->makeInvoice($client, '2026-06-18', 4000, false); // milestone 2: build (unpaid)
     }
 
     // Client 4: churned (the third lifecycle stage on display)
@@ -526,7 +529,7 @@ MD,
 
         $this->makeContact($client, 'Joanna', 'Balcer', ['kontakt@studio-ruchu.test'], 'Właścicielka', '+48 100 000 105');
 
-        $this->makeInvoice($client, '2026-02-16', 2400, true); // strona wizytówka, jednorazowo
+        $this->makeInvoice($client, '2026-02-16', 2400, true); // business card site, one-off
     }
 
     private function seedPrivateOrder(): void
@@ -761,7 +764,7 @@ MD,
 
     /**
      * The task page as the design shows it: a Trello card with its checklist, a brief and the files, images and
-     * links under Zasoby, time from the owner and from an agent, and the agent's writes in Aktywność. The agent
+     * links under Resources, time from the owner and from an agent, and the agent's writes in Activity. The agent
      * acts through a token named like a real one, inside an agent call, so its writes land in the audit trail.
      * No timer is left running: the demo would show an agent at work all day.
      */

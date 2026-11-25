@@ -13,7 +13,8 @@
   font-size: var(--font-size-sm);
   box-shadow: var(--shadow-xs);
   transition-property: color, box-shadow;
-  transition-duration: var(--duration-150);
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-standard);
   outline: none;
 }
 
@@ -87,30 +88,30 @@
 }
 
 .content[data-state="open"] {
-  animation: fadeIn var(--duration-150) var(--ease-out), zoomIn var(--duration-150) var(--ease-out);
+  animation: fadeIn var(--motion-base) var(--ease-standard), zoomIn var(--motion-base) var(--ease-standard);
 }
 
 .content[data-state="closed"] {
-  animation: fadeOut var(--duration-150) var(--ease-in), zoomOut var(--duration-150) var(--ease-in);
+  animation: fadeOut var(--motion-base-exit) var(--ease-exit), zoomOut var(--motion-base-exit) var(--ease-exit);
 }
 
 .content[data-side="bottom"] {
-  animation: fadeIn var(--duration-150) var(--ease-out), slideFromTop var(--duration-150) var(--ease-out);
+  animation: fadeIn var(--motion-base) var(--ease-standard), slideFromTop var(--motion-base) var(--ease-standard);
   transform: translateY(0.25rem);
 }
 
 .content[data-side="top"] {
-  animation: fadeIn var(--duration-150) var(--ease-out), slideFromBottom var(--duration-150) var(--ease-out);
+  animation: fadeIn var(--motion-base) var(--ease-standard), slideFromBottom var(--motion-base) var(--ease-standard);
   transform: translateY(-0.25rem);
 }
 
 .content[data-side="left"] {
-  animation: fadeIn var(--duration-150) var(--ease-out), slideFromRight var(--duration-150) var(--ease-out);
+  animation: fadeIn var(--motion-base) var(--ease-standard), slideFromRight var(--motion-base) var(--ease-standard);
   transform: translateX(-0.25rem);
 }
 
 .content[data-side="right"] {
-  animation: fadeIn var(--duration-150) var(--ease-out), slideFromLeft var(--duration-150) var(--ease-out);
+  animation: fadeIn var(--motion-base) var(--ease-standard), slideFromLeft var(--motion-base) var(--ease-standard);
   transform: translateX(0.25rem);
 }
 
@@ -277,8 +278,8 @@
   height: auto;
   min-height: 48px;
   padding: 12px var(--solo-space-3);
-  border: 1px solid var(--solo-field-border);
-  border-radius: var(--solo-radius-lg);
+  border: 1px solid transparent;
+  border-radius: var(--role-radius-sm);
   background-color: var(--solo-field-bg);
   color: var(--solo-field-fg);
   font: 400 var(--solo-mobile-body) / 21px var(--solo-font-text);
@@ -291,7 +292,6 @@
     min-height: 0;
     padding: 9px var(--solo-space-3);
     border-width: 1px;
-    border-radius: var(--solo-radius-lg);
     font: 400 var(--solo-text-field-regular) / 20px var(--solo-font-text);
   }
 }
@@ -306,17 +306,21 @@
   opacity: 1;
 }
 
-.soloTrigger:focus-visible {
-  border-color: var(--solo-field-border);
-  box-shadow: none;
-  outline: 2px solid var(--solo-fg);
-  outline-offset: 2px;
+.soloTrigger:hover:not(:disabled, :focus-visible) {
+  background-color: color-mix(in srgb, var(--solo-field-fg) 6%, var(--solo-field-bg));
 }
 
-.soloTrigger[aria-invalid="true"],
-:global(.dark) .soloTrigger[aria-invalid="true"] {
-  border-color: var(--solo-late);
-  box-shadow: none;
+/* the same 2 px rings inside the box as the text field */
+.soloTrigger:focus-visible {
+  border-color: var(--role-focus-ring);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--role-focus-ring);
+}
+
+.soloTrigger[aria-invalid="true"]:not(:focus-visible),
+:global(.dark) .soloTrigger[aria-invalid="true"]:not(:focus-visible) {
+  border-color: var(--role-text-primary);
+  box-shadow: inset 0 0 0 1px var(--role-text-primary);
 }
 
 :global([data-day]) .item {
@@ -333,9 +337,9 @@
   gap: 0.28em;
   justify-content: flex-start;
   padding: var(--solo-space-2) var(--solo-space-4);
-  border: 1px solid var(--solo-field-border);
+  border: 1px solid var(--solo-pill-edge);
   border-radius: var(--solo-radius-full);
-  background-color: var(--solo-field-bg);
+  background-color: var(--role-tile);
   color: var(--solo-fg);
   font: 600 var(--solo-text-control) / normal var(--solo-font-text);
   box-shadow: none;

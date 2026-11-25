@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * When a signed-in user last opened a client's record; "nowe" on Przegląd and Dziennik is measured from it.
+ * When a signed-in user last opened a client's record; New on Overview and Journal is measured from it.
  *
  * @property int $id
  * @property int $user_id

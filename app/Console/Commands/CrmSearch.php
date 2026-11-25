@@ -42,7 +42,7 @@ final class CrmSearch extends Command
         }
 
         if ($result['groups'] === []) {
-            $this->raw('No results.');
+            $this->raw($result['archived_total'] > 0 ? "No results. {$result['archived_total']} with --archived (done tasks, archived and deleted records)." : 'No results.');
 
             return self::SUCCESS;
         }

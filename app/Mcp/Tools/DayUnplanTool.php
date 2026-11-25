@@ -33,7 +33,7 @@ final class DayUnplanTool extends Tool
         $account = $this->identity()->account->id;
 
         try {
-            return $this->payload($plans->unplan($account, $validated['task'], $plans->day($validated['day'] ?? null)));
+            return $this->payload($plans->unplan($account, $validated['task'], $plans->day($validated['day'] ?? null, existing: true)));
         } catch (ReferenceException $e) {
             return $this->referenceError($e);
         } catch (AgentRefusal $e) {

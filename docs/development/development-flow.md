@@ -81,3 +81,10 @@ php artisan test --filter=ClientsTest         # Specific test class
 
 ### Adding translations
 Always add to both `lang/en.json` and `lang/pl.json` simultaneously.
+
+### Renaming or retiring a URL
+Old URLs live in one table, `App\Http\LegacyUrls`: a path pattern to its new path, and per new path the old query keys (and values) to their new names. The global middleware `RedirectLegacyUrls` answers a GET or HEAD on an old URL with a 301 (`Cache-Control: public, max-age=604800`, a relative `Location`), translating path and query in one hop and keeping every other parameter in its order. It runs before routing and authentication, so a guest's old bookmark is translated before the login redirect saves it.
+1. Rename the route and every place that builds the URL.
+2. Add the old URL as a row of `LegacyUrls` and as a row of the `table()` provider in `LegacyUrlsTest`, the review list of every redirect; the test fails on a rule or a mapped value with no row.
+3. Never redirect or alias a write (POST, PUT, PATCH, DELETE): `fetch()` follows a 301 on a POST as a GET, so the write is lost without an error. An old write path answers 404. Never use `Route::redirect()` either: Laravel's `RedirectController` drops the query string.
+4. A retired Polish word also goes on the list in `EnglishUrlsGuardTest`, which fails when one comes back as a route segment, a record tab or a string under `app/Http` (only `LegacyUrls.php` is skipped, and it may hold the words only inside its two tables).

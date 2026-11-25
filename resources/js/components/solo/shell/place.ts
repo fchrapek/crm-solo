@@ -17,18 +17,22 @@ export interface PlaceLinkPill {
     href: Href;
     active?: boolean;
     count?: number;
-    /** A word after the label in the count's face, such as "w toku" on the month in progress. */
+    /** A word after the label in the count's face, such as "in progress" on the month in progress. */
     note?: string;
     /** The place is finished (a closed day): a check after the label, read out as this text. */
     done?: string;
     /** How the visit goes, for a pill that filters one block of the page: a partial reload that keeps the scroll. */
     visit?: Pick<InertiaLinkProps, 'only' | 'preserveScroll' | 'preserveState' | 'replace'>;
+    /** In a menu: the group the choice sits under, such as its year; neighbours with the same group share one heading. */
+    group?: string;
 }
 
 /** A pill that opens a menu of choices, such as one more filter beside the status pills; active once a choice narrows the page. */
 export interface PlaceMenuPill {
     label: string;
     active?: boolean;
+    /** The menu's title above its choices. */
+    heading?: string;
     menu: PlaceLinkPill[];
 }
 

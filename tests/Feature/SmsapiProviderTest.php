@@ -177,14 +177,14 @@ final class SmsapiProviderTest extends TestCase
     {
         $owner = User::query()->where('account_id', $this->account->id)->sole();
 
-        $this->actingAs($owner)->get('/settings/sms')->assertInertia(fn (AssertableInertia $page) => $page->where('sending.provider', 'simulator')->where('sending.smsapi_connected', false));
+        $this->actingAs($owner)->get('/settings/messages')->assertInertia(fn (AssertableInertia $page) => $page->where('sending.provider', 'simulator')->where('sending.smsapi_connected', false));
         $this->actingAs($owner)->patch('/settings/sms/sending', ['provider' => 'smsapi'])->assertSessionHasErrors('provider');
         $this->assertSame('simulator', app(MessageSettings::class)->sendingOf($this->account->fresh())['provider']);
 
         Integration::create(['account_id' => $this->account->id, 'provider' => 'smsapi', 'is_enabled' => true, 'api_key' => 'token-of-the-account']);
         $this->actingAs($owner)->patch('/settings/sms/sending', ['provider' => 'smsapi'])->assertSessionHasNoErrors();
 
-        $this->actingAs($owner->fresh())->get('/settings/sms')->assertInertia(fn (AssertableInertia $page) => $page->where('sending.provider', 'smsapi')->where('sending.smsapi_connected', true));
+        $this->actingAs($owner->fresh())->get('/settings/messages')->assertInertia(fn (AssertableInertia $page) => $page->where('sending.provider', 'smsapi')->where('sending.smsapi_connected', true));
         $this->actingAs($owner)->patch('/settings/sms/sending', ['provider' => 'carrier-pigeon'])->assertSessionHasErrors('provider');
     }
 
@@ -192,7 +192,7 @@ final class SmsapiProviderTest extends TestCase
     {
         $owner = User::query()->where('account_id', $this->account->id)->sole();
 
-        $this->actingAs($owner)->get('/settings/integracje')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+        $this->actingAs($owner)->get('/settings/integrations')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
             ->where('integrations.1.provider', 'trello')->where('integrations.1.syncs', true)
             ->where('integrations.2.provider', 'smsapi')->where('integrations.2.syncs', false));
     }

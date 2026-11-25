@@ -1,6 +1,7 @@
 import InertiaPagination from '@/components/inertia-pagination';
-import { Chip, StatusDot } from '@/components/solo/chip';
+import { StatusDot } from '@/components/solo/chip';
 import { HoursBar } from '@/components/solo/hours-bar';
+import { useLinkPrefetch } from '@/components/solo/link-prefetch';
 import { ListTable, ListTableCell, ListTableHead } from '@/components/solo/list-table';
 import { Poster, SoloButton, SoloButtonLink } from '@/components/solo/primitives';
 import { Row } from '@/components/solo/row';
@@ -9,6 +10,7 @@ import { type PlaceResolver } from '@/components/solo/shell/place';
 import { SoloSurface } from '@/components/solo/surface';
 import { Tile, TileInset } from '@/components/solo/tile';
 import { Icon } from '@/components/ui/icon';
+import { InfoHint } from '@/components/ui/info-hint';
 import { monthInstrumental, monthName } from '@/lib/dates';
 import clients from '@/routes/clients';
 import messages from '@/routes/messages';
@@ -33,6 +35,7 @@ export interface ClientListRow {
     is_archived: boolean;
     is_pinned: boolean;
     agent_live: boolean;
+    agent_minutes: number | null;
     hours: ClientListHours;
     /** An account with its own fields: the overview values and the assignee. */
     fields?: Record<string, string | null>;
@@ -61,7 +64,7 @@ interface IndexProps {
 export type OpenMonths = { count: number; period: string | null; oldest: string | null };
 
 /**
- * Figma: Klienci (1087:3605, phone 1087:3858). The statuses and the further filters are the page's pills, the command
+ * Figma: Clients (1087:3605, phone 1087:3858). The statuses and the further filters are the page's pills, the command
  * bar narrows the list to typed words, and the list is one tile: a table from 768 px, name and figures on a phone.
  */
 export default function ClientsIndex() {
@@ -69,8 +72,8 @@ export default function ClientsIndex() {
     const card = cardProp ?? null;
     const filters = listFilters({ filters: base, card });
     const { t } = useTranslation();
-    // The old /clients/create link lands here with ?nowy and opens the dialog.
-    const [creating, setCreating] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('nowy'));
+    // The old /clients/create link lands here with ?new and opens the dialog.
+    const [creating, setCreating] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('new'));
 
     if (noClients(stageCounts)) {
         return (
@@ -132,7 +135,7 @@ export default function ClientsIndex() {
 
 ClientsIndex.place = ((props, context) => clientListPlace({ ...props, card: props.card ?? null }, context)) satisfies PlaceResolver<IndexProps>;
 
-/** Figma: Pierwsze uruchomienie (1095:45827, phone 1095:45957). No clients yet: the dog large, one line and the one next step. */
+/** Figma: First run (1095:45827, phone 1095:45957). No clients yet: the dog large, one line and the one next step. */
 export function FirstRun({ onCreate }: { onCreate: () => void }) {
     const { t } = useTranslation();
 
@@ -171,7 +174,7 @@ export function openMonthsText(current: string, openMonths: OpenMonths, short: b
         : t('It is {{current}} now · {{count}} clients with an open month', values);
 }
 
-/** Figma: Tile / list · Otwarte miesiące. One row; Otwórz leads to the month close of the oldest month still owed. */
+/** Figma: Tile / list · Open months. One row; Open leads to the month close of the oldest month still owed. */
 export function OpenMonthsNote({ current, openMonths }: { current: string; openMonths: OpenMonths }) {
     const { t, i18n } = useTranslation();
 
@@ -225,19 +228,32 @@ function SmsNote({ sms }: { sms: ListCard['sms'] }) {
     );
 }
 
-/** The name cell every list shares: the agent dot on a phone, the link to the record, the pin mark. */
+/** The name cell every list shares: the agent dot, the link to the record, the pin mark. */
 function NameCell({ client }: { client: ClientListRow }) {
     const { t } = useTranslation();
+    const prefetch = useLinkPrefetch();
+    const href = clients.show({ client: client.id, tab: 'overview' });
+    const agent =
+        client.agent_minutes !== null
+            ? t('{{agent}} working · {{minutes}} min', { agent: 'Claude', minutes: client.agent_minutes })
+            : t('{{agent}} working', { agent: 'Claude' });
 
     return (
         <ListTableCell kind="title" truncate>
             <span className={styles.name}>
                 {client.agent_live && (
-                    <span className={styles.agentDot} role="img" aria-label={t('{{agent}} working', { agent: 'Claude' })}>
-                        <StatusDot status="agent" />
-                    </span>
+                    <InfoHint
+                        side="top"
+                        trigger={
+                            <button type="button" className={styles.agentDot} aria-label={agent}>
+                                <StatusDot status="agent" />
+                            </button>
+                        }
+                    >
+                        {agent}
+                    </InfoHint>
                 )}
-                <Link href={clients.show({ client: client.id, tab: 'przeglad' })} className={styles.rowLink} title={client.name}>
+                <Link href={href} prefetch={prefetch(href)} className={styles.rowLink} title={client.name}>
                     {client.short_name}
                 </Link>
                 {client.is_pinned && <Icon name="pin" size={16} role="img" aria-label={t('Pinned')} className={styles.pin} />}
@@ -246,7 +262,7 @@ function NameCell({ client }: { client: ClientListRow }) {
     );
 }
 
-function ClientTable({ rows, period }: { rows: ClientListRow[]; period: string }) {
+export function ClientTable({ rows, period }: { rows: ClientListRow[]; period: string }) {
     const { t, i18n } = useTranslation();
 
     return (
@@ -260,9 +276,6 @@ function ClientTable({ rows, period }: { rows: ClientListRow[]; period: string }
                     </ListTableHead>
                     <ListTableHead align="end" className={styles.colBalance}>
                         {t('Balance')}
-                    </ListTableHead>
-                    <ListTableHead wide className={styles.colFlag}>
-                        {t('Attention')}
                     </ListTableHead>
                 </tr>
             </thead>
@@ -306,7 +319,6 @@ export function ClientRow({ client }: { client: ClientListRow }) {
             >
                 {balance.tone === 'none' ? <span className={styles.wideOnly}>{balance.text}</span> : balance.text}
             </ListTableCell>
-            <ListTableCell wide>{client.agent_live && <Chip status="agent">{t('{{agent}} working', { agent: 'Claude' })}</Chip>}</ListTableCell>
         </tr>
     );
 }

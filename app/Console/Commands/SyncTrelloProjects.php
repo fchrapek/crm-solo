@@ -58,6 +58,8 @@ final class SyncTrelloProjects extends Command
         }
 
         $started = now();
+        memory_reset_peak_usage();
+        $heldAtStart = memory_get_usage(true);
         // One deadline for the whole run, every account and board, so it ends inside the scheduler's overlap lock.
         $deadline = TrelloService::deadline();
 
@@ -89,9 +91,15 @@ final class SyncTrelloProjects extends Command
         }
 
         if ($sync) {
-            $run = ['seconds' => round($started->diffInMilliseconds(now()) / 1000, 1), 'peak_memory_mb' => (int) round(memory_get_peak_usage(true) / 1048576)];
+            $peak = memory_get_peak_usage(true);
+            $run = [
+                'seconds' => round($started->diffInMilliseconds(now()) / 1000, 1),
+                'peak_memory_mb' => (int) round($peak / 1048576),
+                'run_memory_mb' => (int) round(($peak - $heldAtStart) / 1048576),
+            ];
             // The hosted stack logs warnings and up, so only a run worth looking at reaches the file.
-            $worthALook = $run['seconds'] > self::SLOW_RUN_SECONDS || $run['peak_memory_mb'] > self::HEAVY_RUN_MB;
+            // Judged on what the run added: memory its process already held (a long test worker) is not the run's.
+            $worthALook = $run['seconds'] > self::SLOW_RUN_SECONDS || $run['run_memory_mb'] > self::HEAVY_RUN_MB;
             Log::log($worthALook ? 'warning' : 'info', 'Trello sync run finished', $run);
         }
 

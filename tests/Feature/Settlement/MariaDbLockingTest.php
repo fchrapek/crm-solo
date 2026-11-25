@@ -11,6 +11,7 @@ use App\Models\ClientMonthClosure;
 use App\Models\ClientMonthSettlementEvent;
 use App\Models\ClientReport;
 use App\Models\ClientRetainer;
+use App\Models\DayPick;
 use App\Models\MessageRule;
 use App\Models\MessageTemplate;
 use App\Models\OutboundMessage;
@@ -25,20 +26,27 @@ use App\Services\Clients\LoggedTimeFreeze;
 use App\Services\Clients\MonthSettlement;
 use App\Services\Clients\RetainerTerms;
 use App\Services\Clients\SettlementOutcome;
+use App\Services\Day\DayPlanner;
+use App\Services\Day\PlanBusy;
 use App\Services\Messaging\MessageDispatcher;
 use App\Services\Reports\Composers\StructuredListComposer;
 use App\Services\Reports\ReportComposerRegistry;
 use App\Services\Reports\ReportStatusTransition;
 use App\Services\Reports\ReportWriter;
 use App\Services\Time\PeriodSettled;
+use App\Support\JsonSettings;
 use Closure;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\Events\TransactionCommitted;
 use Illuminate\Database\Events\TransactionCommitting;
+use Illuminate\Database\Events\TransactionRolledBack;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use PDO;
 use RuntimeException;
 use Tests\TestCase;
@@ -111,6 +119,8 @@ final class MariaDbLockingTest extends TestCase
             return $registry;
         });
         DB::connection('lock_writer')->statement('SET SESSION innodb_lock_wait_timeout = 1');
+        // As on MariaDB 11.8 in production, where it is on by default.
+        DB::connection('lock_writer')->statement('SET SESSION innodb_snapshot_isolation = ON');
     }
 
     protected function tearDown(): void
@@ -314,6 +324,21 @@ final class MariaDbLockingTest extends TestCase
         $this->assertSame(0, TimeEntry::query()->count());
     }
 
+    public function test_a_move_inside_one_client_waits_on_the_client_row_before_its_time_moves(): void
+    {
+        $task = $this->task();
+        $entry = TimeEntry::create([
+            'account_id' => $this->client->account_id, 'project_id' => $task->project_id, 'client_id' => $this->client->id, 'task_id' => $task->id,
+            'source' => TimeEntry::SOURCE_MANUAL, 'start_time' => '2026-10-05 08:00:00', 'end_time' => '2026-10-05 09:00:00', 'duration_minutes' => 60,
+        ]);
+        $gallery = Project::create(['account_id' => $this->client->account_id, 'client_id' => $this->client->id, 'name' => 'Gallery']);
+
+        $this->whileHolding('clients', $this->client->id, fn () => app(\App\Services\Agent\TaskEditor::class)
+            ->edit((int) $this->client->account_id, (string) $task->id, ['project' => (string) $gallery->id, 'move_time' => true, 'within_client' => true]));
+
+        $this->assertSame($task->project_id, (int) $entry->fresh()->project_id);
+    }
+
     public function test_a_timer_start_queued_behind_a_finalize_of_today_is_refused(): void
     {
         $october = $this->report('2026-10-01', '2026-10-31', ClientReport::STATUS_DRAFT);
@@ -376,6 +401,178 @@ final class MariaDbLockingTest extends TestCase
         $this->assertSame(1, TimeEntry::query()->count());
     }
 
+    public function test_a_second_move_of_a_task_waits_for_the_first_and_moves_it_from_where_the_first_put_it(): void
+    {
+        $planner = app(DayPlanner::class);
+        $task = $this->task();
+        $accountId = (int) $this->client->account_id;
+        $today = $planner->today();
+        $planner->pick($accountId, $today, $task->id);
+        $live = fn (): array => DayPick::query()->live()->where('task_id', $task->id)->orderBy('date')->get()->map(fn (DayPick $pick): string => $pick->date->toDateString())->all();
+
+        $second = $this->interleave(
+            fn () => $planner->pick($accountId, $today->addDay(), $task->id),
+            function () use ($planner, $accountId, $today, $task, $live): array {
+                $planner->pick($accountId, $today->addDays(2), $task->id);
+
+                return $live();
+            },
+            'day_plan_locks',
+        );
+
+        $this->assertSame([$today->addDays(2)->toDateString()], $second);
+        $this->assertSame([$today->addDays(2)->toDateString()], $live());
+        $this->assertSame([$today->addDay()->toDateString(), $today->addDays(2)->toDateString()], DayPick::query()->where('task_id', $task->id)->whereNotNull('moved_to')->orderBy('date')->get()->map(fn (DayPick $pick): string => $pick->moved_to->toDateString())->all(), 'the second move read the first one\'s pick and moved it on');
+    }
+
+    public function test_a_move_that_waits_past_its_bound_for_the_plan_is_refused_with_nothing_written(): void
+    {
+        $planner = app(DayPlanner::class);
+        $task = $this->task();
+        $accountId = (int) $this->client->account_id;
+        $today = $planner->today();
+        $planner->pick($accountId, $today, $task->id);
+
+        $holder = DB::connection('lock_holder');
+        $holder->beginTransaction();
+        $holder->table('day_plan_locks')->where('account_id', $accountId)->lockForUpdate()->first();
+        try {
+            $planner->pick($accountId, $today->addDay(), $task->id);
+            $this->fail('The move went through while another connection held the plan.');
+        } catch (PlanBusy $e) {
+            $this->assertSame(['task_id' => ['The plan is being changed. Try again.']], $e->errors());
+        } finally {
+            $holder->rollBack();
+        }
+
+        $this->assertSame([[$today->toDateString(), null]], DayPick::query()->where('task_id', $task->id)->get()->map(fn (DayPick $pick): array => [$pick->date->toDateString(), $pick->moved_to])->all());
+    }
+
+    public function test_a_close_refused_for_a_timer_never_shows_its_stamp_to_a_move_waiting_on_the_plan(): void
+    {
+        $planner = app(DayPlanner::class);
+        $task = $this->task();
+        $accountId = (int) $this->client->account_id;
+        $today = $planner->today();
+        $planner->pick($accountId, $today, $task->id);
+        TimeEntry::startFor($task);
+        $live = fn (): array => DayPick::query()->live()->where('task_id', $task->id)->orderBy('date')->get()->map(fn (DayPick $pick): string => $pick->date->toDateString())->all();
+
+        [$dir, $pid, $child] = $this->forkSecond(function (string $dir) use ($planner, $accountId, $today, $task, $live): array {
+            self::awaitFile("{$dir}/held", 'the close to hold the plan');
+            $planner->pick($accountId, $today->addDay(), $task->id);
+
+            return $live();
+        });
+        $this->onceQueried(['`day_plan_locks`', 'for update'], function () use ($dir, $child): void {
+            file_put_contents("{$dir}/held", '1');
+            $this->awaitQueued($child, '%`day_plan_locks`%for update%');
+        });
+        // The move runs to its end before the close goes on, at the moment its turn is given back.
+        $this->onceTransactionEnds(fn () => self::awaitFile("{$dir}/answer", 'the move to answer'));
+
+        try {
+            $planner->close($accountId, $today);
+            $this->fail('The day closed with a timer running.');
+        } catch (ValidationException $e) {
+            $this->assertSame(['close' => ['Stop the running timer before closing the day.']], $e->errors());
+        }
+
+        $this->assertSame([$today->addDay()->toDateString()], $this->secondResult($dir, $pid)['answer'], 'the move saw today open and moved its pick');
+        $this->assertSame([$today->addDay()->toDateString()], $live());
+        $this->assertFalse($planner->isClosed($accountId, $today));
+    }
+
+    public function test_a_timer_started_while_the_close_waits_to_stamp_refuses_the_close_and_its_stamp_never_shows(): void
+    {
+        $planner = app(DayPlanner::class);
+        $task = $this->task();
+        $accountId = (int) $this->client->account_id;
+        $today = $planner->today();
+
+        [$dir, $pid, $child] = $this->forkSecond(function (string $dir) use ($task): mixed {
+            self::awaitFile("{$dir}/held", 'the close to hold the plan');
+            $close = (int) self::awaitFile("{$dir}/close", 'the close to name its connection');
+            // The timer has written its entry and taken back today's stamp; it commits once the close waits to stamp.
+            Event::listen(TransactionCommitting::class, function () use ($dir, $close): void {
+                file_put_contents("{$dir}/unstamped", '1');
+                $this->awaitQueued($close, '%insert into `day_closes`%');
+            });
+
+            return TimeEntry::startFor($task)->id;
+        });
+        file_put_contents("{$dir}/close", (string) DB::connection('lock_writer')->selectOne('select connection_id() as id')->id);
+        $this->onceQueried(['`day_plan_locks`', 'for update'], function () use ($dir): void {
+            file_put_contents("{$dir}/held", '1');
+            self::awaitFile("{$dir}/unstamped", 'the timer to take back the stamp');
+        });
+        $stampShown = null;
+        $this->onceTransactionEnds(function () use (&$stampShown, $accountId): void {
+            $stampShown = DB::connection('lock_holder')->table('day_closes')->where('account_id', $accountId)->exists();
+        });
+
+        try {
+            $planner->close($accountId, $today);
+            $this->fail('The day closed with a timer running.');
+        } catch (ValidationException $e) {
+            $this->assertSame(['close' => ['Stop the running timer before closing the day.']], $e->errors());
+        }
+
+        $this->assertIsInt($this->secondResult($dir, $pid)['answer'], 'the timer started');
+        $this->assertFalse($stampShown, 'the refused close committed no stamp');
+        $this->assertFalse($planner->isClosed($accountId, $today));
+        $this->assertSame(1, TimeEntry::query()->whereNull('end_time')->count());
+    }
+
+    public function test_a_timer_started_after_the_close_stamped_never_runs_on_the_closed_day(): void
+    {
+        $planner = app(DayPlanner::class);
+        $task = $this->task();
+        $accountId = (int) $this->client->account_id;
+        $today = $planner->today();
+
+        [$dir, $pid, $child] = $this->forkSecond(function (string $dir) use ($task): mixed {
+            self::awaitFile("{$dir}/stamped", 'the close to stamp the day');
+
+            return TimeEntry::startFor($task)->id;
+        });
+        $this->onceQueried(['insert into `day_closes`'], function () use ($dir, $child): void {
+            file_put_contents("{$dir}/stamped", '1');
+            $this->awaitQueued($child, '%delete from `day_closes`%');
+        });
+
+        $planner->close($accountId, $today);
+        $timer = $this->secondResult($dir, $pid)['answer'];
+
+        // Under snapshot isolation the timer's stamp removal reads a row committed after its snapshot and is refused, start and all.
+        $this->assertSame(['error', true], [$timer[0] ?? null, str_contains((string) ($timer[1] ?? ''), '1020 Record has changed since last read')]);
+        $this->assertTrue($planner->isClosed($accountId, $today));
+        $this->assertSame(0, TimeEntry::query()->count(), 'the refused start wrote nothing');
+    }
+
+    public function test_a_plan_change_behind_another_first_use_of_the_plan_row_is_refused_within_its_bound(): void
+    {
+        $planner = app(DayPlanner::class);
+        $task = $this->task();
+        $accountId = (int) $this->client->account_id;
+        DB::table('day_plan_locks')->where('account_id', $accountId)->delete();
+
+        // Another request inserted the row and holds it uncommitted.
+        $holder = DB::connection('lock_holder');
+        $holder->beginTransaction();
+        $holder->table('day_plan_locks')->insert(['account_id' => $accountId]);
+        try {
+            $planner->pick($accountId, $planner->today(), $task->id);
+            $this->fail('The pick went through while another connection held the plan row.');
+        } catch (PlanBusy $e) {
+            $this->assertSame(['task_id' => ['The plan is being changed. Try again.']], $e->errors());
+        } finally {
+            $holder->rollBack();
+        }
+
+        $this->assertSame(0, DayPick::query()->count());
+    }
+
     public function test_the_settlement_migrations_go_down_and_up_again(): void
     {
         // Everything from the first settlement migration on, so later migrations go down and up with them.
@@ -392,6 +589,18 @@ final class MariaDbLockingTest extends TestCase
         $this->assertTrue($schema->hasTable('client_month_settlement_events'));
         $this->assertTrue($schema->hasColumn('client_reports', 'needs_recalculation'));
         $this->assertSame('2026-09', Account::query()->sole()->settlementFrom());
+    }
+
+    public function test_settings_keys_are_written_in_place_on_mariadb_a_null_column_included(): void
+    {
+        $account = Account::create(['name' => 'Settings']);
+        JsonSettings::write('accounts', $account->id, ['report_baseline' => true]);
+        $stale = $account->fresh();
+        JsonSettings::write('accounts', $account->id, ['month_close' => true]);
+        JsonSettings::write('accounts', $stale->id, ['report_baseline' => false, 'count' => 3, 'label' => 'Zakres "bazowy"']);
+        JsonSettings::forget('accounts', $account->id, 'count');
+
+        $this->assertSame(['report_baseline' => false, 'month_close' => true, 'label' => 'Zakres "bazowy"'], $account->fresh()->settings);
     }
 
     public function test_a_custom_field_write_waits_on_the_client_row(): void
@@ -462,7 +671,41 @@ final class MariaDbLockingTest extends TestCase
      *
      * @return array{string, string}
      */
-    private function interleave(Closure $first, Closure $second): array
+    private function interleave(Closure $first, Closure $second, string $table = 'clients'): array
+    {
+        [$dir, $pid, $child] = $this->forkSecond(function (string $dir) use ($second): mixed {
+            self::awaitFile("{$dir}/held", 'the first operation to hold its lock');
+
+            return $second();
+        });
+        $committingAt = null;
+        Event::listen(TransactionCommitting::class, function () use (&$committingAt, $dir, $child, $table): void {
+            if ($committingAt !== null) {
+                return;
+            }
+            file_put_contents("{$dir}/held", '1');
+            $this->awaitQueued($child, "%`{$table}`%for update%");
+            $committingAt = microtime(true);
+        });
+
+        try {
+            $this->firstAnswer = $first();
+        } finally {
+            $result = $this->secondResult($dir, $pid);
+        }
+
+        $this->assertNotNull($committingAt, 'the first operation reached its commit holding the lock');
+        $this->assertGreaterThan($committingAt, $result['at'], 'the second operation finished only after the first committed');
+
+        return $result['answer'];
+    }
+
+    /**
+     * Runs $second($dir) on a connection of its own in a child process; the two sides signal each other through files in $dir.
+     *
+     * @return array{string, int, int} the directory, the child's pid and its connection id
+     */
+    private function forkSecond(Closure $second): array
     {
         $dir = sys_get_temp_dir().'/settlement-race-'.bin2hex(random_bytes(6));
         mkdir($dir);
@@ -475,9 +718,9 @@ final class MariaDbLockingTest extends TestCase
             DB::purge('lock_writer');
             DB::purge('lock_holder');
             try {
+                DB::connection('lock_writer')->statement('SET SESSION innodb_snapshot_isolation = ON');
                 file_put_contents("{$dir}/child", (string) DB::connection('lock_writer')->selectOne('select connection_id() as id')->id);
-                self::awaitFile("{$dir}/held", 'the first operation to hold its lock');
-                $answer = ['answer' => $second(), 'at' => microtime(true)];
+                $answer = ['answer' => $second($dir), 'at' => microtime(true)];
             } catch (Throwable $e) {
                 $answer = ['answer' => ['error', $e::class.': '.$e->getMessage()], 'at' => microtime(true)];
             }
@@ -485,40 +728,58 @@ final class MariaDbLockingTest extends TestCase
             posix_kill((int) getmypid(), SIGKILL);
         }
 
-        $child = (int) self::awaitFile("{$dir}/child", 'the second connection to open');
-        $committingAt = null;
-        Event::listen(TransactionCommitting::class, function () use (&$committingAt, $dir, $child): void {
-            if ($committingAt !== null) {
-                return;
-            }
-            file_put_contents("{$dir}/held", '1');
-            $this->awaitQueuedBehindClientLock($child);
-            $committingAt = microtime(true);
-        });
+        return [$dir, $pid, (int) self::awaitFile("{$dir}/child", 'the second connection to open')];
+    }
 
-        try {
-            $this->firstAnswer = $first();
-        } finally {
-            pcntl_waitpid($pid, $status);
-        }
+    /** @return array{answer: mixed, at: float} */
+    private function secondResult(string $dir, int $pid): array
+    {
+        pcntl_waitpid($pid, $status);
         $result = unserialize(self::awaitFile("{$dir}/answer", 'the second operation to answer'));
         array_map(unlink(...), glob("{$dir}/*") ?: []);
         rmdir($dir);
 
-        $this->assertNotNull($committingAt, 'the first operation reached its commit holding the lock');
-        $this->assertGreaterThan($committingAt, $result['at'], 'the second operation finished only after the first committed');
-
-        return $result['answer'];
+        return $result;
     }
 
-    /** Fails unless the given connection is running its locking read of the client row, i.e. waiting on the held lock. */
-    private function awaitQueuedBehindClientLock(int $connectionId): void
+    /**
+     * Runs $then once, right after this process's first query that contains every one of $parts.
+     *
+     * @param  list<string>  $parts
+     */
+    private function onceQueried(array $parts, Closure $then): void
+    {
+        $done = false;
+        DB::listen(function (QueryExecuted $query) use (&$done, $parts, $then): void {
+            if ($done || array_filter($parts, fn (string $part): bool => ! str_contains($query->sql, $part)) !== []) {
+                return;
+            }
+            $done = true;
+            $then();
+        });
+    }
+
+    /** Runs $then once, when this process's outermost transaction has committed or rolled back. */
+    private function onceTransactionEnds(Closure $then): void
+    {
+        $done = false;
+        Event::listen([TransactionCommitted::class, TransactionRolledBack::class], function () use (&$done, $then): void {
+            if ($done || DB::connection('lock_writer')->transactionLevel() > 0) {
+                return;
+            }
+            $done = true;
+            $then();
+        });
+    }
+
+    /** Fails unless the given connection is running a statement like $statement, i.e. waiting on a lock the other side holds. */
+    private function awaitQueued(int $connectionId, string $statement): void
     {
         $deadline = microtime(true) + 10;
         while (microtime(true) < $deadline) {
             $waiting = DB::connection('lock_holder')->selectOne(
-                "select count(*) as waiting from information_schema.PROCESSLIST where ID = ? and COMMAND in ('Query', 'Execute') and INFO like '%`clients`%for update%'",
-                [$connectionId],
+                "select count(*) as waiting from information_schema.PROCESSLIST where ID = ? and COMMAND in ('Query', 'Execute') and INFO like ?",
+                [$connectionId, $statement],
             )->waiting;
             if ((int) $waiting > 0) {
                 return;
@@ -527,7 +788,7 @@ final class MariaDbLockingTest extends TestCase
         }
 
         $seen = DB::connection('lock_holder')->select('select ID, COMMAND, STATE, INFO from information_schema.PROCESSLIST');
-        throw new RuntimeException("Connection {$connectionId} never queued behind the client row lock within 10 seconds. Seen: ".json_encode($seen));
+        throw new RuntimeException("Connection {$connectionId} never queued on {$statement} within 10 seconds. Seen: ".json_encode($seen));
     }
 
     private function task(): Task

@@ -122,8 +122,15 @@ p:last-child {
 }
 
 /* Code and pre styling */
+/* Browsers default these to a mono face. */
+code,
+kbd,
+samp,
+pre {
+    font-family: inherit;
+}
+
 code {
-    font-family: var(--font-family-mono);
     font-size: 0.875em;
     background-color: var(--color-muted);
     padding: var(--spacing-0-5) var(--spacing-1);
@@ -131,7 +138,6 @@ code {
 }
 
 pre {
-    font-family: var(--font-family-mono);
     overflow-x: auto;
     padding: var(--spacing-4);
     background-color: var(--color-muted);

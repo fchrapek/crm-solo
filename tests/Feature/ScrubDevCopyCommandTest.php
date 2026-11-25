@@ -7,7 +7,9 @@ namespace Tests\Feature;
 use App\Models\Account;
 use App\Models\Client;
 use App\Models\ClientDocument;
+use App\Models\IntakeForm;
 use App\Models\Integration;
+use App\Models\LeadIntake;
 use App\Models\MessageRule;
 use App\Models\MessageTemplate;
 use App\Models\Project;
@@ -118,6 +120,35 @@ final class ScrubDevCopyCommandTest extends TestCase
         $integration = Integration::query()->sole();
         $this->assertFalse((bool) $integration->is_enabled);
         $this->assertNull(DB::table('integrations')->value('api_key'));
+    }
+
+    public function test_pins_existing_behaviour_the_integration_scrub_also_switches_off_the_account_sender_without_its_password(): void
+    {
+        Integration::create(['account_id' => $this->kept->id, 'provider' => Integration::SMTP, 'is_enabled' => true, 'api_key' => 'smtp-password', 'settings' => ['host' => 'smtp.example.test']]);
+
+        $this->artisan('dev:scrub', ['--keep-account' => $this->kept->id])->assertSuccessful();
+
+        $sender = Integration::query()->where('provider', Integration::SMTP)->sole();
+        $this->assertFalse($sender->is_enabled);
+        $this->assertNull(DB::table('integrations')->where('id', $sender->id)->value('api_key'));
+    }
+
+    public function test_every_form_is_switched_off_without_its_secrets_and_waiting_notices_are_skipped(): void
+    {
+        $form = IntakeForm::create([
+            'account_id' => $this->kept->id, 'name' => 'Drawer', 'public_key' => IntakeForm::newPublicKey(),
+            'allowed_origins' => ['https://www.example.test'], 'pipeline' => 'filipchrapek', 'source' => 'www-form',
+            'turnstile_secret' => 'turnstile', 'webhook_secret_hash' => hash('sha256', 'webhook'), 'is_active' => true,
+        ]);
+        $waiting = LeadIntake::create(['account_id' => $this->kept->id, 'intake_form_id' => $form->id, 'idempotency_key' => 'a', 'fingerprint' => str_repeat('0', 64)]);
+        $sent = LeadIntake::create(['account_id' => $this->kept->id, 'intake_form_id' => $form->id, 'idempotency_key' => 'b', 'fingerprint' => str_repeat('0', 64), 'notice_state' => 'sent']);
+
+        $this->artisan('dev:scrub', ['--keep-account' => $this->kept->id])->assertSuccessful();
+
+        $row = DB::table('intake_forms')->where('id', $form->id)->first();
+        $this->assertSame([0, null, null], [(int) $row->is_active, $row->turnstile_secret, $row->webhook_secret_hash]);
+        $this->assertSame(LeadIntake::SKIPPED, $waiting->refresh()->notice_state);
+        $this->assertSame('sent', $sent->refresh()->notice_state);
     }
 
     public function test_it_refuses_without_the_staging_flag_and_deletes_nothing(): void

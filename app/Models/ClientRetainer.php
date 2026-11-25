@@ -73,7 +73,7 @@ final class ClientRetainer extends Model
     }
 
     /**
-     * What the abonament dialog edits; the dialog sends every field back, so nothing it does not show is cleared.
+     * What the retainer dialog edits; the dialog sends every field back, so nothing it does not show is cleared.
      *
      * @return array<string, mixed>
      */

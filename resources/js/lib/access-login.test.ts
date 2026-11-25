@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { accessLoginTarget } from './access-login';
 
-const here = 'https://app.example.test/czesc';
+const here = 'https://app.example.test/waitlist';
 
 describe('a visit Cloudflare Access refuses', () => {
     test('a refused link loads the page it pointed at, so Access can show its login', () => {

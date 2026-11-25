@@ -7,6 +7,7 @@ namespace App\Services\Agent;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TaskBilledMonth;
+use App\Models\TimeEntry;
 use App\Services\Clients\BilledTime;
 use App\Services\Clients\ClientFinancialLock;
 use App\Services\Integrations\Trello\TrelloListMapper;
@@ -67,10 +68,12 @@ final class TaskEditor
      * Only the keys present change. `archive` true archives and false
      * unarchives; `reopen` takes a done task back to To-Do, or to `list`;
      * `move_time` brings the task's logged time onto its project, except
-     * time in a settled period, which is listed as skipped. `reportable`
-     * decides whether the task's time counts in reports and the hours bank.
+     * time in a settled period, which is listed as skipped. `within_client`
+     * keeps the move inside the task's client: only time already on that
+     * client follows, and no billed figure moves. `reportable` decides
+     * whether the task's time counts in reports and the hours bank.
      *
-     * @param  array{name?: ?string, description?: ?string, due?: ?string, list?: ?string, project?: ?string, reportable?: ?bool, archive?: ?bool, reopen?: ?bool, move_time?: ?bool}  $input
+     * @param  array{name?: ?string, description?: ?string, due?: ?string, list?: ?string, project?: ?string, reportable?: ?bool, archive?: ?bool, reopen?: ?bool, move_time?: ?bool, within_client?: ?bool}  $input
      * @return array<string, mixed>
      *
      * @throws AgentRefusal|ReferenceException
@@ -78,6 +81,7 @@ final class TaskEditor
     public function edit(int $accountId, string $reference, array $input): array
     {
         $task = $this->resolver->task($reference, $accountId);
+        $withinClient = (bool) ($input['within_client'] ?? false);
         $changes = [];
 
         if (array_key_exists('name', $input) && $input['name'] !== null) {
@@ -97,6 +101,9 @@ final class TaskEditor
         if (array_key_exists('project', $input) && $input['project'] !== null) {
             $project = $this->resolver->project($input['project'], $accountId);
             if ($project->id !== $task->project_id) {
+                if ($withinClient && (int) $project->client_id !== (int) $task->project?->client_id) {
+                    throw AgentRefusal::invalid('Pick a project of the same client.', ['field' => 'project']);
+                }
                 $this->guardProject($project);
                 if ($task->allChildTasks()->exists()) {
                     throw AgentRefusal::invalid("Task #{$task->id} has subtasks: move each subtask first, then the task.", ['field' => 'project']);
@@ -117,10 +124,10 @@ final class TaskEditor
             throw AgentRefusal::invalid('Nothing to change: pass name, description, due, list, project, reportable, archive, unarchive, reopen or move time.');
         }
         $toClient = isset($changes['project_id']) ? $project->client_id : $task->project?->client_id;
-        if ($moveTime && BilledTime::figuresWouldMove($task, $toClient !== null ? (int) $toClient : null) && app(AgentCallContext::class)->missing([AgentAbilities::BILLING]) !== []) {
+        if ($moveTime && ! $withinClient && BilledTime::figuresWouldMove($task, $toClient !== null ? (int) $toClient : null) && app(AgentCallContext::class)->missing([AgentAbilities::BILLING]) !== []) {
             throw new AgentRefusal('missing_ability', 'Moving this task\'s time also moves its billed figures, which needs the '.AgentAbilities::BILLING.' ability.');
         }
-        if ($moveTime && $toClient !== null) {
+        if ($moveTime && ! $withinClient && $toClient !== null) {
             $to = (int) $toClient;
             $clash = TaskBilledMonth::query()->where('task_id', $task->id)->where('client_id', '!=', $to)
                 ->whereIn('period', TaskBilledMonth::query()->select('period')->where('task_id', $task->id)->where('client_id', $to))->pluck('period')->unique()->values()->all();
@@ -161,7 +168,11 @@ final class TaskEditor
         }
 
         try {
-            [$time, $stayedBilled] = $moveTime ? $this->moveTimeAndFigures($task->fresh() ?? $task) : [['moved' => [], 'skipped' => []], []];
+            [$time, $stayedBilled] = match (true) {
+                $moveTime && $withinClient => $this->moveClientTime($task->fresh() ?? $task),
+                $moveTime => $this->moveTimeAndFigures($task->fresh() ?? $task),
+                default => [['moved' => [], 'skipped' => []], []],
+            };
         } catch (TimeEntryChanged) {
             throw AgentRefusal::invalid('A time entry changed while its time was moving: run the same edit again to move the rest.');
         }
@@ -186,6 +197,7 @@ final class TaskEditor
                     ...array_diff_key(AgentRefusal::periodSettled($skip['settled'])->toPayload(), ['error' => true]),
                 ], $time['skipped']),
                 'billed_stayed' => $stayedBilled,
+                ...$withinClient ? ['time_elsewhere' => $this->timeElsewhere($task->fresh() ?? $task)] : [],
             ] : [],
             'changed' => array_values(array_map(fn (string $key): string => match ($key) {
                 'list_name' => 'list',
@@ -208,6 +220,26 @@ final class TaskEditor
         $clients = array_values(array_unique([...BilledTime::clientsOfTask($task), ...($to !== null ? [(int) $to] : [])]));
 
         return app(ClientFinancialLock::class)->clients($clients, fn (): array => [$this->time->followTask($task), app(BilledTime::class)->followTask($task)]);
+    }
+
+    /**
+     * A move inside one client changes no client's totals, so it holds only that client and leaves every figure alone.
+     *
+     * @return array{0: array{moved: list<mixed>, skipped: list<array<string, mixed>>}, 1: list<string>}
+     */
+    private function moveClientTime(Task $task): array
+    {
+        $client = $task->project?->client_id;
+
+        return app(ClientFinancialLock::class)->clients($client !== null ? [(int) $client] : [], fn (): array => [$this->time->followTask($task, withinClient: true), []]);
+    }
+
+    /** @return list<int> the task's time entries left on another client */
+    private function timeElsewhere(Task $task): array
+    {
+        return TimeEntry::query()->where('task_id', $task->id)
+            ->where(fn ($query) => $query->whereNull('client_id')->orWhere('client_id', '!=', $task->project?->client_id))
+            ->orderBy('id')->pluck('id')->map(fn ($id): int => (int) $id)->all();
     }
 
     /**

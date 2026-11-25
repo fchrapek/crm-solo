@@ -6,7 +6,7 @@ import { JsonRequestError, jsonRequest } from '@/lib/json-request';
 import clients from '@/routes/clients';
 import tasks from '@/routes/tasks';
 import { router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { TaskFormDialog, type TaskDialogValues } from '../../../clients/components/task-form-dialog';
@@ -47,16 +47,18 @@ export function editValues(task: TaskData): Partial<TaskDialogValues> {
 }
 
 /**
- * Figma: Zadanie, "more" (1094:47089) and the refused delete (1094:47408). Edytuj opens the task form; Archiwizuj and
- * Usuń ask first, and a delete the server refuses for settled time shows its reason and offers the archive instead.
+ * Figma: Task, "more" (1094:47089) and the refused delete (1094:47408). Edit opens the task form; Archive and
+ * Delete ask first, and a delete the server refuses for settled time shows its reason and offers the archive instead.
  */
 export function TaskMenu({
     task,
     parentOptions,
+    projectOptions,
     onCopy,
 }: {
     task: TaskData;
     parentOptions?: { id: number; name: string }[];
+    projectOptions?: { id: number; name: string }[];
     onCopy: () => void;
 }) {
     const { t } = useTranslation();
@@ -66,7 +68,17 @@ export function TaskMenu({
     const items = taskMenuItems(task);
     const failed = (error: unknown) => toast.error(error instanceof Error ? error.message : t('Something went wrong.'));
 
-    const edit = () => router.reload({ only: ['parent_options'], onSuccess: () => setEditing(true) });
+    const edit = () => router.reload({ only: ['parent_options', 'project_options'], onSuccess: () => setEditing(true) });
+    const editable = items.includes('edit');
+
+    // `?change` opens the form at once: the add field's toast sends a new task here to change its project.
+    useEffect(() => {
+        const url = new URL(window.location.href);
+        if (!editable || !url.searchParams.has('change')) return;
+        url.searchParams.delete('change');
+        window.history.replaceState(window.history.state, '', url);
+        router.reload({ only: ['parent_options', 'project_options'], onSuccess: () => setEditing(true) });
+    }, [editable]);
 
     async function setArchived(archived: boolean) {
         try {
@@ -89,7 +101,7 @@ export function TaskMenu({
             return;
         }
         toast.success(t('Task deleted.'));
-        router.visit(task.client ? clients.show({ client: task.client.id, tab: 'zadania' }).url : clients.index().url);
+        router.visit(task.client ? clients.show({ client: task.client.id, tab: 'tasks' }).url : clients.index().url);
     }
 
     return (
@@ -109,7 +121,16 @@ export function TaskMenu({
                 {items.includes('delete') && <ActionMenuItem onSelect={() => setAsking('delete')}>{t('Delete')}</ActionMenuItem>}
             </ActionMenu>
             {items.includes('edit') && (
-                <TaskFormDialog open={editing} onOpenChange={setEditing} mode="edit" initial={editValues(task)} parentOptions={parentOptions} sheet />
+                <TaskFormDialog
+                    open={editing}
+                    onOpenChange={setEditing}
+                    mode="edit"
+                    initial={editValues(task)}
+                    parentOptions={parentOptions}
+                    projectId={task.project?.id}
+                    projects={projectOptions}
+                    sheet
+                />
             )}
             <ConfirmDialog
                 open={asking === 'archive'}

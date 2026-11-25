@@ -1,44 +1,44 @@
-/* Figma: Klient · Dziennik. Tiles, rows and entries are parts; this styles what sits inside them. */
-.stage {
-    display: none;
-}
-
+/* Figma: Client · Journal. Tiles, rows and entries are parts; this styles what sits inside them. */
 /* the sentence sits right under the tile's head */
 .brief {
     padding-top: 0;
 }
 
-.headline {
-    font-weight: 600;
+.author {
+    display: flex;
+    align-items: center;
+    gap: var(--role-space-8);
+    min-width: 0;
 }
 
-/* a long note opens folded to three lines */
-.text {
-    white-space: pre-line;
-}
-
-.text[data-folded] {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
+.authorName {
+    min-width: 0;
     overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.more {
-    align-self: flex-start;
-    margin-top: var(--role-space-4);
-    padding: 0;
-    border: 0;
-    background: none;
+/* a phone reads the column first: Projects and Relationship, then Work and SMS; from 768 px the main column leads */
+.side {
+    order: -1;
+}
+
+.stageLine {
+    margin: 0 0 var(--role-space-4);
     color: var(--role-text-primary);
-    font: 600 var(--solo-text-meta) / 1.4 var(--solo-font-text);
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    cursor: pointer;
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
 }
 
-.more:focus-visible,
+/* the month the project hours count, beside the count in the head */
+.month {
+    color: var(--role-text-secondary);
+}
+
+.facts {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+}
+
 .trello:focus-visible {
     outline: var(--role-stroke-focus) solid var(--role-focus-ring);
     outline-offset: 2px;
@@ -53,13 +53,18 @@
     text-underline-offset: 3px;
 }
 
+/* the quiet Edit's label ends where the row's text does, as the day rows' actions */
+.rowAction {
+    margin-inline-end: calc(-1 * var(--role-space-12));
+}
+
 .dialogActions {
     flex-direction: row;
     justify-content: flex-end;
 }
 
 @media (min-width: 768px) {
-    .stage {
-        display: inline;
+    .side {
+        order: 0;
     }
 }

@@ -13,6 +13,7 @@ use App\Models\MonthCloseRun;
 use App\Models\MonthCloseStep;
 use App\Services\Integrations\InfaktDrafting;
 use App\Services\Messaging\SummaryEmails;
+use App\Services\Reports\BaselineSections;
 use App\Services\Reports\ReportComposerRegistry;
 use App\Support\LocalCalendar;
 use Closure;
@@ -41,6 +42,7 @@ final class ClientBillingQuery
         private readonly BilledTime $billed,
         private readonly ClientInvoiceList $invoiceList,
         private readonly ReportComposerRegistry $composers,
+        private readonly BaselineSections $baseline,
     ) {}
 
     /** The month in the URL when it is a month up to the one in progress, else the month the client owes next. */
@@ -50,7 +52,7 @@ final class ClientBillingQuery
     }
 
     /**
-     * The ledger pages by "Starsze": a partial reload of billing_ledger with the next page, whose rows the client appends.
+     * The ledger pages by Older: a partial reload of billing_ledger with the next page, whose rows the client appends.
      *
      * @param  string|null  $ledgerPage  the `next` of the ledger page shown last
      * @param  string|null  $mode  the billing mode when the caller already read it
@@ -74,6 +76,7 @@ final class ClientBillingQuery
                     'report_period' => LocalCalendar::previousMonth(),
                     'composers' => $this->composerOptions(),
                     'currency' => $client->currency ?? 'PLN',
+                    'report_baseline' => $this->reportBaseline($client),
                 ],
                 'billing_invoices' => $invoices,
             ];
@@ -86,8 +89,33 @@ final class ClientBillingQuery
             'billing' => fn (): array => $this->summary($client, $state),
             'billing_ledger' => Inertia::merge(fn (): array => $this->ledger($client, $state, $page))->append('rows', 'key'),
             'billing_emails' => fn (): ?array => app(SummaryEmails::class)->monthsFor($client, Auth::user()),
-            'billing_month' => fn (): array => $this->month($client, self::shownPeriod($month, $state)),
+            'billing_month' => fn (): array => $this->month($client, self::shownPeriod($month, $state), $state),
             'billing_invoices' => $invoices,
+        ];
+    }
+
+    /**
+     * Positions in force today, the one a report would snapshot first.
+     *
+     * @return array<string, mixed>
+     */
+    public function retainer(Client $client): array
+    {
+        $all = $client->retainers()->get();
+        $active = $client->retainers()->leadingOn(LocalCalendar::todayDate())->get();
+
+        return [
+            'active' => $active->map(fn (ClientRetainer $retainer): array => [
+                'id' => $retainer->id,
+                'label' => $retainer->label,
+                'monthly_hours' => (float) $retainer->monthly_hours,
+                'monthly_fee' => $retainer->monthly_fee !== null ? (float) $retainer->monthly_fee : null,
+                'rollover_cap_hours' => $retainer->rollover_cap_hours !== null ? (float) $retainer->rollover_cap_hours : null,
+                'currency' => $retainer->currency,
+            ])->values()->all(),
+            'positions' => $all->map(fn (ClientRetainer $retainer): array => $retainer->toPayload())->values()->all(),
+            'active_ids' => $active->pluck('id')->values()->all(),
+            'currency' => $client->currency ?? 'PLN',
         ];
     }
 
@@ -97,7 +125,7 @@ final class ClientBillingQuery
      *
      * @return array<string, mixed>
      */
-    private function month(Client $client, string $period): array
+    private function month(Client $client, string $period, ClientSettlementState $state): array
     {
         [$start] = SettlementPolicy::monthDates($period);
         $today = LocalCalendar::todayDate();
@@ -106,6 +134,7 @@ final class ClientBillingQuery
         return [
             'period' => $period,
             'figures' => $this->billed->figures($client, $period),
+            'settlement' => $this->monthSettlement($client, $period, $state),
             'report' => $report !== null ? [
                 'id' => $report->id,
                 'status' => $report->status,
@@ -126,6 +155,40 @@ final class ClientBillingQuery
                 ->all(),
             'checklist' => $this->checklist($client, $period),
             'composers' => $this->composerOptions(),
+        ];
+    }
+
+    /**
+     * The shown month's own settlement, whichever ledger page holds it: closed, owing a close, or neither, and the
+     * closure to reopen when it is the latest one.
+     *
+     * @return array{state: 'closed'|'open'|null, closure_id: int|null, reopen_refusal: string|null, reopen_blocker: array{report_id: int, period: string}|null}
+     */
+    private function monthSettlement(Client $client, string $period, ClientSettlementState $state): array
+    {
+        $closure = $state->closureFor($period);
+
+        return [
+            'state' => $closure !== null ? 'closed' : ($period === $state->activePeriod || $state->isEligible($period) ? 'open' : null),
+            ...$this->reopen($client, $closure, $state->latestClosure(), SettlementPolicy::monthDates($period)[1]),
+        ];
+    }
+
+    /**
+     * The closure to reopen, set only when it is the latest one, with what a later settled report says against it.
+     *
+     * @return array{closure_id: int|null, reopen_refusal: string|null, reopen_blocker: array{report_id: int, period: string}|null}
+     */
+    private function reopen(Client $client, ?ClientMonthClosure $closure, ?ClientMonthClosure $latest, string $end): array
+    {
+        $reopenable = $closure !== null && $latest !== null && $closure->id === $latest->id;
+        $blocker = $reopenable ? $this->policy->laterSettledReport($client, $end) : null;
+
+        return [
+            'closure_id' => $reopenable ? $closure->id : null,
+            'reopen_refusal' => $this->policy->refusalForLaterReport($blocker),
+            // The report the refusal names, so the phone's blocked sheet can open it.
+            'reopen_blocker' => $blocker !== null ? ['report_id' => $blocker->id, 'period' => $blocker->period_start->format('Y-m')] : null,
         ];
     }
 
@@ -230,10 +293,27 @@ final class ClientBillingQuery
                 'version' => $newestReport->version(),
             ] : null,
             'waiting_report' => $this->waitingReport($reports),
+            'months' => $this->bank->ledgerMonths($client),
             'retainer' => $this->retainer($client),
             'invoices' => $this->invoices($client),
             'invoice_drafts' => $this->drafting->monthState($client),
+            'report_baseline' => $this->reportBaseline($client),
         ];
+    }
+
+    /**
+     * Report baseline with its sections, while the account has it on.
+     *
+     * @return array{markdown: string|null, sections: list<array{title: string|null, items: int}>}|null
+     */
+    private function reportBaseline(Client $client): ?array
+    {
+        if (! $client->account->showsReportBaseline()) {
+            return null;
+        }
+        $markdown = $client->report_baseline_markdown;
+
+        return ['markdown' => $markdown, 'sections' => $this->baseline->of($markdown)];
     }
 
     /**
@@ -274,8 +354,6 @@ final class ClientBillingQuery
             $row->active || $row->eligible => 'open',
             default => null,
         };
-        $reopenable = $closure !== null && $latestClosure !== null && $closure->id === $latestClosure->id;
-        $blocker = $reopenable ? $this->policy->laterSettledReport($client, $row->periodEnd) : null;
 
         return [
             'key' => $row->periodStart.'/'.$row->periodEnd,
@@ -292,10 +370,7 @@ final class ClientBillingQuery
             'active' => $row->active,
             'before_baseline' => $row->beforeBaseline,
             'closed_on' => $closure?->closed_at->copy()->setTimezone(LocalCalendar::timezone())->toDateString(),
-            'closure_id' => $reopenable ? $closure->id : null,
-            'reopen_refusal' => $this->policy->refusalForLaterReport($blocker),
-            // The report the refusal names, so the phone's blocked sheet can open it.
-            'reopen_blocker' => $blocker !== null ? ['report_id' => $blocker->id, 'period' => $blocker->period_start->format('Y-m')] : null,
+            ...$this->reopen($client, $closure, $latestClosure, $row->periodEnd),
             'billed' => $row->month?->billed?->toArray(),
             // The pencil: a month whose billed figure may still change, before the dialog reads the full rules.
             'billed_editable' => $row->month?->billed !== null && $closure === null && ($report === null || $report->status === ClientReport::STATUS_DRAFT),
@@ -331,31 +406,6 @@ final class ClientBillingQuery
         $report = $reports->reverse()->first(fn (ClientReport $report): bool => $report->period_end->lt($today) && $report->status !== ClientReport::STATUS_SENT);
 
         return $report !== null ? ['report_id' => $report->id, 'period' => $report->period_start->format('Y-m'), 'status' => $report->status] : null;
-    }
-
-    /**
-     * Positions in force today, the one a report would snapshot first.
-     *
-     * @return array<string, mixed>
-     */
-    private function retainer(Client $client): array
-    {
-        $all = $client->retainers()->get();
-        $active = $client->retainers()->leadingOn(LocalCalendar::todayDate())->get();
-
-        return [
-            'active' => $active->map(fn (ClientRetainer $retainer): array => [
-                'id' => $retainer->id,
-                'label' => $retainer->label,
-                'monthly_hours' => (float) $retainer->monthly_hours,
-                'monthly_fee' => $retainer->monthly_fee !== null ? (float) $retainer->monthly_fee : null,
-                'rollover_cap_hours' => $retainer->rollover_cap_hours !== null ? (float) $retainer->rollover_cap_hours : null,
-                'currency' => $retainer->currency,
-            ])->values()->all(),
-            'positions' => $all->map(fn (ClientRetainer $retainer): array => $retainer->toPayload())->values()->all(),
-            'active_ids' => $active->pluck('id')->values()->all(),
-            'currency' => $client->currency ?? 'PLN',
-        ];
     }
 
     /**

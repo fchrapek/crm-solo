@@ -9,6 +9,7 @@ use App\Models\Integration;
 use App\Models\Project;
 use App\Models\Task;
 use App\Services\Integrations\Trello\CardFinishReconciler;
+use App\Services\Integrations\Trello\TrelloBoardPicker;
 use App\Services\Integrations\Trello\TrelloBoardSyncRunning;
 use App\Services\Integrations\Trello\TrelloListMapper;
 use App\Services\Integrations\Trello\TrelloService;
@@ -228,7 +229,7 @@ final class ProjectsController extends Controller
      * Trello-backed project are returned but flagged so the picker can
      * disable them with an explanatory label.
      */
-    public function availableTrelloBoards(Project $project): JsonResponse
+    public function availableTrelloBoards(Project $project, TrelloBoardPicker $picker): JsonResponse
     {
         $this->authorizeProject($project);
 
@@ -239,7 +240,7 @@ final class ProjectsController extends Controller
         $integration = $this->resolveTrelloIntegration();
 
         try {
-            $boards = collect($this->taskSources->get('trello')->listContainers($integration));
+            $entries = $picker->boards($integration);
         } catch (Throwable $e) {
             return response()->json([
                 'error' => 'fetch_failed',
@@ -247,41 +248,13 @@ final class ProjectsController extends Controller
             ], 502);
         }
 
-        $linkedProjects = Project::with('client:id,name')
-            ->where('account_id', $project->account_id)
-            ->whereNotNull('trello_board_id')
-            ->get()
-            ->keyBy('trello_board_id');
-
-        $entries = $boards->map(function (array $board) use ($linkedProjects) {
-            $linked = $board['id'] !== null ? $linkedProjects->get($board['id']) : null;
-
-            return [
-                ...$board,
-                'linked_status' => match (true) {
-                    $linked === null => 'available',
-                    $linked->client_id === null => 'orphan',
-                    default => 'linked',
-                },
-                'linked_client_name' => $linked?->client?->name,
-            ];
-        })->values()->all();
-
         return response()->json(['boards' => $entries]);
     }
 
     private function resolveTrelloIntegration(): Integration
     {
-        $integration = Integration::where('account_id', Auth::user()->account_id)
-            ->where('provider', 'trello')
-            ->where('is_enabled', true)
-            ->first();
-
-        if ($integration === null || ! $integration->isConfigured()) {
-            abort(422, 'Trello integration is not configured.');
-        }
-
-        return $integration;
+        return Integration::configuredTrello(Auth::user()->account_id)
+            ?? abort(422, 'Trello integration is not configured.');
     }
 
     private function authorizeProject(Project $project): void

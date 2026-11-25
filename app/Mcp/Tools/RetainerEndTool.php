@@ -14,7 +14,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
 
-#[Description('End a retainer (abonament) position from a date, the first day it no longer applies (default: the 1st of next month). Nothing is deleted; elapsed months keep their terms. Say what you will write and wait for the owner before calling it.')]
+#[Description('End a retainer position from a date, the first day it no longer applies (default: the 1st of next month). Nothing is deleted; elapsed months keep their terms. Say what you will write and wait for the owner before calling it.')]
 final class RetainerEndTool extends Tool
 {
     use HandlesReferenceErrors;

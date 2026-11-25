@@ -1,4 +1,4 @@
-/* The Ustawienia tabs: what their tiles and dialogs need beyond the shared parts. */
+/* The Settings tabs: what their tiles and dialogs need beyond the shared parts. */
 
 .kv {
     display: flex;
@@ -63,7 +63,7 @@ button.chip:focus-visible,
     font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
 }
 
-/* Wygląd: a setting is a label and its choices. Figma: Options (track), pills on the page grey inside a white tile. */
+/* Appearance: a setting is a label and its choices. Figma: Options (track), pills on the page grey inside a white tile. */
 .settings {
     display: flex;
     flex-direction: column;
@@ -188,7 +188,6 @@ button.chip:focus-visible,
 .secret input {
     flex: 1 1 auto;
     min-width: 0;
-    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
 }
 
 .dialogActions {

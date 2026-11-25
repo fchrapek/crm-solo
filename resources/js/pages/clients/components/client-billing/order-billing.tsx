@@ -21,7 +21,7 @@ import { moneyOf } from './format';
 import type { ClientCurrency } from '@/types';
 import type { BilledMonthRow, OrderReportRow } from './types';
 
-/** The line under ZLECENIE: the order, where its invoice stands, and its state. */
+/** The line under Order: the order, where its invoice stands, and its state. */
 export function orderNote(order: ClientOrder, locale: string, t: TFunction): string {
     const state = order.state === null ? null : order.state === 'in_progress' ? t('order_brief_state_in_progress') : t('order_brief_state_done');
 
@@ -52,7 +52,7 @@ function orderInvoiceLine(order: ClientOrder, locale: string, t: TFunction): str
         .join(' ');
 }
 
-/** Figma: Zlecenie, the number tiles: the amount as agreed (gross), the time, and the tasks done. */
+/** Figma: Order, the number tiles: the amount as agreed (gross), the time, and the tasks done. */
 export function OrderStats({ order, locale }: { order: ClientOrder; locale: string }) {
     const { t } = useTranslation();
     const invoice = order.invoice;
@@ -84,7 +84,7 @@ export function OrderStats({ order, locale }: { order: ClientOrder; locale: stri
     );
 }
 
-/** Figma: Zlecenie, the order's facts; Edytuj opens the catch-all project the order reads, and a first retainer turns the screen into the retainer's months. */
+/** Figma: Order, the order's facts; Edit opens the catch-all project the order reads, and a first retainer turns the screen into the retainer's months. */
 export function OrderTile({ clientId, order, currency, locale }: { clientId: number; order: ClientOrder; currency: ClientCurrency; locale: string }) {
     const { t } = useTranslation();
     const [editing, setEditing] = useState(false);
@@ -193,7 +193,7 @@ export function OrderReports({
     );
 }
 
-/** Figma: Miesiące. A client without a bank has no ledger, so its months stand alone in both values; Zmień opens the month's billed time. */
+/** Figma: Months. A client without a bank has no ledger, so its months stand alone in both values; Change opens the month's billed time. */
 export function OrderMonths({ months, locale, onOpen }: { months: BilledMonthRow[]; locale: string; onOpen: (period: string) => void }) {
     const { t } = useTranslation();
 

@@ -15,7 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redirect;
 use RuntimeException;
 
-/** The Faktury za miesiac block on Rozliczenia: Infakt drafts per invoice group through InfaktDrafting, draft only. */
+/** The To invoice block on Billing: Infakt drafts per invoice group through InfaktDrafting, draft only. */
 final class ClientInvoiceDraftsController extends Controller
 {
     public function __construct(private readonly InfaktDrafting $drafting) {}

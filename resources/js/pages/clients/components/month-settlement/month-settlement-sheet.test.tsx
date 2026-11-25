@@ -1,39 +1,26 @@
-import { afterAll, describe, expect, mock, test } from 'bun:test';
+import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 import i18next from 'i18next';
-import type { ComponentProps, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { initReactI18next } from 'react-i18next';
 
+import * as soloWide from '@/components/solo/use-solo-wide';
+import * as dialog from '@/components/ui/dialog';
+import * as sheet from '@/components/ui/sheet';
 import pl from '../../../../../../lang/pl.json';
 
 await i18next.use(initReactI18next).init({ lng: 'pl', resources: { pl: { translation: pl } }, interpolation: { escapeValue: false } });
 
 // Radix portals render nothing on the server, so while these tests run the open content renders in place.
 let wide = true;
-let inline = true;
-mock.module('@/components/solo/use-solo-wide', () => ({ useSoloWide: () => wide }));
-const sheet = { ...(await import('@/components/ui/sheet')) };
-const RealSheetContent = sheet.SheetContent;
-mock.module('@/components/ui/sheet', () => ({
-    ...sheet,
-    SheetContent: (props: ComponentProps<typeof RealSheetContent>) =>
-        inline ? <div data-test="sheet-content">{props.children as ReactNode}</div> : <RealSheetContent {...props} />,
-}));
-const dialog = { ...(await import('@/components/ui/dialog')) };
-const RealDialogContent = dialog.DialogContent;
-mock.module('@/components/ui/dialog', () => ({
-    ...dialog,
-    DialogContent: (props: ComponentProps<typeof RealDialogContent>) =>
-        inline ? <div data-test="dialog-content">{props.children as ReactNode}</div> : <RealDialogContent {...props} />,
-}));
+spyOn(soloWide, 'useSoloWide').mockImplementation(() => wide);
+spyOn(sheet, 'SheetContent').mockImplementation((props) => <div data-test="sheet-content">{props.children as ReactNode}</div>);
+spyOn(dialog, 'DialogContent').mockImplementation((props) => <div data-test="dialog-content">{props.children as ReactNode}</div>);
 
 const { CloseMonthDialog } = await import('./close-month-dialog');
 const { ReopenMonthDialog } = await import('./reopen-month-dialog');
 
-afterAll(() => {
-    wide = true;
-    inline = false;
-});
+afterAll(() => mock.restore());
 
 const close = () => renderToStaticMarkup(<CloseMonthDialog clientId={7} period="2026-09" open onOpenChange={() => undefined} />);
 const reopen = (refusal: string | null = null, blocker: { report_id: number; period: string } | null = null) =>
@@ -49,7 +36,7 @@ const reopen = (refusal: string | null = null, blocker: { report_id: number; per
 const buttons = (html: string) => [...html.matchAll(/<button([^>]*)>([^<]*)<\/button>/g)].map(([, attrs, label]) => ({ attrs, label }));
 
 describe('the close and reopen dialogs on a phone', () => {
-    test('Zamknij miesiąc opens as a bottom sheet: one form, the close button in the header, Anuluj then the submit in its footer', () => {
+    test('Close the month opens as a bottom sheet: one form, the close button in the header, Cancel then the submit in its footer', () => {
         wide = false;
         const html = close();
         expect(html).toContain('data-test="sheet-content"');
@@ -64,7 +51,7 @@ describe('the close and reopen dialogs on a phone', () => {
         expect(html.indexOf('</form>')).toBeGreaterThan(html.indexOf('Zamknij miesiąc'));
     });
 
-    test('Otwórz ponownie opens as a bottom sheet with the same actions (Figma 347:4931)', () => {
+    test('Reopen the month opens as a bottom sheet with the same actions (Figma 347:4931)', () => {
         wide = false;
         const html = reopen();
         expect(html).toContain('data-test="sheet-content"');
@@ -74,7 +61,7 @@ describe('the close and reopen dialogs on a phone', () => {
         expect(buttons(html).map(({ label }) => label)).toEqual(['Anuluj', 'Otwórz ponownie']);
     });
 
-    test('a later report already out opens the blocked sheet instead: its refusal, the month kept, Anuluj and that report (347:4982)', () => {
+    test('a later report already out opens the blocked sheet instead: its refusal, the month kept, Cancel and that report (347:4982)', () => {
         wide = false;
         const refusal = 'Raport za październik jest już sfinalizowany lub wysłany; najpierw go otwórz.';
         const html = reopen(refusal, { report_id: 41, period: '2026-10' });
@@ -84,7 +71,7 @@ describe('the close and reopen dialogs on a phone', () => {
         expect(html).toContain('Wrzesień zostaje zamknięty, liczby się nie zmieniają.');
         expect(html).not.toContain('Otwórz ponownie');
         expect(buttons(html).map(({ label }) => label)).toEqual(['Anuluj']);
-        // The footer keeps Anuluj first and the report link last, so the stacked layout puts the link on top at 320 px.
+        // The footer keeps Cancel first and the report link last, so the stacked layout puts the link on top at 320 px.
         expect(html).toMatch(/>Anuluj<\/button><a[^>]*href="\/clients\/7\/reports\/41"[^>]*>Raport za październik<\/a>/);
 
         const unnamed = reopen(refusal, null);

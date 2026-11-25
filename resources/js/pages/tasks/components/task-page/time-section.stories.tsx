@@ -6,7 +6,7 @@ import { TimeSection } from './time-section';
 const ago = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
 
 const meta = {
-    title: 'Zadania/Zadanie/Czas',
+    title: 'Tasks/Task/Time',
     component: TimeSection,
     decorators: [sideColumn],
     args: { task: { id: 42, name: 'Aktualizacja cennika PDF', client: 'Pracownia Mebli', is_reportable: true }, time, now: NOW },

@@ -1,4 +1,5 @@
-import { describe, expect, mock, test } from 'bun:test';
+import * as inertia from '@inertiajs/react';
+import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import i18next from 'i18next';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -13,16 +14,17 @@ await i18next.use(initReactI18next).init({
     interpolation: { escapeValue: false },
 });
 
-const inertia = await import('@inertiajs/react');
-mock.module('@inertiajs/react', () => ({ ...inertia, Head: () => null, usePage: () => ({ props: {} }) }));
+spyOn(inertia, 'Head').mockImplementation((() => null) as unknown as typeof inertia.Head);
+spyOn(inertia, 'usePage').mockImplementation((() => ({ props: {} })) as typeof inertia.usePage);
+afterAll(() => mock.restore());
 
 const { default: Login } = await import('./login');
-const { default: Waitlist } = await import('./czesc');
+const { default: Waitlist } = await import('./waitlist');
 const { formDog, takesTheCursor } = await import('./frame');
 const text = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 
 describe('the sign-in and waitlist screens', () => {
-    test('login is the cobalt page: the wordmark, the claim and the form, with no date', () => {
+    test('login is the cobalt page: the mark, the claim and the form, with no date', () => {
         const html = renderToStaticMarkup(<Login />);
 
         expect(html).toContain('data-tone="cobalt"');
@@ -64,7 +66,7 @@ describe('the sign-in and waitlist screens', () => {
         expect(takesTheCursor(null)).toBe(false);
     });
 
-    test('on a phone the dog\'s margins scale with the dog, so a landscape phone never pulls the form over the wordmark', () => {
+    test('on a phone the dog\'s margins scale with the dog, so a landscape phone never pulls the form over the mark', () => {
         const css = readFileSync(`${import.meta.dir}/login.module.css`, 'utf8');
         const phone = css.slice(0, css.indexOf('@media')).match(/\.dog \{([^}]*)\}/)?.[1] ?? '';
 

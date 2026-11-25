@@ -22,16 +22,6 @@
     height: 32px;
 }
 
-/* Figma A2f / Icon button Ghost: the pencil on a ledger row, the bare glyph with the row hover behind it. */
-.iconButton[data-icon='pencil'] {
-    border-color: transparent;
-    background: none;
-}
-
-.iconButton[data-icon='pencil']:hover {
-    background: var(--solo-hover);
-}
-
 /* A close or remove × is the bare glyph, as in the dialogs: no ring around it. */
 .iconButton[data-icon='close'] {
     border-color: transparent;
@@ -51,10 +41,6 @@
     color: var(--role-text-primary);
 }
 
-.iconButton[data-look='quiet']:hover {
-    background: var(--role-hover);
-}
-
 .iconButton[data-look='outline'] {
     width: var(--role-control);
     height: var(--role-control);
@@ -64,13 +50,99 @@
     color: var(--role-text-primary);
 }
 
-.iconButton[data-look='outline']:hover {
+@media (hover: hover) {
+    .iconButton[data-look='outline']:not([data-size='row']):hover:not(:disabled) {
+        background: var(--role-hover);
+    }
+}
+
+/* the running timer's stop: the timer colour, filled */
+.iconButton[data-look='stop'] {
+    width: var(--role-control);
+    height: var(--role-control);
+    border: 0;
+    background: var(--role-tile-timer);
+    color: var(--role-text-on-colour);
+}
+
+/* a bare button, and a row's timer: what shows (hover, ring, fill) is a 32 px disc, the size of a row's chevron, inside the larger target */
+.iconButton:is([data-look='quiet'], [data-size='row']) {
+    position: relative;
+    isolation: isolate;
+    border: 0;
+    background: none;
+    box-shadow: none;
+}
+
+.iconButton:is([data-look='quiet'], [data-size='row'])::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: -1;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--role-radius-full);
+    translate: -50% -50%;
+}
+
+/* the disc is the visible edge, so the target's rest overhangs the gaps beside it */
+.iconButton[data-size='row'] {
+    margin-inline: -6px;
+}
+
+.iconButton[data-size='row'][data-look='outline']::before {
+    box-shadow: inset 0 0 0 var(--role-stroke-outline) var(--role-button-secondary-outline);
+}
+
+.iconButton[data-size='row'][data-look='stop']::before {
+    background: var(--role-tile-timer);
+}
+
+@media (hover: hover) {
+    .iconButton:is([data-look='quiet'], [data-size='row'][data-look='outline']):hover:not(:disabled)::before {
+        background: var(--role-hover);
+    }
+}
+
+/* the menu it opened is still there once the pointer has left */
+.iconButton[data-look='quiet'][data-state='open']::before {
     background: var(--role-hover);
 }
 
+.iconButton:is([data-look='quiet'], [data-size='row']):focus-visible {
+    outline: none;
+}
+
+.iconButton:is([data-look='quiet'], [data-size='row']):focus-visible::before {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: calc(-1 * var(--role-stroke-focus));
+}
+
+@media (min-width: 768px) {
+    .iconButton[data-size='row'] {
+        width: 32px;
+        height: 32px;
+        margin-inline: 0;
+    }
+}
+
+/* forced colours drop the shadow the outline is drawn with */
+@media (forced-colors: active) {
+    .iconButton[data-look='outline']:not([data-size='row']),
+    .iconButton[data-size='row']::before {
+        border: 1px solid ButtonText;
+    }
+}
+
+/* the ring on the button's own edge, so a focused icon button keeps the size of its neighbours */
 .iconButton:focus-visible {
-    outline: 2px solid var(--solo-fg);
-    outline-offset: 2px;
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: calc(-1 * var(--role-stroke-focus));
+}
+
+.iconButton:disabled {
+    cursor: default;
 }
 
 /* Figma: TabBar. Phones only, the rail takes over from 768 px; the active section wears the rail's cobalt field. */
@@ -117,6 +189,20 @@
     border-radius: var(--role-radius-full);
 }
 
+/* Figma: TabBar, Mój profil (1561:8544). The avatar stays white with its ink outline inside the cobalt field. */
+.tabAvatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: var(--role-stroke-outline) solid var(--role-outline);
+    border-radius: var(--role-radius-full);
+    background: var(--role-tile);
+    color: var(--role-text-primary);
+    font: 600 var(--solo-text-initials) / 1 var(--solo-font-text);
+}
+
 .tab[aria-current='page'] {
     color: var(--role-text-primary);
 }
@@ -143,12 +229,14 @@
     display: contents;
 }
 
+/* no rule under the header: space separates it from the fields */
 .sheetHeader {
     display: flex;
     flex: none;
     align-items: center;
     gap: var(--solo-space-2);
     min-height: 52px;
+    padding-bottom: var(--solo-space-2);
 }
 
 .sheetTitle {
@@ -161,6 +249,11 @@
 
 .sheetHeader:not([data-action='close']) .sheetTitle {
     text-align: center;
+}
+
+/* the back arrow stands at the sheet's edge, the title a small step after it */
+.sheetHeader .sheetBack {
+    margin-inline-end: calc(var(--role-space-4) - var(--solo-space-2));
 }
 
 .sheetHeader .sheetSpacer,
@@ -206,10 +299,13 @@
     text-align: center;
 }
 
+/* the scrollbar sits in the sheet's side padding: the body reaches into it and keeps the fields where they were */
 .sheetBody {
     flex: 1 1 auto;
     min-height: 0;
-    padding-top: var(--solo-space-1);
+    margin-right: calc(-1 * var(--solo-space-3));
+    padding-top: var(--solo-space-2);
+    padding-right: var(--solo-space-2);
     overflow-y: auto;
     overscroll-behavior: contain;
 }
@@ -224,16 +320,25 @@
  * Mobile / Sheet actions: content-sized buttons side by side while they share a line, otherwise the
  * fit-content row wraps to the full width and each button fills its own line, the primary (the last child) on top.
  */
+.sheetFoot {
+    --solo-pill-hover: var(--role-hover);
+    --solo-pill-edge: transparent;
+    --solo-pill-edge-hover: transparent;
+
+    flex: none;
+    margin: var(--solo-space-3) calc(-1 * var(--solo-space-4)) calc(-1 * max(var(--solo-space-4), env(safe-area-inset-bottom, 0px)));
+    padding: var(--solo-space-4) var(--solo-space-4) max(var(--solo-space-4), env(safe-area-inset-bottom, 0px));
+    background-color: var(--solo-field-bg);
+}
+
 .sheetActions {
     display: flex;
-    flex: none;
     flex-wrap: wrap-reverse;
     justify-content: flex-end;
     gap: var(--solo-space-3);
     width: fit-content;
     max-width: 100%;
     margin-left: auto;
-    padding-top: var(--solo-space-4);
 }
 
 .sheetActions > * {

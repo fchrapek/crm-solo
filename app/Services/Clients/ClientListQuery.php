@@ -9,6 +9,7 @@ use App\Models\TimeEntry;
 use App\Support\LegalName;
 use App\Support\LocalCalendar;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 final class ClientListQuery
 {
@@ -16,7 +17,7 @@ final class ClientListQuery
 
     public const string ARCHIVED = 'archived';
 
-    /** The cooperation filter for clients with no type, so Wszyscy is the sum of the rows below it. */
+    /** The cooperation filter for clients with no type, so All is the sum of the rows below it. */
     public const string NO_TYPE = 'none';
 
     public const array STAGES = [...Client::LIFECYCLE_STAGES, self::ARCHIVED];
@@ -45,14 +46,14 @@ final class ClientListQuery
             ->when($search !== '', fn (Builder $query) => $query->filter(['search' => $search], $accountId))
             ->when($card !== null, fn (Builder $query) => $cards->apply($query, $card))
             ->select(['id', 'name', 'lifecycle_stage', 'cooperation_type', 'is_pinned', 'deleted_at', 'custom_fields', 'assigned_user_id'])
-            ->withExists(['timeEntries as agent_live' => fn (Builder $query) => $query->whereNull('end_time')->whereNotNull('actor_via')])
+            ->withMin(['timeEntries as agent_since' => fn (Builder $query) => $query->whereNull('end_time')->whereNotNull('actor_via')], 'start_time')
             ->addSelect(['month_minutes' => TimeEntry::query()
                 ->selectRaw('COALESCE(SUM(duration_minutes), 0)')
                 ->whereColumn('time_entries.client_id', 'clients.id')
                 ->where('start_time', '>=', $from)
                 ->where('start_time', '<', $to)])
             ->orderByDesc('is_pinned')
-            ->orderByDesc('agent_live')
+            ->orderByRaw('agent_since IS NULL')
             ->orderByDesc('month_minutes')
             ->orderBy('name')
             ->orderBy('id')
@@ -90,7 +91,7 @@ final class ClientListQuery
         ];
     }
 
-    /** @return array{id: int, name: string, short_name: string, lifecycle_stage: string, cooperation_type: ?string, is_archived: bool, is_pinned: bool, agent_live: bool, hours: array{period: string, behind: bool, has_retainer: bool, used: float, available: float, remaining: float, logged: float}} */
+    /** @return array{id: int, name: string, short_name: string, lifecycle_stage: string, cooperation_type: ?string, is_archived: bool, is_pinned: bool, agent_live: bool, agent_minutes: int|null, hours: array{period: string, behind: bool, has_retainer: bool, used: float, available: float, remaining: float, logged: float}} */
     private function row(Client $client, HoursBankMonth $month, ClientSettlementState $state): array
     {
         return [
@@ -101,7 +102,10 @@ final class ClientListQuery
             'cooperation_type' => $client->cooperation_type,
             'is_archived' => $client->deleted_at !== null,
             'is_pinned' => $client->is_pinned,
-            'agent_live' => (bool) $client->agent_live,
+            'agent_live' => is_string($client->agent_since),
+            'agent_minutes' => is_string($client->agent_since)
+                ? (int) max(0, Carbon::parse($client->agent_since, config('app.timezone'))->diffInMinutes(now()))
+                : null,
             'hours' => [
                 'period' => $state->activePeriod,
                 'behind' => $state->openBehind(),

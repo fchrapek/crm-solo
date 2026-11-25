@@ -8,11 +8,11 @@
 }
 
 .overlay[data-state="open"] {
-  animation: fadeIn var(--duration-150) var(--ease-out);
+  animation: fadeIn var(--motion-slow) var(--ease-standard);
 }
 
 .overlay[data-state="closed"] {
-  animation: fadeOut var(--duration-150) var(--ease-in);
+  animation: fadeOut var(--motion-slow-exit) var(--ease-exit);
 }
 
 .content {
@@ -47,11 +47,11 @@
 }
 
 .content[data-state="open"] {
-  animation: fadeIn var(--duration-200) var(--ease-out), zoomIn var(--duration-200) var(--ease-out);
+  animation: panelIn var(--motion-slow) var(--ease-standard);
 }
 
 .content[data-state="closed"] {
-  animation: fadeOut var(--duration-200) var(--ease-in), zoomOut var(--duration-200) var(--ease-in);
+  animation: panelOut var(--motion-slow-exit) var(--ease-exit);
 }
 
 /* Every dialog's content scrolls in here, so the close button outside it stays put; DialogBody narrows the scroll to the fields. */
@@ -73,7 +73,7 @@
   right: var(--dialog-close-right);
   border-radius: var(--radius-sm);
   opacity: 0.7;
-  transition: opacity var(--duration-150);
+  transition: opacity var(--motion-fast) var(--ease-standard);
 }
 
 .closeButton:hover {
@@ -172,14 +172,12 @@
   to { opacity: 0; }
 }
 
-@keyframes zoomIn {
-  from { transform: translate(-50%, -50%) scale(0.95); }
-  to { transform: translate(-50%, -50%) scale(1); }
+@keyframes panelIn {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)); }
 }
 
-@keyframes zoomOut {
-  from { transform: translate(-50%, -50%) scale(1); }
-  to { transform: translate(-50%, -50%) scale(0.95); }
+@keyframes panelOut {
+  to { opacity: 0; transform: translate(-50%, calc(-50% + 8px)); }
 }
 
 /* Solo: under a Solo page the portal container is a [data-day] surface (components/solo/surface.tsx) */
@@ -196,7 +194,8 @@
   --dialog-close-top: 30px;
   --dialog-close-right: 28px;
 
-  border: var(--solo-pop-width, 2px) solid var(--solo-pop-border, var(--solo-fg));
+  overflow: hidden;
+  border: 0;
   border-radius: var(--solo-dialog-radius, var(--solo-radius-xl));
   color: var(--solo-fg);
   box-shadow: var(--solo-pop-shadow, none);
@@ -216,9 +215,19 @@
   color: var(--solo-fg);
 }
 
-/* A2f: the bare 24 px × in its corner, centred where the 16 px one sat */
+/* Figma: OverlayHeader. The 24 px × keeps its place in the corner; the 44 px control around it is the hit area. */
 :global([data-day]) .closeButton {
-  translate: calc((var(--solo-close-size, 1rem) - 1rem) / 2) calc((1rem - var(--solo-close-size, 1rem)) / 2);
+  --dialog-close-target: 44px;
+
+  top: calc(var(--dialog-close-top) + (1rem - var(--dialog-close-target)) / 2);
+  right: calc(var(--dialog-close-right) + (1rem - var(--dialog-close-target)) / 2);
+  display: grid;
+  place-items: center;
+  width: var(--dialog-close-target);
+  height: var(--dialog-close-target);
+  border-radius: var(--solo-radius-full);
+  opacity: 1;
+  isolation: isolate;
 }
 
 :global([data-day]) .closeButton > span:first-child,
@@ -227,16 +236,45 @@
   height: var(--solo-close-size, 1rem);
 }
 
+/* the hover and the ring are the bare icon button's 32 px disc */
+:global([data-day]) .closeButton::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: -1;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--solo-radius-full);
+  translate: -50% -50%;
+}
+
+@media (hover: hover) {
+  :global([data-day]) .closeButton:hover::before {
+    background: var(--role-hover);
+  }
+}
+
 :global([data-day]) .closeButton:focus-visible {
   box-shadow: none;
-  outline: 2px solid var(--solo-fg);
-  outline-offset: 3px;
+  outline: none;
+}
+
+:global([data-day]) .closeButton:focus-visible::before {
+  outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+  outline-offset: calc(-1 * var(--role-stroke-focus));
 }
 
 :global([data-day]) .header {
   gap: var(--solo-space-2);
   padding-right: var(--solo-space-6);
   text-align: left;
+}
+
+/* the scrollbar sits in the dialog's side padding: the body reaches into it and keeps the fields where they were */
+:global([data-day]) .body {
+  margin-right: calc(-1 * var(--solo-space-4));
+  padding-right: var(--solo-space-3);
 }
 
 :global([data-day]) .title {
@@ -252,12 +290,15 @@
   font-size: var(--solo-text-sub);
 }
 
-/* Figma: ActionRow. Anuluj is the quiet button: no edge, the hover fill instead. */
+/* Figma: ActionRow on a tone band to the dialog's edges, no rule; Cancel is the quiet button, Save the one strong one */
 :global([data-day]) .footer {
-  --solo-pill-edge: transparent;
-  --solo-pill-edge-hover: transparent;
   --solo-pill-weight: 600;
   --solo-pill-hover: var(--role-hover);
+  --solo-pill-edge: transparent;
+  --solo-pill-edge-hover: transparent;
 
   gap: var(--solo-space-2);
+  margin: calc(var(--role-space-24) - var(--dialog-gap)) calc(-1 * var(--dialog-pad-inline)) calc(-1 * var(--dialog-pad-bottom));
+  padding: var(--role-space-16) var(--dialog-pad-inline) var(--role-space-20);
+  background-color: var(--solo-field-bg);
 }

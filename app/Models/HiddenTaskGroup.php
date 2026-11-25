@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * A project, or one Trello list of it, kept off the full task list (Zadania) and the plan suggestions.
+ * A project, or one Trello list of it, kept off the full task list (Tasks) and the plan suggestions.
  */
 final class HiddenTaskGroup extends Model
 {

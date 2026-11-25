@@ -57,7 +57,8 @@ export interface SearchPlace {
     url: string;
 }
 
-const plain = (text: string) =>
+/** Text as the search compares it: no accents, ł as l, lower case. */
+export const plain = (text: string) =>
     text
         .normalize('NFD')
         .replace(/\p{M}/gu, '')
@@ -74,7 +75,7 @@ export function placeGroup(query: string, places: SearchPlace[]): SearchGroup | 
     return items.length > 0 ? { group: 'places', total: items.length, items } : null;
 }
 
-/** The palette's rows in reading order: each group's items, then its "pokaż więcej" while more are left. */
+/** The palette's rows in reading order: each group's items, then its Show more while more are left. */
 export function paletteRows(groups: SearchGroup[], more: Partial<Record<SearchGroupName, SearchItem[]>>): GroupRow[] {
     return groups.flatMap((group) => {
         const items = more[group.group] ?? group.items;
@@ -103,11 +104,12 @@ export function useSearch({
 }) {
     const [query, setQuery] = useState('');
     const [archived, setArchived] = useState(false);
+    const [archivedTotal, setArchivedTotal] = useState(0);
     const [groups, setGroups] = useState<SearchGroup[]>([]);
     const [more, setMore] = useState<Partial<Record<SearchGroupName, SearchItem[]>>>({});
     const [searched, setSearched] = useState('');
     const [active, setActive] = useState(0);
-    // Which result set is on screen, counted up with every one, so a late "pokaż więcej" for an earlier set is dropped.
+    // Which result set is on screen, counted up with every one, so a late Show more for an earlier set is dropped.
     const resultSet = useRef(0);
 
     const close = useCallback(() => {
@@ -142,10 +144,11 @@ export function useSearch({
         if (!open || trimmed.length < 2) return;
         const controller = new AbortController();
         const timer = window.setTimeout(() => {
-            jsonRequest<{ groups: SearchGroup[] }>(search.url({ query: { q: trimmed, archived: archived ? 1 : undefined } }), 'GET', undefined, controller.signal)
+            jsonRequest<{ groups: SearchGroup[]; archived_total: number }>(search.url({ query: { q: trimmed, archived: archived ? 1 : undefined } }), 'GET', undefined, controller.signal)
                 .then((result) => {
                     resultSet.current += 1;
                     setGroups(result.groups);
+                    setArchivedTotal(result.archived_total);
                     setMore({});
                     setSearched(trimmed);
                     setActive(0);
@@ -227,6 +230,7 @@ export function useSearch({
         /** The query has an answer on screen, even an empty one. */
         answered: searched !== '' && trimmed === searched,
         searched,
+        archivedTotal,
         filter: filter !== undefined && trimmed.length >= 2 ? { label: filter.label, query: trimmed } : null,
         activeId: rows[active] ? `palette-row-${active}` : undefined,
     };
@@ -253,14 +257,23 @@ export function SearchResults({ search: found }: { search: Search }) {
                         onMouseMove={() => found.setActive(0)}
                         onClick={() => found.choose(found.rows[0])}
                     >
-                        <span className={styles.title}>{found.filter.label}</span>
-                        <span className={styles.caption}>{found.filter.query}</span>
+                        <span className={styles.title} title={found.filter.label}>
+                            {found.filter.label}
+                        </span>
+                        <span className={styles.caption} title={found.filter.query}>
+                            {found.filter.query}
+                        </span>
                     </button>
                 )}
                 {found.groups.map((group) => (
                     <PaletteGroup key={group.group} group={group} rows={found.rows} active={found.active} onHover={found.setActive} onChoose={found.choose} />
                 ))}
-                {found.answered && found.groups.length === 0 && <p className={styles.empty}>{t('No results for "{{query}}"', { query: found.searched })}</p>}
+                {found.answered && found.groups.length === 0 && (
+                    <p className={styles.empty}>
+                        {t('No results for "{{query}}"', { query: found.searched })}
+                        {found.archivedTotal > 0 && ` · ${t('{{count}} in the archive', { count: found.archivedTotal })}`}
+                    </p>
+                )}
             </div>
             <div className={styles.footer}>
                 <button type="button" className={styles.archived} aria-pressed={found.archived} onClick={found.toggleArchived}>
@@ -321,8 +334,12 @@ function PaletteGroup({
                     >
                         {row.kind === 'item' ? (
                             <>
-                                <span className={styles.title}>{itemTitle(row.group, row.item, t, i18n.language)}</span>
-                                <span className={styles.caption}>{itemCaption(row.group, row.item, t)}</span>
+                                <span className={styles.title} title={itemTitle(row.group, row.item, t, i18n.language)}>
+                                    {itemTitle(row.group, row.item, t, i18n.language)}
+                                </span>
+                                <span className={styles.caption} title={itemCaption(row.group, row.item, t) || undefined}>
+                                    {itemCaption(row.group, row.item, t)}
+                                </span>
                             </>
                         ) : row.kind === 'more' ? (
                             <>

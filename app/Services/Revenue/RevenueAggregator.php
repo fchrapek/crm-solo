@@ -101,7 +101,7 @@ final class RevenueAggregator
     }
 
     /**
-     * Compact PLN revenue summary for one client, for the Faktury tab.
+     * Compact PLN revenue summary for one client, for the Invoices tab.
      * Accrual basis (by sale_date), advances excluded. The period window
      * follows the tab's year/month filter; null bounds mean all-time.
      * Share = this client's slice of the whole book within the same window.

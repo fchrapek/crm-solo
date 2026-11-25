@@ -21,17 +21,17 @@ import { LIVE_PROPS, type TaskPageProps } from './components/task-page/types';
 const LIVE_WITHOUT_HISTORY = LIVE_PROPS.filter((prop) => prop !== 'activity');
 
 /**
- * Figma: Zadanie (1094:40618, phone 1094:40855; a CRM task 1094:41102, done 1094:41505). The head, the description,
+ * Figma: Task (1094:40618, phone 1094:40855; a CRM task 1094:41102, done 1094:41505). The head, the description,
  * the card's checklist, the brief, the resources and the child tasks; beside them from 1100 px, under them
  * otherwise, the time tile and the activity.
  */
 export default function TaskShow() {
     const { props, url } = usePage<SharedData & TaskPageProps>();
-    const { task, time, brief, card, resources, activity, live, clock, parent_options: parentOptions } = props;
+    const { task, time, billed, brief, card, resources, activity, live, clock, parent_options: parentOptions, project_options: projectOptions } = props;
     const { t, i18n } = useTranslation();
     const locale = i18n.language;
     const now = useNow(15_000) ?? Date.parse(clock.now);
-    const historyOpen = /[?&]historia(=|&|$)/.test(url);
+    const historyOpen = /[?&]history(=|&|$)/.test(url);
     useLiveReload(historyOpen ? LIVE_WITHOUT_HISTORY : LIVE_PROPS);
 
     return (
@@ -39,7 +39,7 @@ export default function TaskShow() {
             <Head title={task.name} />
             <TileGrid>
                 <TileStack as="section">
-                    <TaskHeader task={task} today={clock.today} locale={locale} parentOptions={parentOptions} />
+                    <TaskHeader task={task} today={clock.today} locale={locale} parentOptions={parentOptions} projectOptions={projectOptions} />
                     <DescriptionSection task={task} />
                     {card !== null && card.total > 0 && <ChecklistSection card={card} trelloUrl={task.trello_url} />}
                     <BriefSection taskId={task.id} brief={brief} now={now} today={clock.today} locale={locale} />
@@ -73,6 +73,7 @@ export default function TaskShow() {
                     <TimeSection
                         task={{ id: task.id, name: task.name, client: task.client?.short_name, is_reportable: task.is_reportable }}
                         time={time}
+                        billed={billed}
                         now={now}
                     />
                     <ActivitySection taskId={task.id} activity={activity} full={historyOpen} live={live} clock={clock} now={now} locale={locale} />

@@ -11,7 +11,7 @@ use App\Services\Agent\ReferenceException;
 use App\Services\Agent\RetainerEditor;
 use Illuminate\Console\Command;
 
-/** Agent verb: end an abonament position; nothing is deleted, elapsed months keep their terms. */
+/** Agent verb: end a retainer position; nothing is deleted, elapsed months keep their terms. */
 #[AccountScope(AccountScope::ACTING)]
 final class CrmRetainerEnd extends Command
 {

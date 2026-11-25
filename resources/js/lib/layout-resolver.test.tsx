@@ -1,14 +1,15 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-mock.module('@/layouts/shell-layout', () => ({
-    default: ({ children, place }: { children: React.ReactNode; place?: () => unknown }) => (
-        <div data-shell="" data-place={place ? 'own' : undefined}>
-            {children}
-        </div>
-    ),
-}));
+import * as shellLayout from '@/layouts/shell-layout';
+
+spyOn(shellLayout, 'default').mockImplementation((({ children, place }: { children: React.ReactNode; place?: () => unknown }) => (
+    <div data-shell="" data-place={place ? 'own' : undefined}>
+        {children}
+    </div>
+)) as unknown as typeof shellLayout.default);
+afterAll(() => mock.restore());
 
 const { applyLayoutToPage } = await import('./layout-resolver');
 
@@ -35,6 +36,6 @@ describe('applyLayoutToPage', () => {
 
     test('the login and splash pages stay bare', () => {
         expect(renderWithLayout('auth/login')).toBe('<main></main>');
-        expect(renderWithLayout('auth/czesc')).toBe('<main></main>');
+        expect(renderWithLayout('auth/waitlist')).toBe('<main></main>');
     });
 });

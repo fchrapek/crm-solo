@@ -16,9 +16,13 @@ final class InstallableAppTest extends TestCase
         $this->get('/login')
             ->assertOk()
             ->assertSee('<link rel="manifest" href="/pwa/manifest.webmanifest">', false)
+            ->assertSee('<link rel="icon" type="image/png" sizes="32x32" href="/pwa/favicon-32.png">', false)
+            ->assertSee('<link rel="icon" type="image/png" sizes="64x64" href="/pwa/favicon-64.png">', false)
             ->assertSee('<link rel="apple-touch-icon" href="/pwa/icon-180.png">', false);
 
         $this->assertFileExists(public_path('pwa/icon-180.png'));
+        $this->assertFileExists(public_path('pwa/favicon-32.png'));
+        $this->assertFileExists(public_path('pwa/favicon-64.png'));
     }
 
     public function test_the_manifest_opens_standalone_with_icons_of_the_sizes_it_names(): void

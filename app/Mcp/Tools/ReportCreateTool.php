@@ -14,7 +14,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
 
-#[Description('Generate a draft report for the month of one client, the same as Generate on the Rozliczenia tab. A month that already has a report is refused with report_exists and its id: regenerate or edit that one. hours, when given, must equal the month\'s task sum; to bill a different total, set a task figure with task_billed_set first. Say what you will write and wait for the owner before calling it.')]
+#[Description('Generate a draft report for the month of one client, the same as Generate on the Billing tab. A month that already has a report is refused with report_exists and its id: regenerate or edit that one. hours, when given, must equal the month\'s task sum; to bill a different total, set a task figure with task_billed_set first. Say what you will write and wait for the owner before calling it.')]
 final class ReportCreateTool extends Tool
 {
     use HandlesReferenceErrors;

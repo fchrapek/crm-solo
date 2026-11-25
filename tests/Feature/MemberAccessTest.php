@@ -18,8 +18,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * A member works with clients, tasks, time and notes. Money, integrations and the account's settings are the owner's:
- * billing is absent for a member (404), the rest is forbidden (403).
+ * A member works with clients, tasks, time and notes, and sets their own profile. Money, integrations and the account's
+ * settings are the owner's: billing and the settings pages are absent for a member (404), the rest is forbidden (403).
  */
 final class MemberAccessTest extends TestCase
 {
@@ -64,9 +64,13 @@ final class MemberAccessTest extends TestCase
             'change lead settings' => ['patch', '/settings/leadgen', [], 403],
             'define a client field' => ['put', '/settings/client-fields/visit_at', ['label' => 'Visit'], 403],
             'delete a client' => ['delete', '/clients/{client}', [], 403],
-            'open the integrations settings' => ['get', '/settings/integracje', [], 404],
-            'open the sms settings' => ['get', '/settings/sms', [], 404],
-            'open the billing tab' => ['get', '/clients/{client}/rozliczenia', [], 404],
+            'open the integrations settings' => ['get', '/settings/integrations', [], 404],
+            'open the settings' => ['get', '/settings', [], 404],
+            'open the general settings' => ['get', '/settings/general', [], 404],
+            'open the leads settings' => ['get', '/settings/leads', [], 404],
+            'open the forms settings' => ['get', '/settings/forms', [], 404],
+            'open the messages settings' => ['get', '/settings/messages', [], 404],
+            'open the billing tab' => ['get', '/clients/{client}/billing', [], 404],
             'open the month close' => ['get', '/month-close', [], 404],
             'open revenue' => ['get', '/revenue', [], 404],
             'generate a report' => ['post', '/clients/{client}/reports', ['period' => '2026-10'], 404],
@@ -93,10 +97,10 @@ final class MemberAccessTest extends TestCase
 
     public function test_a_member_works_with_clients_tasks_and_time(): void
     {
-        $this->actingAs($this->member)->get("/clients/{$this->client->id}/przeglad")
+        $this->actingAs($this->member)->get("/clients/{$this->client->id}/overview")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page->where('auth.user.account.features.billing', false)->where('client.billing', false));
-        $this->actingAs($this->member)->get('/settings/konto')->assertOk();
+        $this->actingAs($this->member)->get('/profile')->assertOk();
 
         $this->actingAs($this->member)->post("/projects/{$this->project->id}/tasks", ['name' => 'Footer'])->assertSessionHasNoErrors();
         $this->assertSame(2, Task::query()->count());

@@ -28,7 +28,9 @@ abstract class Controller extends BaseController
         try {
             return $write();
         } catch (AgentRefusal $e) {
-            throw ValidationException::withMessages([(string) ($e->context['field'] ?? $key) => __($e->getMessage())]);
+            // A refusal that names its fields one by one puts each message under its own field.
+            $problems = $e->context['problems'] ?? null;
+            throw ValidationException::withMessages(is_array($problems) && $problems !== [] ? $problems : [(string) ($e->context['field'] ?? $key) => __($e->getMessage())]);
         }
     }
 }

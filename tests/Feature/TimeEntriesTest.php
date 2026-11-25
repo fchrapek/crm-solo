@@ -163,7 +163,7 @@ final class TimeEntriesTest extends TestCase
             'duration_minutes' => 60,
         ])->save();
 
-        $props = $this->actingAs($user)->get("/clients/{$client->id}/dziennik")->assertOk()->viewData('page')['props'];
+        $props = $this->actingAs($user)->get("/clients/{$client->id}/journal")->assertOk()->viewData('page')['props'];
 
         $this->assertSame([60], array_column($props['journal_work']['rows'], 'minutes'));
         $this->assertSame('Pulled before the removal', $props['journal_work']['rows'][0]['entry']['description']);

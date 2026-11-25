@@ -7,6 +7,7 @@ import { Row } from '@/components/solo/row';
 import { Pills } from '@/components/solo/shell/pills';
 import { type PlaceResolver } from '@/components/solo/shell/place';
 import { SoloSurface } from '@/components/solo/surface';
+import { isOwner } from '@/components/solo/tab-bar';
 import { Tile, TileInset } from '@/components/solo/tile';
 import { localeOf } from '@/lib/hours-text';
 import leads from '@/routes/leads';
@@ -42,13 +43,15 @@ const narrowed = (filters: LeadFilters) =>
     Boolean(filters.search) || Boolean(filters.source) || filters.pipeline !== 'all' || filters.stage !== 'all' || filters.tier !== 'all';
 
 /**
- * Figma: Leady (1093:29084, phone 1093:29331). The board or the list, picked by a pill and kept in the URL; the
+ * Figma: Leads (1093:29084, phone 1093:29331). The board or the list, picked by a pill and kept in the URL; the
  * filters are menu pills beside it and the command bar narrows by words.
  */
 export default function Index({ filters, pipelines, stages, stage_labels, sources, source_labels, tiers, leads: leadRows }: LeadsPageProps) {
     const { t, i18n } = useTranslation();
     const label = useLeadLabel();
-    const view = leadView(usePage().url);
+    const page = usePage<SharedData>();
+    const view = leadView(page.url);
+    const owner = isOwner(page.props.auth.user);
 
     // Brand is an attribute, not a board split - the filter only exists when more than one brand is configured.
     const multiBrand = pipelines.length > 1;
@@ -97,9 +100,11 @@ export default function Index({ filters, pipelines, stages, stage_labels, source
                 <header className={styles.head}>
                     <Poster>{t('Leads')}</Poster>
                     <div className={styles.headActions}>
-                        <SoloButtonLink href={settings.show('leady')} variant="quiet" size="control" prefetch>
-                            {t('Lead settings')}
-                        </SoloButtonLink>
+                        {owner && (
+                            <SoloButtonLink href={settings.show('leads')} variant="quiet" size="control" prefetch>
+                                {t('Lead settings')}
+                            </SoloButtonLink>
+                        )}
                         <SoloButtonLink href={leads.create().url} size="control">
                             {t('Capture lead')}
                         </SoloButtonLink>
@@ -167,7 +172,7 @@ export default function Index({ filters, pipelines, stages, stage_labels, source
                                     {leadRows.data.map((lead) => (
                                         <ListTableRow key={lead.id}>
                                             <ListTableCell kind="title" truncate>
-                                                <Link className={styles.rowLink} href={leads.edit(lead.id).url}>
+                                                <Link className={styles.rowLink} href={leads.edit(lead.id).url} title={lead.name}>
                                                     {lead.name}
                                                 </Link>
                                             </ListTableCell>

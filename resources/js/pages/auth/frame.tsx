@@ -1,5 +1,5 @@
 import { FieldError } from '@/components/solo/field';
-import { Wordmark } from '@/components/solo/logos';
+import { DogHead } from '@/components/solo/logos';
 import { Poster } from '@/components/solo/primitives';
 import { type DogPose } from '@/components/solo/shell/dog-still';
 import { Dog } from '@/components/solo/shell/helper/dog';
@@ -25,10 +25,10 @@ export function formDog(pose: DogPose, peek: boolean, filling: boolean): { pose:
 }
 
 /**
- * Figma: Logowanie, Lista oczekujących. One layout in two colours: the page is the colour, the words and the form
+ * Figma: Login, Waitlist. One layout in two colours: the page is the colour, the words and the form
  * stand on it, in the app's column from 768 px, and the dog is the large live one. It follows the pointer; while a
  * field has the cursor it looks at the form with its sunglasses up, and it takes the pose the form asks for
- * otherwise. A title replaces the wordmark from 768 px.
+ * otherwise. A title replaces the mark from 768 px.
  */
 export function AuthFrame({
     tone,
@@ -41,7 +41,7 @@ export function AuthFrame({
 }: {
     tone: 'cobalt' | 'vermilion';
     title?: string;
-    /** The page's name for a screen whose visible headline is the wordmark. */
+    /** The page's name for a screen whose visible headline is the mark. */
     heading?: string;
     lede?: ReactNode;
     pose?: DogPose;
@@ -56,7 +56,7 @@ export function AuthFrame({
         <SoloSurface day="paper" className={styles.page} data-tone={tone} data-titled={title !== undefined ? '' : undefined}>
             <div className={styles.column}>
                 <div className={styles.brand}>
-                    <Wordmark className={styles.wordmark} />
+                    <DogHead className={styles.mark} />
                     <p className={styles.claim}>{t('brand_claim')}</p>
                 </div>
                 <span className={styles.dog}>

@@ -11,7 +11,7 @@ use App\Services\Agent\ReferenceException;
 use App\Services\Agent\RetainerEditor;
 use Illuminate\Console\Command;
 
-/** Agent verb: add an abonament position, or change the given fields of one; the abonament dialog's rules apply. */
+/** Agent verb: add a retainer position, or change the given fields of one; the retainer dialog's rules apply. */
 #[AccountScope(AccountScope::ACTING)]
 final class CrmRetainerSet extends Command
 {
