@@ -44,6 +44,11 @@ final class AiNarrativeComposer implements ReportComposerInterface
 
     public function compose(ReportContext $context): string
     {
+        // No model is part of the public demo: a visitor's click must never cost a call or carry the account's text out.
+        if (config('app.demo')) {
+            return $this->fallback->compose($context);
+        }
+
         $payload = $this->buildPayload($context);
 
         try {

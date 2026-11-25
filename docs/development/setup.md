@@ -109,15 +109,36 @@ These features degrade gracefully when the env var is unset — local dev works 
 
 `config/waitlist.php`, off by default, so local dev and the demo are unchanged.
 
-- `APP_CLOSED=true`: guests are sent to the splash at `/czesc` from every page that needs a login (the `redirectGuestsTo` in `bootstrap/app.php`). `/login` keeps working for existing users, signed-in users never see the splash, and there is no registration route. With it off, `/czesc` is a 404.
-- `WAITLIST_ACCOUNT_ID`: the account whose funnel receives signups. Required when closed; a wrong id makes `/czesc` answer 503 and log an error, on the first page load and on submit, rather than thanking the visitor. To look at the page locally, start the PHP server with `APP_CLOSED=true WAITLIST_ACCOUNT_ID=1`.
+- `APP_CLOSED=true`: guests are sent to the splash at `/waitlist` from every page that needs a login (the `redirectGuestsTo` in `bootstrap/app.php`). `/login` keeps working for existing users, signed-in users never see the splash, and there is no registration route. With it off, `/waitlist` is a 404. The old `/czesc` answers a 301 to `/waitlist` either way (`LegacyUrls`).
+- `WAITLIST_ACCOUNT_ID`: the account whose funnel receives signups. Required when closed; a wrong id makes `/waitlist` answer 503 and log an error, on the first page load and on submit, rather than thanking the visitor. To look at the page locally, start the PHP server with `APP_CLOSED=true WAITLIST_ACCOUNT_ID=1`.
 - `WAITLIST_PIPELINE`: a pipeline slug from `config/leadgen.php`; empty means the first one. An unknown slug fails the same way as a wrong account.
 - `WAITLIST_PER_MINUTE`, `WAITLIST_PER_HOUR`: signups per visitor IP (5 and 20). The IP is `$request->ip()`, so behind a reverse proxy set `TRUSTED_PROXIES` to the proxy's address or subnet (and `TRUST_CF_CONNECTING_IP=true` behind Cloudflare), or every visitor shares one bucket.
 - `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET`: the same Turnstile gate as the login form, active only with the secret set.
+- `DOCS_URL`: the public docs site; blank (the default) keeps the helper's docs links hidden.
 
 A signup is a lead with source `waitlist`, created through `App\Services\Leads\LeadCapture::captureOnce()`: one lead per email in that account, deleted ones included, and the same thank-you for new, repeated and honeypot submissions. No user is ever created. Concurrent submissions of one address are settled by a unique `(account_id, capture_key)` index on `leads`.
 
-The splash has to be reachable by guests. With Cloudflare Access in front of the host, add a bypass policy for `/czesc` (the page and its form POST), `/locales/*`, `/build/*` and `/up` only, and keep `/login` and everything else behind Access; otherwise host the splash somewhere Access does not cover.
+The splash has to be reachable by guests. With Cloudflare Access in front of the host, add a bypass policy for `/waitlist` (the page and its form POST) and the old `/czesc` (so its redirect reaches guests), `/locales/*`, `/build/*` and `/up` only, and keep `/login` and everything else behind Access; otherwise host the splash somewhere Access does not cover.
+
+## Website forms (lead intake)
+
+Any account can point its own website forms at `POST /intake/{key}`. Locally:
+
+```bash
+php artisan intake-form:create --account=1 --name="Contact drawer" \
+  --pipeline=filipchrapek --source=www-form \
+  --origin=http://localhost:4321 --notify-to=hi@example.test
+printf '%s\n' "$TURNSTILE_TEST_SECRET" | php artisan intake-form:turnstile --account=1 --form=<id>
+php artisan intake-form:set --account=1 --form=<id> --active=no
+```
+
+The create command prints the form's key; the site posts JSON there. Origins are bare and lowercase (`https://www.example.test`; plain http only for localhost). In `local` and `testing` a form without a Turnstile secret is accepted, so no secret is needed to try it; anywhere else it answers 503. Cloudflare's always-pass test keys work too.
+
+- `INTAKE_IP_PER_MINUTE`, `INTAKE_IP_PER_HOUR` (20 and 60): refused requests to `/intake/*` from one visitor address (401, 403, 404, 413, 415), counted right after `TrustProxies` so a proxy's address is never the key; an IPv6 visitor counts by its /64. Accepted posts are covered by the per-form limits below.
+- `INTAKE_PER_MINUTE`, `INTAKE_PER_HOUR` (5 and 20): one IP's posts to one form. A webhook whose secret matches is counted by `INTAKE_WEBHOOK_PER_MINUTE` and `INTAKE_WEBHOOK_PER_HOUR` (60 and 600, per form) instead; a wrong secret stays here.
+- `INTAKE_NEW_LEADS_PER_DAY` (100): new leads per form and day; replays and refusals do not count.
+
+Bodies are capped at 16 KB and must be `application/json`. The IP comes from `$request->ip()`, so behind a proxy set `TRUSTED_PROXIES`, as for the waitlist.
 
 ## Default Credentials
 
@@ -222,8 +243,16 @@ Not in the gate yet: `bun run format:check`, because 14 files under
 
 Two long-lived branches: `develop`, where work lands, and `main`, which is
 what runs in production. Everything else is short-lived, one change each,
-cut from develop: `feat/<topic>`, `fix/<topic>`, `docs/<topic>`,
-`agent/<topic>`.
+cut from develop: `feature/<topic>`, `bugfix/<topic>`, `hotfix/<topic>` or
+`docs/<topic>`, nothing else (no integration branches). Branch names, commit
+subjects and PR titles and bodies are English, with no Polish screen names.
+
+**A PR body is short: essentials only.** What changed and why in a few lines,
+how it was checked in one or two (the commands and the result, no test-by-test
+list), and what a reviewer must know: a migration, a known leftover, anything
+not verified. No file-by-file tour, no retelling of the diff or of the review
+rounds, no measurements unless one is the point. Aim for under 150 words; the
+commits and the diff carry the detail.
 
 **Local hooks.** `bun install` installs them (Lefthook, `lefthook.yml`).
 pre-commit fixes staged PHP with Pint and staged scripts with ESLint, and

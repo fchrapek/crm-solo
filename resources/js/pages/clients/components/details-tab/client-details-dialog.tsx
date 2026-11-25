@@ -3,8 +3,11 @@ import { fieldControl, SoloField, SoloFieldRow, SoloInput, SoloTextarea } from '
 import { SoloButton } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
 import { ResponsiveSelect } from '@/components/solo/responsive-select';
+import { SectionToggle } from '@/components/solo/section-toggle';
+import { SegmentedControl } from '@/components/solo/segmented-control';
+import { GroupHeading } from '@/components/solo/tile';
 import { router } from '@inertiajs/react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import styles from './dialog-form.module.css';
 import type { ClientDetails } from './types';
@@ -73,21 +76,52 @@ function draftOf(details: ClientDetails | undefined): Draft {
     };
 }
 
-/**
- * What the form sends: the rate only while the cooperation is hourly, so editing anything else never clears a stored
- * rate.
- */
+/** What the form sends: only the fields its type and cooperation show, so a hidden field never clears a stored value or refuses unseen. */
 export function clientPayload(draft: Draft): Partial<Draft> {
     const payload: Partial<Draft> = { ...draft };
     if (draft.cooperation_type !== 'hourly') delete payload.hourly_rate;
+    if (draft.type === 'individual') {
+        delete payload.tax_id;
+        delete payload.business_type;
+    }
 
     return payload;
 }
 
-/**
- * Dane firmy, or with no client Nowy klient (Figma 573:10837, phone 573:15240): every field of the client form, Nazwa
- * first. The update rules require the type, so it always goes along, even unchanged.
- */
+type Group = 'company' | 'notes';
+
+/** The form's fields in the order they stand, with their control and the folded group that holds them. */
+const FIELDS: { key: string; id: string; group?: Group }[] = [
+    { key: 'name', id: 'client-name' },
+    { key: 'cooperation_type', id: 'client-cooperation' },
+    { key: 'email', id: 'client-email' },
+    { key: 'phone', id: 'client-phone' },
+    { key: 'hourly_rate', id: 'client-hourly-rate' },
+    { key: 'currency', id: 'client-currency' },
+    { key: 'tax_id', id: 'client-tax-id', group: 'company' },
+    { key: 'business_type', id: 'client-business-type', group: 'company' },
+    { key: 'address', id: 'client-address', group: 'company' },
+    { key: 'postal_code', id: 'client-postal-code', group: 'company' },
+    { key: 'city', id: 'client-city', group: 'company' },
+    { key: 'region', id: 'client-region', group: 'company' },
+    { key: 'country', id: 'client-country', group: 'company' },
+    { key: 'segment', id: 'client-segment', group: 'company' },
+    { key: 'notes', id: 'client-notes', group: 'notes' },
+];
+
+/** The first field the server refused, in the form's order: its group opens and the field takes the focus. */
+export function firstInvalid(errors: Record<string, string>): { id: string; group?: Group } | null {
+    return FIELDS.find((field) => errors[field.key] !== undefined) ?? null;
+}
+
+/** Refusals no field of the form shows, such as the type: they stand at the top of the form instead. */
+export function unmappedErrors(errors: Record<string, string>): string[] {
+    return Object.entries(errors)
+        .filter(([key]) => !FIELDS.some((field) => field.key === key))
+        .map(([, message]) => message);
+}
+
+/** New client, or Company data for a client (Figma 1395:35803, phone 1395:36518); the type always goes along, as the update rules require it. */
 export function ClientDetailsDialog({
     clientId,
     details,
@@ -103,6 +137,10 @@ export function ClientDetailsDialog({
     const [draft, setDraft] = useState<Draft>(() => draftOf(details));
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [processing, setProcessing] = useState(false);
+    const editing = clientId !== undefined;
+    const [companyOpen, setCompanyOpen] = useState(editing);
+    const [notesOpen, setNotesOpen] = useState(editing);
+    const [focus, setFocus] = useState<{ id: string } | null>(null);
 
     // Opened from outside, so the form is reset while rendering the open, not in an effect after it.
     const [wasOpen, setWasOpen] = useState(open);
@@ -111,21 +149,39 @@ export function ClientDetailsDialog({
         if (open) {
             setDraft(draftOf(details));
             setErrors({});
+            setCompanyOpen(editing);
+            setNotesOpen(editing);
         }
+    }
+
+    // A folded field is inert until its group opens and disabled until the request ends, so the focus waits for both.
+    useEffect(() => {
+        if (focus !== null && !processing) document.getElementById(focus.id)?.focus();
+    }, [focus, processing]);
+
+    function refused(errs: Record<string, string>) {
+        setErrors(errs);
+        const field = firstInvalid(errs);
+        if (field === null) return;
+        if (field.group === 'company') setCompanyOpen(true);
+        if (field.group === 'notes') setNotesOpen(true);
+        setFocus({ id: field.id });
     }
 
     const set = (key: keyof Draft) => (value: string) => setDraft((current) => ({ ...current, [key]: value }));
 
-    const creating = clientId === undefined;
+    const creating = !editing;
     const individual = draft.type === 'individual';
+    const hourly = draft.cooperation_type === 'hourly';
 
     function submit(e: FormEvent) {
         e.preventDefault();
+        setFocus(null);
         setProcessing(true);
         const options = {
             preserveScroll: !creating,
             onSuccess: () => onOpenChange(false),
-            onError: (errs: Record<string, string>) => setErrors(errs),
+            onError: refused,
             onFinish: () => setProcessing(false),
         };
 
@@ -152,9 +208,10 @@ export function ClientDetailsDialog({
             }
             htmlFor="client-name"
             error={errors.name}
+            hint={creating ? t('Required. You can fill in the rest later.') : undefined}
         >
             <SoloInput
-                {...fieldControl('client-name', errors.name)}
+                {...fieldControl('client-name', errors.name, creating)}
                 value={draft.name}
                 onChange={(e) => set('name')(e.target.value)}
                 required
@@ -165,31 +222,29 @@ export function ClientDetailsDialog({
         </SoloField>
     );
 
-    const typeRow = (
-        <SoloFieldRow>
-            <SoloField label={t('Type')} htmlFor="client-type" error={errors.type}>
-                <ResponsiveSelect
-                    label={t('Type')}
-                    value={draft.type}
-                    onValueChange={set('type')}
-                    disabled={processing}
-                    control={fieldControl('client-type', errors.type)}
-                    options={[
-                        { value: 'business', label: t('Business') },
-                        { value: 'individual', label: t('Individual') },
-                    ]}
-                />
-            </SoloField>
-            <SoloField label={t('Tax ID (NIP)')} htmlFor="client-tax-id" error={errors.tax_id} className={individual ? styles.wideField : undefined}>
-                <SoloInput
-                    {...fieldControl('client-tax-id', errors.tax_id)}
-                    value={draft.tax_id}
-                    onChange={(e) => set('tax_id')(e.target.value)}
-                    maxLength={20}
-                    disabled={processing}
-                />
-            </SoloField>
-        </SoloFieldRow>
+    const typeField = (
+        <SegmentedControl
+            label={t('Type')}
+            value={draft.type}
+            onChange={(value) => set('type')(value)}
+            disabled={processing}
+            options={[
+                { value: 'business', label: t('Business') },
+                { value: 'individual', label: t('Individual') },
+            ]}
+        />
+    );
+
+    const taxIdField = (
+        <SoloField label={t('Tax ID (NIP)')} htmlFor="client-tax-id" error={errors.tax_id}>
+            <SoloInput
+                {...fieldControl('client-tax-id', errors.tax_id)}
+                value={draft.tax_id}
+                onChange={(e) => set('tax_id')(e.target.value)}
+                maxLength={20}
+                disabled={processing}
+            />
+        </SoloField>
     );
 
     const businessTypeField = (
@@ -297,18 +352,23 @@ export function ClientDetailsDialog({
     );
 
     const currencyField = (
-        <SoloField label={t('Currency')} htmlFor="client-currency" error={errors.currency}>
+        <SoloField
+            label={t('Currency')}
+            htmlFor="client-currency"
+            error={errors.currency}
+            hint={hourly ? undefined : t('The hourly rate appears only with an hourly contract.')}
+        >
             <ResponsiveSelect
                 label={t('Currency')}
                 value={draft.currency}
                 onValueChange={set('currency')}
                 disabled={processing}
-                control={fieldControl('client-currency', errors.currency)}
+                control={fieldControl('client-currency', errors.currency, !hourly)}
                 options={[
-                    { value: 'PLN', label: t('PLN - złoty') },
-                    { value: 'EUR', label: t('EUR - euro') },
-                    { value: 'USD', label: t('USD - dollar') },
-                    { value: 'GBP', label: t('GBP - pound') },
+                    { value: 'PLN', label: t('PLN (złoty)') },
+                    { value: 'EUR', label: t('EUR (euro)') },
+                    { value: 'USD', label: t('USD (US dollar)') },
+                    { value: 'GBP', label: t('GBP (pound)') },
                 ]}
             />
         </SoloField>
@@ -323,7 +383,7 @@ export function ClientDetailsDialog({
                 disabled={processing}
                 control={fieldControl('client-segment', errors.segment)}
                 options={[
-                    { value: NONE, label: t(' - none - ') },
+                    { value: NONE, label: t('None') },
                     { value: 'agency', label: t('Agency') },
                     { value: 'smb', label: t('Small / mid business') },
                     { value: 'enterprise', label: t('Enterprise') },
@@ -342,7 +402,7 @@ export function ClientDetailsDialog({
                 disabled={processing}
                 control={fieldControl('client-cooperation', errors.cooperation_type)}
                 options={[
-                    { value: NONE, label: creating ? t(' - none - ') : t('None') },
+                    { value: NONE, label: t('None') },
                     { value: 'retainer', label: t('Retainer') },
                     { value: 'hourly', label: t('Hourly contract') },
                     { value: 'project', label: t('Project') },
@@ -353,9 +413,9 @@ export function ClientDetailsDialog({
     );
 
     const hourlyRateField = (
-        <SoloField label={t('Hourly rate (netto)')} htmlFor="client-hourly-rate" error={errors.hourly_rate}>
+        <SoloField label={t('Hourly rate (net)')} htmlFor="client-hourly-rate" error={errors.hourly_rate} hint={t('Only with an hourly contract.')}>
             <SoloInput
-                {...fieldControl('client-hourly-rate', errors.hourly_rate)}
+                {...fieldControl('client-hourly-rate', errors.hourly_rate, true)}
                 type="number"
                 inputMode="decimal"
                 min={0}
@@ -403,23 +463,52 @@ export function ClientDetailsDialog({
                 </>
             )}
         >
+            {unmappedErrors(errors).length > 0 && (
+                <p className={styles.error} role="alert">
+                    {unmappedErrors(errors).join(' ')}
+                </p>
+            )}
+            {typeField}
             {nameField}
-            {typeRow}
-            {!individual && businessTypeField}
+            {cooperationField}
+            <GroupHeading label={t('Contact details')} size="compact" flush as="h3" />
             {contactRow}
-            {addressField}
-            {postalRow}
-            <SoloFieldRow>
-                {countryField}
-                {currencyField}
-            </SoloFieldRow>
-            <SoloFieldRow>
-                {segmentField}
-                {cooperationField}
-            </SoloFieldRow>
-            {draft.cooperation_type === 'hourly' && hourlyRateField}
-            {regionField}
-            {notesField}
+            <GroupHeading label={t('Billing')} size="compact" flush as="h3" />
+            {hourly ? (
+                <SoloFieldRow>
+                    {hourlyRateField}
+                    {currencyField}
+                </SoloFieldRow>
+            ) : (
+                currencyField
+            )}
+            <SectionToggle
+                label={individual ? t('Address') : t('Company data and address')}
+                summary={companyOpen ? undefined : individual ? t('Address, region, country') : t('Tax ID, address, region, country')}
+                phoneSummary={null}
+                open={companyOpen}
+                onOpenChange={setCompanyOpen}
+                disabled={processing}
+            >
+                <div className={styles.toggleFields}>
+                    {!individual && (
+                        <SoloFieldRow>
+                            {taxIdField}
+                            {businessTypeField}
+                        </SoloFieldRow>
+                    )}
+                    {addressField}
+                    {postalRow}
+                    <SoloFieldRow>
+                        {regionField}
+                        {countryField}
+                    </SoloFieldRow>
+                    {segmentField}
+                </div>
+            </SectionToggle>
+            <SectionToggle label={t('Notes')} summary={notesOpen ? undefined : draft.notes.trim() || t('notes_empty')} open={notesOpen} onOpenChange={setNotesOpen} disabled={processing}>
+                <div className={styles.toggleFields}>{notesField}</div>
+            </SectionToggle>
         </ResponsiveDialog>
     );
 }

@@ -22,7 +22,7 @@ const LINE: Record<number, string> = {
 };
 
 /**
- * Figma: Błąd 404 / 403 / 500 (1095:44768, 1095:45104, 1095:45339; phones 1095:44933 on). The surprised dog, the code
+ * Figma: Error 404 / 403 / 500 (1095:44768, 1095:45104, 1095:45339; phones 1095:44933 on). The surprised dog, the code
  * as the poster, one line and one way out. Signed in it stands in the shell; a guest gets the page alone and a link to log in.
  */
 export default function ErrorPage({ status, auth }: ErrorPageProps) {

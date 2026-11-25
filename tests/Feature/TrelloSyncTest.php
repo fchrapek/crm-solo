@@ -272,7 +272,7 @@ final class TrelloSyncTest extends TestCase
         ]);
 
         $this->actingAs($this->user)
-            ->get('/settings/integracje')
+            ->get('/settings/integrations')
             ->assertInertia(fn (Assert $assert) => $assert
                 ->has('integrations', fn (Assert $assert) => $assert
                     ->each(fn (Assert $item) => $item->etc())

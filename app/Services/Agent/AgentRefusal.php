@@ -28,6 +28,18 @@ final class AgentRefusal extends RuntimeException
 
     public const string NOT_A_DRAFT = 'not_a_draft';
 
+    /** The account has no enabled Trello integration holding both keys. */
+    public const string TRELLO_NOT_CONNECTED = 'trello_not_connected';
+
+    /** The project already has a Trello board. */
+    public const string ALREADY_LINKED = 'already_linked';
+
+    /** Another client's project holds the board. */
+    public const string BOARD_LINKED_ELSEWHERE = 'board_linked_elsewhere';
+
+    /** Trello did not answer, or answered with an error. */
+    public const string TRELLO_FAILED = 'trello_failed';
+
     /** The UI's own service said no; the message says why, as the page would. */
     public const string REFUSED = 'refused';
 

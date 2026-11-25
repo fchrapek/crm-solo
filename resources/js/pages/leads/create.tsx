@@ -30,7 +30,7 @@ interface CreatePageProps extends SharedData {
     pipeline: string;
 }
 
-/** Figma: Leady · Zarejestruj leada (1094:36131, phone 1094:36361). */
+/** Figma: Leads · Capture lead (1094:36131, phone 1094:36361). */
 export default function Create({ pipelines, sources, source_labels, pipeline }: CreatePageProps) {
     const { t } = useTranslation();
     const label = useLeadLabel();

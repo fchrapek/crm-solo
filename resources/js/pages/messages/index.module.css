@@ -1,4 +1,4 @@
-/* Figma: SMS · kolejka. Phone first: the title, the way to the settings, how messages go out, then one tile per day group. */
+/* Figma: SMS · queue. Phone first: the title, the way to the settings, how messages go out, then one tile per day group. */
 .page {
     display: flex;
     flex-direction: column;

@@ -13,7 +13,7 @@ use App\Support\LocalCalendar;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
-/** The agent side of RetainerPositions: adds, changes and ends an abonament position inside the identity's account. */
+/** The agent side of RetainerPositions: adds, changes and ends a retainer position inside the identity's account. */
 final class RetainerEditor
 {
     public const array FIELDS = ['project_id', 'label', 'description', 'monthly_hours', 'monthly_fee', 'overage_hourly_rate', 'rollover_cap_hours', 'invoice_group', 'vat_symbol', 'currency', 'effective_from', 'notes'];

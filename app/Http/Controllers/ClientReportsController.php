@@ -202,7 +202,7 @@ final class ClientReportsController extends Controller
             return Redirect::back()->with('error', $result->message);
         }
 
-        return Redirect::route('clients.show', [$client, 'rozliczenia'])->with('success', $result->message);
+        return Redirect::route('clients.show', [$client, 'billing'])->with('success', $result->message);
     }
 
     private static function isDate(mixed $value): bool

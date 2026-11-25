@@ -347,7 +347,7 @@ final class SummaryEmails
     }
 
     /**
-     * Each month's email state for the client's Rozliczenia, keyed by period; null when the client sends
+     * Each month's email state for the client's Billing, keyed by period; null when the client sends
      * no summary emails or the viewer is not the owner, so the ledger keeps its report column.
      *
      * @return array<string, array{status: ?string, drafted_on: ?string, drafted_via: ?string, sent_on: ?string, changed_on: ?string, recipients: int}>|null

@@ -17,7 +17,7 @@ use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[IsReadOnly]
-#[Description('What closing a client\'s month (Zamknij miesiąc) would freeze now, as the app\'s confirm dialog shows it: contracted, opening, cap, forfeited, used, closing (carried into "next"), source (report or entries), report_status, entries, the preview hash, and "refusal" saying why it cannot close (null when it can). Reads only: closing the month is the owner\'s action in the app.')]
+#[Description('What closing a client\'s month (Close the month) would freeze now, as the app\'s confirm dialog shows it: contracted, opening, cap, forfeited, used, closing (carried into "next"), source (report or entries), report_status, entries, the preview hash, and "refusal" saying why it cannot close (null when it can). Reads only: closing the month is the owner\'s action in the app.')]
 final class MonthSettlementPreviewTool extends Tool
 {
     use HandlesReferenceErrors;

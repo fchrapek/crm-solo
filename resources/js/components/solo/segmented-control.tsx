@@ -1,4 +1,5 @@
 import { ToggleGroup, ToggleGroupItem, segmentedLinkClasses } from '@/components/ui/toggle-group';
+import { fullText } from '@/lib/plain-text';
 import { Link, type InertiaLinkProps } from '@inertiajs/react';
 import type { ReactNode } from 'react';
 
@@ -22,6 +23,8 @@ interface SegmentedControlProps<V extends string> {
     current?: 'page' | 'step';
     /** trail: from 768 px the links read as a caps text trail with arrows between them (the day trail). */
     wide?: 'trail';
+    /** No segment can be picked, as while the form it belongs to is saving. */
+    disabled?: boolean;
     className?: string;
 }
 
@@ -34,6 +37,7 @@ export function SegmentedControl<V extends string>({
     width = 'hug',
     current = 'page',
     wide,
+    disabled,
     className,
 }: SegmentedControlProps<V>) {
     if (options.every((option) => option.href !== undefined)) {
@@ -46,6 +50,7 @@ export function SegmentedControl<V extends string>({
                         className={segmentedLinkClasses.item}
                         data-hug={option.hug || undefined}
                         aria-current={option.value === value ? current : undefined}
+                        title={fullText(option.label)}
                     >
                         {option.label}
                     </Link>
@@ -61,11 +66,12 @@ export function SegmentedControl<V extends string>({
             aria-label={label}
             data-width={width}
             value={value ?? ''}
+            disabled={disabled}
             onValueChange={(next) => next !== '' && onChange?.(next as V)}
             className={className}
         >
             {options.map((option) => (
-                <ToggleGroupItem key={option.value} value={option.value} data-hug={option.hug || undefined}>
+                <ToggleGroupItem key={option.value} value={option.value} data-hug={option.hug || undefined} title={fullText(option.label)}>
                     {option.label}
                 </ToggleGroupItem>
             ))}

@@ -20,23 +20,30 @@ final class ClientViews
 
     public const int VISIT_GAP_MINUTES = 30;
 
+    /** How far ahead of this server a reported reading may be: the clocks of the servers behind one app may differ a little. */
+    public const int READ_AT_SKEW_SECONDS = 60;
+
     private const int LOCK_SECONDS = 5;
 
-    /** Reads the previous view, then records this one; returns where "nowe" starts for this render. */
-    public function open(User $user, Client $client): CarbonImmutable
+    /**
+     * Reads the previous view, then records this one as of `$asOf`, when the shown page's data was read (now when not
+     * given), so what arrived after that read stays new; returns where New starts for this render.
+     */
+    public function open(User $user, Client $client, ?CarbonImmutable $asOf = null): CarbonImmutable
     {
         $this->guard($user, $client);
 
         $lock = Cache::lock($this->key($user, $client).'.lock', self::LOCK_SECONDS);
+        $at = ($asOf ?? CarbonImmutable::now('UTC'))->setTimezone('UTC')->startOfSecond();
 
         try {
-            return $lock->block(self::LOCK_SECONDS, fn (): CarbonImmutable => $this->record($user, $client, $lock));
+            return $lock->block(self::LOCK_SECONDS, fn (): CarbonImmutable => $this->record($user, $client, $lock, $at));
         } catch (LockTimeoutException) {
             return $this->since($user, $client);
         }
     }
 
-    /** Where "nowe" starts without recording a view. */
+    /** Where New starts without recording a view. */
     public function since(User $user, Client $client): CarbonImmutable
     {
         $this->guard($user, $client);
@@ -44,9 +51,8 @@ final class ClientViews
         return $this->sinceAt($this->previous($user, $client), $this->visit($user, $client), CarbonImmutable::now('UTC'));
     }
 
-    private function record(User $user, Client $client, Lock $lock): CarbonImmutable
+    private function record(User $user, Client $client, Lock $lock, CarbonImmutable $now): CarbonImmutable
     {
-        $now = CarbonImmutable::now('UTC')->startOfSecond();
         $since = $this->sinceAt($this->previous($user, $client), $this->visit($user, $client), $now);
         $row = fn () => ClientView::query()->where('user_id', $user->id)->where('client_id', $client->id);
 

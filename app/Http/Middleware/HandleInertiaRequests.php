@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Models\TimeEntry;
 use App\Services\Day\DayPlanner;
 use App\Services\I18NextTranslationsLoader;
+use App\Support\PrefetchRequest;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Middleware;
@@ -44,6 +46,7 @@ final class HandleInertiaRequests extends Middleware
                         'name' => $request->user()->name,
                         'email' => $request->user()->email,
                         'owner' => $request->user()->owner,
+                        'helper' => ['desktop' => $request->user()->prefers('helper_desktop'), 'phone' => $request->user()->prefers('helper_phone')],
                         'account' => [
                             'id' => $request->user()->account->id,
                             'name' => $request->user()->account->name,
@@ -52,8 +55,10 @@ final class HandleInertiaRequests extends Middleware
                     ] : null,
                 ];
             },
-            'timer' => fn () => $this->runningTimer($request),
+            'timer' => fn () => $this->runningTimers($request)['shown'],
+            'timers' => fn () => $this->runningTimers($request)['all'],
             'locale' => fn () => $locale,
+            'docsUrl' => fn () => (string) config('services.docs.url'),
             'translations' => ! $request->inertia() ? [
                 $locale => [
                     'translation' => $this->translationsLoader->loadTranslations($locale),
@@ -67,6 +72,13 @@ final class HandleInertiaRequests extends Middleware
             // and every subsequent partial reload returns null and clears the
             // stale frontend state.
             'flash' => Inertia::always(function () use ($request) {
+                // A hover's page may never be shown: the messages stay for the page the user goes to.
+                if (PrefetchRequest::is($request)) {
+                    $request->session()->reflash();
+
+                    return ['success' => null, 'error' => null, 'settlement' => null, 'syncUuid' => $request->session()->get('syncUuid')];
+                }
+
                 return [
                     'success' => $request->session()->pull('success'),
                     'error' => $request->session()->pull('error'),
@@ -83,20 +95,29 @@ final class HandleInertiaRequests extends Middleware
      *
      * @return array{id: int, started_at: string|null, task: string|null, client: string|null}|null
      */
-    private function runningTimer(Request $request): ?array
+    /**
+     * Every running timer, newest first, and the one the shell shows: the newest, or the one `?timer=` names.
+     *
+     * @return array{shown: array<string, mixed>|null, all: list<array<string, mixed>>}
+     */
+    private function runningTimers(Request $request): array
     {
-        $user = $request->user();
-        if ($user === null) {
-            return null;
+        if ($request->attributes->has('shell.timers')) {
+            return $request->attributes->get('shell.timers');
         }
 
-        $entry = $this->planner->running($user->account_id);
-
-        return $entry === null ? null : [
+        $user = $request->user();
+        $all = $user === null ? [] : $this->planner->runningAll($user->account_id)->map(fn (TimeEntry $entry): array => [
             'id' => $entry->id,
             'started_at' => $entry->start_time?->toIso8601String(),
             'task' => $entry->task?->name ?? $entry->description,
             'client' => $entry->client?->name,
-        ];
+            'project_id' => $entry->project_id,
+        ])->values()->all();
+        $shown = collect($all)->firstWhere('id', (int) $request->query('timer')) ?? ($all[0] ?? null);
+
+        $request->attributes->set('shell.timers', $timers = ['shown' => $shown, 'all' => $all]);
+
+        return $timers;
     }
 }

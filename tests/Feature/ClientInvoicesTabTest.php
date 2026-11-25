@@ -11,7 +11,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-/** The whole invoice list on Rozliczenia. Payment state comes from `status`: Infakt leaves the amount columns unsettled on paid invoices. */
+/** The whole invoice list on Billing. Payment state comes from `status`: Infakt leaves the amount columns unsettled on paid invoices. */
 final class ClientInvoicesTabTest extends TestCase
 {
     use RefreshDatabase;
@@ -43,7 +43,7 @@ final class ClientInvoicesTabTest extends TestCase
             'invoice_date' => now()->startOfYear()->addDays(14)->toDateString(),
         ]);
 
-        $response = $this->actingAs($user)->get("/clients/{$client->id}/rozliczenia");
+        $response = $this->actingAs($user)->get("/clients/{$client->id}/billing");
 
         $response->assertOk();
         $tab = $response->viewData('page')['props']['billing_invoices'];
@@ -87,7 +87,7 @@ final class ClientInvoicesTabTest extends TestCase
             ]);
         }
 
-        $props = $this->actingAs($user)->get("/clients/{$client->id}/rozliczenia?invoice_year=last12")->viewData('page')['props']['billing_invoices'];
+        $props = $this->actingAs($user)->get("/clients/{$client->id}/billing?invoice_year=last12")->viewData('page')['props']['billing_invoices'];
 
         $this->assertSame(200.0, $props['revenue']['period_net']);
         $this->assertSame(1, $props['total']);
@@ -113,7 +113,7 @@ final class ClientInvoicesTabTest extends TestCase
         // Issued inside the year, but its sale date is older, so the books put it outside.
         $make('3/10/2025', 30000, '2025-10-25', '2025-10-10');
 
-        $props = $this->actingAs($user)->get("/clients/{$client->id}/rozliczenia?invoice_year=last12&invoice_month=3")->viewData('page')['props']['billing_invoices'];
+        $props = $this->actingAs($user)->get("/clients/{$client->id}/billing?invoice_year=last12&invoice_month=3")->viewData('page')['props']['billing_invoices'];
 
         $this->assertSame(100.0, $props['revenue']['period_net']);
         $this->assertSame(1, $props['revenue']['period_invoice_count']);
@@ -143,7 +143,7 @@ final class ClientInvoicesTabTest extends TestCase
             ]);
         }
 
-        $props = $this->actingAs($user)->get("/clients/{$client->id}/rozliczenia")->viewData('page')['props']['billing_invoices'];
+        $props = $this->actingAs($user)->get("/clients/{$client->id}/billing")->viewData('page')['props']['billing_invoices'];
 
         $this->assertCount(5, $props['rows']);
         $this->assertSame(5, $props['total']);
@@ -177,7 +177,7 @@ final class ClientInvoicesTabTest extends TestCase
         $make('THIS/JUL', now()->startOfYear()->addMonths(6)->toDateString());
         $make('LAST/NOV', now()->subYear()->startOfYear()->addMonths(10)->toDateString());
 
-        $url = "/clients/{$client->id}/rozliczenia";
+        $url = "/clients/{$client->id}/billing";
 
         // Default = current year.
         $props = $this->actingAs($user)->get($url)->viewData('page')['props']['billing_invoices'];
@@ -219,7 +219,7 @@ final class ClientInvoicesTabTest extends TestCase
             'invoice_date' => now()->startOfYear()->addMonths(6)->toDateString(),
         ]);
 
-        $props = $this->actingAs($user)->get("/clients/{$client->id}/rozliczenia?invoice_year=all")->viewData('page')['props']['billing_invoices'];
+        $props = $this->actingAs($user)->get("/clients/{$client->id}/billing?invoice_year=all")->viewData('page')['props']['billing_invoices'];
 
         $this->assertCount(0, $props['rows']);
         $this->assertSame(0, $props['total']);

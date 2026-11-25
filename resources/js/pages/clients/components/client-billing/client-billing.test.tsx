@@ -3,14 +3,26 @@ import i18next from 'i18next';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { initReactI18next } from 'react-i18next';
 
+import type { PlaceLinkPill, PlaceMenuPill, PlacePill } from '@/components/solo/shell/place';
 import pl from '../../../../../../lang/pl.json';
 import { hoursNumber } from '../client-list/format';
-import { BillingFrame, ClientBillingTab, monthRow } from './client-billing';
-import { invoiceChip, moneyOf, monthNote, monthPills, monthUrl, periodLabel, reportChip, reportState } from './format';
+import { BillingFrame, ClientBillingTab, monthEarlier, monthRow, reopenTargetOf } from './client-billing';
+import { invoiceChip, moneyOf, monthNote, monthPills, periodLabel, reportChip, reportState } from './format';
 import { invoiceListUrl, yearPills } from './invoice-list';
-import { correctionOf, ledgerState } from './ledger-tile';
-import { emailLook } from './month-tiles';
-import type { BilledMonth, BillingInvoice, BillingInvoiceList, BillingLedger, BillingMonth, LedgerRow, OrderBilling, RetainerBilling } from './types';
+import { bankHint, correctionOf, ledgerState, rowHint } from './ledger-tile';
+import { balanceSub, billedSub, carriedCaption, carriedOf, monthChangeOf } from './month-figures';
+import { emailLook, statTiles } from './month-tiles';
+import type {
+    BilledMonth,
+    BillingInvoice,
+    BillingInvoiceList,
+    BillingLedger,
+    BillingMonth,
+    LedgerRow,
+    MonthSettlementState,
+    OrderBilling,
+    RetainerBilling,
+} from './types';
 
 type Fixture = RetainerBilling & { ledger: BillingLedger };
 
@@ -81,6 +93,7 @@ const frame: Fixture = {
     settlement: { active_period: '2026-10', current_period: '2026-10', open_behind: false },
     opening_balance: { report_id: 9, value: -9.5, version: 'v1' },
     waiting_report: { report_id: 9, period: '2026-09', status: 'draft' },
+    months: ['2026-10', '2026-09', '2026-08', '2026-07', '2026-06'],
     retainer: {
         active: [{ id: 1, label: null, monthly_hours: 30, monthly_fee: 1800, rollover_cap_hours: 60, currency: 'PLN' }],
         positions: [],
@@ -96,6 +109,7 @@ const frame: Fixture = {
         more: 0,
     },
     invoice_drafts: null,
+    report_baseline: null,
 };
 
 const empty: Fixture = {
@@ -105,9 +119,11 @@ const empty: Fixture = {
     settlement: { active_period: '2026-10', current_period: '2026-10', open_behind: false },
     opening_balance: null,
     waiting_report: null,
+    months: [],
     retainer: { active: [], positions: [], active_ids: [], currency: 'PLN' },
     invoices: { rows: [], more: 0 },
     invoice_drafts: null,
+    report_baseline: null,
 };
 
 const figures = (period: string, extra: Partial<BilledMonth> = {}): BilledMonth => ({
@@ -137,9 +153,17 @@ const figures = (period: string, extra: Partial<BilledMonth> = {}): BilledMonth 
     ...extra,
 });
 
+const settled = (state: MonthSettlementState['state'], closure: number | null = null): MonthSettlementState => ({
+    state,
+    closure_id: closure,
+    reopen_refusal: null,
+    reopen_blocker: null,
+});
+
 const month = (period: string, extra: Partial<BillingMonth> = {}, figs: Partial<BilledMonth> = {}): BillingMonth => ({
     period,
     figures: figures(period, figs),
+    settlement: settled(figs.closed ? 'closed' : null),
     report: null,
     invoices: [],
     checklist: null,
@@ -147,14 +171,30 @@ const month = (period: string, extra: Partial<BillingMonth> = {}, figs: Partial<
     ...extra,
 });
 
-const draft = { id: 9, status: 'draft' as const, sent_on: null, generated_on: '2026-10-02', needs_recalculation: false, composer_key: 'structured_list' };
+const draft = {
+    id: 9,
+    status: 'draft' as const,
+    sent_on: null,
+    generated_on: '2026-10-02',
+    needs_recalculation: false,
+    composer_key: 'structured_list',
+};
 
 const list = (extra: Partial<BillingInvoiceList> = {}): BillingInvoiceList => ({
     rows: frame.invoices.rows,
     total: 3,
     truncated: false,
     filters: { year: 2026, month: null, years: [2026, 2025] },
-    revenue: { currency: 'PLN', period_net: 5400, period_gross: 6642, period_invoice_count: 3, alltime_net: 9000, alltime_gross: 11070, share_net: 12.5, last_invoice_date: '2026-09-15' },
+    revenue: {
+        currency: 'PLN',
+        period_net: 5400,
+        period_gross: 6642,
+        period_invoice_count: 3,
+        alltime_net: 9000,
+        alltime_gross: 11070,
+        share_net: 12.5,
+        last_invoice_date: '2026-09-15',
+    },
     ...extra,
 });
 
@@ -180,56 +220,92 @@ describe('the month Rozliczenia shows', () => {
     test('the month in the props drives the figures, the tasks and the tiles around them', () => {
         const text = textOf(render(frame));
 
-        expect(text).toContain('Pakiet 30 h na miesiąc');
-        expect(text).toContain('Czas rzeczywisty 32,0 h zapisany w zadaniach');
-        expect(text).toContain('Czas rozliczany 32,0 h równy rzeczywistemu');
-        expect(text).toContain('Bilans po miesiącu −11,5 h 11,5 h ponad pakiet');
+        expect(text).toContain('Pakiet 30 h Z poprzednich miesięcy −9,5 h Czas rozliczany 32,0 h Bilans −11,5 h Zadania');
+        expect(statTiles(month('2026-09'), false, 'pl', t).map((tile) => tile.hint)).toEqual([
+            'na miesiąc',
+            'pożyczone z kolejnych miesięcy',
+            'równy rzeczywistemu',
+            '−9,5\u00a0h z poprzednich, −2,0\u00a0h we wrześniu',
+        ]);
+        expect(text).not.toContain('Czas rzeczywisty');
         expect(text).toContain('Zadania września 2');
         expect(text).toContain('Formularz wyceny mebli na wymiar 20,0 h · 20,0 h');
         expect(text).toContain('Razem 32,0 h · 32,0 h');
         expect(text).toContain('Raport za wrzesień');
-        expect(text).toContain('Faktury za wrzesień');
+        expect(text).not.toContain('Faktury za wrzesień');
     });
 
-    test('a task\'s own figure is explained beside its hours, where a long task name cannot cut it off', () => {
+    test("a task's own figure is explained beside its hours, where a long task name cannot cut it off", () => {
         const html = spaces(render(frame));
         const row = html.slice(html.indexOf('Migracja hostingu'));
 
         expect(row.indexOf('aria-label="Twoja liczba"')).toBeGreaterThan(row.indexOf('12,0 h · 12,0 h'));
     });
 
-    test('the retainer stands in the main column under the month\'s invoices, so the side column holds only the report and the month', () => {
-        const html = render(frame);
+    test('the main column holds the tasks, the bank and every invoice; the side column the report, the retainer and the baseline', () => {
+        const html = render({
+            ...frame,
+            report_baseline: { markdown: '### W ramach abonamentu\n\n- Monitoring', sections: [{ title: 'W ramach abonamentu', items: 1 }] },
+        });
+        const main = html.slice(0, html.indexOf('<aside'));
         const aside = html.slice(html.indexOf('<aside'), html.indexOf('</aside>'));
 
-        expect(html.indexOf('Abonament')).toBeGreaterThan(html.indexOf('Faktury za wrzesień'));
-        expect(html.indexOf('Abonament')).toBeLessThan(html.indexOf('<aside'));
+        expect(main).toContain('Zadania września');
+        expect(main).toContain('Bank godzin');
+        expect(main).toContain('Faktury · Infakt');
         expect(aside).toContain('Raport za wrzesień');
-        expect(aside).not.toContain('Abonament');
+        expect(aside).toContain('Abonament');
+        expect(aside).toContain('Zakres bazowy raportu');
+        expect(html.slice(html.indexOf('</aside>'))).not.toContain('<section');
+    });
+
+    test('no tile stretches to the other column, and no Month tile is left', () => {
+        const html = render(frame);
+
+        expect(html).not.toContain('Bilans → otwarcie');
+        expect(textOf(html)).not.toContain('Przepracowane');
     });
 
     test('another month reads its own figures: nothing of the page is tied to the newest month', () => {
         const text = textOf(render(frame, month('2026-08', {}, { real: 24, billed: 24, used: 24, closing: -9.5, tasks: [] })));
 
         expect(text).toContain('Zadania sierpnia');
-        expect(text).toContain('Czas rzeczywisty 24,0 h');
+        expect(text).toContain('Czas rozliczany 24,0 h');
         expect(text).toContain('Raport za sierpień');
         expect(text).not.toContain('Zadania września');
     });
 
-    test('every task whose figure may change offers Zmień, named after the task', () => {
+    test('every task whose figure may change offers Change, named after the task', () => {
         const html = render(frame);
 
         expect(html.match(/aria-label="Zmień czas rozliczany: /g)?.length).toBe(2);
         expect(html).toContain('aria-label="Zmień czas rozliczany: Migracja hostingu"');
     });
 
-    test('a month that cannot change says what locks it and offers no Zmień', () => {
-        const locked = month('2026-08', {}, { closed: true, closed_on: '2026-09-04', closure_id: 4, refusal: 'zamknięty', refusal_code: 'period_settled' });
+    test('a closed month offers no Change and says it is closed once, on the line under its name', () => {
+        const locked = month(
+            '2026-08',
+            {},
+            { closed: true, closed_on: '2026-09-04', closure_id: 4, refusal: 'zamknięty', refusal_code: 'period_settled' },
+        );
         const html = render(frame, locked);
 
         expect(html).not.toContain('aria-label="Zmień czas rozliczany');
-        expect(textOf(html)).toContain('Sierpień jest zamknięty od 04.09, więc tych liczb nie zmienisz.');
+        expect(textOf(html)).toContain('Skończył się 31.08 · zamknięty 04.09');
+        expect(textOf(html)).not.toContain('Sierpień jest zamknięty od 04.09, więc tych liczb nie zmienisz.');
+        expect(textOf(html)).not.toContain('Otwórz miesiąc ponownie');
+    });
+
+    test('a month its finalized report locks says so in the tasks, with the way back to a draft', () => {
+        const locked = month(
+            '2026-09',
+            { report: { ...draft, status: 'finalized' } },
+            { refusal: 'Raport jest sfinalizowany.', refusal_code: 'not_a_draft' },
+        );
+        const text = textOf(render(frame, locked));
+
+        expect(text).toContain('Raport jest sfinalizowany.');
+        expect(text).toContain('Otwórz raport ponownie');
     });
 
     test('a month closed before figures were kept per task shows its totals only', () => {
@@ -248,47 +324,97 @@ describe('the month Rozliczenia shows', () => {
 });
 
 describe('the month pills and the head', () => {
-    const rows = [open(row('2026-09', 'draft', 32, -9.5)), row('2026-08', 'sent', 24, -15.5), { ...row('2026-07', 'sent', 1, 0), whole_month: false }];
+    const rows = [
+        open(row('2026-09', 'draft', 32, -9.5)),
+        row('2026-08', 'sent', 24, -15.5),
+        { ...row('2026-07', 'sent', 1, 0), whole_month: false },
+    ];
 
-    test('the pills are the month in progress, the whole months of the bank and the month shown, each a link that carries the month', () => {
-        const pills = monthPills(rows, '2026-08', '2026-10', 7, 'pl', t);
+    const months = ['2026-09', '2026-08', '2026-07', '2026-06', '2026-01', '2025-12', '2025-11'];
+    const menuOf = (pills: PlacePill[]) => pills.find((pill): pill is PlaceMenuPill => 'menu' in pill);
 
-        expect(pills.map((pill) => pill.label)).toEqual(['Październik', 'Wrzesień', 'Sierpień']);
-        expect(pills[0].note).toBe('w toku');
-        expect(pills.filter((pill) => pill.active).map((pill) => pill.label)).toEqual(['Sierpień']);
-        expect(pills[1].href).toBe(monthUrl(7, '2026-09'));
-        expect(String(pills[1].href)).toContain('/clients/7/rozliczenia?miesiac=2026-09');
+    test('the pills are the month in progress and the two newest months of the bank, each a link that carries the month', () => {
+        const pills = monthPills(months, '2026-09', '2026-10', 7, 'pl', t);
+        const links = pills.filter((pill): pill is PlaceLinkPill => !('menu' in pill));
+
+        expect(links.map((pill) => pill.label)).toEqual(['Październik', 'Wrzesień', 'Sierpień']);
+        expect(links[0].note).toBe('w toku');
+        expect(links.filter((pill) => pill.active).map((pill) => pill.label)).toEqual(['Wrzesień']);
+        expect(String(links[1].href)).toContain('/clients/7/billing?month=2026-09');
     });
 
-    test('a month older than the pills still gets its own pill, with the year once it is another one', () => {
-        const pills = monthPills(rows, '2025-12', '2026-10', 7, 'pl', t);
+    test('every older month sits in the Older menu under its year, newest first, named without the year its heading gives', () => {
+        const menu = menuOf(monthPills(months, '2026-09', '2026-10', 7, 'pl', t));
 
-        expect(pills[pills.length - 1]).toMatchObject({ label: 'Grudzień 2025', active: true });
+        expect(menu).toMatchObject({ label: 'Starsze', active: false, heading: 'Starsze miesiące' });
+        expect(menu?.menu.map((choice) => [choice.group, choice.label])).toEqual([
+            ['2026', 'Lipiec'],
+            ['2026', 'Czerwiec'],
+            ['2026', 'Styczeń'],
+            ['2025', 'Grudzień'],
+            ['2025', 'Listopad'],
+        ]);
+        expect(String(menu?.menu[4].href)).toContain('/clients/7/billing?month=2025-11');
     });
 
-    test('the line under the month says how it stands and where its report is', () => {
-        expect(monthNote(month('2026-09'), '2026-10', null, 'pl', t)).toBe('Skończył się 30.09 · otwarty · raport do wygenerowania');
-        expect(monthNote(month('2026-10'), '2026-10', '2026-09', 'pl', t)).toBe('W toku · wrzesień jeszcze otwarty');
+    test('an older month shown gives the menu pill its name and selects it, also when the bank does not list it', () => {
+        const pills = monthPills(months, '2026-06', '2026-10', 7, 'pl', t);
+        expect(menuOf(pills)).toMatchObject({ label: 'Czerwiec', active: true });
+        expect(
+            menuOf(pills)
+                ?.menu.filter((choice) => choice.active)
+                .map((choice) => choice.label),
+        ).toEqual(['Czerwiec']);
+        expect(pills.filter((pill) => !('menu' in pill) && pill.active)).toHaveLength(0);
+
+        expect(menuOf(monthPills(months, '2024-12', '2026-10', 7, 'pl', t))).toMatchObject({ label: 'Grudzień 2024', active: true });
+        expect(menuOf(monthPills(months, '2025-11', '2026-10', 7, 'pl', t))).toMatchObject({ label: 'Listopad 2025', active: true });
+    });
+
+    test('three months or fewer have no menu pill', () => {
+        expect(menuOf(monthPills(['2026-09', '2026-08'], '2026-10', '2026-10', 7, 'pl', t))).toBeUndefined();
+    });
+
+    test('the line under the month says when it ends or ended, when it closed and where its report is', () => {
+        expect(monthNote(month('2026-09'), '2026-10', 'pl', t)).toBe('Skończył się 30.09 · raport do wygenerowania');
+        expect(monthNote(month('2026-10'), '2026-10', 'pl', t)).toBe('Trwa do 31.10 · raport po zamknięciu miesiąca');
+        expect(monthNote(month('2026-09', { report: draft }), '2026-10', 'pl', t)).toBe('Skończył się 30.09 · szkic raportu');
         expect(
             spaces(
                 monthNote(
-                    month('2026-08', { report: { ...draft, status: 'sent', sent_on: '2026-09-05' } }, { closed: true, closed_on: '2026-09-04', used: 29.5 }),
+                    month(
+                        '2026-08',
+                        { report: { ...draft, status: 'sent', sent_on: '2026-09-05' } },
+                        { closed: true, closed_on: '2026-09-04', used: 29.5 },
+                    ),
                     '2026-10',
-                    null,
                     'pl',
                     t,
                 ),
             ),
-        ).toBe('Zamknięty 04.09 na 29,5 z 30 h · raport wysłany 05.09');
+        ).toBe('Skończył się 31.08 · zamknięty 04.09 · raport wysłany 05.09');
     });
 
-    test('the head is the month as the poster with the months beside it, and an order names the order', () => {
-        const client = { id: 7, name: 'Pracownia Mebli Przykładowa sp. z o.o.', short_name: 'Pracownia Mebli', billing_mode: 'retainer' as const, is_archived: false, is_pinned: false, open_tasks_count: 0, live_agent_minutes: null };
-        const html = renderToStaticMarkup(<BillingFrame client={client} billing={frame} ledger={{ ...frame.ledger, rows }} month={month('2026-09')} />);
+    test("the head is the month as the poster with the months beside it, and how the month stands is the tab's first line", () => {
+        const client = {
+            id: 7,
+            name: 'Pracownia Mebli Przykładowa sp. z o.o.',
+            short_name: 'Pracownia Mebli',
+            billing_mode: 'retainer' as const,
+            is_archived: false,
+            is_pinned: false,
+            open_tasks_count: 0,
+            live_agent_minutes: null,
+        };
+        const html = renderToStaticMarkup(
+            <BillingFrame client={client} billing={frame} ledger={{ ...frame.ledger, rows }} month={month('2026-09')} />,
+        );
 
-        expect(textOf(html)).toContain('Wrzesień Skończył się 30.09 · otwarty · raport do wygenerowania');
+        expect(textOf(html)).toContain('Wrzesień');
+        expect(textOf(html)).not.toContain('Skończył się');
+        expect(textOf(render(frame)).trim().startsWith('Skończył się 30.09 · raport do wygenerowania')).toBe(true);
         expect(html).toContain('aria-label="Miesiące"');
-        expect(html).toContain('href="/clients/7/rozliczenia?miesiac=2026-08"');
+        expect(html).toContain('href="/clients/7/billing?month=2026-08"');
     });
 });
 
@@ -315,43 +441,154 @@ describe('the report of the month', () => {
         expect(drafted).toContain('href="/clients/7/reports/9"');
         expect(textOf(drafted)).toContain('Otwórz raport Wygeneruj ponownie');
         expect(textOf(render(frame, month('2026-09', { report: { ...draft, status: 'finalized' } })))).toContain('Oznacz jako wysłany Otwórz raport');
-        expect(textOf(render(frame, month('2026-09', { report: { ...draft, needs_recalculation: true } })))).toContain('Liczby wcześniejszego miesiąca się zmieniły.');
+        expect(textOf(render(frame, month('2026-09', { report: { ...draft, needs_recalculation: true } })))).toContain(
+            'Liczby wcześniejszego miesiąca się zmieniły.',
+        );
     });
 });
 
-describe('the month tile', () => {
+describe('the number tiles', () => {
+    const cut = { opening: 40, contracted: 30, available: 60, used: 22, real: 21.4, billed: 22, closing: 38 };
+
+    test('they add up: what the month carries, plus the package, less the billed time, is the balance', () => {
+        for (const figs of [figures('2026-09'), figures('2026-03', cut), figures('2026-10', { opening: 0, available: 30, used: 30, closing: 0 })]) {
+            expect(Math.round((carriedOf(figs) + monthChangeOf(figs)) * 100) / 100).toBe(figs.closing);
+        }
+    });
+
+    test('From previous months reads borrowed, saved, nothing, or what the rollover cap cut', () => {
+        expect(carriedCaption(figures('2026-09'), 'pl', t)).toBe('pożyczone z kolejnych miesięcy');
+        expect(carriedCaption(figures('2026-09', { opening: 0.5, available: 30.5 }), 'pl', t)).toBe('zapas z poprzednich miesięcy');
+        expect(carriedCaption(figures('2026-09', { opening: 0, available: 30 }), 'pl', t)).toBe('bez przeniesienia');
+        expect(carriedOf(figures('2026-03', cut))).toBe(30);
+        expect(carriedCaption(figures('2026-03', cut), 'pl', t)).toBe('zapas po limicie, 10,0 h przepadło');
+    });
+
+    test('the billed time names the real time beside it, and the balance its two parts', () => {
+        expect(spaces(billedSub({ real: 17.85, billed: 26.48, used: 26.48 }, 'pl', t))).toBe('rzeczywisty 17,85 h, 8,63 h więcej');
+        expect(billedSub({ real: 9.5, billed: 9.5, used: 9.5 }, 'pl', t)).toBe('równy rzeczywistemu');
+        expect(spaces(balanceSub('2026-10', figures('2026-10', { opening: -16.5, available: 13.5, used: 26.48, closing: -12.98 }), 'pl', t))).toBe(
+            '−16,5 h z poprzednich, +3,52 h w październiku',
+        );
+        expect(spaces(balanceSub('2026-03', figures('2026-03', cut), 'pl', t))).toBe('+30,0 h z poprzednich, +8,0 h w marcu');
+    });
+
+    test('a closed month names the balance the next month opens with', () => {
+        const text = textOf(render(frame, month('2026-09', {}, { closed: true, closed_on: '2026-10-05', closure_id: 4 })));
+
+        expect(text).toContain('Bilans, otwarcie października −11,5 h');
+    });
+
+    test('a client without a retainer keeps two tiles and no bank', () => {
+        const text = textOf(render(empty, month('2026-10', {}, { has_retainer: false, contracted: null })));
+
+        expect(text).toContain('Czas rzeczywisty 32,0 h Czas rozliczany 32,0 h');
+        expect(statTiles(month('2026-10', {}, { has_retainer: false, contracted: null }), true, 'pl', t).map((tile) => tile.hint)).toEqual([
+            'do dziś',
+            'równy rzeczywistemu',
+        ]);
+        expect(text).not.toContain('Pakiet');
+        expect(text).not.toContain('Bank godzin');
+    });
+});
+
+describe('explanations behind the (i)', () => {
+    test('each tile carries its figure alone, its (i) named as the explanation of its label, with no caption line left', () => {
+        const html = render(frame);
+        const text = textOf(html);
+
+        for (const label of ['Pakiet', 'Z poprzednich miesięcy', 'Czas rozliczany', 'Bilans', 'Bank godzin', 'Faktury · Infakt']) {
+            expect(html).toContain(`aria-label="${label}: wyjaśnienie"`);
+            expect(html).not.toMatch(new RegExp(`<button[^>]*aria-label="${label}"`));
+        }
+        for (const caption of [
+            'na miesiąc',
+            'pożyczone z kolejnych miesięcy',
+            'równy rzeczywistemu',
+            'z poprzednich',
+            'Bilans liczy czas rozliczany',
+            'Kwoty netto',
+        ]) {
+            expect(text).not.toContain(caption);
+        }
+    });
+
+    test('the cut month, a saved month and a month without carry-over read their own hint', () => {
+        const cut = { opening: 40, contracted: 30, available: 60, used: 22, real: 21.4, billed: 22, closing: 38 };
+        const hint = (figs: Partial<BilledMonth>) => statTiles(month('2026-03', {}, figs), false, 'pl', t)[1].hint;
+
+        expect(spaces(hint(cut))).toBe('zapas po limicie, 10,0 h przepadło');
+        expect(hint({ opening: 0.5, available: 30.5 })).toBe('zapas z poprzednich miesięcy');
+        expect(hint({ opening: 0, available: 30 })).toBe('bez przeniesienia');
+        expect(spaces(statTiles(month('2026-03', {}, cut), false, 'pl', t)[2].hint)).toBe('rzeczywisty 21,4 h, 0,6 h więcej');
+    });
+});
+
+describe("the month's line under its name", () => {
     const withRows = (rows: LedgerRow[]): Fixture => ({ ...frame, ledger: { ...frame.ledger, rows } });
 
-    test('its lines add up to the balance the next month opens with', () => {
-        const text = textOf(render(frame));
+    test('Close the month stands only on an ended month that owes a close, beside its open chip', () => {
+        const owing = month('2026-09', { settlement: settled('open') });
 
-        expect(text).toContain('Pakiet +30,0 h');
-        expect(text).toContain('Z poprzednich miesięcy −9,5 h');
-        expect(text).toContain('Przepracowane · z czasu rozliczanego −32,0 h');
-        expect(text).toContain('Bilans → otwarcie października −11,5 h');
-    });
-
-    test('Zamknij miesiąc stands only on an ended month that owes a close', () => {
-        const owing = withRows([open(row('2026-09', 'draft', 32, -9.5)), ...frame.ledger.rows.slice(1)]);
-
-        expect(textOf(render(owing))).toContain('Zamknij miesiąc');
+        expect(textOf(render(frame, owing))).toContain('Skończył się 30.09 · raport do wygenerowania otwarty Zamknij miesiąc');
         expect(textOf(render(frame))).not.toContain('Zamknij miesiąc');
-        expect(textOf(render(owing, month('2026-10')))).not.toContain('Zamknij miesiąc');
+        expect(textOf(render(frame, month('2026-10', { settlement: settled('open') })))).not.toContain('Zamknij miesiąc');
+        expect(textOf(render(frame, month('2026-10', { settlement: settled('open') })))).toContain(
+            'Trwa do 31.10 · raport po zamknięciu miesiąca w toku',
+        );
     });
 
-    test('Otwórz ponownie stands only on the latest closed month, and the checklist is one click away', () => {
+    test('a month past the loaded pages of the bank still reads its own settlement', () => {
+        const old = month('2025-03', { settlement: settled('open') });
+        const text = textOf(render(frame, old));
+
+        expect(monthRow(frame.ledger, '2025-03')).toBeUndefined();
+        expect(text).toContain('otwarty Zamknij miesiąc');
+    });
+
+    test('an earlier month still open is a notice, and the month waits for it, with a package or without', () => {
+        const behind = { ...frame, settlement: { active_period: '2026-08', current_period: '2026-10', open_behind: true } };
+        const html = render(behind, month('2026-09', { settlement: settled('open') }));
+
+        expect(monthEarlier(behind.settlement, '2026-09')).toBe('2026-08');
+        expect(monthEarlier(frame.settlement, '2026-09')).toBeNull();
+        expect(textOf(html)).toContain('Sierpień jest nadal otwarty. Zamknij najpierw sierpień, potem wrzesień.');
+        expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Zamknij miesiąc<\/button>/);
+        expect(textOf(render(behind, month('2026-10')))).toContain('Najpierw zamknij sierpień.');
+
+        const unpackaged = render(behind, month('2026-09', { settlement: settled('open') }, { has_retainer: false, contracted: null }));
+        expect(textOf(unpackaged)).toContain('Sierpień jest nadal otwarty.');
+        expect(unpackaged).toMatch(/<button[^>]*disabled=""[^>]*>Zamknij miesiąc<\/button>/);
+    });
+
+    test('Reopen the month stands only on the latest closed month, and the checklist is one click away', () => {
         const rows = [
             { ...row('2026-09', 'sent', 32, -9.5), settlement: 'closed' as const, closed_on: '2026-10-05', closure_id: 4 },
             { ...row('2026-08', 'sent', 24, -15.5), settlement: 'closed' as const, closed_on: '2026-09-04' },
         ];
-        const closed = (period: string) => month(period, { checklist: { done: 15, total: 15 } }, { closed: true, closed_on: '2026-10-05', closure_id: period === '2026-09' ? 4 : 3, refusal: 'x', refusal_code: 'period_settled' });
+        const closed = (period: string) =>
+            month(
+                period,
+                { checklist: { done: 15, total: 15 }, settlement: settled('closed', period === '2026-09' ? 4 : null) },
+                { closed: true, closed_on: '2026-10-05', closure_id: period === '2026-09' ? 4 : 3, refusal: 'x', refusal_code: 'period_settled' },
+            );
         const latest = render(withRows(rows), closed('2026-09'));
 
         expect(textOf(latest)).toContain('Lista kontrolna · 15 z 15');
         expect(latest).toContain('href="/month-close/7?period=2026-09"');
         expect(latest.match(/Otwórz ponownie<\/button>/g)?.length).toBe(1);
         expect(render(withRows(rows), closed('2026-08'))).not.toContain('Otwórz ponownie</button>');
+        expect(textOf(render(withRows(rows), closed('2026-08')))).toContain('zamknięty');
         expect(monthRow(withRows(rows).ledger, '2026-09')?.closure_id).toBe(4);
+    });
+
+    test('Reopen the month reopens the month shown, read from its own closure, else the latest closed row', () => {
+        const rows = [{ ...row('2026-09', 'sent', 32, -9.5), settlement: 'closed' as const, closed_on: '2026-10-05', closure_id: 4 }];
+        const shown = month('2026-09', { settlement: settled('closed', 4) }, { closed: true, used: 30, closing: -9.5 });
+
+        expect(reopenTargetOf(shown, withRows([]).ledger)).toMatchObject({ period: '2026-09', closure_id: 4, used: 30, closing: -9.5 });
+        expect(reopenTargetOf(month('2026-10'), withRows(rows).ledger)).toMatchObject({ period: '2026-09', closure_id: 4 });
+        expect(reopenTargetOf(month('2026-10'), withRows([]).ledger)).toBeNull();
     });
 });
 
@@ -361,12 +598,15 @@ describe('the hours bank', () => {
 
         expect(html.match(/aria-current="true"/g)?.length).toBe(1);
         expect(html).toMatch(/<tr aria-current="true"[^>]*>.*?Wrzesień 2026/s);
-        expect(html).toContain('href="/clients/7/rozliczenia?miesiac=2026-07"');
+        expect(html).toContain('href="/clients/7/billing?month=2026-07"');
     });
 
     test('a month shows both values, with the marker on one billed off its real time', () => {
         const billed = { real: 27.3, billed: 26, tasks: [], note: 'zaokrąglone' };
-        const html = render({ ...frame, ledger: { ...frame.ledger, rows: [{ ...row('2026-09', 'draft', 26, -9.5), billed }, ...frame.ledger.rows.slice(1)] } });
+        const html = render({
+            ...frame,
+            ledger: { ...frame.ledger, rows: [{ ...row('2026-09', 'draft', 26, -9.5), billed }, ...frame.ledger.rows.slice(1)] },
+        });
         const text = textOf(html);
 
         expect(text).toContain('Rzeczywisty');
@@ -377,6 +617,15 @@ describe('the hours bank', () => {
         expect(text).not.toContain('Zaokrąglanie');
     });
 
+    test('the columns are month, package, real, billed and balance; the change and the state sit in the (i) by the month', () => {
+        const html = render(frame);
+        const head = html.slice(html.indexOf('<thead'), html.indexOf('</thead>'));
+
+        expect(textOf(head).trim()).toBe('Miesiąc Pakiet Rzeczywisty Rozliczany rzeczywisty · rozliczany Bilans');
+        expect(html).toContain('aria-label="Zmiana i stan, Wrzesień 2026"');
+        expect(spaces(rowHint(frame.ledger.rows[1], null, 'pl', t))).toBe('Zmiana: +6,0 h · Stan: wysłany 03.09');
+    });
+
     test('an opening that does not continue the month before shows as a correction row', () => {
         const [newer, older] = [row('2026-09', 'draft', 32, -9.5), row('2026-08', 'sent', 24, -15.5)];
 
@@ -384,7 +633,6 @@ describe('the hours bank', () => {
         expect(correctionOf({ ...newer, opening: 0 }, older)).toBe(9.5);
         const text = textOf(render({ ...frame, ledger: { ...frame.ledger, rows: [{ ...newer, opening: 0, closing: -2 }, older] } }));
         expect(text).toContain('Korekta 01.09');
-        expect(text).toContain('bilans otwarcia ustawiony ręcznie');
     });
 
     test('the state keeps the settlement and the report apart', () => {
@@ -394,7 +642,7 @@ describe('the hours bank', () => {
         expect(ledgerState(row('2026-07', 'finalized', 30.5, -15), null, 'pl', t)).toBe('sfinalizowany');
     });
 
-    test('an older page of months loads in place through Starsze, only the ledger reloading', () => {
+    test('an older page of months loads in place through Older, only the ledger reloading', () => {
         const html = render({ ...frame, ledger: { ...frame.ledger, next: '2' } });
 
         expect(textOf(html)).toContain('Starsze');
@@ -402,7 +650,7 @@ describe('the hours bank', () => {
     });
 
     test('without a row the bank says where it starts, and no opening balance is offered', () => {
-        const text = textOf(render(empty, month('2026-10', {}, { has_retainer: false, contracted: null })));
+        const text = textOf(render(empty, month('2026-10')));
 
         expect(text).toContain('Bank godzin zaczyna się od pierwszego raportu');
         expect(text).not.toContain('Zmień bilans otwarcia');
@@ -420,7 +668,8 @@ describe('retainer terms', () => {
 
         expect(text).toContain('30 h w pakiecie, rollover do 60 h');
         expect(text).toContain('1 800,00 zł netto / mc');
-        expect(text).toContain('Rollover do 60 h w obie strony');
+        expect(text).not.toContain('Rollover do 60 h w obie strony');
+        expect(bankHint(60, 'pl', t)).toContain('Rollover do 60 h w obie strony');
         expect(text).toContain('32,0 h');
     });
 });
@@ -451,12 +700,15 @@ describe('the full invoice list', () => {
         expect(pills.map((pill) => pill.label)).toEqual(['2026', 'Ostatnie 12 miesięcy', 'Wszystkie lata']);
         expect(pills[0]).toMatchObject({ active: true });
         expect('menu' in pills[0] && pills[0].menu.map((choice) => choice.label)).toEqual(['2026', '2025']);
-        expect(pills[1]).toMatchObject({ href: '/clients/7/rozliczenia?miesiac=2026-09&invoice_year=last12', visit: { only: ['billing_invoices'], preserveScroll: true } });
+        expect(pills[1]).toMatchObject({
+            href: '/clients/7/billing?month=2026-09&invoice_year=last12',
+            visit: { only: ['billing_invoices'], preserveScroll: true },
+        });
     });
 
     test('a month narrows a year only, and an order has no month to keep', () => {
-        expect(invoiceListUrl(7, null, 2026, 9)).toBe('/clients/7/rozliczenia?invoice_year=2026&invoice_month=9');
-        expect(invoiceListUrl(7, null, 'all', 9)).toBe('/clients/7/rozliczenia?invoice_year=all');
+        expect(invoiceListUrl(7, null, 2026, 9)).toBe('/clients/7/billing?invoice_year=2026&invoice_month=9');
+        expect(invoiceListUrl(7, null, 'all', 9)).toBe('/clients/7/billing?invoice_year=all');
     });
 
     test('the rows read number, state and both amounts, over the revenue of the same window', () => {
@@ -477,7 +729,14 @@ describe('the full invoice list', () => {
         expect(invoiceChip(invoice('1/1/2026', '2026-01-01', '2026-01-09'), 'pl', t).status).toBe('done');
         expect(invoiceChip(invoice('1/1/2026', '2026-01-01', null, { status: 'draft' }), 'pl', t).status).toBe('open');
         const html = renderToStaticMarkup(
-            <ClientBillingTab clientId={7} clientName="x" billing={frame} ledger={frame.ledger} month={month('2026-09')} invoices={list({ rows: [overdue] })} />,
+            <ClientBillingTab
+                clientId={7}
+                clientName="x"
+                billing={frame}
+                ledger={frame.ledger}
+                month={month('2026-09')}
+                invoices={list({ rows: [overdue] })}
+            />,
         );
         expect(html).not.toMatch(/data-tone="over"[^>]*>po terminie/);
     });
@@ -514,8 +773,32 @@ describe('Rozliczenia for a client in the order layout', () => {
         report_period: '2026-09',
         composers: [{ key: 'retainer', label: 'Raport miesięczny' }],
         currency: 'PLN',
+        report_baseline: null,
     };
-    const client = { id: 7, name: 'Jan Przykładowy', short_name: 'Jan Przykładowy', billing_mode: 'order' as const, is_archived: false, is_pinned: false, open_tasks_count: 0, live_agent_minutes: null };
+    const client = {
+        id: 7,
+        name: 'Jan Przykładowy',
+        short_name: 'Jan Przykładowy',
+        billing_mode: 'order' as const,
+        is_archived: false,
+        is_pinned: false,
+        open_tasks_count: 0,
+        live_agent_minutes: null,
+    };
+
+    test('in both layouts the side column stays in the page flow and the DOM keeps the main column first, while their layout is decided', () => {
+        for (const html of [render(oneOff), render(frame)]) {
+            const grids = html.match(/<div[^>]*data-(?:reflow|static-side)[^>]*>/g) ?? [];
+            const grid = grids[0] ?? '';
+
+            expect(grids).toHaveLength(1);
+            expect(grid).toContain('data-static-side=""');
+            expect(html).not.toContain('data-phone-order');
+            expect(html).not.toContain('data-place');
+            expect(html.indexOf('<aside')).toBeGreaterThan(html.indexOf(grid));
+        }
+        expect(render(frame)).toContain('data-reflow=""');
+    });
 
     test('the head names the order and where its invoice stands', () => {
         const text = textOf(renderToStaticMarkup(<BillingFrame client={client} billing={oneOff} ledger={undefined} month={undefined} />));
@@ -548,8 +831,10 @@ describe('Rozliczenia for a client in the order layout', () => {
         expect(textOf(render(oneOff))).toContain('Nie ma jeszcze raportów.');
     });
 
-    test('a scope from the catch-all project reads as Zakres and Edytuj opens its editor', () => {
-        const project = { id: 3, name: 'Audyt energetyczny domu', description: 'Dom jednorodzinny, 164 m2' } as NonNullable<OrderBilling['order']['project']>;
+    test('a scope from the catch-all project reads as Scope and Edit opens its editor', () => {
+        const project = { id: 3, name: 'Audyt energetyczny domu', description: 'Dom jednorodzinny, 164 m2' } as NonNullable<
+            OrderBilling['order']['project']
+        >;
         const text = textOf(render({ ...oneOff, order: { ...order, project } }));
 
         expect(text).toContain('Zakres Dom jednorodzinny, 164 m2');
@@ -559,7 +844,9 @@ describe('Rozliczenia for a client in the order layout', () => {
     test('without an invoice the head says so and the amount is gone', () => {
         const bare = { ...oneOff, order: { ...order, invoice: null } };
 
-        expect(textOf(renderToStaticMarkup(<BillingFrame client={client} billing={bare} ledger={undefined} month={undefined} />))).toContain('Bez faktury');
+        expect(textOf(renderToStaticMarkup(<BillingFrame client={client} billing={bare} ledger={undefined} month={undefined} />))).toContain(
+            'Bez faktury',
+        );
         expect(textOf(render(bare))).not.toContain('Kwota');
     });
 
@@ -585,11 +872,18 @@ describe('a summary-email client', () => {
     });
 
     test('the email tile names each state and its one action', () => {
-        expect(emailLook(undefined, true, 'pl', t)).toMatchObject({ chip: { status: 'waiting', label: 'do przygotowania' }, action: 'Przygotuj szkic', primary: true });
+        expect(emailLook(undefined, true, 'pl', t)).toMatchObject({
+            chip: { status: 'waiting', label: 'do przygotowania' },
+            action: 'Przygotuj szkic',
+            primary: true,
+        });
         expect(emailLook(undefined, false, 'pl', t)).toBeNull();
         expect(emailLook(state('draft'), true, 'pl', t)).toMatchObject({ chip: { label: 'szkic 02.10 · agent' }, action: 'Otwórz szkic' });
         expect(emailLook(state('test_sent'), true, 'pl', t)?.chip.label).toBe('testowo 02.10');
-        expect(emailLook(state('sent'), true, 'pl', t)).toMatchObject({ chip: { status: 'done', label: 'wysłano 03.10 · 2 osoby' }, action: 'Zobacz' });
+        expect(emailLook(state('sent'), true, 'pl', t)).toMatchObject({
+            chip: { status: 'done', label: 'wysłano 03.10 · 2 osoby' },
+            action: 'Zobacz',
+        });
         expect(emailLook(state('failed'), true, 'pl', t)?.notice).toContain('nie został wysłany');
         expect(emailLook(state('unconfirmed'), true, 'pl', t)?.chip).toEqual({ status: 'waiting', label: 'niepotwierdzone 02.10' });
     });

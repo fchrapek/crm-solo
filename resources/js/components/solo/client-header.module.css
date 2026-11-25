@@ -40,7 +40,7 @@
     grid-template-columns: minmax(0, 1fr) 0 auto;
 }
 
-/* the same thin arrow as the trail's → and Cała historia →, in the label's own font */
+/* the same thin arrow as the trail's → and Whole history →, in the label's own font */
 .backIcon {
     flex: none;
 }

@@ -72,14 +72,14 @@ export function weekdayName(date: Date, locale: string): string {
     return capitalize(new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date));
 }
 
-const FROM_WEEKDAY = ['from Sunday', 'from Monday', 'from Tuesday', 'from Wednesday', 'from Thursday', 'from Friday', 'from Saturday'];
+/** A short phrase on one line: "z\u00a012.11", "do\u00a030.10". */
+export function keepTogether(text: string): string {
+    return text.replace(/ /g, '\u00a0');
+}
 
-/** "z czwartku": the day an earlier pick came from, by weekday within the last week, by date before that. */
-export function fromDay(day: string, today: string, locale: string, t: TFunction): string {
-    const days = Math.round((parseDay(today).getTime() - parseDay(day).getTime()) / 86_400_000);
-    if (days < 7) return t(FROM_WEEKDAY[parseDay(day).getDay()]);
-
-    return t('from {{date}}', { date: shortDate(day, locale, Number(today.slice(0, 4))) });
+/** "czw. 19.11": a day by its weekday and date, with the year when it is not `thisYear`. */
+export function weekdayDate(day: string, locale: string, thisYear: number): string {
+    return `${format(day, locale, { weekday: 'short' })} ${shortDate(day, locale, thisYear)}`;
 }
 
 /** "28 września" / "28 September": the date without the weekday the poster already shows. */
@@ -99,7 +99,7 @@ export function runningMinutesToday(dayStart: string, startedAt: readonly string
     return startedAt.reduce((sum, started) => (new Date(started).getTime() >= start ? sum + minutesSince(started, now) : sum), 0);
 }
 
-/** "3 h 40", "0 h 48": the day's figures on Podsumowanie and the timer. */
+/** "3 h 40", "0 h 48": the day's figures on Summary and the timer. */
 export function hoursClock(minutes: number, t: TFunction): string {
     return t('{{hours}} h {{mm}}', { hours: Math.floor(minutes / 60), mm: String(minutes % 60).padStart(2, '0') });
 }

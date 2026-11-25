@@ -6,7 +6,7 @@ import styles from './task-page.module.css';
 import type { TaskCard } from './types';
 
 /**
- * Figma: Zadanie, the Checklista tile (1094:40618). The card's checklist from the cache, read only: Trello owns it, and
+ * Figma: Task, the Checklist tile (1094:40618). The card's checklist from the cache, read only: Trello owns it, and
  * the CRM has no checklist of its own, so a task without a card checklist has no tile.
  */
 export function ChecklistSection({ card, trelloUrl }: { card: TaskCard; trelloUrl: string | null }) {

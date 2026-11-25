@@ -32,7 +32,7 @@ final class ReportComposerTest extends TestCase
     {
         parent::setUp();
 
-        $this->account = Account::create(['name' => 'Acme']);
+        $this->account = Account::create(['name' => 'Acme', 'settings' => ['report_baseline' => true]]);
         $this->client = $this->account->clients()->create([
             'name' => 'Acme',
             'currency' => 'PLN',
@@ -490,6 +490,17 @@ Second line ignored.', '- Fix. Multi line.'],
             'the baseline must survive verbatim, not paraphrased or re-wrapped',
         );
         $this->assertStringNotContainsString('## Within retainer', $body);
+    }
+
+    public function test_with_the_report_baseline_switched_off_no_report_carries_the_baseline(): void
+    {
+        $this->client->update(['report_baseline_markdown' => "### Monitoring\n- Skanowanie podatności"]);
+        $this->account->update(['settings' => ['report_baseline' => false]]);
+
+        $context = app(ReportDataAggregator::class)->aggregate($this->client->fresh(), Carbon::parse('2026-03-01'), Carbon::parse('2026-03-31'), 'month');
+
+        $this->assertNull($context->reportBaselineMarkdown());
+        $this->assertStringNotContainsString('Skanowanie podatności', (new StructuredListComposer)->compose($context));
     }
 
     public function test_available_hours_carry_the_previous_balance_and_respect_the_cap(): void

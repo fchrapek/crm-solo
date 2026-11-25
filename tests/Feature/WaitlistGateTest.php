@@ -51,22 +51,24 @@ final class WaitlistGateTest extends TestCase
         config(['waitlist.closed' => false]);
 
         $this->get('/')->assertRedirect('/login');
-        $this->get('/czesc')->assertNotFound();
-        $this->post('/czesc', ['email' => 'guest@example.com'])->assertNotFound();
+        $this->get('/waitlist')->assertNotFound();
+        $this->post('/waitlist', ['email' => 'guest@example.com'])->assertNotFound();
 
         $this->assertSame(0, Lead::count());
     }
 
     public function test_a_closed_app_sends_guests_from_any_page_to_the_splash(): void
     {
-        $this->get('/')->assertRedirect('/czesc');
-        $this->get('/clients')->assertRedirect('/czesc');
-        $this->get('/waitlist')->assertNotFound();
+        $this->get('/')->assertRedirect('/waitlist');
+        $this->get('/clients')->assertRedirect('/waitlist');
+        $this->get('/czesc')->assertStatus(301)->assertHeader('Location', '/waitlist');
+        $this->post('/czesc', ['email' => 'guest@example.com'])->assertNotFound();
+        $this->assertSame(0, Lead::count());
 
-        $this->get('/czesc')
+        $this->get('/waitlist')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->component('auth/czesc')
+                ->component('auth/waitlist')
                 ->where('joined', false)
                 ->where('turnstileSiteKey', null));
     }
@@ -85,7 +87,7 @@ final class WaitlistGateTest extends TestCase
 
     public function test_a_guest_sent_to_the_splash_returns_to_the_page_they_asked_for_after_login(): void
     {
-        $this->get('/clients')->assertRedirect('/czesc');
+        $this->get('/clients')->assertRedirect('/waitlist');
 
         $this->post('/login', [
             'email' => 'owner@example.com',
@@ -95,10 +97,18 @@ final class WaitlistGateTest extends TestCase
 
     public function test_signed_in_users_never_see_the_splash(): void
     {
-        $this->actingAs($this->owner)->get('/czesc')->assertRedirect('/');
-        $this->actingAs($this->owner)->post('/czesc', ['email' => 'x@example.com'])->assertRedirect('/');
+        $this->actingAs($this->owner)->get('/waitlist')->assertRedirect('/login');
+        $this->actingAs($this->owner)->post('/waitlist', ['email' => 'x@example.com'])->assertRedirect('/login');
 
         $this->assertSame(0, Lead::count());
+    }
+
+    public function test_a_signed_in_user_leaves_the_splash_by_the_login_page_and_lands_on_home(): void
+    {
+        // Cloudflare sends `/` without an Access cookie to the splash, so an answer of `/` there never ends.
+        $this->actingAs($this->owner)->get('/waitlist')->assertRedirect('/login');
+        $this->actingAs($this->owner)->get('/login')->assertRedirect('/');
+        $this->actingAs($this->owner)->get('/')->assertOk();
     }
 
     public function test_there_is_no_registration_while_closed(): void
@@ -115,8 +125,8 @@ final class WaitlistGateTest extends TestCase
 
     public function test_a_signup_becomes_a_waitlist_lead_in_the_configured_account(): void
     {
-        $this->post('/czesc', ['email' => 'Ada@Example.com', 'name' => '  Ada  '])
-            ->assertRedirect('/czesc')
+        $this->post('/waitlist', ['email' => 'Ada@Example.com', 'name' => '  Ada  '])
+            ->assertRedirect('/waitlist')
             ->assertSessionHas('waitlist_joined', true);
 
         $lead = Lead::sole();
@@ -135,13 +145,13 @@ final class WaitlistGateTest extends TestCase
     public function test_the_thank_you_state_shows_after_a_signup(): void
     {
         $this->followingRedirects()
-            ->post('/czesc', ['email' => 'ada@example.com'])
-            ->assertInertia(fn ($page) => $page->component('auth/czesc')->where('joined', true));
+            ->post('/waitlist', ['email' => 'ada@example.com'])
+            ->assertInertia(fn ($page) => $page->component('auth/waitlist')->where('joined', true));
     }
 
     public function test_a_signup_without_a_name_is_named_after_its_email(): void
     {
-        $this->post('/czesc', ['email' => 'ada@example.com']);
+        $this->post('/waitlist', ['email' => 'ada@example.com']);
 
         $this->assertSame('ada@example.com', Lead::sole()->name);
     }
@@ -151,15 +161,15 @@ final class WaitlistGateTest extends TestCase
         $pipeline = Lead::pipelines()[1];
         config(['waitlist.pipeline' => $pipeline]);
 
-        $this->post('/czesc', ['email' => 'ada@example.com']);
+        $this->post('/waitlist', ['email' => 'ada@example.com']);
 
         $this->assertSame($pipeline, Lead::sole()->pipeline);
     }
 
     public function test_a_repeated_signup_keeps_one_lead_and_gets_the_same_answer(): void
     {
-        $first = $this->post('/czesc', ['email' => 'ada@example.com']);
-        $second = $this->post('/czesc', ['email' => 'ADA@example.com ', 'name' => 'Someone else']);
+        $first = $this->post('/waitlist', ['email' => 'ada@example.com']);
+        $second = $this->post('/waitlist', ['email' => 'ADA@example.com ', 'name' => 'Someone else']);
 
         $this->assertSame($first->headers->get('Location'), $second->headers->get('Location'));
         $second->assertSessionHas('waitlist_joined', true);
@@ -170,10 +180,10 @@ final class WaitlistGateTest extends TestCase
 
     public function test_a_lead_deleted_in_the_crm_is_not_brought_back_by_a_new_signup(): void
     {
-        $this->post('/czesc', ['email' => 'ada@example.com']);
+        $this->post('/waitlist', ['email' => 'ada@example.com']);
         Lead::sole()->delete();
 
-        $this->post('/czesc', ['email' => 'ada@example.com'])->assertSessionHas('waitlist_joined', true);
+        $this->post('/waitlist', ['email' => 'ada@example.com'])->assertSessionHas('waitlist_joined', true);
 
         $this->assertSame(0, Lead::count());
         $this->assertSame(1, Lead::withTrashed()->count());
@@ -185,7 +195,7 @@ final class WaitlistGateTest extends TestCase
         Lead::create(['account_id' => $other->id, 'pipeline' => Lead::pipelines()[0], 'name' => 'Theirs', 'source' => 'waitlist', 'email' => 'ada@example.com']);
         Lead::create(['account_id' => $this->account->id, 'pipeline' => Lead::pipelines()[0], 'name' => 'Client lead', 'source' => 'referral', 'email' => 'ada@example.com']);
 
-        $this->post('/czesc', ['email' => 'ada@example.com']);
+        $this->post('/waitlist', ['email' => 'ada@example.com']);
 
         $this->assertSame(1, Lead::where('account_id', $this->account->id)->where('source', 'waitlist')->count());
         $this->assertSame(1, Lead::where('account_id', $other->id)->count());
@@ -193,8 +203,8 @@ final class WaitlistGateTest extends TestCase
 
     public function test_a_filled_honeypot_gets_the_thank_you_and_no_lead(): void
     {
-        $this->post('/czesc', ['email' => 'bot@example.com', 'website' => 'https://spam.example'])
-            ->assertRedirect('/czesc')
+        $this->post('/waitlist', ['email' => 'bot@example.com', 'website' => 'https://spam.example'])
+            ->assertRedirect('/waitlist')
             ->assertSessionHas('waitlist_joined', true);
 
         $this->assertSame(0, Lead::count());
@@ -202,8 +212,8 @@ final class WaitlistGateTest extends TestCase
 
     public function test_an_invalid_email_is_rejected(): void
     {
-        $this->from('/czesc')
-            ->post('/czesc', ['email' => 'not-an-email'])
+        $this->from('/waitlist')
+            ->post('/waitlist', ['email' => 'not-an-email'])
             ->assertSessionHasErrors('email');
 
         $this->assertSame(0, Lead::count());
@@ -213,11 +223,11 @@ final class WaitlistGateTest extends TestCase
     {
         config(['waitlist.per_minute' => 2]);
 
-        $this->post('/czesc', ['email' => 'one@example.com']);
-        $this->post('/czesc', ['email' => 'two@example.com']);
-        $this->from('/czesc')
-            ->post('/czesc', ['email' => 'three@example.com'])
-            ->assertRedirect('/czesc')
+        $this->post('/waitlist', ['email' => 'one@example.com']);
+        $this->post('/waitlist', ['email' => 'two@example.com']);
+        $this->from('/waitlist')
+            ->post('/waitlist', ['email' => 'three@example.com'])
+            ->assertRedirect('/waitlist')
             ->assertSessionHas('error');
 
         $this->assertSame(['one@example.com', 'two@example.com'], Lead::orderBy('id')->pluck('email')->all());
@@ -228,13 +238,13 @@ final class WaitlistGateTest extends TestCase
         config(['services.turnstile.secret' => 'test-secret', 'services.turnstile.site_key' => 'test-sitekey']);
         Http::fake(['challenges.cloudflare.com/*' => Http::response(['success' => false])]);
 
-        $this->get('/czesc')->assertInertia(fn ($page) => $page->where('turnstileSiteKey', 'test-sitekey'));
+        $this->get('/waitlist')->assertInertia(fn ($page) => $page->where('turnstileSiteKey', 'test-sitekey'));
 
-        $this->from('/czesc')
-            ->post('/czesc', ['email' => 'ada@example.com'])
+        $this->from('/waitlist')
+            ->post('/waitlist', ['email' => 'ada@example.com'])
             ->assertSessionHasErrors('cf-turnstile-response');
-        $this->from('/czesc')
-            ->post('/czesc', ['email' => 'ada@example.com', 'cf-turnstile-response' => 'bad-token'])
+        $this->from('/waitlist')
+            ->post('/waitlist', ['email' => 'ada@example.com', 'cf-turnstile-response' => 'bad-token'])
             ->assertSessionHasErrors('cf-turnstile-response');
 
         $this->assertSame(0, Lead::count());
@@ -245,7 +255,7 @@ final class WaitlistGateTest extends TestCase
         config(['services.turnstile.secret' => 'test-secret']);
         Http::fake(['challenges.cloudflare.com/*' => Http::response(['success' => true])]);
 
-        $this->post('/czesc', ['email' => 'ada@example.com', 'cf-turnstile-response' => 'good-token'])
+        $this->post('/waitlist', ['email' => 'ada@example.com', 'cf-turnstile-response' => 'good-token'])
             ->assertSessionHas('waitlist_joined', true);
 
         $this->assertSame(1, Lead::count());
@@ -255,7 +265,7 @@ final class WaitlistGateTest extends TestCase
     {
         config(['waitlist.account_id' => 999999]);
 
-        $this->post('/czesc', ['email' => 'ada@example.com'])->assertStatus(503);
+        $this->post('/waitlist', ['email' => 'ada@example.com'])->assertStatus(503);
 
         $this->assertSame(0, Lead::count());
     }
@@ -264,7 +274,7 @@ final class WaitlistGateTest extends TestCase
     {
         config(['waitlist.account_id' => 999999]);
 
-        $this->get('/czesc')->assertStatus(503);
+        $this->get('/waitlist')->assertStatus(503);
     }
 
     public function test_a_missing_account_in_production_renders_the_inertia_error_page_for_a_guest(): void
@@ -272,7 +282,7 @@ final class WaitlistGateTest extends TestCase
         $this->app['env'] = 'production';
         config(['waitlist.account_id' => 999999]);
 
-        $this->get('/czesc')
+        $this->get('/waitlist')
             ->assertStatus(503)
             ->assertInertia(fn ($page) => $page
                 ->component('error', false)
@@ -284,8 +294,8 @@ final class WaitlistGateTest extends TestCase
     {
         config(['waitlist.pipeline' => 'no-such-pipeline']);
 
-        $this->get('/czesc')->assertStatus(503);
-        $this->post('/czesc', ['email' => 'ada@example.com'])->assertStatus(503);
+        $this->get('/waitlist')->assertStatus(503);
+        $this->post('/waitlist', ['email' => 'ada@example.com'])->assertStatus(503);
 
         $this->assertSame(0, Lead::count());
     }
@@ -294,7 +304,7 @@ final class WaitlistGateTest extends TestCase
     {
         $other = Account::create(['name' => 'Someone else']);
 
-        $this->post('/czesc', [
+        $this->post('/waitlist', [
             'email' => 'ada@example.com',
             'account_id' => $other->id,
             'source' => 'referral',
@@ -311,8 +321,8 @@ final class WaitlistGateTest extends TestCase
 
     public function test_an_array_in_the_honeypot_gets_the_thank_you_and_no_lead(): void
     {
-        $this->post('/czesc', ['email' => 'bot@example.com', 'website' => ['spam']])
-            ->assertRedirect('/czesc')
+        $this->post('/waitlist', ['email' => 'bot@example.com', 'website' => ['spam']])
+            ->assertRedirect('/waitlist')
             ->assertSessionHas('waitlist_joined', true);
 
         $this->assertSame(0, Lead::count());
@@ -334,7 +344,7 @@ final class WaitlistGateTest extends TestCase
             ]);
         });
 
-        $this->post('/czesc', ['email' => 'ada@example.com'])->assertSessionHas('waitlist_joined', true);
+        $this->post('/waitlist', ['email' => 'ada@example.com'])->assertSessionHas('waitlist_joined', true);
 
         $this->assertTrue($raced);
         $lead = Lead::sole();

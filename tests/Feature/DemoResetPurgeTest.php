@@ -6,10 +6,14 @@ namespace Tests\Feature;
 
 use App\Models\Account;
 use App\Models\User;
+use App\Support\DemoWriteBudget;
+use Database\Seeders\DemoSeeder;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use LogicException;
 use Tests\TestCase;
 
 /**
@@ -153,6 +157,30 @@ final class DemoResetPurgeTest extends TestCase
         $this->artisan('demo:reset')->assertFailed();
 
         $this->assertSame(2, Account::query()->count());
+    }
+
+    public function test_a_rebuild_that_breaks_marks_the_demo_for_another_try_and_frees_the_lock(): void
+    {
+        $this->demoDatabase();
+        DemoWriteBudget::takeChanged();
+        $this->app->bind(DemoSeeder::class, fn () => new class extends Seeder
+        {
+            public function run(): void
+            {
+                throw new LogicException('the disk is full');
+            }
+        });
+
+        try {
+            $this->artisan('demo:reset')->run();
+            $this->fail('The broken rebuild was reported as done.');
+        } catch (LogicException) {
+            $this->assertTrue(DemoWriteBudget::takeChanged());
+        }
+
+        unset($this->app[DemoSeeder::class]);
+        $this->artisan('demo:reset')->doesntExpectOutputToContain('Another reset is running')->assertSuccessful();
+        $this->assertSame(User::DEMO_EMAIL, User::query()->sole()->email);
     }
 
     private function demoDatabase(): void

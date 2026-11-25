@@ -26,7 +26,7 @@ interface Props {
 }
 
 /**
- * Figma: Punktacja. FIT / BEHAVIOUR / TRIGGER checkboxes. Points come from the server's copy of
+ * Figma: Score. FIT / BEHAVIOUR / TRIGGER checkboxes. Points come from the server's copy of
  * the config map - never a duplicate table in the frontend - so a re-tuned
  * plan changes these labels without a code edit here.
  *

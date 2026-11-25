@@ -11,7 +11,7 @@ import { currentWeek, MonthCalendar, MonthCard, shownWeeks, type MonthData } fro
 import { EmptyBlock, SectionHead, SoloButton } from './primitives';
 import { soloPortalRoot, SoloSurface, useInSoloSurface, useSoloPortalSurface } from './surface';
 import { TaskRow } from './task-row';
-import { GroupHeading } from './tile';
+import { FoldingGroup, GroupHeading } from './tile';
 
 await i18next.use(initReactI18next).init({ lng: 'pl', resources: { pl: { translation: pl } }, interpolation: { escapeValue: false } });
 
@@ -69,6 +69,29 @@ describe('SectionHead', () => {
 });
 
 describe('GroupHeading', () => {
+    test('a group that folds puts its button inside the heading and says whether it is open', () => {
+        const closed = renderToStaticMarkup(<GroupHeading label="Z poprzednich dni" note={3} toggle={{ open: false, onToggle: () => {}, controls: 'z-dni' }} />);
+        const open = renderToStaticMarkup(<GroupHeading label="Z poprzednich dni" note={3} toggle={{ open: true, onToggle: () => {}, controls: 'z-dni' }} />);
+
+        expect(closed).toMatch(/<h2[^>]*><button type="button"[^>]*aria-expanded="false"[^>]*>Z poprzednich dni<span[^>]*>3<\/span>/);
+        expect(open).toContain('aria-expanded="true"');
+    });
+
+    test('a folding group starts closed with its rows in the page, inert, and its heading controls them', () => {
+        const html = renderToStaticMarkup(
+            <FoldingGroup label="Z poprzednich dni" note={3}>
+                <ul>
+                    <li>Wycena</li>
+                </ul>
+            </FoldingGroup>,
+        );
+        const controls = html.match(/aria-controls="([^"]+)"/)?.[1];
+
+        expect(html).toContain('aria-expanded="false"');
+        expect(html).toMatch(/data-fold="" data-closed="true" inert=""><div[^>]*><ul><li>Wycena<\/li>/);
+        expect(html).toContain(`id="${controls}"`);
+    });
+
     test('the label is a heading with its note and the current word beside it, and the end slot after them', () => {
         const html = renderToStaticMarkup(<GroupHeading label="Czwartek" note="12.11" current="dziś" end="1 z 5 wybrane" />);
         expect(html).toMatch(/<h2[^>]*>Czwartek<\/h2><span[^>]*>12\.11<\/span><span[^>]*>dziś<\/span><\/span><span[^>]*>1 z 5 wybrane<\/span>/);
@@ -136,7 +159,7 @@ describe('TaskRow', () => {
     });
 
     test('a row that leads elsewhere keeps its link, and a timer with no task links nowhere by default', () => {
-        expect(renderToStaticMarkup(<TaskRow task={task} href="/?widok=timer&timer=9" />)).toContain('href="/?widok=timer&amp;timer=9"');
+        expect(renderToStaticMarkup(<TaskRow task={task} href="/?view=timer&timer=9" />)).toContain('href="/?view=timer&amp;timer=9"');
         expect(renderToStaticMarkup(<TaskRow task={{ ...task, task_id: 0 }} />)).not.toContain('<a ');
     });
 
@@ -267,7 +290,7 @@ describe('InertiaPagination solo look', () => {
         expect(html).toContain('href="/klienci?page=3"');
     });
 
-    test('on the first page Poprzednia is inert text and Następna links on', () => {
+    test('on the first page Previous page is inert text and Next page links on', () => {
         expect(html).toMatch(/<span[^>]*aria-disabled="true"[^>]*>← Poprzednia<\/span>/);
         expect(html).toMatch(/<a[^>]*href="\/klienci\?page=2"[^>]*>Następna →<\/a>/);
     });
@@ -331,16 +354,14 @@ describe('the room a fixed phone bar takes', () => {
 });
 
 describe('the bottom sheet in Night', () => {
-    test('the sheet draws the overlay edge along its top and the scrim dims with black, while paper keeps its borderless sheet', async () => {
+    test('the sheet has no edge in either appearance, as the dialog, and the scrim dims with black', async () => {
         const css = await Bun.file(new URL('../ui/sheet/sheet.module.css', import.meta.url)).text();
         const paper = css.match(/:global\(\[data-day\]\) \.bottom \{([^}]*)\}/)?.[1] ?? '';
-        const night = css.match(/:global\(\.dark \[data-day='paper'\]\) \.bottom \{([^}]*)\}/)?.[1] ?? '';
         const scrim = css.match(/:global\(\.dark \[data-day='paper'\]\) \.overlay \{([^}]*)\}/)?.[1] ?? '';
 
         expect(paper).toContain('border: 0;');
-        expect(night.trim()).toBe('border-top: var(--solo-pop-width, 2px) solid var(--solo-pop-border, var(--solo-rule-strong));');
+        expect(css).not.toMatch(/:global\(\.dark \[data-day='paper'\]\) \.bottom \{/);
         expect(scrim).toContain('var(--color-black) 60%');
-        expect(css.indexOf(':global(.dark')).toBeGreaterThan(css.indexOf(':global([data-day]) .bottom {'));
     });
 });
 
@@ -479,7 +500,7 @@ describe('Month card and Stop', () => {
 
     test('the whole month numbers every day in its state, starts under its weekday and names four states in the legend', () => {
         const html = renderToStaticMarkup(<MonthCalendar month={{ ...october(9), closed: 6 }} />);
-        const cells = [...html.matchAll(/<span role="listitem"[^>]*data-state="(\w+)"[^>]*>(\d+)<\/span>/g)].map(([, state, day]) => [
+        const cells = [...html.matchAll(/<a role="listitem"[^>]*data-state="(\w+)"[^>]*>(\d+)<\/a>/g)].map(([, state, day]) => [
             Number(day),
             state,
         ]);
@@ -489,8 +510,25 @@ describe('Month card and Stop', () => {
         expect(cells[0]).toEqual([1, 'open']);
         expect(cells[9]).toEqual([10, 'today']);
         expect(cells[30]).toEqual([31, 'future']);
+        expect(html).toMatch(/<a role="listitem"[^>]*href="\/day\/2026-10-01"/);
+        expect(html).toMatch(/<a role="listitem"[^>]*data-state="today"[^>]*href="\/"/);
         expect(html.match(/<span aria-hidden="true"><\/span>/g)).toHaveLength(3);
         expect(html.replace(/<[^>]+>/g, '|')).toContain('zamknięty||||otwarty||||dziś||||przed nami');
+    });
+
+    test('the month tile marks every day of the month, each a link named by its date, time and state', () => {
+        const month = october(9);
+        month.days[1] = { ...month.days[1], minutes: 75 };
+        const html = renderToStaticMarkup(<MonthCard look="tile" month={month} />);
+
+        expect(html.match(/<a role="listitem"/g)).toHaveLength(31);
+        expect(html).toContain('--marks-columns:16');
+        expect(html).toMatch(/title="pt\. 2 października · 1 h 15 min · niezamknięty"[^>]*href="\/day\/2026-10-02"/);
+    });
+
+    test("on Today the month tile's label carries the day's date, which the poster no longer shows", () => {
+        expect(renderToStaticMarkup(<MonthCard look="tile" month={october(9)} date="2026-10-28" />)).toContain('Październik · 28.10.2026');
+        expect(renderToStaticMarkup(<MonthCard look="tile" month={october(9)} />)).not.toContain('28.10.2026');
     });
 
     test('the month tile opens the whole month from its button, which says it opens a dialog', () => {
@@ -506,7 +544,7 @@ describe('Month card and Stop', () => {
         expect(currentWeek(closed)).toBe(currentWeek(october(9)));
     });
 
-    test('the card keeps the week before today and today, and only Dziś offers the whole month', () => {
+    test('the card keeps the week before today and today, and only Today offers the whole month', () => {
         const html = renderToStaticMarkup(<MonthCard month={october(9)} monthLink />);
         const marked = [...html.matchAll(/<span role="listitem" class="[^"]*" data-other-week=""[^>]*aria-label="(\d+):/g)].map(([, day]) =>
             Number(day),

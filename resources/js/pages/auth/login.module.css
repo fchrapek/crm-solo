@@ -1,4 +1,4 @@
-/* Logowanie and Lista oczekujących: one layout in two colours. The page is the colour; on a phone the wordmark, the dog and the form stack, from 768 px the words and the form keep the left and the dog fills the right, cut by the edges. */
+/* Login and Waitlist: one layout in two colours. The page is the colour; on a phone the mark, the dog and the form stack, from 768 px the words and the form keep the left and the dog fills the right, cut by the edges. */
 .page {
     --auth-text: var(--role-command-bar-text);
     --auth-text-muted: var(--role-command-bar-text-muted);
@@ -37,9 +37,9 @@
     text-align: center;
 }
 
-.wordmark {
+.mark {
     display: block;
-    width: 176px;
+    width: 64px;
     max-width: 100%;
     height: auto;
 }
@@ -67,7 +67,6 @@
     --solo-fg-muted: var(--auth-text);
     --solo-field-bg: var(--auth-text);
     --solo-field-fg: var(--solo-ink);
-    --solo-field-border: transparent;
     --role-button-primary: var(--auth-text);
     --role-button-primary-text: var(--solo-ink);
     --role-outline: var(--auth-text);
@@ -188,8 +187,8 @@
         display: none;
     }
 
-    .wordmark {
-        width: 300px;
+    .mark {
+        width: 96px;
     }
 
     .claim {

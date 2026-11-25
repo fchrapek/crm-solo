@@ -4,14 +4,46 @@ import * as React from 'react';
 
 import { menuBoxClass, menuRowClass } from '@/components/solo/menu';
 import { useSoloPortalSurface } from '@/components/solo/surface';
+import { fullText } from '@/lib/plain-text';
 import { cn } from '@/lib/utils';
 import styles from './select.module.css';
 
 /** True inside a solo-menu panel, whose items are Menu / Row. */
 const InSoloMenu = React.createContext(false);
 
-function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
-    return <SelectPrimitive.Root data-slot="select" {...props} />;
+/** The chosen item's text, for the trigger's tooltip: Radix draws the value itself, so the trigger cannot read it. */
+const ChosenText = React.createContext<string | undefined>(undefined);
+
+/** The text of the SelectItem with this value among the children; an item inside another component is not found. */
+function chosenText(children: React.ReactNode, value: string): string | undefined {
+    for (const child of React.Children.toArray(children)) {
+        if (!React.isValidElement<{ value?: string; children?: React.ReactNode }>(child)) continue;
+        if (child.type === SelectItem && child.props.value === value) return fullText(child.props.children);
+        const nested = chosenText(child.props.children, value);
+        if (nested !== undefined) return nested;
+    }
+
+    return undefined;
+}
+
+function Select({ children, value, defaultValue, onValueChange, ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
+    const [picked, setPicked] = React.useState(defaultValue);
+    const current = value ?? picked;
+
+    return (
+        <SelectPrimitive.Root
+            data-slot="select"
+            value={value}
+            defaultValue={defaultValue}
+            onValueChange={(next) => {
+                setPicked(next);
+                onValueChange?.(next);
+            }}
+            {...props}
+        >
+            <ChosenText.Provider value={current === undefined ? undefined : chosenText(children, current)}>{children}</ChosenText.Provider>
+        </SelectPrimitive.Root>
+    );
 }
 
 function SelectGroup({ ...props }: React.ComponentProps<typeof SelectPrimitive.Group>) {
@@ -35,11 +67,14 @@ function SelectTrigger({
     /** solo: the outlined field box of Solo dialogs (Figma Input / Outline); solo-pill: the filter pill (Figma Select trigger). */
     look?: 'default' | 'solo' | 'solo-pill';
 }) {
+    const chosen = React.useContext(ChosenText);
+
     return (
         <SelectPrimitive.Trigger
             data-slot="select-trigger"
             className={cn(styles.trigger, look === 'solo' && styles.soloTrigger, look === 'solo-pill' && styles.soloPillTrigger, className)}
             {...props}
+            title={props.title ?? chosen}
         >
             {children}
             <SelectPrimitive.Icon asChild>

@@ -14,12 +14,19 @@
     line-height: normal;
 }
 
+.hint {
+    margin: 0;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
 .box {
     width: 100%;
     min-width: 0;
     min-height: 48px;
     padding: 12px var(--solo-space-3);
-    border: 1px solid var(--solo-field-border);
+    /* transparent, so the box keeps its size and forced colours still draw an edge */
+    border: 1px solid transparent;
     border-radius: var(--role-radius-sm);
     background: var(--solo-field-bg);
     color: var(--solo-field-fg);
@@ -52,7 +59,16 @@
     line-height: 1.4;
 }
 
-/* One focus line: the border turns the focus colour and thickens inward to 2 px, so the box does not grow and no outer ring doubles it. */
+.box::placeholder {
+    color: var(--solo-fg-muted);
+    opacity: 1;
+}
+
+.box:hover:not(:disabled, :focus-visible) {
+    background-color: color-mix(in srgb, var(--solo-field-fg) 6%, var(--solo-field-bg));
+}
+
+/* Focus and error draw a 2 px ring inside the box: the border takes the colour and an inset 1 px doubles it, so the box does not grow. */
 .box:focus-visible {
     border-color: var(--role-focus-ring);
     outline: none;
@@ -72,14 +88,19 @@
         inset 0 0 0 100px var(--solo-field-bg);
 }
 
-/* Figma: Field, State=Error. No error red beside vermilion: a 2 px ink edge and the message under it. */
+/* No error red beside vermilion: an ink ring and the message under it. */
 .box[aria-invalid='true'] {
     border-color: var(--role-text-primary);
     box-shadow: inset 0 0 0 1px var(--role-text-primary);
 }
 
+.box[aria-invalid='true']:focus-visible {
+    border-color: var(--role-focus-ring);
+    box-shadow: inset 0 0 0 1px var(--role-focus-ring);
+}
+
 .box:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
 }
 
 .error {

@@ -47,6 +47,9 @@ final class Integration extends Model
     /** Keys inside settings that hold credentials, stored encrypted. */
     public const SECRET_SETTINGS = ['trello_api_key'];
 
+    /** The account's own mail sender, kept out of PROVIDERS so Integrations neither lists nor writes it. */
+    public const string SMTP = 'smtp';
+
     protected $fillable = [
         'account_id',
         'provider',
@@ -56,6 +59,20 @@ final class Integration extends Model
         'last_synced_at',
         'last_sync_error',
     ];
+
+    protected $hidden = ['api_key', 'settings'];
+
+    /** The account's Trello connection a project connects, links and syncs through: enabled and holding both keys. */
+    public static function configuredTrello(int $accountId): ?self
+    {
+        $integration = self::query()
+            ->where('account_id', $accountId)
+            ->where('provider', 'trello')
+            ->where('is_enabled', true)
+            ->first();
+
+        return $integration?->isConfigured() ? $integration : null;
+    }
 
     /**
      * Credential fields the edit form takes for a provider: `api_key` is the

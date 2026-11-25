@@ -33,6 +33,13 @@ final class SecurityHeadersTest extends TestCase
         $this->get('/up')->assertHeader('X-Frame-Options', 'SAMEORIGIN');
     }
 
+    public function test_the_demo_loads_pictures_from_its_own_host_only(): void
+    {
+        config(['app.demo' => true]);
+
+        $this->get('/login')->assertHeader('Content-Security-Policy', "frame-ancestors 'self'; img-src 'self' data: blob:");
+    }
+
     public function test_hsts_is_sent_over_https_outside_local(): void
     {
         config(['app.url' => 'https://crm-solo.test']);

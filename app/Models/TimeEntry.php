@@ -133,7 +133,7 @@ final class TimeEntry extends Model
         self::created(function (TimeEntry $entry): void {
             if ($entry->end_time === null && $entry->account_id !== null) {
                 $planner = app(\App\Services\Day\DayPlanner::class);
-                $planner->reopen((int) $entry->account_id, $planner->today());
+                $planner->reopenForTimer((int) $entry->account_id);
             }
         });
     }

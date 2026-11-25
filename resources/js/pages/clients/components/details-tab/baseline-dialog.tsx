@@ -7,7 +7,7 @@ import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import styles from './dialog-form.module.css';
 
-/** Zakres bazowy raportu: the work every report lists, in markdown, saved through the report baseline endpoint. */
+/** Report baseline: the work every report lists, in markdown, saved through the report baseline endpoint. */
 export function BaselineDialog({
     clientId,
     baseline,
@@ -74,6 +74,7 @@ export function BaselineDialog({
                 value={draft}
                 onChange={setDraft}
                 rows={8}
+                look="solo"
                 disabled={processing}
                 aria-label={t('Report baseline')}
                 aria-invalid={error ? true : undefined}

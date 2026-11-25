@@ -21,10 +21,10 @@ type Story = StoryObj<typeof meta>;
 
 export const Primary: Story = {};
 
-/** The main action of a screen (Figma Ink md): Start, Zamknij dzień, Zapisz plan. */
+/** The main action of a screen (Figma Ink md): Start, Close the day, Save the plan. */
 export const InkMd: Story = { args: { variant: 'ink', size: 'md', children: 'Zapisz plan →' } };
 
-/** The secondary action, one size wherever it sits: the masthead search, a record header's actions, a dialog's Anuluj. */
+/** The secondary action, one size wherever it sits: the masthead search, a record header's actions, a dialog's Cancel. */
 export const Pill: Story = { args: { variant: 'pill', children: 'Anuluj' } };
 
 export const SearchPill: Story = { args: { variant: 'pill', children: '⌘K  Szukaj' } };

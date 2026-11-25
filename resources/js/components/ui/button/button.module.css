@@ -10,8 +10,8 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   transition-property: color, background-color, box-shadow;
-  transition-duration: var(--duration-150);
-  transition-timing-function: var(--ease-in-out);
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-standard);
   outline: none;
   cursor: pointer;
 }

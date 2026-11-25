@@ -1,5 +1,5 @@
 import type { ChipStatus } from '@/components/solo/chip';
-import type { PlaceLinkPill } from '@/components/solo/shell/place';
+import type { PlaceLinkPill, PlacePill } from '@/components/solo/shell/place';
 import { capitalize, monthName, shortDate } from '@/lib/dates';
 import clients from '@/routes/clients';
 import type { TFunction } from 'i18next';
@@ -8,9 +8,9 @@ import type { ActivePosition, BilledMonth, BillingInvoice, BillingMonth, LedgerR
 
 const h = (value: number, locale: string, signed = false) => `${hoursNumber(value, locale, signed)}\u00a0h`;
 
-/** Rozliczenia on one month: the month travels in the URL, so a reload and a link land on it. */
+/** Billing on one month: the month travels in the URL, so a reload and a link land on it. */
 export function monthUrl(clientId: number, period: string): string {
-    return clients.show({ client: clientId, tab: 'rozliczenia' }, { query: { miesiac: period } }).url;
+    return clients.show({ client: clientId, tab: 'billing' }, { query: { month: period } }).url;
 }
 
 /** "Wrzesień", with the year once it is not the running one. */
@@ -20,19 +20,34 @@ export function monthLabel(period: string, current: string, locale: string): str
     return period.slice(0, 4) === current.slice(0, 4) ? name : `${name} ${period.slice(0, 4)}`;
 }
 
-export const MONTH_PILLS = 6;
+export const MONTH_PILLS = 3;
 
-/** The month pills beside the title: the newest whole months of the bank, the month in progress and the one shown, newest first. */
-export function monthPills(rows: LedgerRow[], shown: string, current: string, clientId: number, locale: string, t: TFunction): PlaceLinkPill[] {
-    const recent = rows.filter((row) => row.whole_month).map((row) => row.period);
-    const periods = [...new Set([current, ...recent.slice(0, MONTH_PILLS), shown])].sort().reverse();
-
-    return periods.map((period) => ({
+/** The newest months as pills and the older ones in the Older menu by year, whose pill takes the name of an older month shown. */
+export function monthPills(months: string[], shown: string, current: string, clientId: number, locale: string, t: TFunction): PlacePill[] {
+    const periods = [...new Set([current, ...months, shown])].sort().reverse();
+    const pill = (period: string): PlaceLinkPill => ({
         label: monthLabel(period, current, locale),
         href: monthUrl(clientId, period),
         active: period === shown,
         ...(period === current ? { note: t('month_running') } : {}),
-    }));
+    });
+    const older = periods.slice(MONTH_PILLS);
+    const picked = older.find((period) => period === shown);
+
+    return [
+        ...periods.slice(0, MONTH_PILLS).map(pill),
+        ...(older.length > 0
+            ? [
+                  {
+                      label: picked !== undefined ? monthLabel(picked, current, locale) : t('Older'),
+                      active: picked !== undefined,
+                      heading: t('Older months'),
+                      // under its year heading a month needs no year of its own
+                      menu: older.map((period) => ({ ...pill(period), label: capitalize(monthName(period, locale)), group: period.slice(0, 4) })),
+                  },
+              ]
+            : []),
+    ];
 }
 
 /** What the month's report is, as the chip and the line under the title name it. */
@@ -50,7 +65,12 @@ export function reportState(month: Pick<BillingMonth, 'report'>, running: boolea
     return report.status;
 }
 
-export function reportChip(month: Pick<BillingMonth, 'report'>, running: boolean, locale: string, t: TFunction): { status: ChipStatus; label: string } {
+export function reportChip(
+    month: Pick<BillingMonth, 'report'>,
+    running: boolean,
+    locale: string,
+    t: TFunction,
+): { status: ChipStatus; label: string } {
     const report = month.report;
     switch (reportState(month, running)) {
         case 'running':
@@ -67,12 +87,15 @@ export function reportChip(month: Pick<BillingMonth, 'report'>, running: boolean
         case 'finalized':
             return { status: 'waiting', label: t('report_chip_finalized') };
         case 'sent':
-            return { status: 'done', label: report?.sent_on ? t('ledger_report_sent', { date: shortDate(report.sent_on, locale) }) : t('ledger_report_sent_undated') };
+            return {
+                status: 'done',
+                label: report?.sent_on ? t('ledger_report_sent', { date: shortDate(report.sent_on, locale) }) : t('ledger_report_sent_undated'),
+            };
     }
 }
 
-/** The line under the month's name: how the month stands, then its report. */
-export function monthNote(month: BillingMonth, current: string, behind: string | null, locale: string, t: TFunction): string {
+/** The line under the month's name: when it ends or ended, when it was closed, then its report; the chip beside it carries open or closed. */
+export function monthNote(month: BillingMonth, current: string, locale: string, t: TFunction): string {
     const figures = month.figures;
     const running = month.period === current;
     const [year, mon] = month.period.split('-').map(Number);
@@ -80,7 +103,9 @@ export function monthNote(month: BillingMonth, current: string, behind: string |
     const state = reportState(month, running);
     const report =
         state === 'running'
-            ? null
+            ? figures.has_retainer
+                ? t('report_note_after_close')
+                : null
             : state === 'to_generate'
               ? figures.has_retainer
                   ? t('report_note_to_generate')
@@ -94,21 +119,14 @@ export function monthNote(month: BillingMonth, current: string, behind: string |
                     : month.report?.sent_on
                       ? t('ledger_report_sent_named', { date: shortDate(month.report.sent_on, locale) })
                       : t('ledger_report_sent_undated_named');
+    const end = t(running ? 'month_note_until' : 'month_note_ended', { date: shortDate(lastDay, locale) });
+    const closed = figures.closed
+        ? figures.closed_on !== null
+            ? t('ledger_closed', { date: shortDate(figures.closed_on, locale) })
+            : t('ledger_closed_undated')
+        : null;
 
-    if (figures.closed) {
-        const values = {
-            date: figures.closed_on !== null ? shortDate(figures.closed_on, locale) : '',
-            used: hoursNumber(figures.used, locale),
-            contracted: figures.contracted !== null ? hoursTerms(figures.contracted, locale) : '',
-        };
-
-        return [t(figures.contracted !== null ? 'month_note_closed' : 'month_note_closed_bare', values), report].filter(Boolean).join(' · ');
-    }
-    if (running) {
-        return [t('month_note_running'), behind !== null ? t('month_note_behind', { month: monthName(behind, locale) }) : null, report].filter(Boolean).join(' · ');
-    }
-
-    return [t('month_note_ended', { date: shortDate(lastDay, locale) }), figures.has_retainer ? t('ledger_open') : null, report].filter(Boolean).join(' · ');
+    return [end, closed, report].filter(Boolean).join(' · ');
 }
 
 /** The caption under the billed figure: equal to the real time, or how far the owner's figures moved it. */
@@ -121,33 +139,9 @@ export function billedCaption(figures: Pick<BilledMonth, 'real' | 'billed' | 'us
     return t(diff < 0 ? 'billed_caption_less' : 'billed_caption_more', { hours: hoursNumber(Math.abs(diff), locale) });
 }
 
-/** The caption under the balance: frozen by a closure, past the package, or what is left of it. */
-export function balanceCaption(figures: Pick<BilledMonth, 'closed' | 'closed_on' | 'closing'>, locale: string, t: TFunction): string {
-    if (figures.closed) {
-        return figures.closed_on !== null ? t('balance_caption_frozen', { date: shortDate(figures.closed_on, locale) }) : t('ledger_closed_undated');
-    }
-
-    return figures.closing < 0
-        ? t('balance_caption_over', { hours: hoursNumber(-figures.closing, locale) })
-        : t('{{hours}} h free', { hours: hoursNumber(figures.closing, locale) });
-}
-
 /** Hours the rollover cap cut from what the month could draw on. */
 export function forfeitedOf(figures: Pick<BilledMonth, 'opening' | 'contracted' | 'available'>): number {
     return Math.max(0, Math.round((figures.opening + (figures.contracted ?? 0) - figures.available) * 100) / 100);
-}
-
-/** "z wpisów", "z czasu rozliczanego", "z raportu (szkic)": where the month's used hours come from; a closure names nothing. */
-export function usedSourceKey(month: Pick<BillingMonth, 'figures' | 'report'>): string | null {
-    const source = month.figures.source;
-    if (source === 'closure') {
-        return null;
-    }
-    if (source === 'report') {
-        return month.report?.status === 'draft' ? 'close_source_draft' : 'close_source_report';
-    }
-
-    return `close_source_${source}`;
 }
 
 /** Settlement first, then the report's delivery; a report beside a settlement names itself. */

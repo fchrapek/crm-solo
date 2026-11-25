@@ -1,4 +1,4 @@
-/* Figma: Projekt. The frame, then the tiles; the tiles are parts. */
+/* Figma: Project. The frame, then the tiles; the tiles are parts. */
 .page {
     display: flex;
     flex-direction: column;

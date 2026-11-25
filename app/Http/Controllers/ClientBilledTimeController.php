@@ -16,7 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 
-/** Billed time of a client's month and its task figures (the Rozliczenia dialog), all through BilledTime. */
+/** Billed time of a client's month and its task figures (the Billing dialog), all through BilledTime. */
 final class ClientBilledTimeController extends Controller
 {
     public function __construct(private readonly BilledTime $billed) {}

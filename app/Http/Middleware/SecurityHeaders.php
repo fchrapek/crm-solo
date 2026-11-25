@@ -23,7 +23,8 @@ final class SecurityHeaders
             'X-Content-Type-Options' => 'nosniff',
             'Referrer-Policy' => 'same-origin',
             'X-Frame-Options' => 'SAMEORIGIN',
-            'Content-Security-Policy' => "frame-ancestors 'self'",
+            // A demo visitor's text is read by the next one, so a picture there loads from this host or not at all.
+            'Content-Security-Policy' => config('app.demo') ? "frame-ancestors 'self'; img-src 'self' data: blob:" : "frame-ancestors 'self'",
         ];
 
         if ($request->isSecure() && ! app()->isLocal()) {

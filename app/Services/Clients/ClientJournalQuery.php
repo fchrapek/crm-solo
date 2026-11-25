@@ -24,36 +24,48 @@ use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\MergeProp;
 
-/** Figma: Klient / Dziennik. Undo per session, entry kinds and project domains are not built. */
+/** Figma: Client / Journal. Undo per session, entry kinds and project domains are not built. */
 final class ClientJournalQuery
 {
     public const int WORK_PAGE = 10;
 
     public const int NOTES_PAGE = 5;
 
+    /** Journal › Relationship: the whole list, a page this long. */
+    public const int RELATION_PAGE = 20;
+
+    public const string RELATION_VIEW = 'relationship';
+
     /** The first page grows to hold every new row, up to this many. */
     public const int FIRST_PAGE_MAX = 50;
+
+    /** The tie order of the relationship stream inside one second. */
+    private const array NOTE_RANKS = ['note' => 2, 'field' => 1, 'settlement' => 0];
 
     public function __construct(private readonly ClientJournal $journal) {}
 
     /**
-     * The two lists page by cursor; "Starsze" reloads only its list, which the client appends.
+     * The two lists page by cursor; Older reloads only its list, which the client appends.
      *
-     * @param  CarbonInterface  $since  where "nowe" starts for this user (ClientViews)
+     * @param  CarbonInterface  $since  where New starts for this user (ClientViews)
      * @param  string|null  $workCursor  the `next` of the work list page shown last
      * @param  string|null  $notesCursor  the `next` of the journal entries page shown last
-     * @return array{journal: Closure, journal_sms: Closure, journal_work: MergeProp, journal_notes: MergeProp}
+     * @param  string|null  $view  `relationship` for the sub-view with every entry, a longer page of them
+     * @return array{journal: Closure, journal_view: string|null, journal_sms: Closure, journal_work: MergeProp, journal_notes: MergeProp}
      */
-    public function props(Client $client, CarbonInterface $since, ?string $workCursor = null, ?string $notesCursor = null): array
+    public function props(Client $client, CarbonInterface $since, ?string $workCursor = null, ?string $notesCursor = null, ?string $view = null): array
     {
         $since = CarbonImmutable::instance($since)->setTimezone('UTC');
+        $view = $view === self::RELATION_VIEW ? $view : null;
+        $page = $view === null ? self::NOTES_PAGE : self::RELATION_PAGE;
 
         return [
+            'journal_view' => $view,
             'journal' => fn (): array => $this->summary($client, $since),
             // The account's text messages to this client, newest first; null when the account sends none.
             'journal_sms' => fn (): ?array => app(ClientFieldsQuery::class)->uses($client->account_id) ? app(ClientFieldsQuery::class)->messages($client, 20) : null,
             'journal_work' => Inertia::merge(fn (): array => $this->work($client, $since, $this->workCursor($workCursor)))->append('rows', 'key'),
-            'journal_notes' => Inertia::merge(fn (): array => $this->notes($client, $since, $this->notesCursor($notesCursor)))->append('rows', 'key'),
+            'journal_notes' => Inertia::merge(fn (): array => $this->notes($client, $this->notesCursor($notesCursor), $page))->append('rows', 'key'),
         ];
     }
 
@@ -121,6 +133,10 @@ final class ClientJournalQuery
                     ->sum('duration_minutes'),
             ],
             'stage' => $this->stage($client),
+            // Every entry the relationship list holds: notes and stage changes, field changes, closes and reopens.
+            'notes_total' => ClientLifecycleEvent::query()->where('client_id', $client->id)->where('account_id', $client->account_id)->count()
+                + ClientFieldEvent::query()->where('client_id', $client->id)->count()
+                + ClientMonthSettlementEvent::query()->where('client_id', $client->id)->count(),
             'period' => $period,
             'projects' => $this->projects($client, $period),
             'tasks' => $this->taskOptions($client),
@@ -132,13 +148,18 @@ final class ClientJournalQuery
         return $cursor !== null && preg_match('/^\d{1,12}$/', $cursor) === 1 ? CarbonImmutable::createFromTimestamp((int) $cursor, 'UTC') : null;
     }
 
-    /** @return array{0: CarbonImmutable, 1: int}|null */
+    /**
+     * "time-kind-id", the last row a page showed; an older cursor of a time alone (or time-id) reads as before that second.
+     *
+     * @return array{0: CarbonImmutable, 1: int|null, 2: int|null}|null
+     */
     private function notesCursor(?string $cursor): ?array
     {
-        // An older two-part cursor (time-id) still reads; only its time counts now.
-        return $cursor !== null && preg_match('/^(\d{1,12})(?:-\d{1,10})?$/', $cursor, $m) === 1
-            ? [CarbonImmutable::createFromTimestamp((int) $m[1], 'UTC'), 0]
-            : null;
+        if ($cursor === null || preg_match('/^(\d{1,12})(?:-([0-2])-(\d{1,10})|-\d{1,10})?$/', $cursor, $m) !== 1) {
+            return null;
+        }
+
+        return [CarbonImmutable::createFromTimestamp((int) $m[1], 'UTC'), isset($m[2]) && $m[2] !== '' ? (int) $m[2] : null, isset($m[3]) && $m[3] !== '' ? (int) $m[3] : null];
     }
 
     /**
@@ -157,7 +178,8 @@ final class ClientJournalQuery
         $entries = TimeEntry::query()
             ->where('account_id', $client->account_id)
             ->whereIn('id', $shown->pluck('entry_ids')->flatten())
-            ->with('task:id,name')
+            // The row links its task, so only a task of the account's own projects counts as one.
+            ->with(['task' => fn ($task) => $task->select(['id', 'name', 'project_id'])->whereHas('project', fn ($project) => $project->where('account_id', $client->account_id))])
             ->get(['id', 'task_id', 'title', 'description', 'start_time', 'end_time', 'duration_minutes', 'actor_via', 'billable'])
             ->keyBy('id');
         $events = ClientLifecycleEvent::query()
@@ -223,8 +245,10 @@ final class ClientJournalQuery
             'title' => $title !== null && $title !== '' ? (string) $title : null,
             'subtitle' => $note !== null ? $note->note : ($detail !== null && $detail !== '' ? (string) $detail : null),
             'via' => $lead?->actor_via ?? $note?->actor_via,
+            'task_id' => $lead?->task?->id,
             'minutes' => $members->contains(fn (TimeEntry $entry): bool => $entry->end_time === null) ? null : (int) $members->sum('duration_minutes'),
             'running' => $members->contains(fn (TimeEntry $entry): bool => $entry->end_time === null),
+            'running_since' => $members->firstWhere('end_time', null)?->start_time?->toIso8601String(),
             'writes' => $row['session'] !== null ? ($writes[$row['session']] ?? 0) : null,
             'is_new' => $this->isNew($row['at'], $since),
             'entry' => $members->count() === 1 && $lead->end_time !== null ? [
@@ -240,53 +264,58 @@ final class ClientJournalQuery
     }
 
     /**
-     * Journal entries and field changes newest first. A page runs from the newest down to its size-th row and takes every
-     * row of that second too, so a cursor of one timestamp never splits a second; the first page holds every new row (up to FIRST_PAGE_MAX).
+     * Journal entries, field changes and closes as one stream, newest first by (time, kind, id), a page of exactly `$page`
+     * rows. The cursor is the last row shown, so the next page starts right after it whichever kind it was.
      *
-     * @param  array{0: CarbonImmutable, 1: int}|null  $before
+     * @param  array{0: CarbonImmutable, 1: int|null, 2: int|null}|null  $before
      * @return array{rows: list<array<string, mixed>>, next: string|null}
      */
-    private function notes(Client $client, CarbonImmutable $since, ?array $before): array
+    private function notes(Client $client, ?array $before, int $page = self::NOTES_PAGE): array
     {
-        $notes = fn () => ClientLifecycleEvent::query()
-            ->where('client_id', $client->id)
-            ->where('account_id', $client->account_id)
-            ->when($before, fn ($q) => $q->where('created_at', '<', $before[0]));
-        $changes = fn () => ClientFieldEvent::query()
-            ->where('client_id', $client->id)
-            ->when($before, fn ($q) => $q->where('created_at', '<', $before[0]));
-        $size = $before === null
-            ? max(self::NOTES_PAGE, min(self::FIRST_PAGE_MAX, $notes()->where('created_at', '>=', $since)->count() + $changes()->where('created_at', '>=', $since)->count()))
-            : self::NOTES_PAGE;
+        $older = function ($query, int $rank) use ($before) {
+            if ($before === null) {
+                return $query;
+            }
+            [$at, $kind, $id] = $before;
 
-        $times = $notes()->orderByDesc('created_at')->limit($size)->pluck('created_at')
-            ->concat($changes()->orderByDesc('created_at')->limit($size)->pluck('created_at'))
-            ->map(fn ($at): CarbonImmutable => CarbonImmutable::instance($at))
-            ->sortByDesc(fn (CarbonImmutable $at): int => $at->getTimestamp())
-            ->values();
-        $floor = $times->count() >= $size ? $times[$size - 1] : null;
-        $more = $floor !== null && ($notes()->where('created_at', '<', $floor)->exists() || $changes()->where('created_at', '<', $floor)->exists());
-        $within = fn ($q) => $q->when($more, fn ($w) => $w->where('created_at', '>=', $floor));
+            return $query->where(function ($older) use ($at, $kind, $id, $rank): void {
+                $older->where('created_at', '<', $at);
+                if ($kind !== null && $rank < $kind) {
+                    $older->orWhere('created_at', $at);
+                }
+                if ($kind !== null && $rank === $kind) {
+                    $older->orWhere(fn ($tie) => $tie->where('created_at', $at)->where('id', '<', $id));
+                }
+            });
+        };
+        $newest = fn ($query, int $rank) => $older($query, $rank)->orderByDesc('created_at')->orderByDesc('id')->limit($page + 1);
 
-        $shown = $within($notes())
+        $entries = $newest(ClientLifecycleEvent::query()->where('client_id', $client->id)->where('account_id', $client->account_id), self::NOTE_RANKS['note'])
             ->with('user:id,first_name,last_name')
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->get(['id', 'user_id', 'from_stage', 'to_stage', 'note', 'created_at', 'actor_via']);
+            ->get(['id', 'user_id', 'from_stage', 'to_stage', 'note', 'created_at', 'actor_via'])
+            ->map(fn (ClientLifecycleEvent $event): array => [
+                'key' => 'note-'.$event->id,
+                'kind' => 'note',
+                'at' => $event->created_at,
+                'rid' => $event->id,
+                'id' => $event->id,
+                'date' => $this->localDate($event->created_at),
+                'via' => $event->actor_via,
+                'author' => $event->user !== null ? mb_trim($event->user->first_name.' '.$event->user->last_name) : null,
+                'from_stage' => $event->from_stage,
+                'to_stage' => $event->to_stage,
+                'stage_change' => $event->from_stage !== $event->to_stage,
+                'note' => $event->note,
+            ]);
 
-        // Settlement events interleave by time over the span this page of entries covers, so no cursor of their own is needed.
-        $settlements = ClientMonthSettlementEvent::query()
-            ->where('client_id', $client->id)
-            ->when($before, fn ($q) => $q->where('created_at', '<', $before[0]))
-            ->when($more, fn ($q) => $q->where('created_at', '>=', $floor))
+        $settlements = $newest(ClientMonthSettlementEvent::query()->where('client_id', $client->id), self::NOTE_RANKS['settlement'])
             ->with('actor:id,first_name,last_name')
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
             ->get()
             ->map(fn (ClientMonthSettlementEvent $event): array => [
                 'key' => 'settlement-'.$event->id,
                 'kind' => 'settlement',
                 'at' => $event->created_at,
+                'rid' => $event->id,
                 'date' => $this->localDate($event->created_at),
                 'via' => null,
                 'author' => $event->actor !== null ? mb_trim($event->actor->first_name.' '.$event->actor->last_name) : null,
@@ -301,10 +330,8 @@ final class ClientJournalQuery
             ]);
 
         $definitions = ClientFieldDefinition::query()->where('account_id', $client->account_id)->get()->keyBy('key');
-        $fields = $within($changes())
+        $fields = $newest(ClientFieldEvent::query()->where('client_id', $client->id), self::NOTE_RANKS['field'])
             ->with('user:id,first_name,last_name')
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
             ->get()
             ->map(fn (ClientFieldEvent $event): array => [
                 ...app(ClientFieldsQuery::class)->event($event, $definitions->get($event->field_key)),
@@ -312,32 +339,21 @@ final class ClientJournalQuery
                 'field_key' => $event->field_key,
                 'kind' => 'field',
                 'at' => $event->created_at,
+                'rid' => $event->id,
                 'date' => $this->localDate($event->created_at),
                 'via' => null,
                 'author' => $event->user?->name,
             ]);
 
-        $entries = $shown->map(fn (ClientLifecycleEvent $event): array => [
-            'key' => 'note-'.$event->id,
-            'kind' => 'note',
-            'at' => $event->created_at,
-            'id' => $event->id,
-            'date' => $this->localDate($event->created_at),
-            'via' => $event->actor_via,
-            'author' => $event->user !== null ? mb_trim($event->user->first_name.' '.$event->user->last_name) : null,
-            'from_stage' => $event->from_stage,
-            'to_stage' => $event->to_stage,
-            'stage_change' => $event->from_stage !== $event->to_stage,
-            'note' => $event->note,
-        ]);
+        $stream = $entries->concat($settlements)->concat($fields)
+            ->sort(fn (array $a, array $b): int => [$b['at']->getTimestamp(), self::NOTE_RANKS[$b['kind']], $b['rid']] <=> [$a['at']->getTimestamp(), self::NOTE_RANKS[$a['kind']], $a['rid']])
+            ->values();
+        $shown = $stream->take($page);
+        $last = $shown->last();
 
         return [
-            'rows' => $entries->concat($settlements)->concat($fields)
-                ->sortByDesc(fn (array $row): int => $row['at']->getTimestamp())
-                ->map(fn (array $row): array => array_diff_key($row, ['at' => true]))
-                ->values()
-                ->all(),
-            'next' => $more ? (string) $floor->getTimestamp() : null,
+            'rows' => $shown->map(fn (array $row): array => array_diff_key($row, ['at' => true, 'rid' => true]))->values()->all(),
+            'next' => $stream->count() > $page && $last !== null ? $last['at']->getTimestamp().'-'.self::NOTE_RANKS[$last['kind']].'-'.$last['rid'] : null,
         ];
     }
 

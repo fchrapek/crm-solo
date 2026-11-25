@@ -2,7 +2,7 @@ import { type Place, type PlaceContext, type PlacePill } from '@/components/solo
 import contactsRoute from '@/routes/contacts';
 import leads from '@/routes/leads';
 
-/** Kontakty and Leady are siblings under the Kontakty rail item. */
+/** Contacts and Leads are siblings under the Contacts rail item. */
 export function peoplePills(current: 'contacts' | 'leads', t: PlaceContext['t']): PlacePill[] {
     return [
         { label: t('Contacts'), href: contactsRoute.index().url, active: current === 'contacts' },
@@ -20,7 +20,7 @@ export const listQuery = ({ search, trashed }: ContactFilters) => ({ ...(search 
 
 export const listUrl = (filters: ContactFilters) => contactsRoute.index({ query: listQuery(filters) }).url;
 
-/** Kontakty is a section's home: no tokens. The command bar narrows the list and keeps the deleted ones in view. */
+/** Contacts is a section's home: no tokens. The command bar narrows the list and keeps the deleted ones in view. */
 export function contactsPlace({ filters }: { filters: ContactFilters }, { t }: PlaceContext): Place {
     return {
         pills: peoplePills('contacts', t),

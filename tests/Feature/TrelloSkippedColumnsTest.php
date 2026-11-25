@@ -211,7 +211,7 @@ final class TrelloSkippedColumnsTest extends TestCase
         ]);
 
         $this->actingAs($this->user)
-            ->get(route('settings.show', ['tab' => 'integracje']))
+            ->get(route('settings.show', ['tab' => 'integrations']))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('integrations.1.provider', 'trello')
                 ->where('integrations.1.skipped_lists', ['Raporty'])

@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
-/** Ustawienia / Wiadomości SMS: templates, rules and how messages go out, and the email templates, through the service the verbs use. */
+/** Settings / Text messages: templates, rules and how messages go out, and the email templates, through the service the verbs use. */
 final class MessageSettingsController extends Controller
 {
     public function __construct(private readonly MessageSettings $settings) {}

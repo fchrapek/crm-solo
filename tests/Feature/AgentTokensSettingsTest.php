@@ -16,7 +16,7 @@ use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 /**
- * Ustawienia · Agenci: the owner issues, re-scopes and revokes the account's
+ * Settings · Agents: the owner issues, re-scopes and revokes the account's
  * agent tokens. The plain token is answered once, in the create response.
  */
 final class AgentTokensSettingsTest extends TestCase
@@ -63,15 +63,15 @@ final class AgentTokensSettingsTest extends TestCase
         $this->withHeaders(['Authorization' => 'Bearer '.$plain])->post('/agent/verb', ['verb' => 'today', 'args' => ['--json']])->assertOk();
     }
 
-    public function test_the_tab_lists_tokens_without_ever_sending_the_token_or_its_hash(): void
+    public function test_the_integrations_tab_lists_tokens_without_ever_sending_the_token_or_its_hash(): void
     {
         $plain = (string) $this->create(['name' => 'codex', 'abilities' => ['read'], 'expires' => '90'])->json('token');
 
-        $page = $this->actingAs($this->owner)->get('/settings/agenci')
+        $page = $this->actingAs($this->owner)->get('/settings/integrations')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('settings/index')
-                ->where('tab', 'agenci')
+                ->where('tab', 'integrations')
                 ->has('tokens', 1)
                 ->where('tokens.0.name', 'codex')
                 ->where('tokens.0.abilities', ['read'])
@@ -106,14 +106,14 @@ final class AgentTokensSettingsTest extends TestCase
     {
         $token = $this->issue($this->owner);
 
-        $this->actingAs($this->member)->get('/settings/agenci')->assertForbidden();
+        $this->actingAs($this->member)->get('/settings/integrations')->assertNotFound();
         $this->actingAs($this->member)->postJson('/settings/agent-tokens', ['name' => 'x', 'abilities' => ['read'], 'expires' => '30', 'current_password' => 'password'])->assertForbidden();
         $this->actingAs($this->member)->patch("/settings/agent-tokens/{$token->id}", ['abilities' => ['read', 'write:time']])->assertForbidden();
         $this->actingAs($this->member)->delete("/settings/agent-tokens/{$token->id}")->assertForbidden();
 
         $this->assertSame(['read'], $token->fresh()->abilities);
         $this->assertNull($token->fresh()->revoked_at);
-        $this->actingAs($this->member)->get('/settings')->assertInertia(fn (Assert $page) => $page->where('summary.tokens', null));
+        $this->actingAs($this->member)->get('/settings')->assertNotFound();
     }
 
     public function test_another_accounts_token_is_not_found(): void
@@ -123,7 +123,7 @@ final class AgentTokensSettingsTest extends TestCase
 
         $this->actingAs($this->owner)->patch("/settings/agent-tokens/{$token->id}", ['abilities' => ['read', 'write:time']])->assertNotFound();
         $this->actingAs($this->owner)->delete("/settings/agent-tokens/{$token->id}")->assertNotFound();
-        $this->actingAs($this->owner)->get('/settings/agenci')->assertInertia(fn (Assert $page) => $page->has('tokens', 0));
+        $this->actingAs($this->owner)->get('/settings/integrations')->assertInertia(fn (Assert $page) => $page->has('tokens', 0));
 
         $this->assertSame(['read'], $token->fresh()->abilities);
         $this->assertNull($token->fresh()->revoked_at);
@@ -164,7 +164,7 @@ final class AgentTokensSettingsTest extends TestCase
 
         $this->actingAs($this->owner)->delete("/settings/agent-tokens/{$token->id}")->assertRedirect()->assertSessionHas('success');
         $this->assertNotNull($token->fresh()->revoked_at);
-        $this->actingAs($this->owner)->get('/settings/agenci')->assertInertia(fn (Assert $page) => $page->has('tokens', 0));
+        $this->actingAs($this->owner)->get('/settings/integrations')->assertInertia(fn (Assert $page) => $page->has('tokens', 0));
 
         $this->app['auth']->forgetGuards();
         $this->withHeaders(['Authorization' => 'Bearer '.$issued->plainTextToken])

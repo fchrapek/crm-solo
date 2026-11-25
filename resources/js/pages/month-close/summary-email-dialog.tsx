@@ -77,8 +77,8 @@ export function watchedSettled(watched: number | null, email: SummaryEmail | nul
 }
 
 /**
- * Figma: Podsumowanie za … (993:29609, sheet 994:32245) and its states (993:33774 testowo, 993:34432 wysłano,
- * 993:35144 nie wysłano, 993:35802 niepotwierdzone). The owner's draft and send of a client's month-end email.
+ * Figma: Summary for … (993:29609, sheet 994:32245) and its states (993:33774 test, 993:34432 sent,
+ * 993:35144 not sent, 993:35802 unconfirmed). The owner's draft and send of a client's month-end email.
  */
 export function SummaryEmailDialog({
     clientId,
@@ -360,8 +360,12 @@ export function SummaryEmailDialog({
                                                 disabled={busy !== null}
                                             />
                                         )}
-                                        <span className={styles.name}>{candidate.source === 'client' ? t('Client email') : candidate.name}</span>
-                                        <span className={styles.address}>{candidate.email}</span>
+                                        <span className={styles.name} title={candidate.source === 'client' ? t('Client email') : candidate.name}>
+                                            {candidate.source === 'client' ? t('Client email') : candidate.name}
+                                        </span>
+                                        <span className={styles.address} title={candidate.email}>
+                                            {candidate.email}
+                                        </span>
                                     </li>
                                 ))}
                             </ul>
@@ -383,7 +387,9 @@ export function SummaryEmailDialog({
                                             />
                                         )}
                                         <span className={styles.name}>{t('Copy to me')}</span>
-                                        <span className={styles.address}>{loaded?.owner_email}</span>
+                                        <span className={styles.address} title={loaded?.owner_email}>
+                                            {loaded?.owner_email}
+                                        </span>
                                     </li>
                                 </ul>
                             </section>

@@ -1,23 +1,30 @@
-import { describe, expect, mock, test } from 'bun:test';
+import * as inertia from '@inertiajs/react';
+import { afterAll, describe, expect, mock, spyOn, test } from 'bun:test';
 import i18next from 'i18next';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { initReactI18next } from 'react-i18next';
 
 import pl from '../../../../lang/pl.json';
+import * as soloWide from './use-solo-wide';
 
 await i18next.use(initReactI18next).init({ lng: 'pl', resources: { pl: { translation: pl } }, interpolation: { escapeValue: false } });
 
 let currentUrl = '/';
 let wide = true;
-mock.module('./use-solo-wide', () => ({ useSoloWide: () => wide }));
-const inertia = await import('@inertiajs/react');
-mock.module('@inertiajs/react', () => ({ ...inertia, usePage: () => ({ url: currentUrl, props: { auth: { user: { name: 'Anna Zając' } } } }) }));
+let owner = 1;
+spyOn(soloWide, 'useSoloWide').mockImplementation(() => wide);
+spyOn(inertia, 'usePage').mockImplementation((() => ({
+    url: currentUrl,
+    props: { auth: { user: { name: 'Anna Zając', email: 'anna@example.test', owner } } },
+})) as typeof inertia.usePage);
+afterAll(() => mock.restore());
 
 const { TabBar, tabBarSection } = await import('./tab-bar');
 const { Rail } = await import('./shell/rail');
 const { ClientHeader } = await import('./client-header');
 const { BottomSheet, BottomSheetPanel } = await import('./bottom-sheet');
 const { ListRow } = await import('./list-row');
+const { IconButton } = await import('./icon-button');
 const { ResponsiveSelect } = await import('./responsive-select');
 const { returnTarget, submitOnCommandEnter } = await import('./responsive-dialog');
 const { SoloButton } = await import('./primitives');
@@ -29,39 +36,43 @@ const activeTab = (html: string) => [...html.matchAll(/<(?:a|button)[^>]*aria-cu
 describe('TabBar', () => {
     test('every route lands on its tab, and a page no tab owns lights none', () => {
         expect(tabBarSection('/')).toBe('today');
-        expect(tabBarSection('/?widok=gotowe')).toBe('today');
-        expect(tabBarSection('/jutro')).toBe('today');
-        expect(tabBarSection('/tydzien?nastepny=1')).toBe('today');
-        expect(tabBarSection('/zadania?na=jutro')).toBe('today');
+        expect(tabBarSection('/?view=summary')).toBe('today');
+        expect(tabBarSection('/tomorrow')).toBe('today');
+        expect(tabBarSection('/week?next=1')).toBe('today');
+        expect(tabBarSection('/all-tasks?for=tomorrow')).toBe('today');
         expect(tabBarSection('/clients')).toBe('clients');
-        expect(tabBarSection('/clients/7/rozliczenia')).toBe('clients');
-        expect(tabBarSection('/contacts?kontakt=3')).toBe('contacts');
+        expect(tabBarSection('/clients/7/billing')).toBe('clients');
+        expect(tabBarSection('/contacts?contact=3')).toBe('contacts');
         expect(tabBarSection('/settings')).toBe('settings');
-        expect(tabBarSection('/settings/agenci')).toBe('settings');
-        // Leady are a pill beside Kontakty
+        expect(tabBarSection('/settings/integrations')).toBe('settings');
+        expect(tabBarSection('/profile')).toBe('profile');
+        // Leads are a pill beside Contacts
         expect(tabBarSection('/leads/3')).toBe('contacts');
         expect(tabBarSection('/revenue?year=2026')).toBeNull();
         expect(tabBarSection('/clientsx')).toBeNull();
-        // a task and the month close are reached from Klienci, so they light it (Figma: Zadanie on phones)
+        // a task and the month close are reached from Clients, so they light it (Figma: Task on phones)
         expect(tabBarSection('/tasks/12')).toBe('clients');
         expect(tabBarSection('/sms?status=failed')).toBe('clients');
         expect(tabBarSection('/month-close')).toBe('clients');
     });
 
     test('the current route marks exactly one tab as the page', () => {
-        currentUrl = '/clients/1/przeglad';
+        currentUrl = '/clients/1/overview';
         expect(activeTab(renderToStaticMarkup(<TabBar />))).toEqual(['Klienci']);
         currentUrl = '/';
         expect(activeTab(renderToStaticMarkup(<TabBar />))).toEqual(['Dziś']);
         currentUrl = '/contacts';
         expect(activeTab(renderToStaticMarkup(<TabBar />))).toEqual(['Kontakty']);
-        currentUrl = '/settings/wyglad';
+        currentUrl = '/settings/messages';
+        expect(activeTab(renderToStaticMarkup(<TabBar />))).toEqual(['Ustawienia']);
+        // an owner reaches My profile from the Settings list, so Settings stays lit
+        currentUrl = '/profile';
         expect(activeTab(renderToStaticMarkup(<TabBar />))).toEqual(['Ustawienia']);
         currentUrl = '/revenue';
         expect(activeTab(renderToStaticMarkup(<TabBar />))).toEqual([]);
     });
 
-    test('the four tabs are Dziś, Klienci, Kontakty and Ustawienia, in that order', () => {
+    test('the four tabs are Today, Clients, Contacts and Settings, in that order', () => {
         currentUrl = '/';
         const html = renderToStaticMarkup(<TabBar />);
         const labels = [...html.matchAll(/<a[^>]*href="([^"]+)"[^>]*>.*?<span>([^<]+)<\/span><\/a>/g)].map((m) => [m[1], m[2]]);
@@ -76,8 +87,48 @@ describe('TabBar', () => {
         expect(html).not.toContain('Więcej');
     });
 
+    test('a member has no Settings: the fourth tab is My profile as the avatar, lit on /profile', () => {
+        owner = 0;
+        currentUrl = '/profile';
+        const html = renderToStaticMarkup(<TabBar />);
+        owner = 1;
+
+        expect([...html.matchAll(/<a[^>]*href="([^"]+)"[^>]*>.*?<span>([^<]+)<\/span><\/a>/g)].map((m) => [m[1], m[2]])).toEqual([
+            ['/', 'Dziś'],
+            ['/clients', 'Klienci'],
+            ['/contacts', 'Kontakty'],
+            ['/profile', 'Mój profil'],
+        ]);
+        expect(activeTab(html)).toEqual(['Mój profil']);
+        expect(html).toMatch(/href="\/profile"[^>]*>.*?<span[^>]*aria-hidden="true"[^>]*>AZ<\/span>/);
+        expect(html).not.toContain('/settings');
+    });
+
+    test("a member's rail has no Settings and leaves My profile to the avatar", () => {
+        owner = 0;
+        currentUrl = '/profile';
+        const html = renderToStaticMarkup(<Rail timer={null} />);
+        owner = 1;
+        const nav = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
+
+        expect([...nav.matchAll(/<a[^>]*>.*?<\/span>([^<]+)<\/a>/g)].map((m) => m[1])).toEqual(['Dziś', 'Klienci', 'Kontakty']);
+        expect(html).toMatch(/aria-label="Anna Zając"[^>]*data-current=""/);
+    });
+
+    test('on /profile no rail item is lit and the avatar is', () => {
+        currentUrl = '/profile';
+        const html = renderToStaticMarkup(<Rail timer={null} />);
+        const nav = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
+
+        expect(nav).not.toContain('aria-current');
+        expect(html).toMatch(/aria-label="Anna Zając"[^>]*data-current=""/);
+
+        currentUrl = '/settings';
+        expect(renderToStaticMarkup(<Rail timer={null} />)).not.toContain('data-current');
+    });
+
     test('the rail lists the same four sections and marks the current one', () => {
-        currentUrl = '/settings/agenci';
+        currentUrl = '/settings/integrations';
         const html = renderToStaticMarkup(<Rail timer={null} />);
         const nav = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
         expect([...nav.matchAll(/<a[^>]*>.*?<\/span>([^<]+)<\/a>/g)].map((m) => m[1])).toEqual(['Dziś', 'Klienci', 'Kontakty', 'Ustawienia']);
@@ -152,7 +203,7 @@ describe('BottomSheet', () => {
         expect(html).not.toContain('Godziny · wrzesień');
     });
 
-    test('an open sheet has its header, one scrolling body and the actions outside it', () => {
+    test('an open sheet has its header, one scrolling body and the actions outside it in a foot of their own', () => {
         const html = renderToStaticMarkup(
             <Sheet open>
                 <BottomSheetPanel
@@ -175,10 +226,10 @@ describe('BottomSheet', () => {
         );
         expect(html).toContain('>Zamknij wrzesień</h2>');
         expect(html).toContain('aria-label="Zamknij"');
-        expect(html).toMatch(/Zamrażamy wrzesień w banku godzin\.<\/p><p>Pakiet<\/p><\/div><div[^>]*><button[^>]*>Anuluj/);
+        expect(html).toMatch(/<div[^>]*data-slot="sheet-body"><p[^>]*>Zamrażamy wrzesień w banku godzin\.<\/p><p>Pakiet<\/p><\/div><div[^>]*><div[^>]*><button[^>]*>Anuluj/);
     });
 
-    test('a done header centres the title between Wyczyść and Gotowe', () => {
+    test('a done header centres the title between Clear and Done', () => {
         const html = renderToStaticMarkup(
             <Sheet open>
                 <BottomSheetPanel title="Filtr" action="done" onClear={() => undefined}>
@@ -191,7 +242,7 @@ describe('BottomSheet', () => {
         expect(html).not.toContain('aria-label="Zamknij"');
     });
 
-    test('a save header puts Anuluj and the submit around the centred title of a form sheet, with no footer', () => {
+    test('a save header puts Cancel and the submit around the centred title of a form sheet, with no footer', () => {
         const html = renderToStaticMarkup(
             <Sheet open>
                 <BottomSheetPanel title="Dane firmy" action="save" onSubmit={() => undefined} saving>
@@ -202,6 +253,49 @@ describe('BottomSheet', () => {
         expect(html).toMatch(/^<form noValidate=""><div data-action="save">/);
         expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Anuluj<\/button><h2[^>]*>Dane firmy<\/h2><button type="submit"[^>]*disabled=""[^>]*>Zapisz<\/button>/);
         expect(html).not.toContain('aria-label="Zamknij"');
+    });
+
+    test("a sheet that is a menu's second step leads with a way back before its title and keeps its close", () => {
+        const back = renderToStaticMarkup(
+            <Sheet open>
+                <BottomSheetPanel title="Przenieś na" onBack={() => undefined}>
+                    <p>Kalendarz</p>
+                </BottomSheetPanel>
+            </Sheet>,
+        );
+        const plain = renderToStaticMarkup(
+            <Sheet open>
+                <BottomSheetPanel title="Przenieś na">
+                    <p>Kalendarz</p>
+                </BottomSheetPanel>
+            </Sheet>,
+        );
+
+        expect(back).toMatch(/<button[^>]*aria-label="Wróć"[^>]*data-icon="chevron-left"[^>]*>.*?<\/button><h2[^>]*>Przenieś na<\/h2><button[^>]*aria-label="Zamknij"/);
+        expect(plain).not.toContain('aria-label="Wróć"');
+    });
+});
+
+describe('IconButton', () => {
+    test('a focused icon button draws its ring on its own edge, so it keeps the size of the buttons beside it', async () => {
+        const css = await Bun.file(new URL('./mobile.module.css', import.meta.url)).text();
+
+        expect(css).toMatch(/\.iconButton:focus-visible \{[^}]*outline: var\(--role-stroke-focus\) solid var\(--role-focus-ring\);\s*outline-offset: calc\(-1 \* var\(--role-stroke-focus\)\);/);
+        expect(css).not.toMatch(/\.iconButton[^{]*:focus-visible \{[^}]*outline-offset: [1-9]/);
+    });
+
+    test('a bare button and a row timer show one 32 px disc, whatever their target: no look paints the target on hover', async () => {
+        const css = await Bun.file(new URL('./mobile.module.css', import.meta.url)).text();
+        const html = renderToStaticMarkup(<IconButton icon="play" look="outline" size="row" filled label="Start: Wycena" />);
+
+        expect(html).toContain('data-size="row"');
+        expect(css).toMatch(/\.iconButton:is\(\[data-look='quiet'\], \[data-size='row'\]\)::before \{[^}]*width: 32px;\s*height: 32px;/);
+        const hovers = [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, selector, body]) => selector.includes('.iconButton') && selector.includes(':hover') && body.includes('background'));
+        expect(hovers.map(([, selector]) => selector.trim())).toEqual([
+            ".iconButton[data-look='outline']:not([data-size='row']):hover:not(:disabled)",
+            ".iconButton:is([data-look='quiet'], [data-size='row'][data-look='outline']):hover:not(:disabled)::before",
+        ]);
+        expect(css).toMatch(/@media \(min-width: 768px\) \{\s*\.iconButton\[data-size='row'\] \{\s*width: 32px;\s*height: 32px;\s*margin-inline: 0;/);
     });
 });
 
@@ -226,7 +320,7 @@ describe('ListRow', () => {
         const agent = css.match(/\.listAgent \{([^}]*)\}/)?.[1] ?? '';
         const label = css.match(/\.listAgentText \{([^}]*)\}/)?.[1] ?? '';
 
-        expect(html).toContain('<span aria-hidden="true"></span><span>claude pracuje</span>');
+        expect(html).toContain('<span aria-hidden="true"></span><span title="claude pracuje">claude pracuje</span>');
         expect(agent).toContain('min-width: 0;');
         expect(label).toContain('text-overflow: ellipsis;');
         expect(html.indexOf('+6,45 h')).toBeGreaterThan(html.indexOf('claude pracuje'));

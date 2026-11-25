@@ -4,6 +4,7 @@ import { ActionMenu, ActionMenuItem } from '@/components/solo/action-menu';
 import { Chip } from '@/components/solo/chip';
 import { useInHeaderMenu } from '@/components/solo/client-header';
 import { SoloField, SoloInput } from '@/components/solo/field';
+import { Fold } from '@/components/solo/fold';
 import { IconButton } from '@/components/solo/icon-button';
 import { KvRow } from '@/components/solo/kv-row';
 import { Notice } from '@/components/solo/notice';
@@ -93,9 +94,25 @@ const RECENT_REVISIONS = 3;
 const KEEP = { preserveState: true, preserveScroll: true, replace: true };
 
 /**
- * Figma: Raport (1092:25793, phone 1092:25989). The text for the client first, with Wysyłka, Godziny and Aktywność
- * beside it; Podgląd and Edytuj are the page's pills. Every write keeps the version guard of the text it was based on.
+ * Figma: Report (1092:25793, phone 1092:25989). The text for the client first, with Delivery, Hours and Activity
+ * beside it; Preview and Edit are the page's pills. Every write keeps the version guard of the text it was based on.
  */
+/** A change's diff, worked out the first time it is opened and kept for the closing motion. */
+function RevisionDiff({ id, open, before, after }: { id: string; open: boolean; before: string; after: string }) {
+    const [seen, setSeen] = useState(open);
+    if (open && !seen) setSeen(true);
+
+    return (
+        <Fold id={id} open={open}>
+            {seen && (
+                <div className={styles.diff}>
+                    <MarkdownDiff before={before} after={after} />
+                </div>
+            )}
+        </Fold>
+    );
+}
+
 export default function ReportEdit({ client, report, composers, revisions }: Props) {
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);
@@ -268,6 +285,7 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
                                         value={draft.body}
                                         onChange={(body) => setDraft((current) => ({ ...current, body }))}
                                         rows={24}
+                                        look="solo"
                                         disabled={savingBalance}
                                     />
                                     <div className={styles.editorActions}>
@@ -443,6 +461,7 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
                                                                 variant="secondary"
                                                                 size="control"
                                                                 aria-expanded={open}
+                                                                aria-controls={`revision-${r.id}`}
                                                                 aria-label={open ? t('Hide changes') : t('Show changes')}
                                                                 onClick={() => setExpanded((current) => toggled(current, r.id))}
                                                             >
@@ -451,9 +470,9 @@ export default function ReportEdit({ client, report, composers, revisions }: Pro
                                                         ) : undefined
                                                     }
                                                 />
-                                                {open && canDiff && (
-                                                    <li className={styles.diff}>
-                                                        <MarkdownDiff before={before} after={after} />
+                                                {canDiff && (
+                                                    <li className={styles.diffRow} aria-hidden={!open}>
+                                                        <RevisionDiff id={`revision-${r.id}`} open={open} before={before} after={after} />
                                                     </li>
                                                 )}
                                             </Fragment>
@@ -639,7 +658,7 @@ ReportEdit.place = (({ client, report }, { t, url, locale }) => {
 
     return {
         tokens: [
-            { label: client.short_name, href: clients.show({ client: client.id, tab: 'przeglad' }).url },
+            { label: client.short_name, href: clients.show({ client: client.id, tab: 'overview' }).url },
             { label: capitalize(monthName(period, locale)), href: monthUrl(client.id, period) },
             { label: t('Report') },
         ],

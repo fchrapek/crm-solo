@@ -9,7 +9,7 @@ import {
     menuValueClass,
     menuWideClass,
 } from '@/components/solo/menu';
-import { Poster, SoloButton, SoloButtonLink } from '@/components/solo/primitives';
+import { SoloButton, SoloButtonLink } from '@/components/solo/primitives';
 import { Row } from '@/components/solo/row';
 import { type Place, type PlaceContext, type PlaceLinkPill } from '@/components/solo/shell/place';
 import { SoloSurface } from '@/components/solo/surface';
@@ -26,6 +26,7 @@ import { type SharedData } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DayHeading } from './day-header';
 import styles from './day.module.css';
 
 type Target = 'today' | 'tomorrow' | 'date';
@@ -38,7 +39,10 @@ export interface TasksProps {
     closed: boolean;
     target: Target;
     lastPlannable: string;
+    /** `day` when the list was opened from that day's page. */
+    back: 'day' | null;
     maxPicks: number;
+    warnFull: boolean;
     pickedCount: number;
     groups: { client: string; tasks: DayTask[] }[];
     hideable: HideableGroup[];
@@ -57,7 +61,7 @@ export interface HideableGroup {
     hidden: boolean;
 }
 
-/** How many rows a client group shows before "Pokaż N więcej"; picked rows always show. */
+/** How many rows a client group shows before Show N more; picked rows always show. */
 export const GROUP_PREVIEW = 3;
 
 /** How many days the day pills offer: today, tomorrow and the next working days. */
@@ -70,7 +74,7 @@ function addDays(day: string, days: number): string {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-/** Today, tomorrow, then working days up to the last plannable one; a weekend pick goes through Tydzień. */
+/** Today, tomorrow, then working days up to the last plannable one; a weekend pick goes through Week. */
 export function dayChoices(today: string, last: string): string[] {
     const days = [today];
     for (let day = addDays(today, 1); day <= last && days.length < DAY_CHOICES; day = addDays(day, 1)) {
@@ -81,20 +85,22 @@ export function dayChoices(today: string, last: string): string[] {
     return days;
 }
 
-const listUrl = (date: string, todayDate: string, hidden = false) =>
+/** The list for a day; a list opened from a day's page keeps `from=day` on every link, so Done still returns there. */
+export const listUrl = (date: string, todayDate: string, hidden = false, from: TasksProps['back'] = null) =>
     today.tasks({
         query: {
-            ...(date === todayDate ? {} : { na: date === addDays(todayDate, 1) ? 'jutro' : date }),
-            ...(hidden ? { ukryte: 1 } : {}),
+            ...(date === todayDate ? {} : { for: date === addDays(todayDate, 1) ? 'tomorrow' : date }),
+            ...(hidden ? { hidden: 1 } : {}),
+            ...(from === 'day' ? { from: 'day' } : {}),
         },
     }).url;
 
 /**
  * The days picks can be chosen for, as pills: today, tomorrow and the next working days, plus the day the list is on
- * when Tydzień sent a weekend. Each is a link to the same list for that day.
+ * when Week sent a weekend. Each is a link to the same list for that day.
  */
 export function dayPillsFor(
-    { today: todayDate, date, lastPlannable, showHidden }: Pick<TasksProps, 'today' | 'date' | 'lastPlannable' | 'showHidden'>,
+    { today: todayDate, date, lastPlannable, showHidden, back }: Pick<TasksProps, 'today' | 'date' | 'lastPlannable' | 'showHidden'> & Partial<Pick<TasksProps, 'back'>>,
     { t, locale }: Pick<PlaceContext, 't' | 'locale'>,
 ): PlaceLinkPill[] {
     const days = dayChoices(todayDate, lastPlannable);
@@ -110,13 +116,20 @@ export function dayPillsFor(
                     : index === 1 && choice === addDays(todayDate, 1)
                       ? `${t('Tomorrow')} · ${name}`
                       : name,
-            href: listUrl(choice, todayDate, showHidden),
+            href: listUrl(choice, todayDate, showHidden, back),
             active: choice === date,
         };
     });
 }
 
-/** A pick keeps the page's state, so a group opened with Pokaż więcej stays open. */
+/** Where Done leads: the day's page the list was opened from, else the day view of its target. */
+export function listBack(target: Target, date: string, from: TasksProps['back']): string {
+    if (from === 'day') return today.day(date).url;
+
+    return target === 'tomorrow' ? today.plan().url : target === 'date' ? today.week().url : dashboard().url;
+}
+
+/** A pick keeps the page's state, so a group opened with Show more stays open. */
 export function pickTask(taskId: number, date: string): void {
     router.post(day.picks.store().url, { task_id: taskId, date }, { preserveScroll: true, preserveState: true });
 }
@@ -126,21 +139,19 @@ function actionLabel(target: Target, t: ReturnType<typeof useTranslation>['t']):
 }
 
 /**
- * Figma: Wszystkie zadania, one client (1087:5502). The client and its count, then the tasks: the title, the project
- * from 768 px and the pick button; a picked row takes the selection fill and says Wybrane.
+ * Figma: All tasks, one client (1087:5502). The client and its count, then the tasks: the title, the project
+ * from 768 px and the pick button; a picked row takes the selection fill and says Picked.
  */
 export function ClientGroup({
     client,
     tasks: rows,
     date,
     target,
-    full,
 }: {
     client: string;
     tasks: DayTask[];
     date: string;
     target: Target;
-    full: boolean;
 }) {
     const { t } = useTranslation();
     const [expanded, setExpanded] = useState(false);
@@ -164,7 +175,6 @@ export function ClientGroup({
                                 <SoloButton
                                     variant="secondary"
                                     size="control"
-                                    disabled={full}
                                     aria-label={`${actionLabel(target, t)}: ${task.name}`}
                                     onClick={() => pickTask(task.task_id, date)}
                                 >
@@ -193,7 +203,7 @@ interface HiddenProps {
 }
 
 /**
- * Figma: Ukryj grupy (946:22628, phone 934:23342). A client row hides every group it has now, its groups follow it
+ * Figma: Hide groups (946:22628, phone 934:23342). A client row hides every group it has now, its groups follow it
  * indented and hide one at a time; a hidden row is red.
  */
 function HideGroupsBody({ groups, hidden, showHidden, onReveal, head = true }: HiddenProps & { groups: HideableGroup[]; head?: boolean }) {
@@ -297,33 +307,33 @@ function HideGroups({ groups, ...hiddenProps }: HiddenProps & { groups: Hideable
 }
 
 /**
- * Figma: Wszystkie zadania (1087:5502, drawn as a dialog; here the page it is today). Every open task grouped by
- * client, where picks are chosen; the day they are chosen for is a pill, and Gotowe leads back to that day's view.
+ * Figma: All tasks (1087:5502, drawn as a dialog; here the page it is today). Every open task grouped by
+ * client, where picks are chosen; the day they are chosen for is a pill, and Done leads back to that day's view.
  */
 export default function TaskList() {
-    const { today: todayDate, date, target, maxPicks, pickedCount, groups, hideable, hidden, showHidden } = usePage<SharedData & TasksProps>().props;
+    const {
+        today: todayDate,
+        date,
+        target,
+        back: from,
+        groups,
+        hideable,
+        hidden,
+        showHidden,
+    } = usePage<SharedData & TasksProps>().props;
     const errors = usePage().props.errors as Record<string, string>;
     const { t } = useTranslation();
-    const full = pickedCount >= maxPicks;
     const total = groups.reduce((n, g) => n + g.tasks.length, 0);
-    const back = target === 'tomorrow' ? today.plan().url : target === 'date' ? today.week().url : dashboard().url;
-    const reveal = () => router.get(listUrl(date, todayDate, !showHidden), {}, { preserveScroll: true, preserveState: true });
+    const back = listBack(target, date, from);
+    const reveal = () => router.get(listUrl(date, todayDate, !showHidden, from), {}, { preserveScroll: true, preserveState: true });
 
     return (
         <SoloSurface day="paper">
             <Head title={t('All tasks')} />
             <main className={styles.summary}>
-                <header className={styles.summaryHead}>
-                    <Poster>{t('All tasks')}</Poster>
+                <DayHeading title={t('All tasks')}>
                     <div className={styles.listHead}>
-                        <p className={styles.meta}>
-                            {[
-                                t('{{count}} of {{max}} picked', { count: pickedCount, max: maxPicks }),
-                                hidden.groups > 0 ? t('{{count}} hidden tasks', { count: hidden.tasks }) : null,
-                            ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                        </p>
+                        {hidden.groups > 0 && <p className={styles.meta}>{t('{{count}} hidden tasks', { count: hidden.tasks })}</p>}
                         <div className={styles.listActions}>
                             {hidden.groups > 0 && (
                                 <SoloButton variant="quiet" size="control" onClick={reveal}>
@@ -336,7 +346,7 @@ export default function TaskList() {
                             </SoloButtonLink>
                         </div>
                     </div>
-                </header>
+                </DayHeading>
                 <Tile kind="list" className={styles.pool}>
                     {errors.task_id && (
                         <TileInset>
@@ -344,7 +354,7 @@ export default function TaskList() {
                         </TileInset>
                     )}
                     {groups.map((group) => (
-                        <ClientGroup key={group.client} client={group.client} tasks={group.tasks} date={date} target={target} full={full} />
+                        <ClientGroup key={group.client} client={group.client} tasks={group.tasks} date={date} target={target} />
                     ))}
                     {total === 0 && (
                         <TileInset>
@@ -357,7 +367,7 @@ export default function TaskList() {
     );
 }
 
-/** One level below Dziś; its pills are the days a pick can go to. */
+/** One level below Today; its pills are the days a pick can go to. */
 TaskList.place = (props: TasksProps, context: PlaceContext): Place => ({
     tokens: [{ label: context.t('All tasks') }],
     pills: dayPillsFor(props, context),

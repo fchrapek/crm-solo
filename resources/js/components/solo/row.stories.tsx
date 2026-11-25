@@ -112,3 +112,85 @@ export const InAList: Story = {
         </TileRows>
     ),
 };
+
+const facts = [
+    { label: 'Klient', value: 'Fundacja Testowa' },
+    { label: 'Projekt', value: 'Nowa strona fundacji' },
+    { label: 'Termin', value: '2.11', short: true },
+    { label: 'Czas', value: '1 h 20 min', short: true },
+];
+
+/** Figma: Shared · Row details. One line at rest with no hover band; the chevron before the action opens the pairs under the row in fixed columns; a linked title takes the secondary ink on hover. */
+export const Details: Story = {
+    args: {
+        title: 'Makiety: strona główna i podstrona projektu',
+        href: '#',
+        details: facts,
+        detailsOpen: true,
+        action: (
+            <SoloButton size="control" variant="quiet">
+                Na jutro
+            </SoloButton>
+        ),
+    },
+};
+
+/** A running timer's dot and live time stand before the chevron at all times; every row of the list keeps the same columns, a missing value leaves its column empty and a long one is cut with its whole text as the tooltip. */
+export const DetailsInAList: Story = {
+    decorators: [],
+    render: () => (
+        <Tile kind="list">
+            <TileRows>
+                <Row
+                    rule={false}
+                    title="Optymalizacja zdjęć w galerii"
+                    href="#"
+                    check={{ done: false, label: 'Oznacz jako zrobione', onToggle: noop }}
+                    running={new Date(Date.now() - 24 * 60_000).toISOString()}
+                    details={[{ ...facts[0], value: 'PRZEDSIĘBIORSTWO HANDLOWO-USŁUGOWE PRZYKŁADOWE S.C. ANNA TESTOWA-NOWAK, JAN, PIOTR TESTOWY' }, ...facts.slice(1)]}
+                    detailsOpen
+                    action={<IconButton icon="stop" look="stop" filled label="Stop" />}
+                />
+                <Row
+                    title="Bieżące poprawki na stronie"
+                    href="#"
+                    check={{ done: false, label: 'Oznacz jako zrobione', onToggle: noop }}
+                    time="45 min"
+                    timeTone="quiet"
+                    details={[facts[0], { label: 'Projekt', value: null }, ...facts.slice(2)]}
+                    detailsOpen
+                    action={<IconButton icon="play" look="outline" filled label="Start" />}
+                />
+            </TileRows>
+        </Tile>
+    ),
+};
+
+/** Journal entries: title, chevron and menu at rest; the date leads the details, a long note's text takes the whole line. */
+export const DetailsJournal: Story = {
+    decorators: [],
+    render: () => (
+        <Tile kind="list">
+            <TileRows>
+                {[
+                    { title: 'Telefon: migracja hostingu przesunięta na 3.11', date: '15.10', text: 'Telefon: migracja hostingu przesunięta na 3.11\nKlient prosi o przeniesienie poczty w tym samym oknie.' },
+                    { title: 'Wizja: do umówienia → umówiona', date: '14.10\u00a0·\u00a009:30', text: null },
+                ].map((entry, index) => (
+                    <Row
+                        key={entry.title}
+                        rule={index > 0}
+                        title={entry.title}
+                        details={[
+                            { label: 'Data', value: entry.date },
+                            { label: 'Autor', value: 'Filip' },
+                            { label: 'Rodzaj', value: entry.text ? 'Notatka' : 'Pole' },
+                            { label: 'Tekst', value: entry.text, wide: true },
+                        ]}
+                        detailsOpen={index === 0}
+                        more={<IconButton icon="more" look="quiet" label="Więcej akcji" />}
+                    />
+                ))}
+            </TileRows>
+        </Tile>
+    ),
+};

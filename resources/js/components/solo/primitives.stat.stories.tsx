@@ -17,7 +17,7 @@ export const Minutes: Story = { args: { value: '38 min', label: 'dziś' } };
 
 export const Count: Story = { args: { value: '3 z 5', label: 'zadania' } };
 
-/** Podsumowanie: three stats on the Done surface, spread over a phone's width. */
+/** Summary: three stats on the Done surface, spread over a phone's width. */
 export const RowOfThree: Story = {
     globals: { day: 'done' },
     render: () => (
@@ -29,7 +29,7 @@ export const RowOfThree: Story = {
     ),
 };
 
-/** Zadanie and Zaloguj czas on phones: dziś and łącznie on Paper. */
+/** Task and Log time on phones: Today and In total on Paper. */
 export const RowOfTwo: Story = {
     render: () => (
         <StatRow>

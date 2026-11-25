@@ -36,6 +36,8 @@ export interface User {
     deleted_at: string;
     account: Account;
     can_delete: boolean;
+    /** Helper per device kind (Settings, Appearance). */
+    helper?: { desktop: boolean; phone: boolean };
     [key: string]: unknown;
 }
 
@@ -185,13 +187,18 @@ export interface ShellTimer {
     started_at: string;
     task: string | null;
     client: string | null;
+    /** The project the time goes to: the add field presets it when it is the only timer running. */
+    project_id?: number | null;
 }
 
 export interface SharedData {
     name: string;
     auth: Auth;
     timer: ShellTimer | null;
+    timers: ShellTimer[];
     locale: string;
+    /** The public docs site, empty until it is published: the helper hides its docs links while it is. */
+    docsUrl: string;
     translations: TranslationStore | null;
     [key: string]: unknown;
 }

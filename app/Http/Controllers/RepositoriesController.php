@@ -12,6 +12,9 @@ use Illuminate\Support\Facades\Auth;
 
 final class RepositoriesController extends Controller
 {
+    /** A web address or a git remote; the page links the first and prints the second. */
+    private const string REMOTE = 'regex:/\\A(https?:\\/\\/|ssh:\\/\\/|[\\w.-]+@[\\w.-]+:)\\S+\\z/i';
+
     public function store(Request $request, Project $project): RedirectResponse
     {
         if ($project->account_id !== Auth::user()->account_id) {
@@ -21,7 +24,7 @@ final class RepositoriesController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'local_path' => 'nullable|string|max:500',
-            'remote_url' => 'nullable|string|max:500',
+            'remote_url' => ['nullable', 'string', 'max:500', self::REMOTE],
             'provider' => 'nullable|string|in:github,gitlab,bitbucket,local',
         ]);
 
@@ -46,7 +49,7 @@ final class RepositoriesController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'local_path' => 'nullable|string|max:500',
-            'remote_url' => 'nullable|string|max:500',
+            'remote_url' => ['nullable', 'string', 'max:500', self::REMOTE],
             'provider' => 'nullable|string|in:github,gitlab,bitbucket,local',
         ]);
 

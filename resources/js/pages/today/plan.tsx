@@ -1,62 +1,93 @@
-import { Poster, SoloButton, SoloButtonLink } from '@/components/solo/primitives';
-import { Row } from '@/components/solo/row';
+import { type MonthData } from '@/components/solo/month-card';
+import { SoloButton, SoloButtonLink } from '@/components/solo/primitives';
+import { listDetails, Row } from '@/components/solo/row';
 import { type PlaceResolver } from '@/components/solo/shell/place';
 import { SoloSurface } from '@/components/solo/surface';
 import { type DayTask } from '@/components/solo/task-row';
-import { Tile, TileActions, TileGrid, TileHeader, TileInset, TileNote, TileRows } from '@/components/solo/tile';
-import { longDate, parseDay, weekdayName } from '@/lib/dates';
+import { GroupHeading, Tile, TileActions, TileGrid, TileHeader, TileInset, TileNote, TileRows, TileStack } from '@/components/solo/tile';
+import { parseDay, weekdayName } from '@/lib/dates';
 import { dashboard } from '@/routes';
 import day from '@/routes/day';
 import tasks from '@/routes/tasks';
 import today from '@/routes/today';
-import { type SharedData } from '@/types';
+import { type SharedData, type ShellTimer } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
-import { useTaskCheck } from './day';
+import { AddOrPick } from './add-or-pick';
+import { placesNote, taskDetails, TimerTile, timerOf, useTaskCheck } from './day';
+import { DayHeading, DayMonth } from './day-header';
 import styles from './day.module.css';
-import { dayPills } from './place';
+import { dayLabel, dayPills, dayPlace, type DayNav } from './place';
 
 export interface PlanSuggestions {
     tasks: DayTask[];
     /** Today's unfinished picks among the suggestions; they come first. */
     leftover: number;
-    /** Every open task, the size of Wszystkie zadania. */
+    /** Every open task, the size of All tasks. */
     open: number;
 }
 
 interface PlanProps {
     date: string;
+    /** Whether the day takes new picks: from today to the end of next week. A moved pick may sit further ahead. */
+    plannable: boolean;
     closed: boolean;
     maxPicks: number;
+    warnFull: boolean;
+    /** Set when the plan is another day's than tomorrow's. */
+    day?: DayNav;
     picks: DayTask[];
     suggestions: PlanSuggestions;
+    month: MonthData;
     [key: string]: unknown;
 }
 
 const keep = { preserveScroll: true };
-const fullList = () => today.tasks({ query: { na: 'jutro' } });
 
-/** Figma: Jutro, Propozycje (1091:27911). A few open tasks to put on tomorrow in one click, deadlines first, and the way to the full list. */
-export function Suggestions({ date, suggestions }: { date: string; suggestions: PlanSuggestions }) {
-    const { t } = useTranslation();
+/** The full list for the plan's own day; from a day's page it carries the date and Done returns to that page. */
+export const planListHref = (date: string, nav?: DayNav): string => today.tasks({ query: nav ? { for: date, from: 'day' } : { for: 'tomorrow' } }).url;
+
+/**
+ * Figma: Tomorrow 2E (1375:26662, phone 1375:26876), Shared · Row details (1555:77908, phone 1556:19881). Suggestions as
+ * a group inside the plan's list, in the plan's order: the title, a running timer's time, the chevron to the client,
+ * project, due day and logged time, a quiet For tomorrow; the last row opens the full list.
+ */
+export function Suggestions({
+    date,
+    suggestions,
+    list,
+    tomorrow = true,
+    timers = [],
+}: {
+    date: string;
+    suggestions: PlanSuggestions;
+    list: string;
+    tomorrow?: boolean;
+    /** The account's running timers, for the row whose task one runs on. */
+    timers?: ShellTimer[];
+}) {
+    const { t, i18n } = useTranslation();
+    const details = listDetails(suggestions.tasks.map((task) => taskDetails(task, t, i18n.language)));
 
     return (
-        <Tile kind="list" as="aside">
-            <TileHeader label={t('Suggestions')} end={t('deadlines first')} />
+        <>
+            <GroupHeading label={t('Suggestions')} note={t('from today, then deadlines')} />
             <TileRows>
-                {suggestions.tasks.map((task) => (
+                {suggestions.tasks.map((task, index) => (
                     <Row
                         key={task.task_id}
-                        wrap
                         title={task.name}
                         href={tasks.show(task.task_id)}
+                        running={timerOf(task, timers)?.started_at}
+                        details={details[index]}
                         action={
                             <SoloButton
-                                variant="secondary"
+                                variant="quiet"
                                 size="control"
+                                className={styles.rowAction}
                                 onClick={() => router.post(day.picks.store().url, { task_id: task.task_id, date }, keep)}
                             >
-                                {t('For tomorrow')}
+                                {tomorrow ? t('For tomorrow') : t('For this day')}
                             </SoloButton>
                         }
                     />
@@ -65,66 +96,37 @@ export function Suggestions({ date, suggestions }: { date: string; suggestions: 
                     wrap
                     title={t('All tasks ({{count}})', { count: suggestions.open })}
                     action={
-                        <SoloButtonLink href={fullList()} variant="quiet" size="control" className={styles.rowAction}>
+                        <SoloButtonLink href={list} variant="quiet" size="control" className={styles.rowAction}>
                             {t('Open')}
                         </SoloButtonLink>
                     }
                 />
             </TileRows>
-        </Tile>
-    );
-}
-
-/** The free places of tomorrow as the list's last row: beside Propozycje it points at them; with nothing to suggest it leads to the full list. */
-export function FreeSlots({ free, proposing }: { free: number; proposing: boolean }) {
-    const { t } = useTranslation();
-
-    return proposing ? (
-        <Row
-            title={t('{{count}} free slots', { count: free })}
-            meta={<span className={styles.phoneOnly}>{t('add from the suggestions below')}</span>}
-            wideMeta={t('add from the suggestions beside')}
-        />
-    ) : (
-        <Row
-            title={t('{{count}} free slots', { count: free })}
-            action={
-                <SoloButtonLink href={fullList()} variant="secondary" size="control">
-                    {t('Choose')}
-                </SoloButtonLink>
-            }
-        />
+        </>
     );
 }
 
 /**
- * Figma: Jutro (1091:27911, phone 1091:28116; the plan full 1091:28309). Tomorrow's picks; while places are free and
- * there is something to suggest, Propozycje stand beside the list (below it on a phone) and the action leads back to
- * the day; once the plan is full, or nothing is left to suggest, the free places lead to the full list and the
- * action is Zapisz plan.
+ * Figma: Tomorrow 2E (1375:26662, phone 1375:26876; the add field 1412:22227). Tomorrow's picks and the add field, then
+ * while places are free and there is something to suggest the Suggestions group in the same list, and the action leads
+ * back to the day, otherwise it is Save the plan. Beside it from 1100 px, below it otherwise, the timer and the month.
  */
 export default function PlanTomorrow() {
-    const { date, maxPicks, picks, suggestions } = usePage<SharedData & PlanProps>().props;
+    const { date, plannable, maxPicks, warnFull, picks, suggestions, month, timer, timers, day: nav } = usePage<SharedData & PlanProps>().props;
     const errors = usePage().props.errors as Record<string, string>;
     const { t, i18n } = useTranslation();
     const check = useTaskCheck();
-    const free = maxPicks - picks.length;
-    const proposing = free > 0 && suggestions.tasks.length > 0;
-    const picked = t('{{count}} of {{max}} picked', { count: picks.length, max: maxPicks });
+    const proposing = plannable && suggestions.tasks.length > 0;
+    const list = planListHref(date, nav);
 
     return (
         <SoloSurface day="paper">
-            <Head title={t('Plan tomorrow')} />
+            <Head title={nav ? dayLabel(date, i18n.language) : t('Plan tomorrow')} />
             <main className={styles.summary}>
-                <header className={styles.summaryHead}>
-                    <Poster>{weekdayName(parseDay(date), i18n.language)}</Poster>
-                    <p className={styles.meta}>
-                        {longDate(date, i18n.language)} · {picked}
-                    </p>
-                </header>
+                <DayHeading title={weekdayName(parseDay(date), i18n.language)} />
                 <TileGrid>
                     <Tile kind="list">
-                        <TileHeader label={t('Tomorrow')} end={picked} />
+                        <TileHeader label={nav ? t('Plan of the day') : t('Tomorrow')} />
                         <TileRows>
                             {picks.map((pick) => (
                                 <Row
@@ -146,10 +148,20 @@ export default function PlanTomorrow() {
                                     }
                                 />
                             ))}
-                            {free > 0 && <FreeSlots free={free} proposing={proposing} />}
+                            {plannable && (
+                                <AddOrPick
+                                    date={date}
+                                    picked={picks.length}
+                                    maxPicks={maxPicks}
+                                    warnFull={warnFull}
+                                    listHref={list}
+                                    note={placesNote(picks.length, maxPicks, warnFull, t)}
+                                />
+                            )}
                         </TileRows>
-                        {(proposing || errors.task_id) && (
+                        {(proposing || !plannable || errors.task_id) && (
                             <TileInset>
+                                {!plannable && <TileNote>{t('Picks can be set from today to the end of next week.')}</TileNote>}
                                 {proposing && (
                                     <TileNote>
                                         {suggestions.leftover > 0
@@ -160,17 +172,22 @@ export default function PlanTomorrow() {
                                 {errors.task_id && <p className={styles.error}>{errors.task_id}</p>}
                             </TileInset>
                         )}
-                        <TileActions>
+                        {proposing && <Suggestions date={date} suggestions={suggestions} list={list} tomorrow={!nav} timers={timers} />}
+                        <TileActions apart>
                             <SoloButtonLink href={dashboard()} size="control">
                                 {proposing ? t('Back to the day') : t('Save the plan')}
                             </SoloButtonLink>
                         </TileActions>
                     </Tile>
-                    {proposing && <Suggestions date={date} suggestions={suggestions} />}
+                    <TileStack as="aside">
+                        {timer && <TimerTile running={timer} timers={timers} />}
+                        <DayMonth month={month} date={date} />
+                    </TileStack>
                 </TileGrid>
             </main>
         </SoloSurface>
     );
 }
 
-PlanTomorrow.place = ((props, { t }) => ({ pills: dayPills('tomorrow', t, props.closed) })) satisfies PlaceResolver<PlanProps>;
+PlanTomorrow.place = ((props, context) =>
+    props.day ? dayPlace(props.day, context) : { pills: dayPills('tomorrow', context.t, props.closed) }) satisfies PlaceResolver<PlanProps>;

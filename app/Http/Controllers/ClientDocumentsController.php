@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\ClientDocument;
+use App\Support\DemoRows;
 use App\Support\UploadLimits;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Throwable;
 
 /**
  * Client-scoped documents (signed contracts, GDPR clauses, sub-processing
@@ -52,12 +54,15 @@ final class ClientDocumentsController extends Controller
                 'required',
                 'file',
                 'max:'.UploadLimits::maxKilobytes(self::MAX_FILE_KB),
-                'extensions:'.implode(',', self::ALLOWED_EXTENSIONS),
-                'mimetypes:'.implode(',', self::ALLOWED_MIMETYPES),
+                'extensions:'.implode(',', UploadLimits::extensions(self::ALLOWED_EXTENSIONS)),
+                'mimetypes:'.implode(',', UploadLimits::mimetypes(self::ALLOWED_MIMETYPES)),
             ],
             'category' => ['nullable', 'string', 'max:50'],
             'label' => ['nullable', 'string', 'max:200'],
         ]);
+
+        // Asked before the file is stored, so a full demo leaves no file without a row.
+        DemoRows::guardCreate(new ClientDocument);
 
         $file = $validated['file'];
         $extension = $file->getClientOriginalExtension() ?: 'bin';
@@ -66,15 +71,21 @@ final class ClientDocumentsController extends Controller
 
         Storage::disk('local')->putFileAs("client-documents/{$client->id}", $file, $filename);
 
-        $client->documents()->create([
-            'account_id' => $client->account_id,
-            'file_path' => $relativePath,
-            'original_name' => $file->getClientOriginalName(),
-            'mime' => $file->getMimeType() ?? 'application/octet-stream',
-            'size' => $file->getSize(),
-            'category' => $validated['category'] ?? null,
-            'label' => $validated['label'] ?? null,
-        ]);
+        try {
+            $client->documents()->create([
+                'account_id' => $client->account_id,
+                'file_path' => $relativePath,
+                'original_name' => $file->getClientOriginalName(),
+                'mime' => $file->getMimeType() ?? 'application/octet-stream',
+                'size' => $file->getSize(),
+                'category' => $validated['category'] ?? null,
+                'label' => $validated['label'] ?? null,
+            ]);
+        } catch (Throwable $e) {
+            Storage::disk('local')->delete($relativePath);
+
+            throw $e;
+        }
 
         return back()->with('flash', ['success' => __('Document uploaded.')]);
     }
@@ -101,8 +112,9 @@ final class ClientDocumentsController extends Controller
     {
         $this->authorizeDocument($client, $document);
 
-        Storage::disk('local')->delete($document->file_path);
+        // The row first: a delete that is refused keeps its file.
         $document->delete();
+        Storage::disk('local')->delete($document->file_path);
 
         return back()->with('flash', ['success' => __('Document deleted.')]);
     }

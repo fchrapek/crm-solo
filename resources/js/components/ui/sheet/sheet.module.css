@@ -8,11 +8,11 @@
 }
 
 .overlay[data-state="open"] {
-  animation: fadeIn var(--duration-150) var(--ease-out);
+  animation: fadeIn var(--motion-slow) var(--ease-standard);
 }
 
 .overlay[data-state="closed"] {
-  animation: fadeOut var(--duration-150) var(--ease-in);
+  animation: fadeOut var(--motion-slow-exit) var(--ease-exit);
 }
 
 .content {
@@ -23,15 +23,6 @@
   gap: var(--spacing-4);
   background-color: var(--color-background);
   box-shadow: var(--shadow-lg);
-  transition: transform var(--ease-in-out);
-}
-
-.content[data-state="open"] {
-  transition-duration: var(--duration-500);
-}
-
-.content[data-state="closed"] {
-  transition-duration: var(--duration-300);
 }
 
 /* Right side */
@@ -50,11 +41,11 @@
 }
 
 .right[data-state="open"] {
-  animation: slideInFromRight var(--duration-500) var(--ease-in-out);
+  animation: slideInFromRight var(--motion-slow) var(--ease-standard);
 }
 
 .right[data-state="closed"] {
-  animation: slideOutToRight var(--duration-300) var(--ease-in-out);
+  animation: slideOutToRight var(--motion-slow-exit) var(--ease-exit);
 }
 
 /* Left side */
@@ -73,11 +64,11 @@
 }
 
 .left[data-state="open"] {
-  animation: slideInFromLeft var(--duration-500) var(--ease-in-out);
+  animation: slideInFromLeft var(--motion-slow) var(--ease-standard);
 }
 
 .left[data-state="closed"] {
-  animation: slideOutToLeft var(--duration-300) var(--ease-in-out);
+  animation: slideOutToLeft var(--motion-slow-exit) var(--ease-exit);
 }
 
 /* Top side */
@@ -89,11 +80,11 @@
 }
 
 .top[data-state="open"] {
-  animation: slideInFromTop var(--duration-500) var(--ease-in-out);
+  animation: slideInFromTop var(--motion-slow) var(--ease-standard);
 }
 
 .top[data-state="closed"] {
-  animation: slideOutToTop var(--duration-300) var(--ease-in-out);
+  animation: slideOutToTop var(--motion-slow-exit) var(--ease-exit);
 }
 
 /* Bottom side */
@@ -105,11 +96,11 @@
 }
 
 .bottom[data-state="open"] {
-  animation: slideInFromBottom var(--duration-500) var(--ease-in-out);
+  animation: slideInFromBottom var(--motion-slow) var(--ease-standard);
 }
 
 .bottom[data-state="closed"] {
-  animation: slideOutToBottom var(--duration-300) var(--ease-in-out);
+  animation: slideOutToBottom var(--motion-slow-exit) var(--ease-exit);
 }
 
 .closeButton {
@@ -118,7 +109,7 @@
   right: var(--spacing-4);
   border-radius: var(--radius-sm);
   opacity: 0.7;
-  transition: opacity var(--duration-150);
+  transition: opacity var(--motion-fast) var(--ease-standard);
 }
 
 .closeButton:hover {
@@ -242,11 +233,7 @@
   outline: none;
 }
 
-/* Night: the sheet shares the page's ink, so its edge is a rule and the scrim dims with black. */
+/* Night: the scrim dims with black; the sheet stands on its tile fill with no edge, as the dialog does. */
 :global(.dark [data-day='paper']) .overlay {
   background-color: var(--solo-scrim, color-mix(in srgb, var(--color-black) 60%, transparent));
-}
-
-:global(.dark [data-day='paper']) .bottom {
-  border-top: var(--solo-pop-width, 2px) solid var(--solo-pop-border, var(--solo-rule-strong));
 }

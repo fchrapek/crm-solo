@@ -68,7 +68,7 @@ final class TimeEntryRecord
     public static function lockedReason(array $settled): string
     {
         return $settled['reason'] === LoggedTimeFreeze::CLOSED
-            ? "{$settled['month']} is closed (Zamknij miesiąc): reopen it in the app to change its time."
+            ? "{$settled['month']} is closed (".__('Close the month').'): reopen it in the app to change its time.'
             : "The report for {$settled['month']} is finalized or sent: reopen it in the app to change its time.";
     }
 

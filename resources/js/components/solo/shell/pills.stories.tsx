@@ -7,8 +7,8 @@ const meta = {
     args: {
         items: [
             { label: 'Dziś', href: '/', active: true },
-            { label: 'Podsumowanie', href: '/?widok=gotowe' },
-            { label: 'Jutro', href: '/jutro' },
+            { label: 'Podsumowanie', href: '/?view=summary' },
+            { label: 'Jutro', href: '/tomorrow' },
         ],
     },
 } satisfies Meta<typeof Pills>;

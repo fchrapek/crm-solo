@@ -3,7 +3,7 @@ import { ListRow } from '@/components/solo/list-row';
 import { SoloButton, soloButtonClass } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
 import { Row } from '@/components/solo/row';
-import { Tile, TileHeader, TileInset, TileNote, TileRows } from '@/components/solo/tile';
+import { Tile, TileHeader, TileRows } from '@/components/solo/tile';
 import { InfoHint } from '@/components/ui/info-hint';
 import { monthName, shortDate } from '@/lib/dates';
 import { jsonRequest } from '@/lib/json-request';
@@ -12,8 +12,8 @@ import { router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import styles from './client-billing.module.css';
-import { invoiceChip, moneyOf } from './format';
-import type { BillingInvoice, InvoiceDraftGroup, InvoiceDrafts, InvoiceSource } from './types';
+import { moneyOf } from './format';
+import type { InvoiceDraftGroup, InvoiceDrafts, InvoiceSource } from './types';
 
 type Translate = ReturnType<typeof useTranslation>['t'];
 
@@ -47,16 +47,21 @@ export function groupHint(group: InvoiceDraftGroup, period: string, locale: stri
         return t('Infakt did not confirm this draft, so it may or may not be there. Check Infakt before trying again.');
     }
     if (group.source !== null && group.source.number !== null && netOf(group) !== null) {
-        return t('Copy of invoice {{number}} for {{source}}, {{money}} net, with new dates for {{month}}. It becomes a draft; you issue it in Infakt.', {
-            number: group.source.number,
-            source: group.source.sale_date !== null ? monthName(group.source.sale_date.slice(0, 7), locale) : '',
-            money: moneyOf((netOf(group) ?? 0) / 100, group.currency, locale, true),
-            month: target,
-        });
+        return t(
+            'Copy of invoice {{number}} for {{source}}, {{money}} net, with new dates for {{month}}. It becomes a draft; you issue it in Infakt.',
+            {
+                number: group.source.number,
+                source: group.source.sale_date !== null ? monthName(group.source.sale_date.slice(0, 7), locale) : '',
+                money: moneyOf((netOf(group) ?? 0) / 100, group.currency, locale, true),
+                month: target,
+            },
+        );
     }
 
     return group.chained
-        ? t('Copy of the invoice drafted for this group last month, with new dates for {{month}}. It becomes a draft; you issue it in Infakt.', { month: target })
+        ? t('Copy of the invoice drafted for this group last month, with new dates for {{month}}. It becomes a draft; you issue it in Infakt.', {
+              month: target,
+          })
         : t('Copy of the latest issued VAT invoice, with new dates for {{month}}. It becomes a draft; you issue it in Infakt.', { month: target });
 }
 
@@ -73,7 +78,9 @@ function reasonText(reason: NonNullable<InvoiceDraftGroup['reason']>, t: Transla
         case 'settles_advance':
             return t('The invoice recorded for this group last time settles an advance invoice. Pick the invoice to copy.');
         case 'unusable':
-            return t('The invoice recorded for this group last time cannot be copied as it is (its payment term or fields). Pick the invoice to copy.');
+            return t(
+                'The invoice recorded for this group last time cannot be copied as it is (its payment term or fields). Pick the invoice to copy.',
+            );
         case 'projects_changed':
             return t('The projects of this invoice group changed since its last invoice. Pick the invoice to copy.');
     }
@@ -97,80 +104,29 @@ export function groupChip(group: InvoiceDraftGroup, t: Translate): { status: Chi
 }
 
 /**
- * Figma: Faktury za wrzesień. For the month Infakt drafts are made for, a row per invoice group with its amount, the
- * (i) naming the source and its action; for any other month, the invoices booked in it.
+ * Figma 10 (1449:19316): To invoice for {month}, in the side column under Report. A row per invoice group with its
+ * net amount, the (i) naming what a copy takes, its state and its buttons under it; Copy all copies the ready ones.
  */
-export function MonthInvoices({
+export function InvoiceDraftsTile({
     clientId,
     clientName,
-    period,
     drafts,
-    invoices,
     locale,
 }: {
     clientId: number;
     clientName: string;
-    period: string;
-    /** The groups of the drafted month, when it is the month shown. */
-    drafts: InvoiceDrafts | null;
-    invoices: BillingInvoice[];
+    drafts: InvoiceDrafts;
     locale: string;
 }) {
     const { t } = useTranslation();
     const [picking, setPicking] = useState<InvoiceDraftGroup | null>(null);
     const [sending, setSending] = useState(false);
-    const month = monthName(period, locale);
-    const label = t('Invoices for {{month}}', { month });
-
-    if (drafts === null) {
-        return (
-            <Tile kind="list">
-                <TileHeader label={label} count={invoices.length > 0 ? invoices.length : undefined} />
-                {invoices.length === 0 ? (
-                    <TileInset>
-                        <TileNote>{t('No invoices for this month.')}</TileNote>
-                    </TileInset>
-                ) : (
-                    <TileRows>
-                        {invoices.map((invoice, index) => {
-                            const chip = invoiceChip(invoice, locale, t);
-                            const number = invoice.number ?? t('No number');
-
-                            return (
-                                <Row
-                                    key={invoice.id}
-                                    rule={index > 0}
-                                    title={
-                                        invoice.external_url !== null ? (
-                                            <a href={invoice.external_url} target="_blank" rel="noopener noreferrer" title={t('Open in Infakt')} className={styles.plainLink}>
-                                                {number}
-                                            </a>
-                                        ) : (
-                                            number
-                                        )
-                                    }
-                                    time={moneyOf(invoice.net, invoice.currency, locale, true)}
-                                    chip={<Chip status={chip.status}>{chip.label}</Chip>}
-                                />
-                            );
-                        })}
-                    </TileRows>
-                )}
-                {invoices.length > 0 && (
-                    <TileInset>
-                        <TileNote>{t('Net amounts.')}</TileNote>
-                    </TileInset>
-                )}
-            </Tile>
-        );
-    }
-
-    const copyable = drafts.groups.some((group) => group.state === 'ready');
+    const ready = drafts.groups.filter((group) => group.state === 'ready').length;
 
     function copy(group: number | null, like: string) {
         router.post(
             clientInvoiceDrafts.store(clientId).url,
-            { period: drafts?.period, group, like },
+            { period: drafts.period, group, like },
             { preserveScroll: true, onStart: () => setSending(true), onFinish: () => setSending(false) },
         );
     }
@@ -178,16 +134,20 @@ export function MonthInvoices({
     return (
         <Tile kind="list">
             <TileHeader
-                label={label}
+                label={t('To invoice for {{month}}', { month: monthName(drafts.period, locale) })}
                 count={drafts.groups.length}
-                end={
-                    copyable ? (
-                        <SoloButton variant="secondary" size="control" onClick={() => copy(null, 'last')} disabled={sending}>
-                            {t('Copy all')}
-                        </SoloButton>
-                    ) : undefined
-                }
+                hint={{
+                    label: t('To invoice for {{month}}', { month: monthName(drafts.period, locale) }),
+                    text: t('drafts_hint', { month: monthName(drafts.period, locale) }),
+                }}
             />
+            {ready > 0 && (
+                <div className={styles.copyAll}>
+                    <SoloButton variant="quiet" size="control" onClick={() => copy(null, 'last')} disabled={sending}>
+                        {t('Copy all ({{count}})', { count: ready })}
+                    </SoloButton>
+                </div>
+            )}
             <TileRows>
                 {drafts.groups.map((group, index) => {
                     const chip = groupChip(group, t);
@@ -195,23 +155,32 @@ export function MonthInvoices({
                     return (
                         <Row
                             key={group.group}
-                            rule={index > 0}
-                            stack
+                            rule={index > 0 || ready > 0}
+                            stack="always"
+                            wrap
                             title={
                                 <>
                                     {groupTitle(group, t)} <InfoHint>{groupHint(group, drafts.period, locale, t)}</InfoHint>
                                 </>
                             }
-                            time={netOf(group) !== null && group.state !== 'needs_source' ? moneyOf((netOf(group) ?? 0) / 100, group.currency, locale, true) : undefined}
+                            time={
+                                netOf(group) !== null && group.state !== 'needs_source'
+                                    ? moneyOf((netOf(group) ?? 0) / 100, group.currency, locale, true)
+                                    : undefined
+                            }
                             chip={chip !== null ? <Chip status={chip.status}>{chip.label}</Chip> : undefined}
-                            action={<GroupAction group={group} sending={sending} onCopy={() => copy(group.group, 'last')} onPick={() => setPicking(group)} />}
+                            action={
+                                <GroupAction
+                                    group={group}
+                                    sending={sending}
+                                    onCopy={() => copy(group.group, 'last')}
+                                    onPick={() => setPicking(group)}
+                                />
+                            }
                         />
                     );
                 })}
             </TileRows>
-            <TileInset>
-                <TileNote>{t('month_invoices_note', { month })}</TileNote>
-            </TileInset>
             <PickInvoiceDialog
                 clientId={clientId}
                 clientName={clientName}
@@ -230,13 +199,18 @@ export function MonthInvoices({
     );
 }
 
-/** A group's buttons: its draft in Infakt, or Kopiuj fakturę with Wybierz fakturę beside it; a pick is always offered while nothing is drafted. */
+/** A group's buttons: its draft in Infakt, or Copy invoice with Pick invoice beside it; a pick is always offered while nothing is drafted. */
 function GroupAction({ group, sending, onCopy, onPick }: { group: InvoiceDraftGroup; sending: boolean; onCopy: () => void; onPick: () => void }) {
     const { t } = useTranslation();
 
     if (group.state === 'drafted') {
         return group.draft_url !== null ? (
-            <a href={group.draft_url} target="_blank" rel="noopener noreferrer" className={soloButtonClass({ variant: 'secondary', size: 'control' })}>
+            <a
+                href={group.draft_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={soloButtonClass({ variant: 'secondary', size: 'control' })}
+            >
                 {t('Open in Infakt')}
             </a>
         ) : null;
@@ -318,8 +292,8 @@ function PickInvoiceDialog({
             title={t('Pick the invoice to copy')}
             description={`${name} · ${clientName}`}
             onSubmit={(event) => event.preventDefault()}
-            actions={(size) => (
-                <SoloButton variant="secondary" size={size === 'touch' ? 'touch' : 'control'} onClick={() => onOpenChange(false)}>
+            actions={() => (
+                <SoloButton variant="pill" onClick={() => onOpenChange(false)}>
                     {t('Cancel')}
                 </SoloButton>
             )}
@@ -352,10 +326,13 @@ function PickInvoiceDialog({
                     </ul>
                 ))}
             <p className={styles.pickNote}>
-                {t('Net amounts. The copy gets the dates for {{month}} and lands in Infakt as a draft. The picked invoice becomes the template for {{group}} in the following months.', {
-                    month: monthName(period, locale),
-                    group: name,
-                })}
+                {t(
+                    'Net amounts. The copy gets the dates for {{month}} and lands in Infakt as a draft. The picked invoice becomes the template for {{group}} in the following months.',
+                    {
+                        month: monthName(period, locale),
+                        group: name,
+                    },
+                )}
             </p>
         </ResponsiveDialog>
     );

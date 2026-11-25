@@ -45,21 +45,21 @@ export const TodayClosed: Story = { args: { month: october('stamped', { 14: 'ope
 /** Every tile state in two weeks: closed, open, today, rest, future. */
 export const EveryTile: Story = { args: { month: october('today', { 19: 'closed', 20: 'open', 21: 'closed', 22: 'open' }) } };
 
-/** Dziś adds Cały miesiąc ↓, which opens the whole month in a popover. */
+/** Today adds Whole month ↓, which opens the whole month in a popover. */
 export const WithMonthLink: Story = { args: { monthLink: true } };
 
-/** Plan jutro and Podsumowanie name the day in the head. */
+/** Plan tomorrow and Summary name the day in the head. */
 export const WithDate: Story = { args: { date: '2026-10-23' } };
 
-/** Surface=Accent: the card on Podsumowanie (Done) and the timer. */
+/** Surface=Accent: the card on Summary (Done) and the timer. */
 export const OnDone: Story = { args: { month: october('stamped', { 14: 'open' }) }, globals: { ...DESKTOP, day: 'done' } };
 
 export const OnTimer: Story = { globals: { ...DESKTOP, day: 'timer' } };
 
-/** The redesign's number tile on Dziś: closed weekdays over all weekdays, one mark per weekday, on every width. */
+/** The redesign's number tile on Today: closed weekdays over all weekdays, one mark per weekday, on every width. */
 export const Tile: Story = { args: { month: october('today'), look: 'tile' }, globals: {} };
 
-/** Figma: Cały miesiąc. Day cells in their states: closed, open, today, ahead, and weekends bare; the popover and the phone sheet show this. */
+/** Figma: Whole month. Day cells in their states: closed, open, today, ahead, and weekends bare; the popover and the phone sheet show this. */
 export const WholeMonth: Story = {
     args: { month: october('today', { 14: 'open', 20: 'open' }) },
     globals: {},

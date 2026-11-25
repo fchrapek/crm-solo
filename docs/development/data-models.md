@@ -23,10 +23,40 @@ Agent verbs and MCP tools act inside the resolved identity's account
 (`App\Services\Agent\AgentIdentityResolver`); another account's record answers
 not found.
 
-**Account settings**: `accounts.settings` is JSON. `settlement_from` (YYYY-MM)
+**Account settings**: `accounts.settings` is JSON, written key by key through
+`App\Support\JsonSettings` (a JSON path update, a null column made `{}` first),
+so a concurrent write of another key is never reset from a stale read;
+`users.settings` (preferences) is written the same way. `settlement_from` (YYYY-MM)
 is the first month whose retainer months must be settled; read it only through
 `Account::settlementFrom()`, which falls back to the local creation month
 ([client-reports.md](client-reports.md#month-settlement-zamknij-miesiąc)).
+
+**Account modules** (`Account::MODULES`, read through `Account::usesModule()`):
+an optional feature is a switch in Ustawienia, Ogólne, Moduły (`PATCH
+/settings/modules`, the owner's, both part of billing), off when the key is
+missing, so a new account starts with every module off. A client shows a
+module's tile only while the module is on and the client uses it.
+- `month_close`, Zamknięcie miesiąca: Dane shows the client's month close tile
+  when the client has a close type, and the ⋯ menu offers "Dodaj do zamknięcia
+  miesiąca" when it has none; Zadania names "w zamknięciu" per project.
+  It refuses to switch off while the close holds any client, counted by
+  `MonthCloseWorklist::heldCount()` from the definition the worklist lists by
+  (enrolled, an unfinished run, or an hours month still owed), so off means
+  nothing is in the close at that moment. The refusal is best effort, with no
+  lock; the guarantee is visibility: a client the close holds keeps its Dane
+  tile, ⋯ entry and Zadania hint whatever the switch says
+  (`MonthCloseWorklist::holds()`), whether it came to owe an hours month at a
+  month end, got a run from a tick or was restored from the archive.
+  Enrolling a client from Dane while the module is off turns it on in the same
+  request (`MonthCloseModule::enrol()`) and the toast says so.
+- `report_baseline`, Zakres bazowy raportu: on, Rozliczenia shows the client's
+  baseline and reports carry it; off, neither does
+  (`Account::showsReportBaseline()`). Dane's ⋯ menu offers "Włącz zakres bazowy
+  raportu" to a client without one.
+The 2026-11-21 migrations turned each on for the accounts already using it (a
+client with a close type or in the close; a written baseline), and DemoSeeder
+turns both on for the demo account. Pola klienta (the tiles under Moduły on
+Ogólne) and Wiadomości SMS (the Wiadomości tab) stand in Moduły as links.
 
 **More than one account** (2026-10-12): one hosted instance can carry other businesses, each its own account. `php artisan accounts:create "<name>" --owner-email= --owner-first-name= --owner-last-name= --password-file=` makes one with its owner (there is no password reset by mail). The first account is the operator's (`Account::operatorId()`): Horizon, `integrations:probe`, the kiwwwi lead pull and the server indicators in Ustawienia belong to it. Local verbs and the stdio MCP carry no credentials, so once a second account exists they act only in the account named by `AGENT_LOCAL_ACCOUNT` and refuse otherwise; `accounts:create` refuses until it is set. The lead vocabulary (custom sources, source and pipeline labels) is read per account through `App\Services\Leads\LeadVocabulary`; pipelines themselves stay in `config/leadgen.php` for every account.
 
@@ -76,7 +106,7 @@ postal code). Vocabulary lives in constants: `Client::LIFECYCLE_STAGES`
   request and an order page never builds the bank, the settlement or the
   ledger. For an order, Czeka na ciebie lists the next dated open task and the
   unpaid invoice due first, Zadania is one open list plus "Zrobione" and the
-  client's time (each bounded, `?wszystkie=open|done|time` expands), the
+  client's time (each bounded, `?expand=open|done|time` expands), the
   invoice rail reads gross, and Zlecenie edits the catch-all project
   (`ProjectFormDialog`, Zakres from its description). Dane heads an
   `individual` client "Osoba prywatna", hides NIP and shows the person's own
@@ -90,7 +120,8 @@ postal code). Vocabulary lives in constants: `Client::LIFECYCLE_STAGES`
   filter (`cooperation_type=none`, "Bez typu"), so Wszyscy is the sum of the
   type rows.
 - `report_baseline_markdown`: the baseline scope, inserted verbatim into every
-  report ([client-reports.md](client-reports.md)).
+  report while the account has `report_baseline` on; edited from Rozliczenia,
+  not Dane ([client-reports.md](client-reports.md)).
 - `include_in_month_close` gates the `/month-close` worklist; setting
   `month_close_type` from empty to a type turns it on.
 - `is_pinned` puts the client first on Lista; inside each group the order stays
@@ -101,7 +132,7 @@ postal code). Vocabulary lives in constants: `Client::LIFECYCLE_STAGES`
   the removed Clockify integration.
 
 **Client record**: `/clients/{client}/{tab}` (`pages/clients/show.tsx`) with
-Przegląd, Zadania, Dziennik, Rozliczenia and Dane; `/clients/{client}` opens
+Przegląd, Zadania, Dziennik, Rozliczenia and Dane (`overview`, `tasks`, `journal`, `billing`, `details`); `/clients/{client}` opens
 Przegląd. The earlier documents and settings page (`/clients/{client}/edit`) is retired: every part of it lives on
 a tab (projects and Trello on Zadania and the project page, reports, invoices and the retainer on Rozliczenia, time
 entries and notes on Dziennik, documents, the form with the client's notes and region, the stage, month close and
@@ -165,7 +196,11 @@ together) with the billed figure the owner stated for that task in that month,
 shown to the client) and `updated_by_user_id`. The client is the one the figure
 was billed to, the way `time_entries.client_id` is: a task moved with its time
 (`task-edit --move-time`) takes its open months' figures along, and a figure in
-a closed or reported month stays. No `account_id`: reached through an
+a closed or reported month stays. The task form's Projekt field moves a task
+only between projects of its client (`TaskEditor` with `within_client`): time
+already on that client follows, time and figures still on another client stay
+where they are, and no figure moves, so a member's move changes no client's
+totals. No `account_id`: reached through an
 account-scoped client or task. Written and deleted only by
 `App\Services\Clients\BilledTime` (a task delete goes through it and is
 refused by a settled figure) and audited for agents; a row on a task that is
@@ -199,15 +234,25 @@ stays on the client's timeline and also shows on the task page.
 When a signed-in user last opened a client's record: `user_id`, `client_id`
 (unique together, both cascade on delete), `viewed_at` (UTC). "Nowe" on
 Przegląd and Dziennik counts from it (`App\Services\Clients\ClientViews`):
-the record page reads the previous `viewed_at`, then writes now, in the same
-request, under a per-user, per-client lock, and `viewed_at` never moves
-back. Pages opened less than 30 minutes apart are one visit and keep its
+the record's GET only reads where "nowe" starts, and the page, once shown,
+reports its opening (`POST clients/{client}/view`, 204, `useClientView` in
+`pages/clients/client-view.ts`), once per client and tab, whether it came
+from the server or from the prefetch cache. The GET carries `read_at`, the
+second its data was read, and the report sends it back: the view is recorded
+as of that instant, so what arrived after the read stays new. A reading of
+any age counts (a page restored from history reports its own, and changes
+nothing when a later view is stored); one more than a minute ahead of the
+server's clock (`ClientViews::READ_AT_SKEW_SECONDS`) or from before the client
+existed is a 422, nothing is written, and the page does not send it again.
+The report writes under a per-user, per-client lock, `viewed_at` never moves back, it keeps the
+prefetched pages (the visit's start does not move), and it has its own
+budget (`throttle:client-views`, outside the demo write budget). Pages opened less than 30 minutes apart are one visit and keep its
 starting point (held in the cache, so two tabs agree), so a tab switch or a
 saved note does not empty "nowe"; the gap is measured between page opens. Before the first visit "nowe" reaches back to local midnight
 seven days ago. Partial reloads, prefetches, agent verbs, MCP tools and the
 agent-context endpoint never write a row; a user can only record a view of a
-client in their own account. Dziennik's NOWE label marks work rows only, from
-the same instant and inclusive boundary as its summary.
+client in their own account. Dziennik's Nowe status marks work rows only (in the row's details, the
+Status column), from the same instant and inclusive boundary as its summary.
 
 ## ClientDocument
 
@@ -335,13 +380,86 @@ Details: `agent-crm-interface.md`, "Audit trail and attribution".
 
 ## Integration
 
-One row per provider in `Integration::PROVIDERS` (`infakt`, `trello`); a row
-for any other provider is ignored. `api_key` is encrypted, and so are the
+One row per provider in `Integration::PROVIDERS` (`infakt`, `trello`,
+`smsapi`); Ustawienia, Integracje lists and writes only those. The one other
+row is `smtp`, the account's own mail sender (below). `api_key` and `settings`
+are `$hidden`. `api_key` is encrypted, and so are the
 credential keys inside `settings` (`Integration::SECRET_SETTINGS`) through the
 `SettingsWithSecrets` cast. A blank credential field on save keeps the stored
 value. A credential encrypted under another `APP_KEY` reads as missing, is kept
 unchanged, and makes the services refuse to run
 (`Integration::unreadableSecrets()`). Disconnect clears the credentials.
+
+**Account sender** (`provider` `smtp`, one per account,
+`App\Services\Messaging\Sender`): the password in `api_key`; `host`, `port`
+(465, 587 or 2525), `username`, `from_address` and `from_name` in `settings`.
+Only `php artisan mail-sender:set` on the server writes it, the password piped
+on stdin; it is neither a verb nor an MCP tool. `AccountMailer` builds a mailer
+for one send: it refuses in the demo, resolves the host again and connects to
+an address it checked is public (`SmtpHostGuard`), with the host name as the
+TLS peer name, TLS required on every port and a 10 second timeout, and applies
+`mail.to` itself, since a mailer built outside the mail manager skips the
+global addresses. Lead notices use it; the instance mailer and summary emails
+do not. Mail rules: [hosting.md](hosting.md#mail).
+
+## Website forms (IntakeForm, LeadIntake)
+
+`intake_forms`: one row per website form an account hooks to the CRM. The
+form posts JSON to `POST /intake/{public_key}` (`routes/intake.php`, outside
+the web group). The row alone decides the account, `pipeline` and `source`;
+the request never does. `allowed_origins` lists the exact origins a browser
+may post from, `turnstile_secret` is encrypted, `webhook_secret_hash` holds a
+sha256, and both are `$hidden`. An unknown and an inactive key answer the
+same 404. `php artisan intake-form:create` makes a form, and
+`intake-form:turnstile` sets its secret from stdin only.
+`App\Http\Middleware\GuardIntakeRequests` (global) checks the origin, the
+16 KB cap and the JSON content type, and adds the CORS headers.
+`App\Services\Leads\FormIntake` writes the lead and its `lead_intakes` row in
+one transaction.
+
+`lead_intakes`: one row per accepted submission. `idempotency_key` is unique
+per form and the lead's `external_ref` is `form-{form id}-{key}`. The same key
+with the same payload `fingerprint` answers 200, with another payload 409.
+`notice_state` (`waiting`, `sent`, `failed`, `skipped`) is the lead notice's
+outbox. `dev:scrub` switches every form off, clears both secrets and marks
+waiting notices skipped.
+
+**Webhook caller**: a request with `Authorization: Bearer <secret>` is a
+server post; the secret is compared with `hash_equals` against the stored
+sha256, a wrong one is a 401 and never falls back to the browser checks, and
+no Origin or Turnstile is needed. `idempotency_key` is optional there (no
+replay protection without it). `intake-form:webhook-secret` creates or
+rotates the secret and shows it once.
+
+**Extras**: keys beyond the known fields go into the note under "Dodatkowe
+pola" (`App\Services\Leads\IntakeExtras`): at most 20, a key up to 40
+characters, a value up to 1000, a list up to 10 scalars, anything else a
+422. Control fields (`idempotency_key`, `cf-turnstile-response`, the honeypot
+`website`, every `cf-` key) are never stored.
+
+**Lead notice**: `App\Jobs\SendLeadIntakeNotice` holds the intake id only,
+is unique per intake, and is dispatched after the commit. It rebuilds the
+account's mailer (`AccountMailer`) in `handle()` and sends `LeadIntakeNotice`
+(plain text, Reply-To the visitor, the form's `notify_to` read at send time,
+the earlier lead of the same address in the account, a link to the lead). No
+usable sender: the notice stays waiting. The demo, a host that resolves to
+an address that is not public, or no `notify_to`: failed, with the reason in
+`failure_reason`. A host that does not resolve, or a transport error, is
+retried 5 times (1, 5, 15 and 60 minutes), then failed; every error leaves
+the job as its class and code only, without the original exception. A
+refused SMTP login (530, 534, 535) fails every waiting notice of the account
+with reason `auth`. A deleted lead or a notice older than 7 days is skipped.
+The job is queued with its unique lock (`SendLeadIntakeNotice::enqueue`,
+held 2 hours, freed when the queue refuses the job), after the commit.
+`lead-intake:notify-pending` (every 5 minutes, one run at a time) queues
+waiting notices of accounts with a sender once they are 10 minutes old,
+skips those older than 7 days, and with `--retry-failed` sends the failed
+ones of the last 7 days again; `lead-intake:status` counts the states per
+form. A webhook has its own per-form limit (`INTAKE_WEBHOOK_PER_MINUTE`,
+`INTAKE_WEBHOOK_PER_HOUR`), counted only once its secret matched, in place of
+the per-IP form limit (which a wrong secret still meets), and no honeypot: its
+`website` field is data. `enqueue` takes the lock and pushes inside an
+after-commit callback, so a push refused at commit frees the lock too.
 
 ## Content fields and the humanizer gate
 

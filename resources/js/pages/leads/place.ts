@@ -15,19 +15,19 @@ export type LeadView = 'kanban' | 'list';
 
 /** The view lives in the URL beside the filters, so a reload and a link keep it. */
 export function leadView(url: string): LeadView {
-    return new URLSearchParams(url.split('?')[1] ?? '').get('widok') === 'lista' ? 'list' : 'kanban';
+    return new URLSearchParams(url.split('?')[1] ?? '').get('view') === 'list' ? 'list' : 'kanban';
 }
 
 /** The list's URL: only what narrows it, so the plain board is /leads. */
 export function leadsUrl(filters: Partial<LeadFilters>, view: LeadView): string {
     const query = Object.fromEntries(
-        Object.entries({ ...filters, widok: view === 'list' ? 'lista' : undefined }).filter(([, value]) => value !== undefined && value !== '' && value !== 'all'),
+        Object.entries({ ...filters, view: view === 'list' ? 'list' : undefined }).filter(([, value]) => value !== undefined && value !== '' && value !== 'all'),
     );
 
     return leads.index({ query }).url;
 }
 
-/** Leady stand beside Kontakty; the command bar narrows the list and keeps the filters and the view. */
+/** Leads stand beside Contacts; the command bar narrows the list and keeps the filters and the view. */
 export function leadsPlace({ filters }: { filters: LeadFilters }, { t, url }: PlaceContext): Place {
     return {
         tokens: [{ label: t('Leads') }],
@@ -36,7 +36,7 @@ export function leadsPlace({ filters }: { filters: LeadFilters }, { t, url }: Pl
     };
 }
 
-/** One level down: Leady, then the lead or the new one. */
+/** One level down: Leads, then the lead or the new one. */
 export function leadPlace(label: string, { t }: PlaceContext): Place {
     return { tokens: [{ label: t('Leads'), href: leads.index().url }, { label }], pills: peoplePills('leads', t) };
 }

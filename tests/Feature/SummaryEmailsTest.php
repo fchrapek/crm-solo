@@ -103,14 +103,14 @@ final class SummaryEmailsTest extends TestCase
         $this->actingAs(User::factory()->create(['account_id' => $this->owner->account_id, 'owner' => false]))->get("/month-close/{$this->client->id}?period=2026-10")->assertNotFound();
     }
 
-    public function test_the_rozliczenia_tab_gives_the_owner_each_month_email_of_a_retainer_client(): void
+    public function test_the_billing_tab_gives_the_owner_each_month_email_of_a_retainer_client(): void
     {
         $this->client->retainers()->create(['account_id' => $this->client->account_id, 'monthly_hours' => 5, 'monthly_fee' => 500, 'currency' => 'PLN', 'effective_from' => '2025-01-01']);
         $this->draft(['anna@brzozowy-sad.test']);
-        $emails = fn (User $user) => $this->actingAs($user)->get("/clients/{$this->client->id}/rozliczenia")->assertOk()->viewData('page')['props']['billing_emails'];
+        $emails = fn (User $user) => $this->actingAs($user)->get("/clients/{$this->client->id}/billing")->assertOk()->viewData('page')['props']['billing_emails'];
 
         $this->assertSame('draft', $emails($this->owner)['2026-10']['status']);
-        $this->actingAs(User::factory()->create(['account_id' => $this->owner->account_id, 'owner' => false]))->get("/clients/{$this->client->id}/rozliczenia")->assertNotFound();
+        $this->actingAs(User::factory()->create(['account_id' => $this->owner->account_id, 'owner' => false]))->get("/clients/{$this->client->id}/billing")->assertNotFound();
         $this->client->update(['report_mode' => 'report']);
         $this->assertNull($emails($this->owner));
     }

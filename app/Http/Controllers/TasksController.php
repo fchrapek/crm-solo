@@ -7,7 +7,9 @@ namespace App\Http\Controllers;
 use App\Jobs\RefreshTaskCardDetailsJob;
 use App\Models\Project;
 use App\Models\Task;
+use App\Services\Agent\AgentRefusal;
 use App\Services\Agent\CardDetailsFetcher;
+use App\Services\Agent\TaskEditor;
 use App\Services\Tasks\TaskActivity;
 use App\Services\Tasks\TaskPage;
 use App\Services\Tasks\TaskWriter;
@@ -67,7 +69,15 @@ final class TasksController extends Controller
             'priority' => 'nullable|in:low,medium,high',
             'parent_task_id' => 'nullable|integer',
             'is_reportable' => 'nullable|boolean',
+            'project_id' => 'nullable|integer',
         ]);
+
+        $moved = $this->moveToProject($task, isset($validated['project_id']) ? (int) $validated['project_id'] : null);
+        if ($moved !== null) {
+            $task->refresh();
+            // The parent stays behind in the old project.
+            unset($validated['parent_task_id']);
+        }
 
         $changes = [
             'name' => $validated['name'],
@@ -87,7 +97,14 @@ final class TasksController extends Controller
         }
         $writer->update($task, $changes);
 
-        return back()->with('success', __('Task updated.'));
+        $stayed = count($moved['skipped_time'] ?? []);
+        $elsewhere = count($moved['time_elsewhere'] ?? []);
+
+        return back()->with('success', match (true) {
+            $stayed > 0 => __('Task updated. :count time entries stay on the old project: their period is settled.', ['count' => $stayed]),
+            $elsewhere > 0 => __('Task updated. :count time entries stay with another client.', ['count' => $elsewhere]),
+            default => __('Task updated.'),
+        });
     }
 
     public function destroy(Task $task): JsonResponse
@@ -160,7 +177,7 @@ final class TasksController extends Controller
         ]);
     }
 
-    /** The task page (Figma: Zadanie). A stale card's details are fetched behind the page, which shows the cache meanwhile. */
+    /** The task page (Figma: Task). A stale card's details are fetched behind the page, which shows the cache meanwhile; a hover's prefetch starts it too, as a click served from the prefetch cache makes no request. */
     public function show(Request $request, Task $task, TaskPage $page, CardDetailsFetcher $fetcher)
     {
         $this->authorizeTask($task);
@@ -169,7 +186,7 @@ final class TasksController extends Controller
             RefreshTaskCardDetailsJob::dispatch($task->id);
         }
 
-        return Inertia::render('tasks/show', $page->props($task, $request->user(), $request->has('historia') ? null : TaskActivity::PREVIEW));
+        return Inertia::render('tasks/show', $page->props($task, $request->user(), $request->has('history') ? null : TaskActivity::PREVIEW));
     }
 
     /** The description of a CRM task; a card's description is Trello's. */
@@ -189,6 +206,34 @@ final class TasksController extends Controller
         $writer->update($task, ['description' => $description === '' ? null : $description]);
 
         return back();
+    }
+
+    /**
+     * Moves the task to another project of the same client with its logged time, through the path `crm task-edit
+     * --project --move-time` takes. Null when the project does not change.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function moveToProject(Task $task, ?int $projectId): ?array
+    {
+        if ($projectId === null || $projectId === (int) $task->project_id) {
+            return null;
+        }
+
+        $target = Project::query()
+            ->where('account_id', Auth::user()->account_id)
+            ->where('client_id', $task->project?->client_id)
+            ->whereKey($projectId)
+            ->first();
+        if ($target === null) {
+            throw ValidationException::withMessages(['project_id' => __('Pick a project of the same client.')]);
+        }
+
+        try {
+            return app(TaskEditor::class)->edit((int) Auth::user()->account_id, (string) $task->id, ['project' => (string) $target->id, 'move_time' => true, 'within_client' => true]);
+        } catch (AgentRefusal $refusal) {
+            throw ValidationException::withMessages(['project_id' => $refusal->getMessage()]);
+        }
     }
 
     private function authorizeTask(Task $task): void

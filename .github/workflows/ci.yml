@@ -168,6 +168,15 @@ jobs:
         if: steps.classify.outputs.app_checks == 'true'
         run: scripts/check.sh php
 
+      # Thread-safe PHP, the production runtime, resolves symlinks in file calls where the NTS build above does not.
+      - name: Token file tests on a ZTS PHP
+        if: steps.classify.outputs.app_checks == 'true'
+        run: >-
+          docker run --rm --network none --user "$(id -u):$(id -g)" -v "$PWD:/app:ro" -w /app
+          php:8.4-zts-alpine@sha256:85cdfb6256ae2f8ea7669c620139719fc5ac4532488ec77213f89ccd3d9aa0b6
+          php vendor/bin/phpunit tests/Feature/AgentRemoteBridgeTest.php --filter='token_file|token_can_be_written'
+          --fail-on-empty-test-suite --do-not-cache-result --no-progress
+
       - name: Wayfinder, types, ESLint, token linter, JS tests, build
         if: steps.classify.outputs.app_checks == 'true'
         run: scripts/check.sh js

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Agent;
 
 use App\Models\Task;
+use App\Support\LikePattern;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -49,7 +50,7 @@ final class TaskList
             ->whereHas('project', fn (Builder $q) => $q->where('account_id', $accountId))
             ->when($client !== null, fn (Builder $q) => $q->whereHas('project', fn (Builder $p) => $p->where('client_id', $client->id)))
             ->when($project !== null, fn (Builder $q) => $q->where('tasks.project_id', $project->id))
-            ->when($search !== '', fn (Builder $q) => $q->where('tasks.name', 'like', '%'.addcslashes($search, '\\%_').'%'))
+            ->when($search !== '', fn (Builder $q) => LikePattern::where($q, 'tasks.name', $search))
             ->when($status === 'open', fn (Builder $q) => $q->open())
             ->when($status === 'done', fn (Builder $q) => $q->work()->where(fn (Builder $done) => $done->whereNotNull('tasks.finished_at')->orWhere('tasks.is_completed', true)));
 

@@ -70,18 +70,18 @@ describe('Aktywność', () => {
         expect(idle).toContain('Notatka: n1||ty · 12 min temu');
     });
 
-    test('the tile keeps the three newest rows and Cała historia opens the rest by the URL', () => {
+    test('the tile keeps the three newest rows and Whole history opens the rest by the URL', () => {
         const props = { taskId: 36, clock, now: NOW, locale: 'pl', live: null };
         const four = ['n4', 'n3', 'n2', 'n1'].map((key, index) => row(key, `2026-10-08T12:4${3 - index}:00Z`));
         const html = renderToStaticMarkup(<ActivitySection {...props} full activity={{ rows: four, more: false }} />);
 
         expect(html).toContain('Notatka: n2');
         expect(html).not.toContain('Notatka: n1');
-        expect(html).toMatch(/<a [^>]*href="\/tasks\/36\?historia=1"[^>]*>Cała historia/);
+        expect(html).toMatch(/<a [^>]*href="\/tasks\/36\?history=1"[^>]*>Cała historia/);
         expect(renderToStaticMarkup(<ActivitySection {...props} activity={{ rows: [], more: false }} />)).not.toContain('Cała historia');
     });
 
-    test('with nothing to show the tile says Brak aktywności.', () => {
+    test('with nothing to show the tile says No activity yet.', () => {
         const html = renderToStaticMarkup(
             <ActivitySection taskId={36} activity={{ rows: [], more: false }} clock={clock} now={NOW} locale="pl" live={null} />,
         );
@@ -91,7 +91,7 @@ describe('Aktywność', () => {
 });
 
 describe('Brief and Zasoby tiles', () => {
-    test('an empty brief says pusty, shows each field as not set and offers Edytuj', () => {
+    test('an empty brief says empty, shows each field as not set and offers Edit', () => {
         const html = renderToStaticMarkup(<BriefSection taskId={42} brief={emptyBrief} now={NOW} today="2026-10-08" locale="pl" />);
 
         expect(text(html)).toContain('Brief dla agenta|||pusty|');
@@ -99,7 +99,7 @@ describe('Brief and Zasoby tiles', () => {
         expect(html.match(/nie ustawiono/g)).toHaveLength(4);
     });
 
-    test('no resources is the head with na razie brak and Dodaj, and no rows', () => {
+    test('no resources is the head with none yet and Add, and no rows', () => {
         const html = renderToStaticMarkup(<ResourcesSection taskId={42} resources={{ files: [], images: [], links: [] }} />);
 
         expect(html).toContain('na razie brak');
@@ -137,11 +137,11 @@ describe('Zasoby', () => {
 describe('Zadanie header', () => {
     const context = { t: i18next.t.bind(i18next) as (key: string) => string, url: '/tasks/42', locale: 'pl' };
 
-    test("the task's place is its client, Zadania, then the task itself", () => {
+    test("the task's place is its client, Tasks, then the task itself", () => {
         const tokens = taskPlace({ task }, context).tokens;
 
         expect(tokens.map((token) => token.label)).toEqual(['Pracownia Mebli', 'Zadania', 'Aktualizacja cennika PDF']);
-        expect(tokens[1].href).toBe('/clients/3/zadania');
+        expect(tokens[1].href).toBe('/clients/3/tasks');
         expect(tokens[2].href).toBeUndefined();
         expect(taskPlace({ task: { ...task, client: null } }, context).tokens).toHaveLength(1);
     });
@@ -152,7 +152,10 @@ describe('Zadanie header', () => {
 
         const card = renderToStaticMarkup(<TaskMeta task={{ ...trelloTask, is_overdue: true }} today="2026-10-23" locale="pl" />);
         expect(card.replace(/<[^>]+>/g, '')).toBe('Pracownia Mebli · Strona WWW · do 28.10, po terminie · Trello ↗');
-        expect(card).toContain('data-overdue="true">do 28.10, po terminie');
+        expect(card).toMatch(/data-overdue="true"[^>]*>do 28\.10, po terminie/);
+        expect(card).toMatch(/href="\/clients\/\d+\/overview"[^>]*>Pracownia Mebli</);
+        expect(card).toMatch(/href="\/clients\/\d+\/projects\/\d+"[^>]*>Strona WWW</);
+        expect(card).toMatch(/href="\/day\/2026-10-28"/);
         expect(card).not.toContain('Lista');
     });
 
@@ -285,7 +288,7 @@ describe('Czas', () => {
 });
 
 describe('Opis', () => {
-    test('a long description gets Więcej and is marked to clamp; a short one gets neither', () => {
+    test('a long description gets More and is marked to clamp; a short one gets neither', () => {
         const long = 'Nowe ceny są w arkuszu od Marka. '.repeat(8);
         const html = renderToStaticMarkup(<DescriptionSection task={{ ...task, description_markdown: long }} />);
 
@@ -298,7 +301,7 @@ describe('Opis', () => {
         expect(short).not.toContain('Więcej');
     });
 
-    test('an empty CRM description offers Dodaj opis and says Brak opisu., without Edytuj or Podgląd', () => {
+    test('an empty CRM description offers Add description and says No description yet., without Edit or Preview', () => {
         const html = renderToStaticMarkup(<DescriptionSection task={{ ...task, description: null, description_markdown: '' }} />);
 
         expect(html).toContain('>Dodaj opis</button>');
@@ -307,7 +310,7 @@ describe('Opis', () => {
         expect(html).not.toContain('Podgląd');
     });
 
-    test('an empty card description keeps Edytuj w Trello as its one action', () => {
+    test('an empty card description keeps Edit in Trello as its one action', () => {
         const html = renderToStaticMarkup(<DescriptionSection task={{ ...trelloTask, description: null, description_markdown: '' }} />);
 
         expect(html).toContain('Edytuj w Trello ↗');
@@ -315,7 +318,7 @@ describe('Opis', () => {
         expect(html).not.toContain('Podgląd');
     });
 
-    test('a card heads Opis with Edytuj w Trello at every width', () => {
+    test('a card heads Description with Edit in Trello at every width', () => {
         const html = renderToStaticMarkup(<DescriptionSection task={trelloTask} />);
 
         expect(html).toContain('href="https://trello.com/c/demo"');

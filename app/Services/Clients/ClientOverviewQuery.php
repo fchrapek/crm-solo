@@ -29,7 +29,7 @@ final class ClientOverviewQuery
     ) {}
 
     /**
-     * @param  CarbonInterface  $since  where "nowe" starts for this user (ClientViews)
+     * @param  CarbonInterface  $since  where New starts for this user (ClientViews)
      * @param  string|null  $mode  the billing mode when the caller already read it
      * @return array{overview: array<string, mixed>}
      */
@@ -45,7 +45,7 @@ final class ClientOverviewQuery
             'sms' => $card === null ? null : $fields->messages($client, 5, overview: true),
             'sms_pending' => $card === null ? 0 : OutboundMessage::query()->where('client_id', $client->id)->where('status', OutboundMessage::PENDING)->count(),
             'sms_failed' => $card === null ? 0 : OutboundMessage::query()->where('client_id', $client->id)->where('status', OutboundMessage::FAILED)->count(),
-            // Przegląd polls while one of these can still change status.
+            // Overview polls while one of these can still change status.
             'sms_live' => $card !== null && OutboundMessage::query()->where('client_id', $client->id)->whereIn('status', [OutboundMessage::PENDING, OutboundMessage::SENDING])->exists(),
             'month_close' => $billing ? $this->monthClose($client, LocalCalendar::previousMonth()) : null,
             'doing_count' => Task::query()
@@ -82,7 +82,7 @@ final class ClientOverviewQuery
 
         $previous = $this->bank->month($client, LocalCalendar::previousMonth());
         $state = $this->bank->settlement($client);
-        // The hours are the active month's, as on Lista and in crm brief; a waiting report is its own reminder.
+        // The hours are the active month's, as on Clients and in crm brief; a waiting report is its own reminder.
         $hours = $this->bank->month($client, $state->activePeriod);
 
         return [
@@ -90,6 +90,7 @@ final class ClientOverviewQuery
                 ...$common,
                 'report_due' => $this->reportDue($client, $previous),
                 'hours' => [...$hours->toArray(), 'forfeited' => $hours->forfeitedHours()],
+                'retainer' => app(ClientBillingQuery::class)->retainer($client),
                 'order' => null,
                 'order_waiting' => null,
                 'settlement' => [
@@ -155,7 +156,7 @@ final class ClientOverviewQuery
     }
 
     /**
-     * The oldest ended month whose report is not sent; else last month's, when a retainer client gets one and none exists.
+     * Last month's report while it is not sent; or that a retainer client gets one and none exists yet.
      * The report mode only silences that reminder: a report already written stays waiting until it is sent.
      *
      * @return array{period: string, report_id: int|null, status: string|null}|null
@@ -166,8 +167,9 @@ final class ClientOverviewQuery
             ->where('client_id', $client->id)
             ->where('period_type', ClientReport::PERIOD_MONTH);
 
+        // Only the month just ended waits here; an older unsent report stays in Billing.
         $unsent = $monthReports()
-            ->whereDate('period_start', '<', LocalCalendar::monthFrom(LocalCalendar::currentMonth())->toDateString())
+            ->whereDate('period_start', LocalCalendar::monthFrom(LocalCalendar::previousMonth())->toDateString())
             ->where('status', '!=', ClientReport::STATUS_SENT)
             ->whereNotIn('period_start', $monthReports()->where('status', ClientReport::STATUS_SENT)->select('period_start'))
             ->orderBy('period_start')

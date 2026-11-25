@@ -14,7 +14,7 @@ const t = (key: string, options?: Record<string, unknown>) => i18next.t(key, opt
 const filters = { pipeline: 'all', stage: 'all', tier: 'gold', source: 'outbound' };
 
 describe('Leady', () => {
-    test('Leady stand beside Kontakty as a pill, with their own token', () => {
+    test('Leads stand beside Contacts as a pill, with their own token', () => {
         const place = leadsPlace({ filters }, { t, url: '/leads', locale: 'pl-PL' });
 
         expect(place.tokens).toEqual([{ label: 'Leady' }]);
@@ -24,15 +24,15 @@ describe('Leady', () => {
         ]);
     });
 
-    test('a lead and the new lead are one level under Leady', () => {
+    test('a lead and the new lead are one level under Leads', () => {
         expect(leadPlace('Zofia Szablonowa', { t, url: '/leads/3/edit', locale: 'pl-PL' }).tokens).toEqual([{ label: 'Leady', href: '/leads' }, { label: 'Zofia Szablonowa' }]);
     });
 
     test('the view lives in the URL, and a search from the command bar keeps the filters and the view', () => {
         expect(leadView('/leads')).toBe('kanban');
-        expect(leadView('/leads?tier=gold&widok=lista')).toBe('list');
+        expect(leadView('/leads?tier=gold&view=list')).toBe('list');
         expect(leadsUrl(filters, 'kanban')).toBe('/leads?tier=gold&source=outbound');
-        expect(leadsPlace({ filters }, { t, url: '/leads?widok=lista', locale: 'pl-PL' }).filter?.href('anna')).toBe('/leads?tier=gold&source=outbound&search=anna&widok=lista');
+        expect(leadsPlace({ filters }, { t, url: '/leads?view=list', locale: 'pl-PL' }).filter?.href('anna')).toBe('/leads?tier=gold&source=outbound&search=anna&view=list');
     });
 
     test('a filter is a menu pill that names its choice once it narrows', () => {

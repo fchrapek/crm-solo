@@ -3,9 +3,9 @@ import { Link, type InertiaLinkProps } from '@inertiajs/react';
 import type { ButtonHTMLAttributes } from 'react';
 import styles from './mobile.module.css';
 
-type IconName = 'more' | 'filter' | 'plus' | 'close' | 'search' | 'pencil' | 'pin';
+type IconName = 'more' | 'filter' | 'plus' | 'close' | 'search' | 'pencil' | 'pin' | 'play' | 'stop' | 'chevron-left' | 'chevron-right';
 
-/** Figma: Mobile / Icon button; size sm is the desktop 32 px Icon button / More. Look quiet is the redesign's IconButton: bare, 44 px on phones and 40 from 768 px; outline is the same size with the secondary button's ink ring. */
+/** Figma: Mobile / Icon button; size sm is the desktop 32 px Icon button / More; row is a row's timer, a 32 px disc in a 44 px target on phones. Look quiet is the redesign's IconButton: bare, 44 px on phones and 40 from 768 px, its hover and ring the same 32 px disc; outline is the same size with the secondary button's ink ring. */
 export function IconButton({
     icon,
     label,
@@ -14,23 +14,23 @@ export function IconButton({
     filled,
     className,
     ...rest
-}: { icon: IconName; label: string; size?: 'touch' | 'sm'; look?: 'quiet' | 'outline'; filled?: boolean } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'>) {
+}: { icon: IconName; label: string; size?: 'touch' | 'sm' | 'row'; look?: 'quiet' | 'outline' | 'stop'; filled?: boolean } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'>) {
     return (
         <button
             type="button"
             aria-label={label}
             data-icon={icon}
-            data-size={size === 'sm' ? 'sm' : undefined}
+            data-size={size === 'touch' ? undefined : size}
             data-look={look}
             className={[styles.iconButton, className].filter(Boolean).join(' ')}
             {...rest}
         >
-            <Icon name={icon} size={size === 'sm' ? 16 : 20} filled={filled} />
+            <Icon name={icon} size={size === 'touch' ? 20 : 16} filled={filled} />
         </button>
     );
 }
 
-/** The icon button as a link, such as + on Lista. */
+/** The icon button as a link, such as + on List. */
 export function IconButtonLink({ icon, label, className, ...rest }: { icon: IconName; label: string } & Omit<InertiaLinkProps, 'children'>) {
     return (
         <Link aria-label={label} data-icon={icon} className={[styles.iconButton, className].filter(Boolean).join(' ')} {...rest}>

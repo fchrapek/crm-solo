@@ -51,6 +51,14 @@ button.pill {
     outline-offset: 2px;
 }
 
+.chevron {
+    color: var(--role-text-secondary);
+}
+
+.pill:is([data-active], [data-state='open']) .chevron {
+    color: inherit;
+}
+
 .count {
     color: var(--role-text-secondary);
     font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);

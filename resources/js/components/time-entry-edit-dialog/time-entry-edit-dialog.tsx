@@ -49,8 +49,8 @@ export function spanMinutes(start: string, end: string): number | null {
 }
 
 /**
- * Figma: Edytuj wpis czasu (1095:47171). Title, description, task, times and billable of a logged entry, and Usuń
- * wpis; a settled period refuses both and the dialog shows the server's reason.
+ * Figma: Edit time entry (1095:47171). Title, description, task, times and billable of a logged entry, and Delete
+ * entry; a settled period refuses both and the dialog shows the server's reason.
  */
 export function TimeEntryEditDialog({ open, onOpenChange, entry, tasks, onSaved }: Props) {
     const { t } = useTranslation();

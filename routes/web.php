@@ -8,6 +8,7 @@ use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\ContactsController;
 use App\Http\Controllers\FetchTranslationsController;
 use App\Http\Controllers\IntegrationsController;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectBoardController;
 use App\Http\Controllers\ProjectsController;
 use App\Http\Controllers\RepositoriesController;
@@ -20,7 +21,6 @@ use App\Http\Controllers\TasksController;
 use App\Http\Controllers\TimeEntriesController;
 use App\Http\Controllers\UsersController;
 use App\Http\Controllers\WaitlistController;
-use Illuminate\Routing\RedirectController;
 use Illuminate\Support\Facades\Route;
 
 // Unauthenticated by necessity: the frontend fetches strings before a session
@@ -33,23 +33,24 @@ Route::get('/locales/{locale}/translation.json', FetchTranslationsController::cl
 Route::controller(AuthenticatedSessionController::class)->group(function () {
     Route::middleware('guest')->group(function () {
         Route::get('login', 'create')->name('login');
-        Route::post('login', 'store')->name('login.store');
+        Route::post('login', 'store')->middleware('throttle:sign-in')->name('login.store');
     });
     Route::post('logout', 'destroy')->name('logout');
 });
 
-// Closed mode (APP_CLOSED): the /czesc splash guests are sent to instead of /login.
+// Closed mode (APP_CLOSED): the /waitlist splash guests are sent to instead of /login.
 Route::middleware(['guest', 'closed'])->controller(WaitlistController::class)->group(function () {
-    Route::get('czesc', 'show')->name('czesc');
-    Route::post('czesc', 'store')->name('czesc.store')->middleware('throttle:waitlist');
+    Route::get('waitlist', 'show')->name('waitlist');
+    Route::post('waitlist', 'store')->name('waitlist.store')->middleware('throttle:waitlist');
 });
 
 // The demo write budget counts only state-changing requests and only under DEMO_MODE.
 Route::middleware(['auth', 'throttle:demo-writes', App\Http\Middleware\LimitDemoTextWrites::class])->group(function () {
     Route::get('/', [App\Http\Controllers\TodayController::class, 'index'])->name('dashboard');
-    Route::get('/jutro', [App\Http\Controllers\TodayController::class, 'plan'])->name('today.plan');
-    Route::get('/zadania', [App\Http\Controllers\TodayController::class, 'tasks'])->name('today.tasks');
-    Route::get('/tydzien', [App\Http\Controllers\TodayController::class, 'week'])->name('today.week');
+    Route::get('/tomorrow', [App\Http\Controllers\TodayController::class, 'plan'])->name('today.plan');
+    Route::get('/all-tasks', [App\Http\Controllers\TodayController::class, 'tasks'])->name('today.tasks');
+    Route::get('/week', [App\Http\Controllers\TodayController::class, 'week'])->name('today.week');
+    Route::get('/day/{date}', [App\Http\Controllers\TodayController::class, 'day'])->where('date', '\d{4}-\d{2}-\d{2}')->name('today.day');
     Route::post('/day/picks', [App\Http\Controllers\TodayController::class, 'storePick'])->name('day.picks.store');
     Route::delete('/day/picks/{dayPick}', [App\Http\Controllers\TodayController::class, 'destroyPick'])->name('day.picks.destroy');
     Route::post('/day/hidden-groups/toggle', [App\Http\Controllers\TodayController::class, 'toggleHiddenGroup'])->name('day.hidden.toggle');
@@ -61,13 +62,12 @@ Route::middleware(['auth', 'throttle:demo-writes', App\Http\Middleware\LimitDemo
     Route::delete('/day/tasks/{task}/complete', [App\Http\Controllers\TodayController::class, 'uncompleteTask'])->name('day.tasks.uncomplete');
     Route::post('/day/close', [App\Http\Controllers\TodayController::class, 'close'])->name('day.close');
     Route::delete('/day/close', [App\Http\Controllers\TodayController::class, 'reopen'])->name('day.reopen');
+    Route::get('/day/add/tasks', [App\Http\Controllers\DayTasksController::class, 'tasks'])->name('day.add.tasks');
+    Route::get('/day/add/projects', [App\Http\Controllers\DayTasksController::class, 'projects'])->name('day.add.projects');
+    Route::post('/day/add', [App\Http\Controllers\DayTasksController::class, 'store'])->name('day.add.store');
 
-    Route::resource('users', UsersController::class)->only(['store', 'update', 'destroy'])->middlewareFor('update', 'throttle:password-change');
-    // Users live in Ustawienia · Konto; the old pages' URLs land there.
-    foreach (['users', 'users/create', 'users/{user}/edit'] as $old) {
-        Route::get($old, RedirectController::class)->defaults('destination', '/settings/konto')->defaults('status', 302);
-    }
-    Route::put('users/{user}/restore', [UsersController::class, 'restore'])->name('users.restore');
+    Route::resource('users', UsersController::class)->only(['store', 'update', 'destroy'])->middleware('read-only-in-demo')->middlewareFor('update', 'throttle:password-change');
+    Route::put('users/{user}/restore', [UsersController::class, 'restore'])->middleware('read-only-in-demo')->name('users.restore');
 
     // Revenue analytics (Infakt-sourced)
     Route::get('revenue', [RevenueController::class, 'index'])->middleware('feature:billing')->name('revenue.index');
@@ -85,11 +85,13 @@ Route::middleware(['auth', 'throttle:demo-writes', App\Http\Middleware\LimitDemo
     Route::get('clients/{client}', [ClientsController::class, 'record'])->name('clients.record');
     Route::get('clients/{client}/agent-context', [ClientsController::class, 'agentContext'])->name('clients.agent-context');
     Route::get('clients/{client}/{tab}', [ClientsController::class, 'show'])->whereIn('tab', ClientsController::TABS)->name('clients.show');
+    // A view is a by-product of reading, so it spends its own budget and not the demo's write budget.
+    Route::post('clients/{client}/view', [ClientsController::class, 'view'])->withoutMiddleware('throttle:demo-writes')->middleware('throttle:client-views')->name('clients.view');
     Route::put('clients/{client}/pin', [ClientsController::class, 'pin'])->name('clients.pin');
     Route::patch('clients/{client}/fields', [App\Http\Controllers\ClientFieldValuesController::class, 'update'])->name('clients.fields.update');
     Route::get('sms', [App\Http\Controllers\MessagesController::class, 'index'])->name('messages.index');
-    Route::post('messages/{message}/cancel', [App\Http\Controllers\MessagesController::class, 'cancel'])->whereNumber('message')->middleware('can:manage-account')->name('messages.cancel');
-    Route::post('messages/{message}/resend', [App\Http\Controllers\MessagesController::class, 'resend'])->whereNumber('message')->middleware('can:manage-account')->name('messages.resend');
+    Route::post('messages/{message}/cancel', [App\Http\Controllers\MessagesController::class, 'cancel'])->whereNumber('message')->middleware(['read-only-in-demo', 'can:manage-account'])->name('messages.cancel');
+    Route::post('messages/{message}/resend', [App\Http\Controllers\MessagesController::class, 'resend'])->whereNumber('message')->middleware(['read-only-in-demo', 'can:manage-account'])->name('messages.resend');
     Route::patch('clients/{client}/stage', [ClientsController::class, 'transitionStage'])->name('clients.transition-stage');
     Route::patch('clients/{client}/month-close-type', [ClientsController::class, 'updateMonthCloseType'])->middleware('feature:billing')->name('clients.month-close-type');
     Route::patch('clients/{client}/report-mode', [ClientsController::class, 'updateReportMode'])->middleware('feature:billing')->name('clients.report-mode');
@@ -113,7 +115,7 @@ Route::middleware(['auth', 'throttle:demo-writes', App\Http\Middleware\LimitDemo
         Route::put('clients/{client}/billed/{period}/tasks/{task}', [App\Http\Controllers\ClientBilledTimeController::class, 'updateTask'])->name('client-billed.task.update');
         Route::delete('clients/{client}/billed/{period}/tasks/{task}', [App\Http\Controllers\ClientBilledTimeController::class, 'destroyTask'])->name('client-billed.task.destroy');
 
-        // Infakt drafts per invoice group (Faktury za miesiac on Rozliczenia); draft only.
+        // Infakt drafts per invoice group (To invoice on Billing); draft only.
         Route::get('clients/{client}/invoice-drafts/sources', [App\Http\Controllers\ClientInvoiceDraftsController::class, 'sources'])->middleware('not-in-demo')->name('client-invoice-drafts.sources');
         Route::post('clients/{client}/invoice-drafts', [App\Http\Controllers\ClientInvoiceDraftsController::class, 'store'])->middleware('not-in-demo')->name('client-invoice-drafts.store');
 
@@ -204,6 +206,11 @@ Route::middleware(['auth', 'throttle:demo-writes', App\Http\Middleware\LimitDemo
     Route::get('/tasks/{task}', [TasksController::class, 'show'])->name('tasks.show');
     Route::get('/search', App\Http\Controllers\SearchController::class)->name('search');
 
+    // The signed-in person's own screen; every user has it.
+    Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
+    Route::patch('/profile/tasks', [ProfileController::class, 'updateTasks'])->name('profile.tasks.update');
+    Route::patch('/profile/appearance', [ProfileController::class, 'updateAppearance'])->name('profile.appearance.update');
+
     // Settings hub — config defaults + per-account overrides (settings table)
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
     Route::get('/settings/{tab}', [SettingsController::class, 'show'])->whereIn('tab', SettingsController::TABS)->name('settings.show');
@@ -212,28 +219,41 @@ Route::middleware(['auth', 'throttle:demo-writes', App\Http\Middleware\LimitDemo
         Route::patch('/settings/agent-tokens/{token}', [AgentTokensController::class, 'update'])->whereNumber('token')->name('agent-tokens.update');
         Route::delete('/settings/agent-tokens/{token}', [AgentTokensController::class, 'destroy'])->whereNumber('token')->name('agent-tokens.destroy');
     });
-    Route::patch('/settings/leadgen', [SettingsController::class, 'updateLeadgen'])->middleware('can:manage-account')->name('settings.leadgen.update');
-    Route::put('/settings/client-fields/{key}', [App\Http\Controllers\Settings\ClientFieldDefinitionsController::class, 'update'])->middleware('can:manage-account')->name('settings.client-fields.update');
-    Route::post('/settings/sms/templates', [App\Http\Controllers\Settings\MessageSettingsController::class, 'storeTemplate'])->middleware('can:manage-account')->name('settings.sms.templates.store');
-    Route::put('/settings/sms/templates/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'updateTemplate'])->middleware('can:manage-account')->name('settings.sms.templates.update');
-    Route::delete('/settings/sms/templates/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'destroyTemplate'])->middleware('can:manage-account')->name('settings.sms.templates.destroy');
-    Route::post('/settings/sms/rules', [App\Http\Controllers\Settings\MessageSettingsController::class, 'storeRule'])->middleware('can:manage-account')->name('settings.sms.rules.store');
-    Route::put('/settings/sms/rules/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'updateRule'])->middleware('can:manage-account')->name('settings.sms.rules.update');
-    Route::delete('/settings/sms/rules/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'destroyRule'])->middleware('can:manage-account')->name('settings.sms.rules.destroy');
-    Route::patch('/settings/sms/sending', [App\Http\Controllers\Settings\MessageSettingsController::class, 'sending'])->middleware('can:manage-account')->name('settings.sms.sending');
+    // Website forms and the account's sender: the owner's, never in the demo
+    Route::middleware(['not-in-demo', 'can:manage-account'])->group(function () {
+        Route::get('/settings/forms/{form}', [SettingsController::class, 'form'])->whereNumber('form')->name('settings.forms.show');
+        Route::controller(App\Http\Controllers\Settings\IntakeFormsController::class)->group(function () {
+            Route::post('/settings/forms', 'store')->name('settings.forms.store');
+            Route::put('/settings/forms/{form}', 'update')->whereNumber('form')->name('settings.forms.update');
+            Route::put('/settings/forms/{form}/turnstile', 'setTurnstile')->whereNumber('form')->name('settings.forms.turnstile.update');
+            Route::delete('/settings/forms/{form}/turnstile', 'clearTurnstile')->whereNumber('form')->name('settings.forms.turnstile.destroy');
+            Route::post('/settings/forms/{form}/webhook', 'rotateWebhook')->whereNumber('form')->name('settings.forms.webhook.store');
+            Route::delete('/settings/forms/{form}/webhook', 'clearWebhook')->whereNumber('form')->name('settings.forms.webhook.destroy');
+            Route::post('/settings/forms/{form}/retry', 'retry')->whereNumber('form')->name('settings.forms.retry');
+        });
+        Route::put('/settings/sender', [App\Http\Controllers\Settings\MailSenderController::class, 'update'])->name('settings.sender.update');
+        Route::post('/settings/sender/test', [App\Http\Controllers\Settings\MailSenderController::class, 'test'])->name('settings.sender.test');
+    });
+    Route::patch('/settings/modules', [SettingsController::class, 'updateModules'])->middleware(['read-only-in-demo', 'can:manage-account'])->name('settings.modules.update');
+    Route::patch('/settings/leadgen', [SettingsController::class, 'updateLeadgen'])->middleware(['read-only-in-demo', 'can:manage-account'])->name('settings.leadgen.update');
+    Route::put('/settings/client-fields/{key}', [App\Http\Controllers\Settings\ClientFieldDefinitionsController::class, 'update'])->middleware(['read-only-in-demo', 'can:manage-account'])->name('settings.client-fields.update');
+    Route::post('/settings/sms/templates', [App\Http\Controllers\Settings\MessageSettingsController::class, 'storeTemplate'])->middleware(['read-only-in-demo', 'can:manage-account'])->name('settings.sms.templates.store');
+    Route::put('/settings/sms/templates/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'updateTemplate'])->middleware(['read-only-in-demo', 'can:manage-account'])->name('settings.sms.templates.update');
+    Route::delete('/settings/sms/templates/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'destroyTemplate'])->middleware(['read-only-in-demo', 'can:manage-account'])->name('settings.sms.templates.destroy');
+    Route::post('/settings/sms/rules', [App\Http\Controllers\Settings\MessageSettingsController::class, 'storeRule'])->middleware(['read-only-in-demo', 'can:manage-account'])->name('settings.sms.rules.store');
+    Route::put('/settings/sms/rules/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'updateRule'])->middleware(['read-only-in-demo', 'can:manage-account'])->name('settings.sms.rules.update');
+    Route::delete('/settings/sms/rules/{key}', [App\Http\Controllers\Settings\MessageSettingsController::class, 'destroyRule'])->middleware(['read-only-in-demo', 'can:manage-account'])->name('settings.sms.rules.destroy');
+    Route::patch('/settings/sms/sending', [App\Http\Controllers\Settings\MessageSettingsController::class, 'sending'])->middleware(['read-only-in-demo', 'can:manage-account'])->name('settings.sms.sending');
     Route::post('/settings/sms/preview', [App\Http\Controllers\Settings\MessageSettingsController::class, 'preview'])->middleware('can:manage-account')->name('settings.sms.preview');
     Route::middleware('feature:billing')->controller(App\Http\Controllers\Settings\MessageSettingsController::class)->group(function (): void {
         Route::get('/settings/email/templates', 'emailTemplates')->name('settings.email.templates.index');
-        Route::post('/settings/email/templates', 'storeEmailTemplate')->name('settings.email.templates.store');
-        Route::put('/settings/email/templates/{key}', 'updateEmailTemplate')->name('settings.email.templates.update');
-        Route::delete('/settings/email/templates/{key}', 'destroyEmailTemplate')->name('settings.email.templates.destroy');
+        Route::post('/settings/email/templates', 'storeEmailTemplate')->middleware('read-only-in-demo')->name('settings.email.templates.store');
+        Route::put('/settings/email/templates/{key}', 'updateEmailTemplate')->middleware('read-only-in-demo')->name('settings.email.templates.update');
+        Route::delete('/settings/email/templates/{key}', 'destroyEmailTemplate')->middleware('read-only-in-demo')->name('settings.email.templates.destroy');
         Route::post('/settings/email/preview', 'previewEmail')->name('settings.email.preview');
     });
 
-    // Integrations live in Ustawienia · Integracje; on the demo that tab says they are not part of it.
-    Route::get('integrations', RedirectController::class)->defaults('destination', '/settings/integracje')->defaults('status', 302);
     Route::middleware('not-in-demo')->group(function () {
-        Route::get('integrations/{provider}', RedirectController::class)->defaults('destination', '/settings/integracje')->defaults('status', 302);
         Route::put('/integrations/{provider}', [IntegrationsController::class, 'update'])->middleware('can:manage-account')->name('integrations.update');
         Route::post('/integrations/{provider}/sync', [IntegrationsController::class, 'sync'])->middleware('can:manage-account')->name('integrations.sync');
         Route::delete('/integrations/{provider}', [IntegrationsController::class, 'disconnect'])->middleware('can:manage-account')->name('integrations.disconnect');

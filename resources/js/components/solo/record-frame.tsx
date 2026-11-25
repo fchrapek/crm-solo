@@ -10,6 +10,8 @@ interface RecordFrameProps {
     title: string;
     /** The full name when the title is a short form. */
     titleAttr?: string;
+    /** record: the title is a client's name, set like a task's. */
+    titleSize?: 'heading' | 'record';
     /** Above the title: the working agent's chip. */
     chip?: ReactNode;
     /** Under the title: a state the whole record is in, such as archived. */
@@ -27,10 +29,21 @@ interface RecordFrameProps {
 }
 
 /**
- * Figma: the record's head on the redesign (Klient, Projekt). The poster title with the chip above it; where the
+ * Figma: the record's head on the redesign (Client, Project). The poster title with the chip above it; where the
  * record is and its tabs are the page's place, never drawn here.
  */
-export function RecordFrame({ title, titleAttr, chip, note, noteKind = 'label', aside, actions, main, phoneMenu = true }: RecordFrameProps) {
+export function RecordFrame({
+    title,
+    titleAttr,
+    titleSize = 'heading',
+    chip,
+    note,
+    noteKind = 'label',
+    aside,
+    actions,
+    main,
+    phoneMenu = true,
+}: RecordFrameProps) {
     const { t } = useTranslation();
 
     return (
@@ -38,7 +51,9 @@ export function RecordFrame({ title, titleAttr, chip, note, noteKind = 'label', 
             {chip !== undefined && <div className={styles.chip}>{chip}</div>}
             <div className={styles.titleRow}>
                 <div className={styles.title}>
-                    <Poster title={titleAttr}>{title}</Poster>
+                    <Poster size={titleSize} title={titleAttr}>
+                        {title}
+                    </Poster>
                     {note !== undefined && (
                         <p className={styles.note} data-kind={noteKind}>
                             {note}

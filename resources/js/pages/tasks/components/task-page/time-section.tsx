@@ -1,4 +1,5 @@
 import { ManualTimeEntryDialog } from '@/components/manual-time-entry-dialog';
+import { useHelperAction } from '@/components/solo/shell/helper/actions';
 import { BottomAction } from '@/components/solo/bottom-action';
 import { Notice } from '@/components/solo/notice';
 import { SoloButton, Stat } from '@/components/solo/primitives';
@@ -6,14 +7,15 @@ import { Tile, TileActions } from '@/components/solo/tile';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useTimerActions } from '@/hooks/use-timer-actions';
 import { JsonRequestError, jsonRequest } from '@/lib/json-request';
-import { statDuration } from '@/lib/dates';
+import { monthName, statDuration } from '@/lib/dates';
 import tasks from '@/routes/tasks';
 import { router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { liveMinutes } from './format';
 import styles from './task-page.module.css';
-import { LIVE_PROPS, type TaskTime } from './types';
+import { BilledTimeDialog } from '../../../clients/components/client-billing/billed-time-dialog';
+import { LIVE_PROPS, type TaskBilled, type TaskTime } from './types';
 
 /** Why the report switch did not move: the server's own sentence for the field, else its message. */
 export function reportableRefusal(error: unknown): string | null {
@@ -23,7 +25,7 @@ export function reportableRefusal(error: unknown): string | null {
 }
 
 /**
- * "Liczy się w raporcie": the CRM's own flag, a card's too. The switch moves at once and goes back when the server
+ * Counts in the report: the CRM's own flag, a card's too. The switch moves at once and goes back when the server
  * refuses, which it does while a finalized or sent report counts the task.
  */
 function ReportSwitch({ taskId, reportable }: { taskId: number; reportable: boolean }) {
@@ -62,21 +64,56 @@ function ReportSwitch({ taskId, reportable }: { taskId: number; reportable: bool
     );
 }
 
+/** Figma: Billed time on the task page (1156:59625, locked 1156:60200). The month's billed hours beside the real time, changed in the Billing dialog. */
+function BilledRow({ taskId, billed }: { taskId: number; billed: TaskBilled }) {
+    const { t, i18n } = useTranslation();
+    const [open, setOpen] = useState(false);
+    const hours = `${new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 2 }).format(billed.hours)} h`;
+
+    return (
+        <div className={styles.reportRow} data-fill="" data-plain="">
+            <span>
+                {t('Billed time')} · {monthName(billed.period, i18n.language)}
+            </span>
+            <span className={styles.billedEnd}>
+                <span className={styles.billedHours}>{hours}</span>
+                {!billed.locked && (
+                    <SoloButton variant="secondary" size="control" onClick={() => setOpen(true)}>
+                        {t('Change')}
+                    </SoloButton>
+                )}
+            </span>
+            {!billed.locked && (
+                <BilledTimeDialog
+                    clientId={billed.client_id}
+                    period={billed.period}
+                    task={taskId}
+                    open={open}
+                    onOpenChange={setOpen}
+                    onSaved={() => router.reload({ only: LIVE_PROPS })}
+                />
+            )}
+        </div>
+    );
+}
+
 interface TimeSectionProps {
     task: { id: number; name: string; client?: string | null; is_reportable: boolean };
     time: TaskTime;
+    billed?: TaskBilled | null;
     now: number;
 }
 
 /**
- * Figma: Zadanie, the Czas tile (1094:40618): today and the total with running timers counted in, the owner's own
- * Start or Stop, Zaloguj czas and the report switch. A phone also keeps Start fixed at the bottom while no timer of
+ * Figma: Task, the Time tile (1094:40618): today and the total with running timers counted in, the owner's own
+ * Start or Stop, Log time and the report switch. A phone also keeps Start fixed at the bottom while no timer of
  * the owner's runs.
  */
-export function TimeSection({ task, time, now }: TimeSectionProps) {
+export function TimeSection({ task, time, now, billed }: TimeSectionProps) {
     const { t } = useTranslation();
     const timer = useTimerActions();
     const [logging, setLogging] = useState(false);
+    useHelperAction('log-time', useCallback(() => setLogging(true), []));
     const minutes = liveMinutes(time, now);
     const own = time.own_running;
     const running = time.running_since !== null;
@@ -115,6 +152,7 @@ export function TimeSection({ task, time, now }: TimeSectionProps) {
                 </SoloButton>
             </TileActions>
             <ReportSwitch taskId={task.id} reportable={task.is_reportable} />
+            {billed && <BilledRow taskId={task.id} billed={billed} />}
             {own === null && (
                 <BottomAction phoneOnly>
                     <SoloButton size="control" disabled={timer.pending} onClick={start}>

@@ -22,7 +22,7 @@ async function fetchPreview(url: string, signal: AbortSignal): Promise<ClosePrev
     return (await response.json()) as ClosePreview;
 }
 
-/** Figma: D3 flow F3. One dialog for Przegląd and the month-close page; it posts back the hash of the figures it showed. */
+/** Figma: D3 flow F3. One dialog for Overview and the month-close page; it posts back the hash of the figures it showed. */
 export function CloseMonthDialog({
     clientId,
     period,
@@ -161,7 +161,7 @@ export function CloseMonthSummary({ preview, locale }: { preview: ClosePreview; 
             ) : (
                 <p className={styles.info}>
                     {entriesDiffer(preview) && `${t('Entries today: {{hours}} h.', { hours: hoursNumber(preview.entries, locale) })} `}
-                    {t('You can reopen {{month}} in Rozliczenia.', { month })}
+                    {t('You can reopen {{month}} under Billing.', { month })}
                 </p>
             )}
         </>

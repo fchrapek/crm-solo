@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\ClientsController;
 use App\Models\Account;
 use App\Models\AgentAuditEvent;
 use App\Models\Client;
@@ -66,7 +67,7 @@ final class ClientOverviewTest extends TestCase
     public function test_only_the_overview_tab_computes_the_overview(): void
     {
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/przeglad")
+            ->get("/clients/{$this->client->id}/overview")
             ->assertInertia(fn (Assert $page) => $page
                 ->component('clients/show')
                 ->has('overview.report_due')
@@ -77,7 +78,7 @@ final class ClientOverviewTest extends TestCase
             );
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/dane")
+            ->get("/clients/{$this->client->id}/details")
             ->assertInertia(fn (Assert $page) => $page->missing('overview'));
     }
 
@@ -121,15 +122,46 @@ final class ClientOverviewTest extends TestCase
         $this->assertSame('2026-10', $overview['hours']['period']);
     }
 
-    public function test_an_august_report_still_unsent_in_october_waits_before_september(): void
+    public function test_only_last_months_unsent_report_waits_and_an_older_one_stays_in_billing(): void
     {
         $this->retainer(10);
-        $august = $this->report('2026-08', ClientReport::STATUS_DRAFT);
+        $this->report('2026-08', ClientReport::STATUS_DRAFT);
         $this->report('2026-09', ClientReport::STATUS_SENT);
 
         $overview = $this->overview();
-        $this->assertSame(['period' => '2026-08', 'report_id' => $august->id, 'status' => 'draft'], $overview['report_due']);
+        $this->assertNull($overview['report_due']);
         $this->assertSame('2026-10', $overview['hours']['period']);
+
+        ClientReport::query()->whereDate('period_start', '2026-09-01')->update(['status' => ClientReport::STATUS_DRAFT]);
+        $this->assertSame('2026-09', $this->overview()['report_due']['period']);
+    }
+
+    public function test_the_overview_carries_the_retainers_positions_for_the_read_only_dialog(): void
+    {
+        $this->retainer(10);
+
+        $retainer = $this->overview()['retainer'];
+        $this->assertCount(1, $retainer['positions']);
+        $this->assertSame([$retainer['positions'][0]['id']], $retainer['active_ids']);
+        $this->assertEquals(10.0, $retainer['positions'][0]['monthly_hours']);
+    }
+
+    public function test_every_tab_knows_whether_overview_has_the_retainer_button(): void
+    {
+        $this->assertTermsOnEveryTab(false, 'an order client');
+
+        $this->report('2026-09', ClientReport::STATUS_SENT);
+        $this->assertTermsOnEveryTab(false, 'report history only');
+
+        $position = $this->retainer(10);
+        $position->update(['effective_to' => '2026-10-01']);
+        $this->assertTermsOnEveryTab(false, 'no position active this month');
+
+        $position->update(['effective_to' => null]);
+        $this->assertTermsOnEveryTab(true, 'a position active this month');
+
+        $member = User::factory()->create(['account_id' => $this->account->id, 'owner' => false]);
+        $this->actingAs($member)->get("/clients/{$this->client->id}/tasks")->assertOk()->assertInertia(fn (Assert $page) => $page->where('client.retainer_terms', false));
     }
 
     public function test_a_finalized_report_beats_a_newer_draft_for_the_same_month(): void
@@ -179,7 +211,7 @@ final class ClientOverviewTest extends TestCase
         $this->assertNull($this->overview()['report_due']);
     }
 
-    public function test_an_unsent_report_from_before_the_baseline_leaves_the_hours_on_the_active_month_as_lista_shows(): void
+    public function test_an_unsent_report_from_before_the_baseline_leaves_the_hours_on_the_active_month_as_the_list_shows(): void
     {
         $this->retainer(10);
         $this->report('2026-09', ClientReport::STATUS_DRAFT);
@@ -383,7 +415,7 @@ final class ClientOverviewTest extends TestCase
         $this->assertSame(0, $overview['journal']['count']);
         $this->assertSame(0.0, $overview['hours']['used']);
 
-        $this->actingAs($this->user)->get("/clients/{$stranger->id}/przeglad")->assertNotFound();
+        $this->actingAs($this->user)->get("/clients/{$stranger->id}/overview")->assertNotFound();
     }
 
     public function test_the_agent_context_is_the_brief_an_agent_gets(): void
@@ -430,10 +462,22 @@ final class ClientOverviewTest extends TestCase
      */
     private function overview(): array
     {
-        $response = $this->actingAs($this->user)->get("/clients/{$this->client->id}/przeglad");
+        $response = $this->actingAs($this->user)->get("/clients/{$this->client->id}/overview");
         $response->assertOk();
 
         return $response->viewData('page')['props']['overview'];
+    }
+
+    private function assertTermsOnEveryTab(bool $expected, string $case): void
+    {
+        foreach (ClientsController::TABS as $tab) {
+            $props = $this->actingAs($this->user)->get("/clients/{$this->client->id}/{$tab}")->assertOk()->viewData('page')['props'];
+            $this->assertSame($expected, $props['client']['retainer_terms'], "{$case}, {$tab}");
+
+            if ($tab === 'overview' && $props['overview']['hours'] !== null) {
+                $this->assertSame($props['overview']['hours']['has_retainer'] && $props['overview']['retainer']['positions'] !== [], $expected, "{$case}, the tile");
+            }
+        }
     }
 
     /**

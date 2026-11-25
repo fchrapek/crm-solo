@@ -4,18 +4,27 @@ declare(strict_types=1);
 
 namespace App\Services\Day;
 
+use App\Models\DayAddRequest;
 use App\Models\DayClose;
 use App\Models\DayPick;
 use App\Models\HiddenTaskGroup;
+use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Services\Tasks\TaskCompletion;
+use App\Services\Tasks\TaskWriter;
+use App\Services\Time\LoggedMinutes;
+use App\Support\LikePattern;
 use App\Support\LocalCalendar;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\DetectsConcurrencyErrors;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use PDOException;
 
 /**
  * The day as a unit: up to five picks, a running timer, and a close that
@@ -23,6 +32,9 @@ use Illuminate\Validation\ValidationException;
  */
 final class DayPlanner
 {
+    use DetectsConcurrencyErrors;
+
+    /** A full day: more can be picked, with a warning. */
     public const int MAX_PICKS = 5;
 
     public const string STATE_PAPER = 'paper';
@@ -31,7 +43,17 @@ final class DayPlanner
 
     public const string STATE_DONE = 'done';
 
-    public function __construct(private readonly TaskCompletion $completion) {}
+    /** The slot column is an unsigned tiny integer. */
+    private const int SLOTS = 255;
+
+    private const int PICK_ATTEMPTS = 6;
+
+    private const int PLAN_LOCK_WAIT_SECONDS = 5;
+
+    public function __construct(
+        private readonly TaskCompletion $completion,
+        private readonly TaskWriter $writer,
+    ) {}
 
     /**
      * One day's tile: closed, open, rest, today, future or stamped.
@@ -53,6 +75,19 @@ final class DayPlanner
         }
 
         return $day->lt($today) ? 'open' : 'future';
+    }
+
+    /** The earliest day the account has anything on: a pick, a close or logged time. Null on an empty account. */
+    public function firstDay(int $accountId): ?CarbonImmutable
+    {
+        $entry = TimeEntry::where('account_id', $accountId)->min('start_time');
+        $days = array_filter([
+            DayPick::where('account_id', $accountId)->min('date'),
+            DayClose::where('account_id', $accountId)->min('date'),
+            $entry === null ? null : CarbonImmutable::parse($entry, (string) config('app.timezone'))->setTimezone(LocalCalendar::timezone())->toDateString(),
+        ]);
+
+        return $days === [] ? null : CarbonImmutable::parse(mb_substr((string) min(array_map(fn ($day) => mb_substr((string) $day, 0, 10), $days)), 0, 10), LocalCalendar::timezone());
     }
 
     public function today(): CarbonImmutable
@@ -104,6 +139,7 @@ final class DayPlanner
     public function picks(int $accountId, CarbonImmutable $date): Collection
     {
         $picks = DayPick::query()
+            ->live()
             ->where('account_id', $accountId)
             ->whereDate('date', $date->toDateString())
             ->with('task.project.client:id,name')
@@ -111,17 +147,10 @@ final class DayPlanner
             ->get();
 
         $minutes = $this->minutesByTask($accountId, $date, $picks->pluck('task_id')->all());
-        $running = TimeEntry::query()
-            ->where('account_id', $accountId)
-            ->whereIn('task_id', $picks->pluck('task_id'))
-            ->whereNull('end_time')
-            ->orderBy('start_time')
-            ->get(['id', 'task_id'])
-            ->unique('task_id')
-            ->pluck('id', 'task_id');
+        $running = $this->runningIds($accountId, $picks->pluck('task_id')->all());
 
-        return $picks->filter(fn (DayPick $pick) => $pick->task !== null)->values()
-            ->map(fn (DayPick $pick) => $this->pickRow($pick, (int) ($minutes[$pick->task_id] ?? 0), $running[$pick->task_id] ?? null));
+        return $this->withLoggedTime($accountId, $picks->filter(fn (DayPick $pick) => $pick->task !== null)->values()
+            ->map(fn (DayPick $pick) => $this->pickRow($pick, (int) ($minutes[$pick->task_id] ?? 0), $running[$pick->task_id] ?? null)));
     }
 
     /**
@@ -134,6 +163,7 @@ final class DayPlanner
     {
         $sunday = $monday->addDays(6);
         $picks = DayPick::query()
+            ->live()
             ->where('account_id', $accountId)
             ->whereDate('date', '>=', $monday->toDateString())
             ->whereDate('date', '<=', $sunday->toDateString())
@@ -182,17 +212,19 @@ final class DayPlanner
      */
     public function carried(int $accountId, CarbonImmutable $date): Collection
     {
-        $pickedOnDate = DayPick::where('account_id', $accountId)->whereDate('date', $date->toDateString())->pluck('task_id');
+        $pickedOnDate = DayPick::live()->where('account_id', $accountId)->whereDate('date', $date->toDateString())->pluck('task_id');
         $latest = DayPick::query()
+            ->live()
             ->where('account_id', $accountId)
             ->whereDate('date', '<', $date->toDateString())
             ->whereNull('dismissed_at')
             ->whereNotIn('task_id', $pickedOnDate)
+            ->whereNotIn('task_id', $this->workOn($accountId, $date)->select('task_id'))
             ->whereIn('task_id', $this->openTasks($accountId)->select('tasks.id'))
             ->groupBy('task_id')
             ->selectRaw('task_id, MAX(date) as latest');
 
-        return DayPick::query()
+        return $this->withLoggedTime($accountId, DayPick::query()
             ->select('day_picks.*')
             ->joinSub($latest, 'latest', fn ($join) => $join->on('latest.task_id', '=', 'day_picks.task_id')->on('latest.latest', '=', 'day_picks.date'))
             ->where('day_picks.account_id', $accountId)
@@ -205,7 +237,7 @@ final class DayPlanner
                 'from' => $pick->date->toDateString(),
                 ...$this->taskSummary($pick->task),
             ])
-            ->values();
+            ->values());
     }
 
     /** Stops an earlier day's unfinished pick from waiting on today; the past plan keeps it. */
@@ -216,11 +248,11 @@ final class DayPlanner
         }
 
         // Every past pick of the task goes, or the next older one would take its place.
-        DayPick::where('account_id', $accountId)
+        $this->holdingPlan($accountId, fn () => DayPick::where('account_id', $accountId)
             ->where('task_id', $pick->task_id)
             ->whereDate('date', '<', $this->today()->toDateString())
             ->whereNull('dismissed_at')
-            ->update(['dismissed_at' => now()]);
+            ->update(['dismissed_at' => now()]));
     }
 
     /**
@@ -248,7 +280,7 @@ final class DayPlanner
      */
     public function openList(int $accountId, CarbonImmutable $date, bool $withHidden = false): Collection
     {
-        $picked = DayPick::where('account_id', $accountId)->whereDate('date', $date->toDateString())->pluck('task_id')->flip();
+        $picked = DayPick::live()->where('account_id', $accountId)->whereDate('date', $date->toDateString())->pluck('task_id')->flip();
         $tasks = $withHidden ? $this->openTasks($accountId) : $this->visibleTasks($accountId);
 
         return $this->inWorkOrder($tasks)
@@ -272,23 +304,118 @@ final class DayPlanner
      */
     public function suggestions(int $accountId, CarbonImmutable $date, int $limit = 3): array
     {
-        $picked = DayPick::where('account_id', $accountId)->whereDate('date', $date->toDateString())->pluck('task_id')->flip();
-        $today = DayPick::where('account_id', $accountId)->whereDate('date', $this->today()->toDateString())->orderBy('position')->pluck('task_id')->flip();
-        $open = $this->inWorkOrder($this->visibleTasks($accountId))->get();
-
-        $candidates = $open
-            ->reject(fn (Task $task) => $picked->has($task->id))
-            ->sortBy([
-                fn (Task $a, Task $b) => ($today[$a->id] ?? PHP_INT_MAX) <=> ($today[$b->id] ?? PHP_INT_MAX),
-                fn (Task $a, Task $b) => [$a->dueDay() === null, $a->dueDay()] <=> [$b->dueDay() === null, $b->dueDay()],
-            ])
-            ->values();
+        $ids = $this->inPlanOrder($this->visibleTasks($accountId)->whereNotIn('tasks.id', $this->livePicks($accountId, $date)), $accountId, $limit);
+        $today = $this->livePicks($accountId, $this->today())->pluck('task_id')->map(fn ($id) => (int) $id)->flip();
+        $running = $this->runningIds($accountId, $ids);
 
         return [
-            'tasks' => $candidates->take($limit)->map(fn (Task $task) => $this->taskSummary($task))->values(),
-            'leftover' => $candidates->filter(fn (Task $task) => $today->has($task->id))->count(),
-            'open' => $open->count(),
+            // Each says why it is offered: left over from today, else its due day.
+            'tasks' => $this->withLoggedTime($accountId, $this->inOrder(Task::query()->with('project.client:id,name'), $ids)->map(fn (Task $task) => [
+                ...$this->taskSummary($task),
+                'from_today' => $today->has($task->id),
+                'running_id' => $running[$task->id] ?? null,
+            ])->values()),
+            'leftover' => $this->visibleTasks($accountId)
+                ->whereNotIn('tasks.id', $this->livePicks($accountId, $date))
+                ->whereIn('tasks.id', $this->livePicks($accountId, $this->today()))
+                ->count(),
+            'open' => $this->visibleTasks($accountId)->count(),
         ];
+    }
+
+    /**
+     * The add field's matches: open tasks whose name holds the text, hidden groups included, in the order the
+     * suggestions use, leaving out the date's own picks; ordered, cut and counted in the database. `total` counts
+     * every match.
+     *
+     * @return array{tasks: Collection<int, array{task_id: int, name: string, client: ?string, project: ?string}>, total: int}
+     */
+    public function matching(int $accountId, CarbonImmutable $date, string $text, int $limit = 6): array
+    {
+        $found = LikePattern::where(
+            Task::query()
+                ->join('projects', 'projects.id', '=', 'tasks.project_id')
+                ->where('projects.account_id', $accountId)
+                ->open()
+                ->whereNotIn('tasks.id', $this->livePicks($accountId, $date)),
+            'tasks.name',
+            mb_trim($text),
+        );
+        $total = $found->clone()->count();
+        $ids = $this->inPlanOrder($found, $accountId, $limit);
+        $tasks = $this->inOrder(Task::query()->select(['tasks.id', 'tasks.name', 'tasks.project_id'])->with(['project:id,name,client_id', 'project.client:id,name']), $ids)
+            ->map(fn (Task $task): array => ['task_id' => $task->id, 'name' => $task->name, 'client' => $task->project?->client?->name, 'project' => $task->project?->name])
+            ->values();
+
+        return ['tasks' => $tasks, 'total' => $total];
+    }
+
+    /**
+     * Open tasks worked on or changed last, for the add field before anything is typed; the date's picks stay out.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function recentTasks(int $accountId, CarbonImmutable $date, int $limit = 3): Collection
+    {
+        $worked = TimeEntry::query()->selectRaw('MAX(start_time)')->whereColumn('time_entries.task_id', 'tasks.id');
+
+        return $this->visibleTasks($accountId)
+            ->whereNotIn('tasks.id', $this->livePicks($accountId, $date))
+            ->orderByRaw('COALESCE(('.$worked->toSql().'), tasks.updated_at) DESC', $worked->getBindings())
+            ->orderByDesc('tasks.id')
+            ->limit($limit)
+            ->get()
+            ->map(fn (Task $task) => $this->taskSummary($task))
+            ->values();
+    }
+
+    /**
+     * A new task straight onto a day: written by the task form's own path and picked under the plan's turn, in one
+     * transaction, so a refused pick leaves no task behind. A request id is kept per account with its payload: sent
+     * again with the same payload it returns the task it made, with another payload or once that task is gone it is
+     * refused, and it never makes a second task.
+     *
+     * @return array{task: Task, pick: DayPick, replayed: bool}
+     *
+     * @throws AddRequestConflict
+     */
+    public function addNewTask(int $accountId, CarbonImmutable $date, Project $project, string $name, ?string $requestId = null): array
+    {
+        $fingerprint = hash('sha256', (string) json_encode([$date->toDateString(), $project->id, $name]));
+        $recorded = fn (): ?DayAddRequest => $requestId === null ? null : DayAddRequest::where('account_id', $accountId)->where('request_id', $requestId)->first();
+        $replay = function (DayAddRequest $request) use ($accountId, $date, $fingerprint): array {
+            if (! hash_equals($request->fingerprint, $fingerprint)) {
+                throw AddRequestConflict::otherPayload();
+            }
+            $task = Task::query()->whereKey($request->task_id)->whereHas('project', fn (Builder $q) => $q->where('account_id', $accountId))->first();
+            $pick = $task === null ? null : DayPick::live()->where('account_id', $accountId)->where('task_id', $task->id)->whereDate('date', $date->toDateString())->first();
+            if ($task === null || $pick === null) {
+                throw AddRequestConflict::taskGone();
+            }
+
+            return ['task' => $task, 'pick' => $pick, 'replayed' => true];
+        };
+
+        try {
+            return $this->holdingPlan($accountId, function () use ($accountId, $date, $project, $name, $requestId, $fingerprint, $recorded, $replay): array {
+                if (($request = $recorded()) !== null) {
+                    return $replay($request);
+                }
+                $this->guardPlannable($accountId, $date);
+                $task = $this->writer->create($project, ['name' => $name]);
+                $pick = $this->addPick($accountId, $date, $task->id);
+                if ($requestId !== null) {
+                    DayAddRequest::create(['account_id' => $accountId, 'request_id' => $requestId, 'fingerprint' => $fingerprint, 'task_id' => $task->id]);
+                }
+
+                return ['task' => $task, 'pick' => $pick, 'replayed' => false];
+            });
+        } catch (UniqueConstraintViolationException $e) {
+            // The same request won a race and this one rolled back whole: read the winner after the rollback.
+            $request = $recorded();
+
+            return $request !== null ? $replay($request) : throw $e;
+        }
     }
 
     /**
@@ -315,21 +442,19 @@ final class DayPlanner
      *
      * @return Collection<int, array<string, mixed>>
      */
-    public function offPlan(int $accountId, CarbonImmutable $date): Collection
+    public function offPlan(int $accountId, CarbonImmutable $date, bool $withRunning = true): Collection
     {
+        // Moved picks count too: their time shows with them, under what left the day.
         $picked = DayPick::where('account_id', $accountId)->whereDate('date', $date->toDateString())->pluck('task_id');
 
-        $entries = TimeEntry::query()
-            ->where('account_id', $accountId)
-            ->whereNotNull('task_id')
+        $entries = $this->workOn($accountId, $date, $withRunning)
             ->whereNotIn('task_id', $picked)
-            ->where(fn ($q) => $q->whereNull('end_time')->orWhere(fn ($day) => $this->startedOn($day, $date)))
             ->with('task.project.client:id,name')
             ->orderBy('start_time')
             ->get();
 
         // An entry whose task is gone still bills its project, but has no task row to show here.
-        return $entries->filter(fn (TimeEntry $entry) => $entry->task !== null)->groupBy('task_id')->map(function (Collection $taskEntries) {
+        return $this->withLoggedTime($accountId, $entries->filter(fn (TimeEntry $entry) => $entry->task !== null)->groupBy('task_id')->map(function (Collection $taskEntries) {
             $running = $taskEntries->firstWhere('end_time', null);
 
             return [
@@ -337,7 +462,7 @@ final class DayPlanner
                 'minutes' => (int) $taskEntries->whereNotNull('end_time')->sum('duration_minutes'),
                 'running_id' => $running?->id,
             ];
-        })->values();
+        })->values());
     }
 
     /**
@@ -360,33 +485,84 @@ final class DayPlanner
 
     /**
      * The one way to plan a task, for the day screens and the agents: the
-     * date is plannable, the day is not closed, then addPick's rules.
+     * date is plannable, the day is not closed, then addPick's rules. The new
+     * pick and the move of the task's other picks land together.
      */
     public function pick(int $accountId, CarbonImmutable $date, int $taskId): DayPick
     {
-        return $this->holdingDay($accountId, $date, function () use ($accountId, $date, $taskId): DayPick {
-            $this->guardPlannable($accountId, $date);
+        return $this->holdingPlan($accountId, function () use ($accountId, $date, $taskId): DayPick {
+            $elsewhere = $this->plannedElsewhere($accountId, $date, $taskId);
+            $this->guardPlannable($accountId, $date, moving: $elsewhere->isNotEmpty());
+            $pick = $this->addPick($accountId, $date, $taskId);
+            DayPick::whereKey($elsewhere->modelKeys())->update(['moved_to' => $date->toDateString()]);
 
-            return $this->addPick($accountId, $date, $taskId);
+            return $pick;
         });
     }
 
-    /** Takes a pick off its day, under the same rules as adding one. */
+    /**
+     * The days after `$date` in its week with how many picks each holds, for moving a pick within the week.
+     *
+     * @return list<array{date: string, picks: int}>
+     */
+    public function restOfWeek(int $accountId, CarbonImmutable $date): array
+    {
+        $sunday = $date->endOfWeek(CarbonImmutable::SUNDAY);
+        $counts = DayPick::query()
+            ->live()
+            ->where('account_id', $accountId)
+            ->whereDate('date', '>', $date->toDateString())
+            ->whereDate('date', '<=', $sunday->toDateString())
+            ->get(['date'])
+            ->countBy(fn (DayPick $pick) => $pick->date->toDateString());
+        $days = [];
+        for ($day = $date->addDay(); $day->toDateString() <= $sunday->toDateString(); $day = $day->addDay()) {
+            $days[] = ['date' => $day->toDateString(), 'picks' => (int) ($counts[$day->toDateString()] ?? 0)];
+        }
+
+        return $days;
+    }
+
+    /**
+     * What left the day for another: the task, its time on the day and where it went.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function moved(int $accountId, CarbonImmutable $date): Collection
+    {
+        $picks = DayPick::query()
+            ->whereNotNull('moved_to')
+            ->where('account_id', $accountId)
+            ->whereDate('date', $date->toDateString())
+            ->with('task.project.client:id,name')
+            ->orderBy('position')
+            ->get()
+            ->filter(fn (DayPick $pick) => $pick->task !== null)
+            ->values();
+        $minutes = $this->minutesByTask($accountId, $date, $picks->pluck('task_id')->all());
+
+        return $picks->map(fn (DayPick $pick): array => [
+            ...$this->taskSummary($pick->task),
+            'minutes' => (int) ($minutes[$pick->task_id] ?? 0),
+            'moved_to' => $pick->moved_to->toDateString(),
+        ]);
+    }
+
+    /** Takes a pick off its day: any day from today on, as a moved pick may sit past the planning window, never a closed one. */
     public function unpick(int $accountId, DayPick $pick): void
     {
         $date = CarbonImmutable::parse($pick->date->toDateString(), LocalCalendar::timezone());
 
-        $this->holdingDay($accountId, $date, function () use ($accountId, $date, $pick): void {
-            $this->guardPlannable($accountId, $date);
+        $this->holdingPlan($accountId, function () use ($accountId, $date, $pick): void {
+            $this->guardPlannable($accountId, $date, moving: true);
             $pick->delete();
         });
     }
 
     /**
-     * Each pick takes one of the day's MAX_PICKS slots, unique per account and
-     * date in the database: two requests racing for the last slot cannot both
-     * land, and the loser re-reads the day and gets the same answer as if it
-     * had come second.
+     * Each pick takes the day's first free slot, unique per account and date in
+     * the database: of two requests racing for one slot the loser re-reads the
+     * day and takes the next. A day past MAX_PICKS is full, not closed to more.
      */
     public function addPick(int $accountId, CarbonImmutable $date, int $taskId): DayPick
     {
@@ -395,15 +571,22 @@ final class DayPlanner
             throw ValidationException::withMessages(['task_id' => __('This task cannot be picked.')]);
         }
 
-        for ($attempt = 0; $attempt <= self::MAX_PICKS; $attempt++) {
-            $existing = DayPick::where('account_id', $accountId)->whereDate('date', $date->toDateString())->get(['task_id', 'slot', 'position']);
-            if ($existing->contains('task_id', $taskId)) {
+        for ($attempt = 0; $attempt < self::PICK_ATTEMPTS; $attempt++) {
+            $existing = DayPick::where('account_id', $accountId)->whereDate('date', $date->toDateString())->get(['id', 'task_id', 'slot', 'position', 'moved_to']);
+            $same = $existing->firstWhere('task_id', $taskId);
+            if ($same !== null && $same->moved_to === null) {
                 throw ValidationException::withMessages(['task_id' => __('This task is already picked for the day.')]);
             }
+            if ($same !== null) {
+                // Back on a day it was moved from: the day's own pick returns, as the unique task per day asks.
+                $same->update(['moved_to' => null, 'position' => (int) $existing->max('position') + 1]);
 
-            $slot = collect(range(1, self::MAX_PICKS))->diff($existing->pluck('slot')->filter())->first();
-            if ($existing->count() >= self::MAX_PICKS || $slot === null) {
-                throw ValidationException::withMessages(['task_id' => __('A day holds at most :max picks.', ['max' => self::MAX_PICKS])]);
+                return $same;
+            }
+
+            $slot = collect(range(1, self::SLOTS))->diff($existing->pluck('slot')->filter())->first();
+            if ($slot === null) {
+                break;
             }
 
             try {
@@ -419,40 +602,72 @@ final class DayPlanner
             }
         }
 
-        throw ValidationException::withMessages(['task_id' => __('A day holds at most :max picks.', ['max' => self::MAX_PICKS])]);
+        throw ValidationException::withMessages(['task_id' => __('This task could not be picked. Try again.')]);
     }
 
     /**
-     * Stamps the day, then checks for a running timer and takes the stamp back
-     * if one exists. Starting a timer inserts the entry before it removes the
-     * stamp, so whichever order the two land in, a closed day never has a
-     * timer running.
+     * Stamps the day, then checks for a running timer and rolls the stamp back
+     * if one exists, so a refused close is never seen. Starting a timer writes
+     * its entry before it removes the stamp, so whichever order the two land
+     * in, a closed day never has a timer running.
      */
     public function close(int $accountId, CarbonImmutable $date): DayClose
     {
-        return $this->holdingDay($accountId, $date, fn (): DayClose => $this->stampClosed($accountId, $date));
+        return $this->holdingPlan($accountId, function () use ($accountId, $date): DayClose {
+            $close = $this->stampClosed($accountId, $date);
+
+            // No plain read comes before the stamp's write, so this read's snapshot is taken after it and holds every timer whose stamp removal ran first.
+            if ($date->isSameDay($this->today()) && $this->running($accountId) !== null) {
+                throw ValidationException::withMessages(['close' => __('Stop the running timer before closing the day.')]);
+            }
+
+            return $close;
+        }, 'close');
     }
 
     public function reopen(int $accountId, CarbonImmutable $date): void
     {
-        DayClose::where('account_id', $accountId)->whereDate('date', $date->toDateString())->delete();
+        $this->holdingPlan($accountId, fn () => $this->removeStamp($accountId, $date), 'close');
     }
 
     /**
-     * The month card: one entry per day of the month holding the date and
-     * its tile state, plus the closed-weekday count against all weekdays.
-     *
-     * @return array{month: string, days: list<array{date: string, weekday: int, state: string}>, closed: int, weekdays: int}
+     * A timer starting today takes the stamp back without the plan's lock: its entry is written first, so
+     * whichever order it and a close land in, a closed day never has a timer running.
      */
-    public function month(int $accountId, CarbonImmutable $today): array
+    public function reopenForTimer(int $accountId): void
     {
-        $start = $today->startOfMonth();
-        $end = $today->endOfMonth();
+        $this->removeStamp($accountId, $this->today());
+    }
+
+    /**
+     * The month card: one entry per day of the month holding `$day`, its tile
+     * state against today and the time logged on it, plus the closed days
+     * against the days that count: every weekday, and a weekend day once it
+     * is closed.
+     *
+     * @return array{month: string, days: list<array{date: string, weekday: int, state: string, minutes: int}>, closed: int, weekdays: int}
+     */
+    public function month(int $accountId, CarbonImmutable $day): array
+    {
+        $today = $this->today();
+        $start = $day->startOfMonth();
+        $end = $day->endOfMonth();
         $closed = DayClose::where('account_id', $accountId)
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
             ->pluck('date')
             ->map(fn ($d) => CarbonImmutable::parse($d)->toDateString())
             ->flip();
+
+        [$from] = LocalCalendar::dayRange($start);
+        [, $to] = LocalCalendar::dayRange($end);
+        $minutes = TimeEntry::query()
+            ->where('account_id', $accountId)
+            ->whereNotNull('end_time')
+            ->where('start_time', '>=', $from)
+            ->where('start_time', '<', $to)
+            ->get(['start_time', 'duration_minutes'])
+            ->groupBy(fn (TimeEntry $entry) => CarbonImmutable::instance($entry->start_time)->setTimezone(LocalCalendar::timezone())->toDateString())
+            ->map(fn (Collection $entries) => (int) $entries->sum('duration_minutes'));
 
         $days = [];
         for ($day = $start; $day->lte($end); $day = $day->addDay()) {
@@ -460,16 +675,17 @@ final class DayPlanner
                 'date' => $day->toDateString(),
                 'weekday' => $day->dayOfWeekIso,
                 'state' => self::tileState($day, $today, $closed->has($day->toDateString())),
+                'minutes' => (int) ($minutes[$day->toDateString()] ?? 0),
             ];
         }
 
-        $weekdays = collect($days)->where('weekday', '<=', 5);
+        $closedDays = collect($days)->whereIn('state', ['closed', 'stamped']);
 
         return [
             'month' => $start->toDateString(),
             'days' => $days,
-            'closed' => $weekdays->whereIn('state', ['closed', 'stamped'])->count(),
-            'weekdays' => $weekdays->count(),
+            'closed' => $closedDays->count(),
+            'weekdays' => collect($days)->where('weekday', '<=', 5)->count() + $closedDays->where('weekday', '>', 5)->count(),
         ];
     }
 
@@ -573,6 +789,27 @@ final class DayPlanner
     }
 
     /**
+     * A task lives on one day from today on: its picks on other open days, which a pick for `$date` moves there.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, DayPick>
+     */
+    private function plannedElsewhere(int $accountId, CarbonImmutable $date, int $taskId): \Illuminate\Database\Eloquent\Collection
+    {
+        $closed = DayClose::where('account_id', $accountId)->whereDate('date', '>=', $this->today()->toDateString())->pluck('date')
+            ->map(fn ($day) => mb_substr((string) $day, 0, 10));
+
+        return DayPick::query()
+            ->live()
+            ->where('account_id', $accountId)
+            ->where('task_id', $taskId)
+            ->whereDate('date', '>=', $this->today()->toDateString())
+            ->whereDate('date', '!=', $date->toDateString())
+            ->get()
+            ->reject(fn (DayPick $pick): bool => $closed->contains($pick->date->toDateString()))
+            ->values();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function pickRow(DayPick $pick, int $minutes, ?int $runningId): array
@@ -586,31 +823,24 @@ final class DayPlanner
         ];
     }
 
+    /** Writes before it reads: a day closed already answers the insert with its own row, read after it. */
     private function stampClosed(int $accountId, CarbonImmutable $date): DayClose
     {
-        $existing = fn () => DayClose::where('account_id', $accountId)->whereDate('date', $date->toDateString())->first();
         try {
-            $close = $existing() ?? DayClose::create(['account_id' => $accountId, 'date' => $date->toDateString(), 'closed_at' => now()]);
+            return DayClose::create(['account_id' => $accountId, 'date' => $date->toDateString(), 'closed_at' => now()]);
         } catch (UniqueConstraintViolationException $e) {
-            $close = $existing() ?? throw $e;
+            return DayClose::where('account_id', $accountId)->whereDate('date', $date->toDateString())->first() ?? throw $e;
         }
-
-        if ($this->running($accountId) !== null) {
-            $close->delete();
-
-            throw ValidationException::withMessages(['close' => __('Stop the running timer before closing the day.')]);
-        }
-
-        return $close;
     }
 
     /**
      * A plan changes only inside isPlannable's window, and not on a closed
      * day: reopen the day first.
      */
-    private function guardPlannable(int $accountId, CarbonImmutable $date): void
+    private function guardPlannable(int $accountId, CarbonImmutable $date, bool $moving = false): void
     {
-        if (! $this->isPlannable($date)) {
+        // A move may go to any day ahead; a new pick stays within the planning window.
+        if ($moving ? $date->toDateString() < $this->today()->toDateString() : ! $this->isPlannable($date)) {
             throw ValidationException::withMessages(['task_id' => __('Picks can be set from today to the end of next week.')]);
         }
         if ($this->isClosed($accountId, $date)) {
@@ -618,18 +848,136 @@ final class DayPlanner
         }
     }
 
+    private function removeStamp(int $accountId, CarbonImmutable $date): void
+    {
+        DayClose::where('account_id', $accountId)->whereDate('date', $date->toDateString())->delete();
+    }
+
     /**
-     * A plan change and the day's close take turns, so a pick cannot land on
-     * a day that closed between the check and the write.
+     * Every plan change and every close or reopen of the account take turns: a move reads the task's picks on
+     * other days, so one lock per day would let two moves, or a move and a close, interleave. The turn is the
+     * account's `day_plan_locks` row, which comes with the account, held to the commit however long the write takes;
+     * reads and writes run in that one transaction. A turn not given within PLAN_LOCK_WAIT_SECONDS, or a missing row,
+     * is PlanBusy, with nothing written.
      *
      * @template T
      *
      * @param  callable(): T  $callback
      * @return T
      */
-    private function holdingDay(int $accountId, CarbonImmutable $date, callable $callback): mixed
+    private function holdingPlan(int $accountId, callable $callback, string $field = 'task_id'): mixed
     {
-        return Cache::lock("day-plan:{$accountId}:{$date->toDateString()}", 10)->block(5, $callback);
+        try {
+            return DB::transaction(function () use ($accountId, $callback, $field): mixed {
+                $lock = DB::table('day_plan_locks')->where('account_id', $accountId);
+                $turn = DB::connection()->getDriverName() === 'mariadb'
+                    ? $lock->lock('for update wait '.self::PLAN_LOCK_WAIT_SECONDS)->first()
+                    : $lock->lockForUpdate()->first();
+                if ($turn === null) {
+                    throw PlanBusy::on($field);
+                }
+
+                return $callback();
+            });
+        } catch (PDOException $e) {
+            // A nested call sees the timeout as DeadlockException, which is no QueryException.
+            throw $this->causedByConcurrencyError($e) ? PlanBusy::on($field) : $e;
+        }
+    }
+
+    /** The task ids of the date's live picks, as a subquery. */
+    private function livePicks(int $accountId, CarbonImmutable $date): Builder
+    {
+        return DayPick::live()->where('account_id', $accountId)->whereDate('date', $date->toDateString())->select('task_id');
+    }
+
+    /**
+     * The plan's order, the first `$limit` task ids: today's live picks first in their order, then the soonest due day,
+     * then work in hand (lane, then name). The due day is read two ways (Task::dueDay): a CRM task's is its stored
+     * date, a card's is the local day its instant falls on, which SQL cannot read portably. Inside each kind the day
+     * rises with the stored value, so each kind gives its own first `$limit` with bounded reads (dueWindow), the
+     * undated ones theirs by lane and name, and the few candidates are sorted together. Rows read: today's picks and a
+     * small multiple of `$limit`, whatever the display timezone.
+     *
+     * @param  Builder<Task>  $query
+     * @return list<int>
+     */
+    private function inPlanOrder(Builder $query, int $accountId, int $limit): array
+    {
+        $narrow = fn (): Builder => $query->clone()->setEagerLoads([]);
+        $todayIds = DayPick::live()->where('account_id', $accountId)->whereDate('date', $this->today()->toDateString())->orderBy('position')->pluck('task_id')->map(fn ($id) => (int) $id)->values();
+        $position = $todayIds->flip();
+
+        $leftovers = $narrow()->whereIn('tasks.id', $todayIds)->toBase()->pluck('tasks.id')->map(fn ($id) => (int) $id)->sortBy(fn (int $id): int => $position[$id])->values();
+        $wanted = $limit - $leftovers->count();
+        if ($wanted <= 0) {
+            return $leftovers->take($limit)->all();
+        }
+
+        $rest = fn (): Builder => $narrow()->whereNotIn('tasks.id', $todayIds);
+        $candidates = collect()
+            ->concat($this->dueWindow(
+                fn () => $rest()->whereNull('tasks.trello_card_id')->whereNotNull('tasks.due_date'),
+                $wanted,
+                // a CRM task's day is its stored date
+                fn (string $stored): string => mb_substr($stored, 0, 10),
+                fn (string $day): array => [CarbonImmutable::parse($day, 'UTC'), CarbonImmutable::parse($day, 'UTC')->addDay()],
+            ))
+            ->concat($this->dueWindow(
+                fn () => $rest()->whereNotNull('tasks.trello_card_id')->whereNotNull('tasks.due_date'),
+                $wanted,
+                // a card's day is the local one its instant falls on
+                fn (string $stored): string => CarbonImmutable::parse($stored, (string) config('app.timezone'))->setTimezone(LocalCalendar::timezone())->toDateString(),
+                fn (string $day): array => LocalCalendar::dayRange($day),
+            ))
+            ->concat($this->inWorkOrder($rest()->whereNull('tasks.due_date'))->limit($wanted)->toBase()->pluck('tasks.id'));
+
+        // One read of the candidates in lane and name order; a stable sort by day keeps that order inside each day.
+        $ordered = $this->inWorkOrder($narrow()->whereKey($candidates->map(fn ($id) => (int) $id)->unique()->values()->all())->select(['tasks.id', 'tasks.name', 'tasks.list_name', 'tasks.due_date', 'tasks.trello_card_id']))
+            ->get()
+            ->sortBy(fn (Task $task): array => [$task->dueDay() === null, $task->dueDay()])
+            ->take($wanted)
+            ->map(fn (Task $task): int => (int) $task->id);
+
+        return $leftovers->concat($ordered)->values()->all();
+    }
+
+    /**
+     * The ids of the first `$limit` dated tasks of one kind in the plan's order, where the stored due value rises with
+     * the due day: the database orders by it and stops at `$limit`; the days before the last one reached are fewer
+     * than `$limit` and read whole, and that last day is read in lane and name order up to the places left.
+     *
+     * @param  callable(): Builder<Task>  $kind
+     * @param  callable(string): string  $dayOf  the due day (as Task::dueDay reads it) of a stored due value
+     * @param  callable(string): array{0: CarbonImmutable, 1: CarbonImmutable}  $bounds  the stored range of one due day
+     * @return Collection<int, int>
+     */
+    private function dueWindow(callable $kind, int $limit, callable $dayOf, callable $bounds): Collection
+    {
+        $reach = $this->inWorkOrder($kind()->orderBy('tasks.due_date'))->limit($limit)->toBase()->get(['tasks.id', 'tasks.due_date']);
+        if ($reach->count() < $limit) {
+            return $reach->pluck('id')->map(fn ($id) => (int) $id);
+        }
+
+        [$from, $to] = $bounds($dayOf((string) $reach->last()->due_date));
+        $before = $kind()->where('tasks.due_date', '<', $from)->toBase()->pluck('tasks.id');
+        $day = $this->inWorkOrder($kind()->where('tasks.due_date', '>=', $from)->where('tasks.due_date', '<', $to))->limit($limit - $before->count())->toBase()->pluck('tasks.id');
+
+        return $before->concat($day)->map(fn ($id) => (int) $id);
+    }
+
+    /**
+     * The tasks of `$ids`, loaded by `$query`, in the order of `$ids`.
+     *
+     * @param  Builder<Task>  $query
+     * @param  list<int>  $ids
+     * @return Collection<int, Task>
+     */
+    private function inOrder(Builder $query, array $ids): Collection
+    {
+        $at = array_flip($ids);
+
+        return $query->whereKey($ids)->get()->sortBy(fn (Task $task): int => $at[$task->id])->values();
     }
 
     /** Work in hand first: Doing, To-Do, Testing, then custom lanes, Backlog last; by name within a lane. */
@@ -679,8 +1027,41 @@ final class DayPlanner
             'client' => $task->project?->client?->name,
             'project' => $task->project?->name,
             'done' => $task->isDone(),
+            'in_progress' => $task->isInProgress(),
             'can_untick' => $task->canUnfinish(),
+            'due' => $task->dueDay(),
         ];
+    }
+
+    /**
+     * Each task row with its logged time on every day, for its details.
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function withLoggedTime(int $accountId, Collection $rows): Collection
+    {
+        $logged = LoggedMinutes::byTask($accountId, $rows->pluck('task_id')->map(fn ($id): int => (int) $id)->unique()->values()->all());
+
+        return $rows->map(fn (array $row): array => [...$row, 'logged_minutes' => $logged[$row['task_id']] ?? 0]);
+    }
+
+    /**
+     * The first running timer on each task, the one a row stops.
+     *
+     * @param  list<int>  $taskIds
+     * @return Collection<int, int>
+     */
+    private function runningIds(int $accountId, array $taskIds): Collection
+    {
+        return TimeEntry::query()
+            ->where('account_id', $accountId)
+            ->whereIn('task_id', $taskIds)
+            ->whereNull('end_time')
+            ->orderBy('start_time')
+            ->get(['id', 'task_id'])
+            ->unique('task_id')
+            ->pluck('id', 'task_id');
     }
 
     /**
@@ -706,7 +1087,20 @@ final class DayPlanner
     }
 
     /**
-     * @param  \Illuminate\Database\Eloquent\Builder<TimeEntry>|\Illuminate\Database\Query\Builder  $query
+     * A day's work on tasks: entries started that day, and every timer still running.
+     *
+     * @return Builder<TimeEntry>
+     */
+    private function workOn(int $accountId, CarbonImmutable $date, bool $withRunning = true): Builder
+    {
+        return TimeEntry::query()
+            ->where('account_id', $accountId)
+            ->whereNotNull('task_id')
+            ->where(fn ($q) => $q->when($withRunning, fn ($live) => $live->whereNull('end_time'))->orWhere(fn ($day) => $this->startedOn($day, $date)));
+    }
+
+    /**
+     * @param  Builder<TimeEntry>|\Illuminate\Database\Query\Builder  $query
      */
     private function startedOn($query, CarbonImmutable $date): void
     {

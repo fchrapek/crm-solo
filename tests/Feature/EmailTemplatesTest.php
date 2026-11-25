@@ -75,7 +75,7 @@ final class EmailTemplatesTest extends TestCase
         $this->assertStringNotContainsString('“', (string) $template->body);
 
         $this->actingAs($this->owner)->getJson('/settings/email/templates')->assertOk()->assertJsonPath('templates.0.key', 'podsumowanie_miesiaca');
-        $this->actingAs($this->owner)->get('/settings/sms')->assertOk()
+        $this->actingAs($this->owner)->get('/settings/messages')->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->has('templates', 0));
 
         $this->actingAs($this->owner)->put('/settings/email/templates/podsumowanie_miesiaca', ['name' => 'Krótko', 'subject' => 'Za {period}', 'body' => 'Krótka notka.'])->assertSessionHasNoErrors();
@@ -159,13 +159,26 @@ final class EmailTemplatesTest extends TestCase
     {
         app(MessageSettings::class)->template($this->owner->account_id, 'monthly', 'Miesięczne', 'A', MessageTemplate::EMAIL, 'T');
 
-        $this->actingAs($this->owner)->get('/settings/email')->assertOk()
+        $this->actingAs($this->owner)->get('/settings/messages')->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('email_templates.0.key', 'monthly')
                 ->where('email_templates.0.is_default', true)
                 ->where('email_sending.live', false)
                 ->where('email_sending.from', null)
                 ->where('email_sending.bcc', $this->owner->email));
+    }
+
+    public function test_the_email_tab_tells_a_refusing_server_from_a_test_one(): void
+    {
+        config(['mail.default' => 'smtp', 'mail.live_send' => false, 'mail.to.address' => null]);
+
+        $this->actingAs($this->owner)->get('/settings/messages')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('email_sending.live', false)->where('email_sending.refused', true));
+
+        config(['mail.default' => 'log']);
+
+        $this->actingAs($this->owner)->get('/settings/messages')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('email_sending.refused', false));
     }
 
     public function test_the_preview_without_a_client_uses_the_newest_summary_email_client(): void
@@ -183,7 +196,8 @@ final class EmailTemplatesTest extends TestCase
         $account->settings = [...(array) $account->settings, 'features' => ['billing' => false]];
         $account->save();
         $this->actingAs($this->owner)->getJson('/settings/email/templates')->assertNotFound();
-        $this->actingAs($this->owner)->get('/settings/email')->assertNotFound();
+        $this->actingAs($this->owner)->get('/settings/messages')->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->has('templates')->missing('email_templates')->missing('email_sending'));
     }
 
     public function test_a_strict_render_stops_on_a_month_value_that_is_missing(): void

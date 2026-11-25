@@ -4,7 +4,7 @@ import { ChecklistSection } from './checklist-section';
 import { card } from './story-fixtures';
 
 const meta = {
-    title: 'Zadania/Zadanie/Checklista',
+    title: 'Tasks/Task/Checklist',
     component: ChecklistSection,
     decorators: [mainColumn],
     args: { card, trelloUrl: 'https://trello.com/c/demo' },

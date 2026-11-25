@@ -1,4 +1,4 @@
-/* Figma: Zamknięcie miesiąca. The tiles and rows are parts; only what sits inside or between them is styled here. */
+/* Figma: Month close. The tiles and rows are parts; only what sits inside or between them is styled here. */
 .page {
     display: flex;
     flex-direction: column;

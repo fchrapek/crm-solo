@@ -12,7 +12,7 @@ import { RecordFrame } from './record-frame';
 
 export { HeaderActionsScope, useInHeaderMenu, useInRecordFrame } from './header-place';
 
-export const CLIENT_TABS = ['przeglad', 'zadania', 'dziennik', 'rozliczenia', 'dane'] as const;
+export const CLIENT_TABS = ['overview', 'tasks', 'journal', 'billing', 'details'] as const;
 
 export type ClientTab = (typeof CLIENT_TABS)[number];
 
@@ -21,8 +21,10 @@ export interface ClientHeaderData {
     name: string;
     short_name: string;
     billing_mode: 'retainer' | 'order';
-    /** False when the account has billing off: no Rozliczenia tab. */
+    /** False when the account has billing off: no Billing tab. */
     billing?: boolean;
+    /** Overview's Hours tile has its Retainer button; the helper offers the window only then. */
+    retainer_terms?: boolean;
     is_archived: boolean;
     is_pinned: boolean;
     open_tasks_count: number;
@@ -30,11 +32,11 @@ export interface ClientHeaderData {
 }
 
 export const CLIENT_TAB_LABEL: Record<ClientTab, string> = {
-    przeglad: 'Overview',
-    zadania: 'Tasks',
-    dziennik: 'Journal',
-    rozliczenia: 'Billing',
-    dane: 'Data',
+    overview: 'Overview',
+    tasks: 'Tasks',
+    journal: 'Journal',
+    billing: 'Billing',
+    details: 'Data',
 };
 
 export interface PhoneNavBarProps {
@@ -50,7 +52,9 @@ export function PhoneNavBar({ back, children }: PhoneNavBarProps) {
             {back !== undefined && (
                 <Link href={back.href} className={styles.back} onClick={back.onClick}>
                     <Icon name="chevron-left" size={24} className={styles.backIcon} aria-hidden="true" />
-                    <span className={styles.backLabel}>{back.label}</span>
+                    <span className={styles.backLabel} title={back.label}>
+                        {back.label}
+                    </span>
                 </Link>
             )}
             {children}
@@ -60,10 +64,10 @@ export function PhoneNavBar({ back, children }: PhoneNavBarProps) {
 
 export interface RecordHeaderProps {
     size: 'poster' | 'compact';
-    /** Phones: none on a top-level page (Ustawienia). */
+    /** Phones: none on a top-level page (Settings). */
     back?: PhoneNavBarProps['back'];
     title: string;
-    /** Phones: another title, such as the open Ustawienia tab under the USTAWIENIA poster. */
+    /** Phones: another title, such as the open Settings tab under the SETTINGS poster. */
     phoneTitle?: string;
     /** The full name when the title is a short form. */
     titleAttr?: string;
@@ -78,7 +82,7 @@ export interface RecordHeaderProps {
     children?: ReactNode;
 }
 
-/** The record header both the Klient and the Zadanie views use: nav bar below 768 px and the title heading. Where the record is, the page says through its place. */
+/** The record header both the Client and the Task views use: nav bar below 768 px and the title heading. Where the record is, the page says through its place. */
 export function RecordHeader({ size, back, title, phoneTitle, titleAttr, chip, menu, live, afterTitle, children }: RecordHeaderProps) {
     const { t } = useTranslation();
 
@@ -126,11 +130,14 @@ export function AgentChip({ children }: { children: ReactNode }) {
 /** Figma: the client record's head: the working agent's chip, the short name as the poster, the tab's actions. The tabs are the page's pills. */
 export function ClientHeader({
     client,
+    title,
     actions,
     main,
     phoneMenu,
 }: {
     client: ClientHeaderData;
+    /** A sub-view's own name as the poster, such as Client relationship; the client's short name otherwise. */
+    title?: string;
     actions?: ReactNode;
     main?: ReactNode;
     phoneMenu?: boolean;
@@ -139,8 +146,9 @@ export function ClientHeader({
 
     return (
         <RecordFrame
-            title={client.short_name}
-            titleAttr={client.name}
+            title={title ?? client.short_name}
+            titleAttr={title ?? client.name}
+            titleSize="record"
             chip={
                 client.live_agent_minutes !== null ? (
                     <Chip status="agent">{t('{{agent}} working · {{minutes}} min', { agent: 'claude', minutes: client.live_agent_minutes })}</Chip>

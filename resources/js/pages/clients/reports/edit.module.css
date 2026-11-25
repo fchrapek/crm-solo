@@ -1,4 +1,4 @@
-/* Figma: Raport. The tiles and rows are parts; only what sits inside a tile is styled here. */
+/* Figma: Report. The tiles and rows are parts; only what sits inside a tile is styled here. */
 .page {
     display: flex;
     flex-direction: column;
@@ -48,9 +48,12 @@
     gap: 6px;
 }
 
+.diffRow {
+    list-style: none;
+}
+
 .diff {
     padding: var(--role-space-8) var(--role-space-12) var(--role-space-12);
-    list-style: none;
     overflow-x: auto;
 }
 

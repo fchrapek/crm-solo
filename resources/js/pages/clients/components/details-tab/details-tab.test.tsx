@@ -43,10 +43,13 @@ const empty: ClientDetails = {
     include_in_month_close: false,
     ssh_config: null,
     maintenance_invoice_description: null,
-    report_baseline_markdown: null,
     notes: null,
     archived: false,
+    has_report_baseline: false,
+    modules: { month_close: false, report_baseline: false },
 };
+
+const inClose: ClientDetails = { ...empty, month_close_type: 'maintenance', modules: { month_close: true, report_baseline: false } };
 
 const dialogs = { dialog: null, onDialogChange: () => undefined };
 
@@ -54,13 +57,13 @@ describe('DetailsTab', () => {
     test('missing company data and close settings read as muted placeholders, not blank rows', () => {
         const html = renderToStaticMarkup(<DetailsTab client={header} details={empty} contacts={[]} {...dialogs} />);
 
-        // NIP, address, cooperation, phone and email in Firma; SSH and the invoice line in Zamknięcie miesiąca
-        expect(html.match(/data-tone="muted"[^>]*>Nie podano</g)?.length).toBe(7);
+        // NIP, address, cooperation, phone and email in Company
+        expect(html.match(/data-tone="muted"[^>]*>Nie podano</g)?.length).toBe(5);
         expect(html).toMatch(/data-tone="muted"[^>]*>Bez powiązania</);
         expect(html).toContain('Nie ma jeszcze kontaktów.');
     });
 
-    test("a company's phone, email and business type show in Firma once filled", () => {
+    test("a company's phone, email and business type show in Company once filled", () => {
         const html = renderToStaticMarkup(
             <DetailsTab
                 client={header}
@@ -83,10 +86,58 @@ describe('DetailsTab', () => {
         expect(html).not.toMatch(/data-tone="[^"]*"[^>]*>klient 10000123</);
     });
 
-    test('every tile action announces the dialog it opens: Firma, Kontakty, Projekty, Zamknięcie miesiąca, Zakres bazowy and Dokumenty', () => {
-        const html = renderToStaticMarkup(<DetailsTab client={header} details={empty} contacts={[]} {...dialogs} />);
+    test('every tile action announces the dialog it opens: Company, Contacts, Month close and Documents; Baseline scope moved to Billing', () => {
+        const html = renderToStaticMarkup(<DetailsTab client={header} details={inClose} contacts={[]} {...dialogs} />);
 
-        expect(html.match(/aria-haspopup="dialog"/g)?.length).toBe(6);
+        expect(html.match(/aria-haspopup="dialog"/g)?.length).toBe(4);
+        expect(html).not.toContain('Zakres bazowy raportu');
+    });
+
+    test('Month close shows only while the module is on and the client has a close type', () => {
+        const tile = (details: ClientDetails) =>
+            renderToStaticMarkup(<DetailsTab client={header} details={details} contacts={[]} {...dialogs} />).includes('Zamknięcie miesiąca');
+
+        expect(tile(inClose)).toBe(true);
+        expect(tile({ ...inClose, modules: { month_close: false, report_baseline: false } })).toBe(false);
+        expect(tile({ ...inClose, month_close_type: null })).toBe(false);
+    });
+
+    test('the side holds the stage on top, then the month close and documents; the projects tile and the field history leave Details', () => {
+        const html = renderToStaticMarkup(
+            <DetailsTab client={header} details={inClose} contacts={[]} stage={{ stage: 'active', since: null, retainer_from: null }} {...dialogs} />,
+        );
+        const lead = html.slice(html.indexOf('data-place="lead"'), html.indexOf('data-place="main"'));
+        const aside = html.slice(html.indexOf('<aside'), html.indexOf('</aside>'));
+
+        expect(lead).toContain('Etap relacji');
+        expect(aside).toContain('data-place="side"');
+        expect(aside.indexOf('Zamknięcie miesiąca')).toBeLessThan(aside.indexOf('Dokumenty'));
+        expect(html).not.toContain('Projekty i repozytoria');
+        expect(html).not.toContain('Historia pól');
+    });
+
+    test('the DOM follows the phone column, so Tab goes stage, company, contacts, fields, month close, documents, danger zone on every width', () => {
+        const card = { assignee: null, sms_opt_out: false, fields: [], users: [] };
+        const html = renderToStaticMarkup(
+            <DetailsTab
+                client={header}
+                details={inClose}
+                contacts={[]}
+                card={card}
+                stage={{ stage: 'active', since: null, retainer_from: null }}
+                owner
+                {...dialogs}
+            />,
+        );
+        const order = ['Etap relacji', 'Firma', 'Kontakty', 'Pola klienta', 'Zamknięcie miesiąca', 'Dokumenty', 'Strefa zagrożenia'].map((label) =>
+            html.indexOf(`>${label}<`),
+        );
+
+        expect(html).toContain('data-phone-order=""');
+        expect(html).not.toContain('data-reflow');
+        expect(html).not.toContain('data-order');
+        expect(order.every((at) => at > -1)).toBe(true);
+        expect([...order].sort((a, b) => a - b)).toEqual(order);
     });
 
     test('the relationship stage has its own tile with the day it began and the way to change it', () => {
@@ -107,7 +158,7 @@ describe('DetailsTab', () => {
         expect(text).toContain('Abonament od02.06');
     });
 
-    test('projects list what stands behind each one and open its page; Firma says how many have a board', () => {
+    test('Company says how many projects have a board', () => {
         const html = renderToStaticMarkup(
             <DetailsTab
                 client={header}
@@ -120,37 +171,35 @@ describe('DetailsTab', () => {
                 {...dialogs}
             />,
         );
-        const text = html.replace(/<[^>]+>/g, '');
 
-        expect(text).toContain('Trello1 z 2 projektów połączony');
-        expect(text).toContain('Strona WWWTrello · w zamknięciu · 1 repozytoriumOtwórz');
-        expect(text).toContain('Galeriaprywatny · bez repozytoriumOtwórz');
-        expect(html).toContain('href="/clients/3/projects/4"');
-        expect(html).not.toContain('/edit#');
+        expect(html.replace(/<[^>]+>/g, '')).toContain('Trello1 z 2 projektów połączony');
     });
 
-    test('only an owner can archive or delete the client; an archived client can only be restored', () => {
+    test('the danger zone closes the main column, the owner archives there and only there, an archived client is restored', () => {
         const member = renderToStaticMarkup(<DetailsTab client={header} details={empty} contacts={[]} {...dialogs} />);
         const owner = renderToStaticMarkup(<DetailsTab client={header} details={empty} contacts={[]} owner {...dialogs} />);
         const archived = renderToStaticMarkup(<DetailsTab client={header} details={{ ...empty, archived: true }} contacts={[]} owner {...dialogs} />);
+        const text = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 
-        expect(member).not.toContain('Archiwizuj');
-        expect(member).not.toContain('Usuń klienta');
-        expect(owner).toMatch(/Archiwizuj klienta<\/span><button[^>]*>Archiwizuj<\/button>/);
-        expect(owner).toMatch(/Usuń klienta<\/span><button[^>]*>Usuń<\/button>/);
-        expect(archived).toMatch(/Przywróć klienta<\/span><button[^>]*>Przywróć<\/button>/);
-        expect(archived).not.toContain('Usuń klienta');
+        expect(member).not.toContain('Strefa zagrożenia');
+        expect(text(owner)).toContain(
+            'Strefa zagrożenia Archiwizuj klienta Klient znika z list; dane, czas i raporty zostają. Możesz go przywrócić. Archiwizuj',
+        );
+        expect(owner.indexOf('data-place="tail"')).toBeLessThan(owner.indexOf('Strefa zagrożenia'));
+        expect(owner.indexOf('</aside>')).toBeLessThan(owner.indexOf('Strefa zagrożenia'));
+        expect(owner).not.toContain('Usuń');
+        expect(text(archived)).toContain('Przywróć z archiwum Wraca na listy. Przywróć');
     });
 
-    test('an hourly rate and a segment show in Firma, and the close settings in their own section', () => {
+    test('an hourly rate and a segment show in Company, and the close settings in their own section', () => {
         const html = renderToStaticMarkup(
             <DetailsTab
                 client={header}
                 details={{
-                    ...empty,
+                    ...inClose,
+                    cooperation_type: 'hourly',
                     hourly_rate: 165,
                     segment: 'smb',
-                    month_close_type: 'maintenance',
                     ssh_config: 'meble-prod',
                     include_in_month_close: true,
                 }}
@@ -164,6 +213,23 @@ describe('DetailsTab', () => {
         expect(text).toContain('SegmentMała / średnia firma');
         expect(text).toContain('SSHmeble-prod');
         expect(text).toContain('W zamknięciuTak, w każdym miesiącu');
+    });
+
+    test('Rate shows only for an hourly contract', () => {
+        const rate = (cooperation: ClientDetails['cooperation_type']) =>
+            renderToStaticMarkup(
+                <DetailsTab client={header} details={{ ...empty, cooperation_type: cooperation, hourly_rate: 165 }} contacts={[]} {...dialogs} />,
+            ).includes('Stawka');
+
+        expect(rate('hourly')).toBe(true);
+        expect(rate('retainer')).toBe(false);
+    });
+
+    test('Client fields links its change history to Journal', () => {
+        const card = { assignee: null, sms_opt_out: false, fields: [], users: [] } as unknown as Parameters<typeof DetailsTab>[0]['card'];
+        const html = renderToStaticMarkup(<DetailsTab client={header} details={empty} contacts={[]} card={card} {...dialogs} />);
+
+        expect(html).toMatch(/href="\/clients\/3\/journal"[^>]*>Historia zmian</);
     });
 });
 
@@ -189,7 +255,7 @@ describe('SoloField', () => {
 });
 
 describe('DetailsTab for a private person', () => {
-    test('the block is headed Osoba prywatna and has no NIP row', () => {
+    test('the block is headed Individual and has no NIP row', () => {
         const html = renderToStaticMarkup(
             <DetailsTab client={header} details={{ ...empty, type: 'individual', name: 'Jan Przykładowy' }} contacts={[]} {...dialogs} />,
         );
@@ -199,7 +265,7 @@ describe('DetailsTab for a private person', () => {
         expect(html).not.toContain('NIP');
     });
 
-    test("the person's own phone and e-mail read under Kontakt, editable, with contact records kept apart", () => {
+    test("the person's own phone and e-mail read under Contact details, editable, with contact records kept apart", () => {
         const html = renderToStaticMarkup(
             <DetailsTab
                 client={header}
@@ -215,11 +281,11 @@ describe('DetailsTab for a private person', () => {
         expect(text).toContain('E-mailjan@poczta-testowa.test');
         expect(html).toContain('href="tel:+48 100 000 106"');
         expect(html).toContain('href="mailto:jan@poczta-testowa.test"');
-        expect(html.match(/aria-haspopup="dialog"/g)?.length).toBe(7);
+        expect(html.match(/aria-haspopup="dialog"/g)?.length).toBe(4);
         expect(text).toContain('Kontakty0');
     });
 
-    test('a company keeps its Firma heading and NIP row, with phone and email inside Firma', () => {
+    test('a company keeps its Company heading and NIP row, with phone and email inside Company', () => {
         const html = renderToStaticMarkup(<DetailsTab client={header} details={empty} contacts={[]} {...dialogs} />);
 
         expect(html).toContain('Firma');

@@ -1,4 +1,4 @@
-/* Phone first: A2f / List row Size=Phone (title, end meta, chevron); from 768 px the desktop row with Pokaż. */
+/* Phone first: A2f / List row Size=Phone (title, end meta, chevron); from 768 px the desktop row with Show. */
 
 .row {
     position: relative;
@@ -11,12 +11,13 @@
 }
 
 .row:last-child,
-.section:last-of-type > .row:has(+ .body[hidden]) {
+.section:last-of-type > .row:has(+ [data-closed]) {
     border-bottom-color: var(--solo-rule-end, var(--solo-rule));
 }
 
+/* the label keeps its width; the summary takes what is left and gives way first */
 .label {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     margin: 0;
     overflow: hidden;
@@ -28,9 +29,10 @@
 
 .summary,
 .phoneSummary {
-    flex: 0 1 auto;
+    flex: 1 1 0;
     min-width: 0;
     margin: 0;
+    text-align: end;
     overflow: hidden;
     color: var(--solo-fg-muted);
     font: 400 var(--solo-text-sub) / 1.4 var(--solo-font-text);
@@ -71,6 +73,10 @@
     inset: 0;
 }
 
+.toggle:disabled {
+    cursor: default;
+}
+
 .toggle:focus-visible {
     outline: none;
 }
@@ -92,15 +98,11 @@
 .caret {
     flex: none;
     color: var(--solo-fg);
-    transition: transform 120ms ease;
+    transition: transform var(--motion-base) var(--ease-standard);
 }
 
 .caret[data-open] {
     transform: rotate(90deg);
-}
-
-.body[hidden] {
-    display: none;
 }
 
 @media (min-width: 768px) {
@@ -123,7 +125,7 @@
         border-bottom: var(--solo-head-rule, 2px) solid var(--solo-rule-strong);
     }
 
-    .row:has(+ .body[hidden]) {
+    .row:has(+ [data-closed]) {
         border-bottom-color: var(--solo-rule-end, var(--solo-rule-strong));
     }
 

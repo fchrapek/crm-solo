@@ -77,6 +77,48 @@ final class TaskPageActionsTest extends TestCase
         );
     }
 
+    public function test_editing_the_project_moves_the_task_with_its_time_to_another_project_of_the_client(): void
+    {
+        $gallery = Project::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'name' => 'Galeria']);
+        $entry = TimeEntry::create([
+            'account_id' => $this->account->id, 'project_id' => $this->project->id, 'client_id' => $this->client->id, 'task_id' => $this->task->id,
+            'description' => 'Work', 'start_time' => '2026-10-07 08:00:00', 'end_time' => '2026-10-07 09:00:00', 'duration_minutes' => 60,
+        ]);
+
+        $this->actingAs($this->owner)
+            ->put("/tasks/{$this->task->id}", ['name' => 'Cennik PDF', 'list_name' => 'Doing', 'project_id' => $gallery->id])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame($gallery->id, $this->task->fresh()->project_id);
+        $this->assertSame($gallery->id, $entry->fresh()->project_id);
+        $this->assertSame(60, (int) $entry->fresh()->duration_minutes);
+    }
+
+    public function test_a_task_cannot_move_to_another_clients_project_from_the_form(): void
+    {
+        $other = Client::factory()->create(['account_id' => $this->account->id, 'name' => 'Fundacja Testowa']);
+        $foreign = Project::create(['account_id' => $this->account->id, 'client_id' => $other->id, 'name' => 'Strona fundacji']);
+
+        $this->actingAs($this->owner)
+            ->put("/tasks/{$this->task->id}", ['name' => 'Cennik PDF', 'project_id' => $foreign->id])
+            ->assertSessionHasErrors('project_id');
+
+        $this->assertSame($this->project->id, $this->task->fresh()->project_id);
+    }
+
+    public function test_the_edit_form_gets_the_clients_projects_only_when_it_asks(): void
+    {
+        $gallery = Project::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'name' => 'Galeria']);
+        Project::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'name' => 'Stary', 'archived_at' => now()]);
+
+        $this->page()->assertInertia(fn (Assert $page) => $page
+            ->missing('project_options')
+            ->reloadOnly('project_options', fn (Assert $reload) => $reload
+                ->where('project_options', fn ($options) => collect($options)->pluck('name')->all() === ['Galeria', 'General', 'Strona WWW']
+                    && collect($options)->firstWhere('name', 'Galeria')['id'] === $gallery->id))
+        );
+    }
+
     public function test_a_logged_time_row_carries_its_entry_for_the_edit_dialog(): void
     {
         $entry = TimeEntry::create([
@@ -110,7 +152,7 @@ final class TaskPageActionsTest extends TestCase
         $this->actingAs($this->owner)->deleteJson(route('tasks.destroy', $this->task))->assertOk();
 
         $this->actingAs($this->owner)->get(route('tasks.show', $this->task->id))->assertNotFound();
-        $this->actingAs($this->owner)->get(route('clients.show', ['client' => $this->client->id, 'tab' => 'zadania']))->assertOk();
+        $this->actingAs($this->owner)->get(route('clients.show', ['client' => $this->client->id, 'tab' => 'tasks']))->assertOk();
     }
 
     public function test_a_card_is_not_edited_archived_or_deleted_here_but_its_report_flag_is_the_crms(): void

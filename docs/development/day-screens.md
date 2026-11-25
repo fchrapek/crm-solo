@@ -6,15 +6,38 @@ rebuilt on the rail and search redesign and every page renders inside its shell:
 
 ## The day as data
 
-- `day_picks` (`DayPick`): tasks picked for a date, **at most 5** (`DayPlanner::MAX_PICKS`),
+- `day_picks` (`DayPick`): tasks picked for a date; **5 make a full day** (`DayPlanner::MAX_PICKS`) and more can be picked, with a warning each user can switch off in Mój profil, Zadania (`users.settings.warn_full_day`); a pick moved to another day keeps its row with `moved_to` and leaves the day's plan (`DayPick::scopeLive()`, `DayPlanner::moved()` for Podsumowanie),
   from today to the end of next week (`DayPlanner::isPlannable()`, web and agents alike), one row
-  per task per date, account-scoped (route binding too). Each
+  per task per date, account-scoped (route binding too). A move may go to any day ahead, and a pick
+  on any day from today on can be removed or moved again (`unpick()`, `crm unplan --day`), never on a
+  closed day. Every question "is this task on this day" reads live picks only (`scopeLive()`), so a
+  moved task is unpicked on the day it left and comes back to its suggestions. Each
   pick holds one of the five `slot`s, unique per account and date, so the cap holds in the
-  database when two requests add a pick at once; `position` stays the display order.
+  database when two requests add a pick at once; `position` stays the display order. Every plan
+  change (pick, move, unpick, dismiss) and every close or reopen of an account run in one
+  transaction that first locks the account's `day_plan_locks` row (`DayPlanner::holdingPlan()`), and
+  a move reads the task's other picks and writes the new row and their `moved_to` inside it, so two
+  moves of one task, or a move and a close, never interleave, however long one of them takes. A turn
+  not given within five seconds (MariaDB's `FOR UPDATE WAIT 5`) writes nothing and answers "the plan
+  is being changed, try again" (`PlanBusy`: a form error on the web, `refused` with `retry: true` for
+  `crm plan`/`unplan` and the MCP tools). Nothing references that row and the plan's transaction takes
+  no client or report row, so it never waits in a cycle with `ClientFinancialLock`. A close writes
+  its stamp first and then checks for a running timer in the same transaction, with that
+  transaction's first plain read, so the check's snapshot is taken after the stamp's write; a timer
+  refuses the close and the stamp rolls back unseen. A timer's own reopen (`reopenForTimer()`) takes
+  no lock: it writes its entry before it removes the stamp, and the removal either runs before the
+  close's stamp (which then waits for the timer's commit, so the check sees it) or waits on that
+  stamp and removes it once the close commits. On MariaDB 11.8 (snapshot isolation on) that last
+  case refuses the timer's start instead, with nothing written.
+- Several timers may run at once. The shell shares them all (`timers`) and shows the newest, or the one `?timer=` names (`timer`); with more than one, the timer tile and the phone strip carry "1 z 2" (`TimerSwitch`), a list to pick the shown one from.
+- Any day has its own page, `/day/RRRR-MM-DD` (`TodayController::day`): a past day is Podsumowanie for that date and can be closed or reopened from there, a day ahead is its plan, today redirects home. A day past the planning window (a moved pick's) says so instead of offering free places and Propozycje. The month tile marks every day of the month in two rows, each a link to its day; the counter is closed days over weekdays plus closed weekend days. A past day's page shows its own month, with the tile states read against today (`DayPlanner::month()`).
 - A pick left unfinished on an earlier day waits on today (`DayPlanner::carried()`, "z czwartku")
   until the task is done, picked again or dismissed; dismissing stamps `dismissed_at` on the task's
   past picks and never deletes them, so a past day's plan stays as it was.
 - `day_closes` (`DayClose`): the day's stamp, unique per account and date.
+- `day_plan_locks`: one row per account, made with the account (`Account::created`, older accounts by
+  migration) and only ever locked (no model); a plan change never inserts it and refuses with
+  `PlanBusy` when it is missing.
 - Dates are the **display timezone's** calendar day (`DayPlanner::today()`); storage stays UTC.
 - `DayPlanner` (`app/Services/Day`) holds every rule: picks, the full open list, off-plan work,
   closing, the month card, totals, the plan page's suggestions and the overdue count.
@@ -112,48 +135,113 @@ rebuilt on the rail and search redesign and every page renders inside its shell:
 | URL | View |
 |---|---|
 | `/` | Dziś (paper). The day list stays the default while timers run; Podsumowanie only when closed and nothing runs |
-| `/?widok=dzis` | Dziś, even after a close |
-| `/?widok=gotowe` | Podsumowanie: "Gotowe?" with the close button before a close, the stamp after |
-| `/?widok=timer[&timer=id]` | The vermilion focus view of a running timer (falls back to Dziś) |
-| `/jutro` | Plan tomorrow, with Propozycje |
-| `/zadania[?na=jutro]` | Full list of open tasks grouped by client; where picks are chosen (Propozycje on Jutro add too) |
+| `/?view=today` | Dziś, even after a close |
+| `/?view=summary` | Podsumowanie: "Gotowe?" with the close button before a close, the stamp after |
+| `/?view=timer[&timer=id]` | The vermilion focus view of a running timer (falls back to Dziś) |
+| `/tomorrow` | Plan tomorrow, with Propozycje |
+| `/week[?next=1]` | This week or next week, each day with its picks |
+| `/all-tasks[?for=tomorrow\|RRRR-MM-DD][&hidden=1][&from=day]` | Full list of open tasks grouped by client; where picks are chosen (Propozycje on Jutro add too). A day's page opens it for its own date with `from=day`, and Gotowe returns to that page |
 
 The day views (Dziś, Podsumowanie, Jutro, Tydzień) are the shell's pills on every day screen (`dayPills()` in
 `pages/today/place.ts`); once today is closed the Podsumowanie pill carries a check (`done` on a pill, every day
 view gets the `closed` prop). All of them stand on the redesign's tiles (`day.module.css`, `TileGrid`).
 
-- **Dziś** (`pages/today/day.tsx`, Figma 1075:578, phone 1075:780): one list tile with the weekday and the date
-  line, the picks as rows (tick, title, running time in vermilion or logged time, the client from 768 px, Start or
-  Stop, and "Usuń z dzisiaj" behind the row's more button), "Wybierz kolejne" with the free slots and Dodaj, then
-  Z poprzednich dni (Na dziś; Usuń behind the more button), Poza planem and Inne włączone timery when there are
-  any, and the tile's actions: Zamknij dzień (posts the close; disabled while a timer runs; a "Dzień zamknięty"
-  chip once closed) and Zaplanuj jutro. Beside it from 1100 px, below it otherwise: the vermilion timer tile
+- **One day head** (`pages/today/day-header.tsx`, Figma sections 1511:25540, 1515:26853, 1516:27842, 1516:27999,
+  1516:28115): every day screen (Dziś, Jutro, a day's page, Tydzień, Podsumowanie, Wszystkie zadania) takes
+  `DayHeading`, the heading alone with no date line under it, and `DayMonth`, the month tile whose label carries the
+  date ("Listopad · 22.11.2026", Tydzień the range "Listopad · 16.11 – 22.11.2026"; `monthTileLabel`, which
+  Podsumowanie's month figure uses too), so a change to the head lands on all of them. The day tile's header carries no
+  picked count (the add row says the free places); Tydzień keeps one per weekday, since it says which day is full.
+- **Day rows are one line**: every row's title is cut with an ellipsis from 768 px and shows whole on hover; a phone
+  wraps it and the row grows, a row with details to two lines at most (clamped, the whole title its tooltip and the
+  link's name; the link holds the clamp, so its focus ring is whole).
+- **Row details** (Figma Runda zmian (zaakceptowano), Shared · Row details (toggle) 1555:77897, the measurements
+  1557:346726): a task row on Dziś (picks, Z poprzednich dni, Poza planem) and in Propozycje keeps client, project,
+  due day and logged time out of the line and folds them under it (`Row details`, built by `taskDetails` in
+  `day.tsx`): Klient, Projekt, Termin, Czas, label over value with no background, a step under the 16 px title:
+  the value at the end meta's 13 px (`--solo-text-meta`, 18 px line, the primary ink), the label at 12 px
+  (`--solo-text-label`, 16 px line, the secondary ink) right above it, 8 px between lines of pairs. The pairs are one CSS grid with
+  fixed columns in that order, so the rows of a list line up whatever the text: from 768 px a text column shares the
+  width between 4 and 15 rem (`--role-detail-text`) and a date or a duration keeps 5.5 rem (`--role-detail-short`,
+  `short` on the detail). The columns are decided per list (`listDetails`, where the list is rendered): a column no
+  row of the list has a value for is left out of that list (no Termin on a list without due days), a column any row
+  has stays for every row, and from 768 px a row's missing value leaves its cell empty so the next row's Czas stays in
+  line. On a phone the shown pairs flow two to a line in their order, a missing value taking no cell. A long value is cut with an ellipsis and its whole
+  text is the `title` tooltip; only a journal note's Tekst takes the whole line, uncut. A title that is a link
+  has no arrow and no underline: with a pointer over it, it takes the secondary ink (not on the selected row), and it
+  keeps the focus ring. A task from an earlier day adds Z dnia ("czw. 19.11") before Czas. The row has no
+  hover band: only the chevron before the end action shows one, a 32 px disc around its glyph. Start and Stop are the same
+  32 px disc (`IconButton` size `row`), and so are the hover and ring of every bare `IconButton` (look `quiet`: the
+  more button, the calendar's arrows, the way back), inside their larger target. Czas is every finished entry on the task (`logged_minutes`, `App\Services\Time\LoggedMinutes`, one query
+  per list), while the row's own time stays the day's (`minutes`, in the secondary ink). A task a timer runs on
+  shows the dot and the live time before the chevron at all times: the row carries `running_id` (picks, Poza
+  planem, and the suggestions since this change, `DayPlanner::runningIds`) and the page finds that timer among the
+  account's running timers (`timerOf`), whose start the shared `Elapsed` ticks like the rail.
+- **The day panel's lower part** (Dziś, Jutro, Podsumowanie): every rule stands 12 px in, the one under Dodaj zadanie
+  too; rows and Dodaj zadanie are 16 px, group headings 14; the closing buttons stand 24 px under the last row
+  (`TileActions apart`); the plan button is "Plan na jutro" whatever tomorrow holds. Headings, notes, tile headers and
+  tile figures have whole-pixel line heights (the day poster `round()`s its caps leading), so every rule starts on a
+  pixel.
+- **The row menu's calendar** (`pick-menu.tsx`, Figma 1483:12922, phone 1483:13273): Wybierz datę swaps the menu for
+  Przenieś na, a second step with a back arrow before the heading (`BottomSheet onBack` on a phone); the arrow and
+  Escape go back to the menu's items, a second Escape closes it.
+
+- **Dziś** (`pages/today/day.tsx`, Figma 1075:578, phone 1075:780, rows 3E 1375:27445, phone 1375:27701): one list
+  tile with the weekday (no date line: the month tile's label names the date, "Listopad · 21.11.2026"), the picks as
+  rows (tick, title, the running dot and time or the day's logged time, the chevron to the details,
+  Start or Stop, and "Usuń z dzisiaj" behind the row's more button), the add field with the free places as its quiet
+  end meta (not on a closed day), then Z poprzednich dni (the title on one line; the chevron, whose
+  details name the day it came from; a quiet Na dziś; Usuń behind the more button), Poza planem (tick, title, time, the
+  chevron, Stop on a running one, Do planu behind the more button)
+  and Inne włączone timery when there are any, and the tile's actions: Zamknij dzień (posts the close; disabled while a timer runs; a "Dzień zamknięty"
+  chip once closed) and Plan na jutro. Beside it from 1100 px, below it otherwise: the vermilion timer tile
   (from 768 px only: a phone has the row and the strip, never a third) and the month number tile.
 - **Podsumowanie** (`summary.tsx`, Figma 1091:14556, phone 1091:14778, closed 1091:15438, blocked 1091:15874):
-  the poster (Gotowe? before a close, Gotowe. after) with the date, four number tiles (zaplanowane or zadania,
-  zalogowane, klienci, the month; two by two below 1100 px), then the plan tile: the picks (tick, title, the time
-  of a done one, the client from 768 px, Stop on a running one), Poza planem, Inne włączone timery and the close:
+  the poster (Gotowe? before a close, Gotowe. after), four number tiles (zaplanowane or zadania,
+  zalogowane, klienci, the month with the date in its label; two by two below 1100 px), then the plan tile: the picks (tick, title, the time
+  of a done one or the running dot and time, the client from 768 px, Stop on a running one), Poza planem, Inne
+  włączone timery and the close:
   Zamknij dzień with the state beside it (a chip, or the reason while a timer runs), or the Dzień zamknięty chip
   with Otwórz dzień. A close flashes "Dzień zamknięty." Beside it: Czas wg klienta and Jutro (one line and the
   plan button, ink once the day is closed). Czas wg klienta is summed on the page from the pick and off-plan rows
   (`timeByClient`) and is left out when they do not add up to the day's logged total (time with no task).
-- **Jutro** (`plan.tsx`, Figma 1091:27911, phone 1091:28116): the weekday poster with the date and the count,
-  the list tile (tick, title, client, Usuń; the free places as its last row) and, while a place is free and there
-  is something to suggest, the Propozycje tile beside it (below on a phone; `DayPlanner::suggestions`: today's
-  unfinished picks first, then the soonest due day, then work in hand, three at most; Na jutro uses the pick
-  route; the last row opens the full list). The action is "Wróć do dnia" while proposing, else "Zapisz plan",
-  and the free places then lead to the full list.
-- **Tydzień** (`week.tsx`, Figma 1091:28683, phone 1091:29016): the poster with the week's dates, Ten tydzień
+- **Jutro** (`plan.tsx`, Figma 2E 1375:26662, phone 1375:26876): the weekday poster, the list tile
+  (tick, title, client, Usuń; the add field with the free places) and, while a place is free and there is something to suggest, the
+  Propozycje group in the same tile (`DayPlanner::suggestions`: today's unfinished picks first, then the soonest due
+  day, then work in hand, three at most; each is the title, the running dot and time when a timer runs
+  on it, the chevron to Klient, Projekt, Termin and Czas, a quiet Na jutro; the last row opens the full list and has
+  no chevron, like every row of Wszystkie zadania, which carries title and project only). Beside it from
+  1100 px, below otherwise, the running timer and the month tile. The action is "Wróć do dnia" while proposing,
+  else "Zapisz plan".
+- **Row context line**: `Row`'s `context` is a line under the title on a phone only, wrapping, for a row whose end
+  meta (`wideMeta`) says it from 768 px; `wrap` lets the title wrap from 768 px too, for a row in a narrow side column only.
+- **Tydzień** (`week.tsx`, Figma 1091:28683, phone 1091:29016): the poster (the month tile names the week's dates), Ten tydzień
   and Następny as a second row of pills, one tile with the seven dates (each a header with its count and its
-  picks; a past unfinished pick offers Na dziś and Usuń behind the more button; a day with a free place offers
-  Dodaj or Wybierz), and beside it the running timer and the month tile.
+  picks; a past unfinished pick offers Na dziś and Usuń behind the more button; a plannable day ends in a row with
+  Dopisz zadanie, which opens the add field for that date, and Wybierz, the full list), and beside it the running
+  timer and the month tile.
+- **The add field** (`add-or-pick.tsx`, Figma 1F, 1412:21781): one combobox that picks an open task or adds a new one
+  to the day. At rest a quiet "Dodaj zadanie" row; with the cursor and nothing typed, the tasks worked on last and the
+  recent projects (choosing one sets where a new task goes); typed (two characters at least), "Z listy (n)" with the
+  open tasks whose name holds the text (`DayPlanner::matching`, the suggestions' order in SQL, hidden groups included,
+  the date's picks left out; `LikePattern` takes %, _ literally), then
+  Nowe with "Trafi do" and the project pill (`project-picker.tsx`: search, recent projects, clients as headings over
+  their projects, `ProjectChoices`). The pill is preset only when exactly one timer runs (its project). Arrows walk
+  the rows, Enter takes the highlighted one (the first match, or Nowe); while the matches are not in, or the search
+  failed, nothing is selected and Enter waits for a key. Tab from the field reaches Trafi do and the full list. Esc
+  and every close give the focus back to the row or the button that opened the field. A new task goes
+  through `POST /day/add` (`DayPlanner::addNewTask`: `TaskWriter::create` and the pick in one plan transaction;
+  `day_add_requests` keeps each `request_id` per account with its payload and task, so the same id and payload returns
+  the first task, and another payload or a deleted task answers 409), then a toast names it
+  with Zmień, which opens the task's edit form (`?change`). A full day says so in the menu and still adds. From 768 px
+  the field takes the row and the menu opens under it; a phone keeps the row and opens a sheet with the field on top.
 - **Wszystkie zadania** (`tasks.tsx`, drawn as a dialog in Figma 1087:5502, kept as the page `/zadania`): the
   token "Wszystkie zadania", and the days a pick can go to as the pills (`dayPillsFor`: today, tomorrow, the
   next working days, plus the day Tydzień sent). One list tile grouped by client: the head with its count, three
   rows (picked ones always show) and "Pokaż N więcej"; a row is the title, the project from 768 px and the pick
   button; a picked row takes the selection fill and says Wybrane. Ukryj grupy and the hidden count sit under the
   poster, and Gotowe leads back to the day view the list was opened for.
-- **Timer** (`/?widok=timer`, not in the redesign): the earlier content on a vermilion tile inside the shell: the
+- **Timer** (`/?view=timer`, not in the redesign): the earlier content on a vermilion tile inside the shell: the
   task title, client · project, the clock and "od 09:14"; beside it (below on phones) DZIŚ with the day's picks
   as Queue rows, "dziś razem" and Stop. Whether it stays is an open decision.
 
@@ -173,7 +261,7 @@ view gets the `closed` prop). All of them stand on the redesign's tiles (`day.mo
   surface, so they read on vermilion and cobalt. `InertiaPagination look="solo"` is the Solo
   pagination.
 - The layout resolver gives every signed-in page the shell ([shell.md](shell.md)); only `auth/login` and
-  `auth/czesc` are bare. The shell mounts the one toaster.
+  `auth/waitlist` are bare. The shell mounts the one toaster.
 
 ## Phones
 
@@ -192,10 +280,11 @@ Mobile (selected)).
   place (inline from 768 px, the sheet while open below it); CSS still decides what shows, and the server
   renders the inline copy.
 - **Navigation.** The shell renders the rail and `<TabBar>`; both list Dziś, Klienci, Kontakty
-  and Ustawienia, the views being worked on (owner decision, 2026-10-08). Leady, Finanse and the month close
+  and, for an owner, Ustawienia, the views being worked on (owner decision, 2026-10-08); a member's fourth tab
+  on a phone is Mój profil ([shell.md](shell.md)). Leady, Finanse and the month close
   are off the menu for now and still open by URL. The active section comes from the URL
   (`tabBarSection`; a page no section owns lights none). Wyloguj is the avatar menu in the rail and the last row
-  of the Ustawienia list on phones. The shell clears everything fixed over the page end
+  of the Ustawienia list on phones, and the Sesja tile of Mój profil on both. The shell clears everything fixed over the page end
   (the tab bar, a floating button or bottom action, the timer strip, the helper button: [shell.md](shell.md),
   the phone's fixed stack), safe areas included; the floating button stands on the tab bar clearance at
   `--solo-fab-height`. The viewport meta has `viewport-fit=cover`.
@@ -208,7 +297,7 @@ Mobile (selected)).
   header (the Anuluj pill, the centred title, the ink submit; no ×), the only scrolling body, footer actions that sit side by side
   while their widths, the gap and 24 px of headroom fit and stack full width with the primary on top
   when they do not, measured after mount), `ActionMenu` / `ActionMenuItem` / `ActionMenuLink` (DropdownMenu
-  `look="action"`), `IconButton`, `BottomAction` (the screen's main action: below 768 px a 48 px full-width
+  `look="action"`), `IconButton` (the focus ring on its own edge, so a focused one keeps its 40 or 44 px), `BottomAction` (the screen's main action: below 768 px a 48 px full-width
   button fixed above the tab bar in the surface's main look, an optional small secondary above it, and the page
   clears it; from 768 px both buttons render where the page puts them; Timer, Podsumowanie, Plan jutro, Zadanie,
   Projekt), `ListRow`, `SegmentedControl` (ToggleGroup
@@ -251,16 +340,13 @@ Mobile (selected)).
   Zrobione and the time section. The tab's badge counts what the tab shows
   (`ClientTasksQuery::visibleOpenTasks`: the three lanes, unlisted tasks in To-Do, for a retainer; the whole open
   list for an order), so Backlog never inflates it.
-- **Dziennik** (333:2817, 333:3134, 333:3265): the summary sentence, a Relacja z klientem row (the new
-  entries in accent) and a Projekty row, then Praca as `ListRow`s with NOWE on new work rows only.
-  Relacja pushes its own screen (Dziennik back link, title, stage line, notes and the ROZLICZENIE
-  settlement rows, read-only), held in `?relacja`: a client-side Inertia visit (`router.push`), so
-  there is no request and no record visit, the browser's back closes it with the scroll restored, and
-  the back link pops that entry (or replaces the URL when the screen was opened directly). A note
-  written there (or older notes loaded) comes back to Dziennik with that history return, client side;
-  any server visit drops the held copy. Closing the screen gives the focus back to the Relacja row. From 768 px
-  `?relacja` changes nothing. Projekty opens a Gotowe sheet (hours this month, Trello, + Projekt to the
-  old page). + Wpis floats and opens the entry form as a sheet; Starsze pages both lists as before.
+- **Dziennik** (7A, 1454:1463, phone 1454:1977): Praca leads the main column (Starsze pages it) and SMS follows it;
+  beside them Projekty (the month in the head, each project with its hours as end meta) and Relacja z klientem (the
+  stage line, the sentence since the last visit, the five newest entries cut at two lines, and Cała relacja with the
+  count, `journal.notes_total`). A phone reads Projekty, Relacja, Praca, SMS: one DOM, the column first by CSS order.
+  Cała relacja opens the sub-view `?view=relationship` (1368:18948): the place bar's third token Relacja, the poster
+  Relacja z klientem, every entry in full under its month, 20 a page with Starsze (`ClientJournalQuery::RELATION_PAGE`),
+  and beside it Etap relacji with Zmień etap. Durations in the sentence and the rows never break ("6 h 30").
 - **Rozliczenia** (334:3308, 334:3502, 334:3611, 334:3721): the desktop tree and the phone tree render
   from the same props and CSS shows one (`.wide` is `display: contents` from 768 px). A retainer shows the
   balance poster: the latest closed month while a later one is open ("bank po wrześniu", the closure and
@@ -289,8 +375,8 @@ Mobile (selected)).
   task name past 60 characters steps down to `--solo-poster-record-long` with its own looser leading
   (`--solo-poster-record-long-leading`, 1), so Ą, Ę and Ó clear the line above. No measuring script. A
   task's name (`Poster size="record"`) is shown whole, never cut at a line count: at the caps leading a
-  hidden line's accents share a strip with the last shown line's ogonek. A client's name is the page
-  `Poster` through `RecordFrame`, at the Heading size, wrapping freely.
+  hidden line's accents share a strip with the last shown line's ogonek. A client's name takes the same
+  path (`RecordFrame titleSize="record"`): the task's size and long step, wrapping whole.
 - Fonts: two families only ([theming.md](theming.md), Typography). Archivo (variable, `wdth 62` for
   posters) is self-hosted; the mono web faces were removed on 2026-11-12.
   **Switzer** is the official variable woff2 from Fontshare in `public/fonts/switzer/`, preloaded and
@@ -336,7 +422,7 @@ stands on `TileGrid`: the main tiles first, the time tile and the activity besid
 - **Aktywność** (`App\Services\Tasks\TaskActivity`): closed time entries, task notes, agent audit rows, agent
   finishes and reopens, and the owner's current finish; owner edits of the brief or description leave no trail.
   The tile shows the three newest rows (a short title, who and when at the end) and the agent chip while an
-  agent's timer runs. Cała historia (`?historia`) loads every row into a dialog (a sheet on a phone), where a
+  agent's timer runs. Cała historia (`?history`) loads every row into a dialog (a sheet on a phone), where a
   logged time row carries its entry and opens `TimeEntryEditDialog`.
 
 ## Ustawienia and Kontakty
@@ -346,21 +432,32 @@ own rail item. Ustawienia uses `RecordHeader` (the tab is the place token, the c
 `phoneTitle` puts the tab name under the phone back link, and the section list has no back link). Kontakty
 opens like Klienci: the + in the phone nav bar, + Kontakt on the row above the poster from 768 px.
 
-- **Ustawienia** (`settings/index`, `SettingsController`): `/settings` is the phone's section list (one
-  row per tab with its summary) and, from 768 px, the Konto tab; `/settings/{konto|wyglad|leady|integracje|agenci}`
-  are the tabs, each sending only its own props. The left nav is the same on every tab. Konto: the profile
-  and Użytkownicy (the old users pages; `users.store/update/destroy/restore` unchanged). Wygląd: language,
-  mode and accent, stored per browser as before; caps choices from
-  768 px, a row and a sheet per setting below. Leady: the shipped sources read only, custom sources added,
-  relabelled (the slug is fixed once created) or removed, each save PATCHing the whole list. Integracje:
-  each provider's state, Konfiguruj (the old edit form in a `ResponsiveDialog`) and Synchronizuj, plus a
-  line saying whether OpenAI and the kiwwwi forms are set on the server (never the values). Agenci: agent
-  tokens ([agent-crm-interface.md](agent-crm-interface.md#agent-tokens-and-abilities)). The old `/users*`
-  and `/integrations*` pages redirect to their tab.
+- **Ustawienia** (`settings/index`, `SettingsController`, Figma `1543:90041`): the account's settings, the owner's
+  only; a member finds no page there (404, `SettingsController::ownerOnly()`) and has no rail item or tab for it.
+  `/settings` is the phone's section list (Mój profil on its own first, then one row per tab with its summary, then
+  Wyloguj) and, from 768 px, Ogólne; `/settings/{general|leads|forms|messages|integrations}` are the five tabs on one
+  row, each sending only its own props. Ogólne: Moduły (a switch or a link per module, what it does in its (i)), the
+  client fields tiles (built in, the account's, archived) and, in the side column, Użytkownicy (the old users pages;
+  `users.store/update/destroy/restore` unchanged) and how fields work. Leady: the shipped sources read only, custom
+  sources added, relabelled (the slug is fixed once created) or removed, each save PATCHing the whole list.
+  Formularze: the website forms with the mail sender beside them. Wiadomości: the SMS tiles (Wysyłka SMS, Szablony
+  SMS, Reguły SMS), then the e-mail tiles (Wysyłka e-mail, Szablony e-mail; absent with billing off), the SMS queue in
+  the side column. Integracje: each provider's state, Konfiguruj (the old edit form in a `ResponsiveDialog`) and
+  Synchronizuj, then Tokeny agentów ([agent-crm-interface.md](agent-crm-interface.md#agent-tokens-and-abilities)),
+  and in the side column whether OpenAI and the kiwwwi forms are set on the server (never the values). The retired
+  tab addresses (`account`, `client-fields`, `sms`, `email`, `agents`, `appearance`, `tasks`, the Polish ones before
+  them, `/users*` and `/integrations*`) are rows of `App\Http\LegacyUrls`, each one hop to its new home.
+- **Mój profil** (`profile/index`, `ProfileController`, `/profile`): every user's own settings, opened from the
+  account menu (and on a phone from the Ustawienia list, or a member's fourth tab). Profil (name, e-mail, password in
+  the profile form), Wygląd (language and mode, stored per browser; caps choices from 768 px, a row and a sheet per
+  setting below), Pomocnik (two switches saved to the account, `PATCH /profile/appearance`; [shell.md](shell.md), The
+  helper), Zadania (the full day warning and, for an owner with billing, billed time on tasks; `PATCH /profile/tasks`),
+  then Konto (the account's name, my role; for an owner a link to Użytkownicy, for a member the owner's name) and
+  Sesja with Wyloguj.
 - **Kontakty** (`contacts/index`): search (every word must match the person, an email, the phone, the city
   or the client's name), the table (Osoba, Klient, E-mail) or phone rows, Solo pagination. Create and edit
   are `ContactDialog`, the form Klient Dane uses, with the Klient select, a folded Adres i notatki and
-  Usuń kontakt (or Przywróć for a deleted one) in edit mode. `?kontakt=new` and `?kontakt={id}` open it,
+  Usuń kontakt (or Przywróć for a deleted one) in edit mode. `?contact=new` and `?contact={id}` open it,
   which is where `/contacts/create` and `/contacts/{id}/edit` (and Dane's contact rows) now land.
 
 ## Not built yet

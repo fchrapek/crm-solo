@@ -1,4 +1,4 @@
-/* Figma: Zadanie (1094:40618, phone 1094:40855). The tiles and their columns are the shared parts; this is what the task's own blocks add. */
+/* Figma: Task (1094:40618, phone 1094:40855). The tiles and their columns are the shared parts; this is what the task's own blocks add. */
 .head {
     gap: var(--role-space-12);
 }
@@ -307,4 +307,20 @@
     .timeStats {
         --solo-display-stat: 3.625rem;
     }
+}
+
+/* a row that is not one label for one control */
+.reportRow[data-plain] {
+    cursor: default;
+}
+
+.billedEnd {
+    display: inline-flex;
+    flex: none;
+    gap: var(--role-space-12);
+    align-items: center;
+}
+
+.billedHours {
+    font-variant-numeric: tabular-nums;
 }

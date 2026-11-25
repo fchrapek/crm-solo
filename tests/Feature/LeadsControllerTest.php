@@ -10,6 +10,7 @@ use App\Models\Lead;
 use App\Models\LeadStageEvent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -110,6 +111,33 @@ final class LeadsControllerTest extends TestCase
         $lead = Lead::where('name', 'Inbound DM')->sole();
         $this->assertSame('conversation', $lead->stage, 'social DMs enter at conversation');
         $this->assertNull(LeadStageEvent::where('lead_id', $lead->id)->sole()->from_stage);
+    }
+
+    public function test_a_lead_whose_history_line_cannot_be_written_is_not_kept(): void
+    {
+        $this->withoutExceptionHandling();
+        LeadStageEvent::creating(fn () => throw new RuntimeException('no room for the history line'));
+
+        try {
+            $this->actingAs($this->user)->post('/leads', ['pipeline' => 'filipchrapek', 'source' => 'social', 'name' => 'Half saved']);
+            $this->fail('The lead was saved without its history line.');
+        } catch (RuntimeException) {
+            $this->assertSame(0, Lead::where('name', 'Half saved')->count());
+        }
+    }
+
+    public function test_an_edit_whose_stage_move_cannot_be_recorded_changes_nothing(): void
+    {
+        $this->withoutExceptionHandling();
+        $lead = $this->lead(['name' => 'Before', 'pipeline' => 'kiwwwi', 'source' => 'www-form']);
+        LeadStageEvent::creating(fn () => throw new RuntimeException('no room for the history line'));
+
+        try {
+            $this->actingAs($this->user)->put("/leads/{$lead->id}", ['name' => 'After', 'stage' => 'offer']);
+            $this->fail('The edit was saved without its stage move.');
+        } catch (RuntimeException) {
+            $this->assertSame('Before', $lead->fresh()->name);
+        }
     }
 
     public function test_store_rejects_an_unlisted_source_and_a_visitor_stage(): void
@@ -230,6 +258,18 @@ final class LeadsControllerTest extends TestCase
         $this->actingAs($this->user)->post("/leads/{$lead->id}/convert")->assertRedirect();
 
         $this->assertSame(1, Client::count(), 'a second convert must not mint another client');
+    }
+
+    public function test_a_deleted_lead_opens_marked_as_deleted_and_can_be_restored(): void
+    {
+        $lead = $this->lead(['pipeline' => Lead::pipelines()[0], 'source' => 'referral']);
+        $lead->delete();
+
+        $this->actingAs($this->user)->get("/leads/{$lead->id}/edit")->assertOk()
+            ->assertInertia(fn ($page) => $page->where('lead.deleted_at', fn ($value) => $value !== null));
+
+        $this->actingAs($this->user)->put("/leads/{$lead->id}/restore")->assertSessionHas('success');
+        $this->assertFalse($lead->fresh()->trashed());
     }
 
     public function test_leads_are_account_scoped(): void

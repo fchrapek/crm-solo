@@ -2,11 +2,11 @@ import { router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { FormInput, FormLabel, FormMessage } from '@/components/form';
-import { Button } from '@/components/ui/button';
+import { FormLabel, FormMessage } from '@/components/form';
+import { SoloInput, SoloTextarea } from '@/components/solo/field';
 import { Checkbox } from '@/components/ui/checkbox';
+import { SoloButton } from '@/components/solo/primitives';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
 
 import styles from './project-form-dialog.module.css';
 
@@ -86,7 +86,7 @@ export function ProjectFormDialog({ open, onOpenChange, clientId, initial }: Pro
                         <FormLabel htmlFor="project-name" error={errors.name}>
                             {t('Name')}
                         </FormLabel>
-                        <FormInput
+                        <SoloInput
                             id="project-name"
                             type="text"
                             value={name}
@@ -95,14 +95,14 @@ export function ProjectFormDialog({ open, onOpenChange, clientId, initial }: Pro
                             autoFocus
                             maxLength={255}
                             disabled={processing}
-                            error={errors.name}
+                            aria-invalid={errors.name ? true : undefined}
                         />
                         <FormMessage error={errors.name} />
                     </div>
 
                     <div>
                         <FormLabel htmlFor="project-description">{t('Description')}</FormLabel>
-                        <Textarea
+                        <SoloTextarea
                             id="project-description"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
@@ -130,7 +130,7 @@ export function ProjectFormDialog({ open, onOpenChange, clientId, initial }: Pro
                                 <FormLabel htmlFor="project-backup-path" error={errors.backup_path}>
                                     {t('Backup folder')}
                                 </FormLabel>
-                                <FormInput
+                                <SoloInput
                                     id="project-backup-path"
                                     type="text"
                                     value={backupPath}
@@ -138,7 +138,7 @@ export function ProjectFormDialog({ open, onOpenChange, clientId, initial }: Pro
                                     placeholder="/path/to/backups/<client>/<site>"
                                     maxLength={1024}
                                     disabled={processing}
-                                    error={errors.backup_path}
+                                    aria-invalid={errors.backup_path ? true : undefined}
                                 />
                                 <FormMessage error={errors.backup_path} />
                                 <p className={styles.sectionHint}>
@@ -151,12 +151,12 @@ export function ProjectFormDialog({ open, onOpenChange, clientId, initial }: Pro
                     )}
 
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={processing}>
+                        <SoloButton variant="pill" type="button" onClick={() => onOpenChange(false)} disabled={processing}>
                             {t('Cancel')}
-                        </Button>
-                        <Button type="submit" disabled={processing}>
+                        </SoloButton>
+                        <SoloButton variant="ink" size="md" type="submit" disabled={processing}>
                             {processing ? t('Saving…') : isEdit ? t('Save') : t('Create')}
-                        </Button>
+                        </SoloButton>
                     </DialogFooter>
                 </form>
             </DialogContent>

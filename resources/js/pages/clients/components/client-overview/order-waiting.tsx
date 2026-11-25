@@ -7,7 +7,7 @@ import tasks from '@/routes/tasks';
 import { useTranslation } from 'react-i18next';
 import type { OrderWaitingInvoice, OrderWaitingTask } from './types';
 
-/** An order client's rows of Czeka na ciebie: the next dated task with its timer, the unpaid invoice. */
+/** An order client's rows of Waiting for you: the next dated task with its timer, the unpaid invoice. */
 export function OrderWaitingRows({
     clientId,
     task,
@@ -55,7 +55,7 @@ export function OrderWaitingRows({
                                 {t('Open')}
                             </a>
                         ) : (
-                            <SoloButtonLink href={clients.show({ client: clientId, tab: 'rozliczenia' }).url} variant="secondary" size="control">
+                            <SoloButtonLink href={clients.show({ client: clientId, tab: 'billing' }).url} variant="secondary" size="control">
                                 {t('Open')}
                             </SoloButtonLink>
                         )

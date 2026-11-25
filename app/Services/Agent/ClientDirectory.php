@@ -7,6 +7,7 @@ namespace App\Services\Agent;
 use App\Models\Client;
 use App\Models\ClientRetainer;
 use App\Services\Clients\ClientBillingMode;
+use App\Support\LikePattern;
 use App\Support\LocalCalendar;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -62,12 +63,11 @@ final class ClientDirectory
             ->when($stage !== null, fn (Builder $q) => $q->where('lifecycle_stage', $stage))
             ->when($type !== null, fn (Builder $q) => $q->where('cooperation_type', $type))
             ->when($search !== '', function (Builder $q) use ($search): void {
-                $like = '%'.addcslashes($search, '\\%_').'%';
-                $q->where(fn (Builder $inner) => $inner
-                    ->where('name', 'like', $like)
-                    ->orWhere('email', 'like', $like)
-                    ->orWhere('phone', 'like', $like)
-                    ->orWhere('tax_id', 'like', $like));
+                $q->where(function (Builder $inner) use ($search): void {
+                    foreach (['name', 'email', 'phone', 'tax_id'] as $at => $column) {
+                        LikePattern::where($inner, $column, $search, $at === 0 ? 'and' : 'or');
+                    }
+                });
             });
 
         $total = (clone $query)->count();

@@ -13,7 +13,7 @@ use Laravel\Sanctum\NewAccessToken;
 
 /**
  * Issuing, re-scoping and revoking agent tokens, for the artisan commands and
- * the Agenci settings tab alike. Only the SHA-256 hash is stored; the plain
+ * the Agents settings tab alike. Only the SHA-256 hash is stored; the plain
  * text exists once, in the NewAccessToken that issue() returns.
  */
 final class AgentTokens

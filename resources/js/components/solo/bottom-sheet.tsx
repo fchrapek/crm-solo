@@ -1,4 +1,5 @@
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { fullText } from '@/lib/plain-text';
 import { type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IconButton } from './icon-button';
@@ -7,14 +8,16 @@ import { SoloButton, touchTargetClass } from './primitives';
 
 export interface BottomSheetPanelProps {
     title: ReactNode;
-    /** close: the round close button; done: a centred title and Gotowe; save: the Anuluj pill, the centred title and an ink submit (form sheets, Figma 747:18916). */
+    /** close: the round close button; done: a centred title and Done; save: the Cancel pill, the centred title and an ink submit (form sheets, Figma 747:18916). */
     action?: 'close' | 'done' | 'save';
-    /** The save header's submit label, Zapisz by default. */
+    /** The save header's submit label, Save by default. */
     saveLabel?: ReactNode;
     /** Disables the save header's buttons while the form is submitting. */
     saving?: boolean;
-    /** Adds Wyczyść at the start of a done header. */
+    /** Adds Clear at the start of a done header. */
     onClear?: () => void;
+    /** A sheet that is the second step of a menu: a back arrow before the title, and Escape goes back instead of closing. */
+    onBack?: () => void;
     description?: ReactNode;
     /** The footer, outside the scrolling body: touch-size SoloButtons, secondary first. */
     actions?: ReactNode;
@@ -34,6 +37,8 @@ interface BottomSheetProps extends BottomSheetPanelProps {
 
 /** Figma: Mobile / Bottom sheet. */
 export function BottomSheet({ open, defaultOpen, onOpenChange, trigger, description, onCloseAutoFocus, ...panel }: BottomSheetProps) {
+    const { onBack } = panel;
+
     return (
         <Sheet open={open} defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
             {trigger !== undefined && <SheetTrigger asChild>{trigger}</SheetTrigger>}
@@ -41,6 +46,14 @@ export function BottomSheet({ open, defaultOpen, onOpenChange, trigger, descript
                 side="bottom"
                 showCloseButton={false}
                 onCloseAutoFocus={onCloseAutoFocus}
+                onEscapeKeyDown={
+                    onBack === undefined
+                        ? undefined
+                        : (event) => {
+                              event.preventDefault();
+                              onBack();
+                          }
+                }
                 {...(description === undefined ? { 'aria-describedby': undefined } : {})}
             >
                 <BottomSheetPanel description={description} {...panel} />
@@ -53,6 +66,7 @@ export function BottomSheetPanel({
     title,
     action = 'close',
     onClear,
+    onBack,
     saveLabel,
     saving,
     description,
@@ -80,7 +94,10 @@ export function BottomSheetPanel({
                     ) : (
                         <span className={styles.sheetSpacer} aria-hidden="true" />
                     ))}
-                <SheetTitle className={styles.sheetTitle}>{title}</SheetTitle>
+                {onBack !== undefined && <IconButton icon="chevron-left" look="quiet" label={t('Back')} className={styles.sheetBack} onClick={onBack} />}
+                <SheetTitle className={styles.sheetTitle} title={fullText(title)}>
+                    {title}
+                </SheetTitle>
                 {action === 'save' ? (
                     <SoloButton type="submit" variant="ink" size="sm" className={`${styles.sheetSave} ${touchTargetClass}`} disabled={saving}>
                         {saveLabel ?? t('Save')}
@@ -93,11 +110,11 @@ export function BottomSheetPanel({
                     </SheetClose>
                 ) : (
                     <SheetClose asChild>
-                        <IconButton icon="close" label={t('Close')} />
+                        <IconButton icon="close" look="quiet" label={t('Close')} />
                     </SheetClose>
                 )}
             </div>
-            <div className={styles.sheetBody}>
+            <div className={styles.sheetBody} data-slot="sheet-body">
                 {description !== undefined && <SheetDescription className={styles.sheetDescription}>{description}</SheetDescription>}
                 {children}
             </div>
@@ -114,7 +131,11 @@ export function BottomSheetPanel({
     );
 }
 
-/** Figma 347:5881: the actions sit side by side while they fit, else stack full width with the primary on top. */
+/** Figma 347:5881: the actions sit side by side while they fit, else stack full width with the primary on top, on a tone band across the sheet. */
 function SheetActions({ children }: { children: ReactNode }) {
-    return <div className={styles.sheetActions}>{children}</div>;
+    return (
+        <div className={styles.sheetFoot}>
+            <div className={styles.sheetActions}>{children}</div>
+        </div>
+    );
 }

@@ -24,7 +24,7 @@ export const WithLink: Story = { args: { meta: undefined, action: <SectionAction
 
 export const Quiet: Story = { args: { label: 'Poza planem', meta: '1', quiet: true } };
 
-/** Figma Inset=None: the head on the page with no block under it (Jutro on Podsumowanie, the month card). */
+/** Figma Inset=None: the head on the page with no block under it (Tomorrow on Summary, the month card). */
 export const InsetNone: Story = { args: { label: 'Jutro', meta: 'sobota', inset: 'none' } };
 
 export const Body: Story = { args: { kind: 'body', label: 'Czas', meta: '2 h 52 min łącznie' } };

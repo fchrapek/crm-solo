@@ -8,13 +8,14 @@ use App\Jobs\SyncTrelloProjectsJob;
 use App\Models\Integration;
 use App\Services\Integrations\InfaktApiException;
 use App\Services\Integrations\Trello\TrelloListMapper;
+use App\Services\Messaging\MessageSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
-/** The writes behind Ustawienia · Integracje. */
+/** The writes behind Settings · Integrations. */
 final class IntegrationsController extends Controller
 {
     public function update(Request $request, string $provider): RedirectResponse
@@ -97,6 +98,11 @@ final class IntegrationsController extends Controller
                 'settings' => $settings,
                 'last_sync_error' => null,
             ])->save();
+        }
+
+        $account = Auth::user()->account;
+        if ($provider === 'smsapi' && ($account->settings['messages']['provider'] ?? null) === 'smsapi') {
+            app(MessageSettings::class)->sending($account->id, provider: 'simulator');
         }
 
         return back()->with('success', __('Integration disconnected.'));

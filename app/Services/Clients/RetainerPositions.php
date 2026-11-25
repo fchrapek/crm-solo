@@ -13,7 +13,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Adds and changes a client's abonament positions, for the abonament dialog and the agent verbs alike. Positions are
+ * Adds and changes a client's retainer positions, for the retainer dialog and the agent verbs alike. Positions are
  * independent: adding one never closes the others. Every change goes through RetainerTerms, so a settled month keeps
  * the terms it was settled on.
  */
@@ -75,7 +75,7 @@ final class RetainerPositions
             ]);
         });
 
-        // A client with an abonament position defaults into the maintenance close cohort.
+        // A client with a retainer position defaults into the maintenance close cohort.
         if ($client->month_close_type === null) {
             $client->update(['month_close_type' => Client::MONTH_CLOSE_TYPES[0]]);
         }

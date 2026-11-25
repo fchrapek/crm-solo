@@ -59,7 +59,7 @@ final class ClientJournalTest extends TestCase
     public function test_only_the_journal_tab_computes_the_journal(): void
     {
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/dziennik")
+            ->get("/clients/{$this->client->id}/journal")
             ->assertInertia(fn (Assert $page) => $page
                 ->component('clients/show')
                 ->has('journal.summary')
@@ -70,7 +70,7 @@ final class ClientJournalTest extends TestCase
             );
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/przeglad")
+            ->get("/clients/{$this->client->id}/overview")
             ->assertInertia(fn (Assert $page) => $page->missing('journal')->missing('journal_work')->missing('journal_notes'));
     }
 
@@ -114,6 +114,36 @@ final class ClientJournalTest extends TestCase
         $this->assertNull($rows['2026-10-03']['entry']);
     }
 
+    public function test_a_work_row_names_the_task_it_links_to_and_a_running_one_its_start(): void
+    {
+        $task = Task::create(['project_id' => $this->project->id, 'name' => 'Naprawa galerii', 'list_name' => 'Doing']);
+        $this->entry('2026-10-02 08:00:00', 45, task: $task);
+        $this->entry('2026-10-01 08:00:00', 40, session: 'run-1', task: $task);
+        $this->entry('2026-09-30 08:00:00', 30);
+        $running = $this->entry('2026-10-03 08:00:00', 5, task: $task);
+        $running->update(['end_time' => null, 'duration_minutes' => 0]);
+
+        $rows = collect($this->journal()['work']['rows'])->keyBy('date');
+
+        $this->assertSame([$task->id, null], [$rows['2026-10-02']['task_id'], $rows['2026-10-02']['running_since']]);
+        $this->assertSame($task->id, $rows['2026-10-01']['task_id']);
+        $this->assertNull($rows['2026-09-30']['task_id']);
+        $this->assertSame([true, '2026-10-03T08:00:00+00:00'], [$rows['2026-10-03']['running'], $rows['2026-10-03']['running_since']]);
+    }
+
+    public function test_a_work_row_never_links_a_task_of_another_accounts_project(): void
+    {
+        $other = Account::create(['name' => 'Other']);
+        $theirs = Project::create(['account_id' => $other->id, 'client_id' => Client::create(['account_id' => $other->id, 'name' => 'Theirs', 'type' => 'business'])->id, 'name' => 'Their site']);
+        $foreign = Task::create(['project_id' => $theirs->id, 'name' => 'Their task']);
+        $this->entry('2026-10-02 08:00:00', 45, task: $foreign);
+
+        $row = $this->journal()['work']['rows'][0];
+
+        $this->assertNull($row['task_id']);
+        $this->assertNotSame('Their task', $row['title']);
+    }
+
     public function test_the_journal_lists_this_clients_tasks_for_tying_a_time_entry_to_one(): void
     {
         $task = Task::create(['project_id' => $this->project->id, 'name' => 'Deploy na prod', 'list_name' => 'Doing']);
@@ -151,8 +181,10 @@ final class ClientJournalTest extends TestCase
             'title' => 'Deploy na prod',
             'subtitle' => 'H1 w wersjach EN i DE',
             'via' => 'cli',
+            'task_id' => $task->id,
             'minutes' => 60,
             'running' => false,
+            'running_since' => null,
             'writes' => 3,
             'is_new' => true,
             'entry' => null,
@@ -181,7 +213,7 @@ final class ClientJournalTest extends TestCase
         $this->assertSame([[$upper[0]->id], [$upper[1]->id]], [$members['session:Run-A']['entry_ids'], $members['session:Run-A']['event_ids']]);
 
         $this->seenAt('2026-09-28 08:00:00');
-        $this->assertSame(2, $this->actingAs($this->user)->get("/clients/{$this->client->id}/przeglad")->viewData('page')['props']['overview']['journal']['count']);
+        $this->assertSame(2, $this->actingAs($this->user)->get("/clients/{$this->client->id}/overview")->viewData('page')['props']['overview']['journal']['count']);
     }
 
     public function test_on_mariadb_session_grouping_compares_ids_byte_for_byte_in_both_arms(): void
@@ -270,7 +302,7 @@ final class ClientJournalTest extends TestCase
         $pages = 1;
         while ($page['next'] !== null && $pages < 20) {
             $rows = [...$rows, ...$page['rows']];
-            $page = $this->partial('journal_work', ['praca' => $page['next']]);
+            $page = $this->partial('journal_work', ['work' => $page['next']]);
             $pages++;
         }
         $rows = [...$rows, ...$page['rows']];
@@ -307,7 +339,7 @@ final class ClientJournalTest extends TestCase
         $this->assertSame(ClientJournalQuery::FIRST_PAGE_MAX, count($this->journal()['work']['rows']));
     }
 
-    public function test_starsze_walks_the_whole_work_history_a_page_at_a_time_and_ends(): void
+    public function test_older_walks_the_whole_work_history_a_page_at_a_time_and_ends(): void
     {
         foreach (range(0, 519) as $n) {
             $this->entry(Carbon::parse('2026-01-01 08:00:00', 'UTC')->addMinutes($n)->format('Y-m-d H:i:s'), 5);
@@ -324,7 +356,7 @@ final class ClientJournalTest extends TestCase
             if ($page['next'] === null || ++$requests > 100) {
                 break;
             }
-            $page = $this->partial('journal_work', ['praca' => $page['next']]);
+            $page = $this->partial('journal_work', ['work' => $page['next']]);
         }
 
         $this->assertCount(521, $keys);
@@ -344,7 +376,7 @@ final class ClientJournalTest extends TestCase
         $this->entry('2026-09-01 09:00:00', 5);
 
         $first = $this->journal()['work'];
-        $second = $this->partial('journal_work', ['praca' => $first['next']]);
+        $second = $this->partial('journal_work', ['work' => $first['next']]);
 
         $this->assertCount(14, $first['rows']);
         $this->assertSame([], array_values(array_intersect(array_column($first['rows'], 'key'), array_column($second['rows'], 'key'))));
@@ -352,14 +384,14 @@ final class ClientJournalTest extends TestCase
         $this->assertNull($second['next']);
     }
 
-    public function test_starsze_reloads_only_its_own_list_and_the_client_appends_it(): void
+    public function test_older_reloads_only_its_own_list_and_the_client_appends_it(): void
     {
         foreach (range(1, 12) as $n) {
             $this->entry(sprintf('2026-09-%02d 09:00:00', $n), 5);
         }
         $next = $this->journal()['work']['next'];
 
-        $response = $this->inertiaPartial('journal_work', ['praca' => $next]);
+        $response = $this->inertiaPartial('journal_work', ['work' => $next]);
 
         $this->assertArrayHasKey('journal_work', $response->json('props'));
         $this->assertArrayNotHasKey('journal', $response->json('props'));
@@ -383,16 +415,103 @@ final class ClientJournalTest extends TestCase
 
         $first = $this->journal()['notes'];
 
-        $this->assertCount(6, $first['rows'], 'the second entry of 2 September rides along: a page never splits a second');
+        $this->assertCount(5, $first['rows']);
         $this->assertNotNull($first['next']);
         $this->assertSame(['date' => '2026-09-06', 'author' => 'Filip Chrapek', 'stage_change' => false], array_intersect_key($first['rows'][0], array_flip(['date', 'author', 'stage_change'])));
 
-        $rest = $this->partial('journal_notes', ['wpisy' => $first['next']]);
-        $this->assertCount(2, $rest['rows']);
+        // The two entries of 2 September share a second; the cursor names the row, so the page may end between them.
+        $rest = $this->partial('journal_notes', ['notes' => $first['next']]);
+        $this->assertCount(3, $rest['rows']);
         $this->assertNull($rest['next']);
         $ids = [...array_column($first['rows'], 'id'), ...array_column($rest['rows'], 'id')];
         $this->assertCount(8, array_unique($ids));
         $this->assertSame(['author' => null, 'from_stage' => 'prospect', 'to_stage' => 'active', 'stage_change' => true], array_intersect_key(end($rest['rows']), array_flip(['from_stage', 'to_stage', 'stage_change', 'author'])));
+    }
+
+    public function test_the_relationship_view_pages_every_entry_twenty_at_a_time_and_the_tab_counts_them_all(): void
+    {
+        foreach (range(1, 24) as $day) {
+            $this->event(sprintf('2026-08-%02d 09:00:00', $day));
+        }
+        $this->settlementEvent('2026-09-01 08:00:00', 'close');
+
+        $tab = $this->journal();
+        $this->assertNull($this->actingAs($this->user)->get("/clients/{$this->client->id}/journal")->viewData('page')['props']['journal_view']);
+        $this->assertCount(5, $tab['notes']['rows']);
+        $this->assertSame(25, $tab['notes_total']);
+
+        $view = $this->journal('?view=relationship');
+        $this->assertCount(20, $view['notes']['rows']);
+        $this->assertNotNull($view['notes']['next']);
+        $this->assertSame('relationship', $this->actingAs($this->user)->get("/clients/{$this->client->id}/journal?view=relationship")->viewData('page')['props']['journal_view']);
+
+        $this->assertNull($this->actingAs($this->user)->get("/clients/{$this->client->id}/journal?view=cos")->viewData('page')['props']['journal_view']);
+
+        $rest = $this->partial('journal_notes', ['view' => 'relationship', 'notes' => $view['notes']['next']]);
+        $this->assertNull($rest['next']);
+        $this->assertCount(25, array_unique([...array_column($view['notes']['rows'], 'key'), ...array_column($rest['rows'], 'key')]));
+    }
+
+    public function test_a_history_of_closes_alone_pages_like_any_other(): void
+    {
+        foreach (range(1, 25) as $day) {
+            $this->settlementEvent(sprintf('2026-08-%02d 09:00:00', $day), 'close');
+        }
+
+        $first = $this->journal('?view=relationship')['notes'];
+        $this->assertCount(20, $first['rows']);
+        $this->assertNotNull($first['next']);
+        $rest = $this->partial('journal_notes', ['view' => 'relationship', 'notes' => $first['next']]);
+        $this->assertCount(5, $rest['rows']);
+        $this->assertNull($rest['next']);
+        $this->assertCount(25, array_unique([...array_column($first['rows'], 'key'), ...array_column($rest['rows'], 'key')]));
+    }
+
+    public function test_entries_of_every_kind_in_one_second_page_once_each_in_one_order(): void
+    {
+        foreach (range(1, 4) as $n) {
+            $this->event('2026-09-10 09:00:00');
+            $this->settlementEvent('2026-09-10 09:00:00', 'close');
+        }
+        $this->event('2026-09-09 09:00:00');
+
+        $keys = [];
+        $cursor = null;
+        do {
+            $page = $cursor === null ? $this->journal()['notes'] : $this->partial('journal_notes', ['notes' => $cursor]);
+            $this->assertLessThanOrEqual(5, count($page['rows']));
+            $keys = [...$keys, ...array_column($page['rows'], 'key')];
+            $cursor = $page['next'];
+        } while ($cursor !== null);
+
+        $this->assertCount(9, $keys);
+        $this->assertCount(9, array_unique($keys));
+        $this->assertStringStartsWith('note-', $keys[0], 'inside one second the notes come first, then the closes');
+        $this->assertStringStartsWith('settlement-', $keys[7]);
+        $this->assertSame('note-'.ClientLifecycleEvent::query()->whereDate('created_at', '2026-09-09')->value('id'), $keys[8]);
+    }
+
+    public function test_an_older_cursor_of_a_time_or_a_time_and_id_reads_as_before_that_second(): void
+    {
+        foreach (range(1, 8) as $day) {
+            $this->event(sprintf('2026-09-%02d 09:00:00', $day));
+        }
+        $fifth = Carbon::parse('2026-09-05 09:00:00', 'UTC')->getTimestamp();
+
+        foreach (["{$fifth}", "{$fifth}-123"] as $cursor) {
+            $rows = $this->partial('journal_notes', ['notes' => $cursor])['rows'];
+            $this->assertSame(['2026-09-04', '2026-09-03', '2026-09-02', '2026-09-01'], array_column($rows, 'date'), $cursor);
+        }
+        $this->assertCount(5, $this->partial('journal_notes', ['notes' => "{$fifth}-7-1"])['rows'], 'a kind outside 0 to 2 is no cursor: the first page');
+    }
+
+    public function test_a_client_with_no_entries_has_an_empty_relationship(): void
+    {
+        $notes = $this->journal('?view=relationship')['notes'];
+
+        $this->assertSame([], $notes['rows']);
+        $this->assertNull($notes['next']);
+        $this->assertSame(0, $this->journal()['notes_total']);
     }
 
     public function test_settlement_events_interleave_with_the_notes_across_pages_once_each_and_read_only(): void
@@ -406,7 +525,7 @@ final class ClientJournalTest extends TestCase
         $this->settlementEvent('2026-09-09 10:00:00', 'close', $other);
 
         $first = $this->journal()['notes'];
-        $rest = $this->partial('journal_notes', ['wpisy' => $first['next']]);
+        $rest = $this->partial('journal_notes', ['notes' => $first['next']]);
         $rows = [...$first['rows'], ...$rest['rows']];
         $keys = array_column($rows, 'key');
 
@@ -474,14 +593,14 @@ final class ClientJournalTest extends TestCase
         $this->assertSame([], $journal['work']['rows']);
         $this->assertSame([], $journal['notes']['rows']);
         $this->assertSame(0, $journal['projects'][0]['minutes']);
-        $this->actingAs($this->user)->get("/clients/{$stranger->id}/dziennik")->assertNotFound();
+        $this->actingAs($this->user)->get("/clients/{$stranger->id}/journal")->assertNotFound();
     }
 
-    public function test_the_relacja_screen_is_client_state_so_its_url_sends_the_same_props_and_queries(): void
+    public function test_the_relationship_screen_is_client_state_so_its_url_sends_the_same_props_and_queries(): void
     {
         $this->entry('2026-10-01 08:00:00', 60);
         $this->event('2026-10-02 08:00:00');
-        $url = "/clients/{$this->client->id}/dziennik";
+        $url = "/clients/{$this->client->id}/journal";
         $this->actingAs($this->user)->get($url)->assertOk();
 
         DB::flushQueryLog();
@@ -506,10 +625,10 @@ final class ClientJournalTest extends TestCase
 
         foreach (['-4', 'abc', '1e9', '99999999999999'] as $bad) {
             $this->seenAt('2026-09-28 08:00:00');
-            $this->assertSame('2026-09-12', $this->journal('?praca='.urlencode($bad).'&wpisy=x')['work']['rows'][0]['date']);
+            $this->assertSame('2026-09-12', $this->journal('?work='.urlencode($bad).'&notes=x')['work']['rows'][0]['date']);
         }
         $this->seenAt('2026-09-28 08:00:00');
-        $this->assertSame('2026-09-12', $this->journal('?praca[]=1')['work']['rows'][0]['date']);
+        $this->assertSame('2026-09-12', $this->journal('?work[]=1')['work']['rows'][0]['date']);
     }
 
     private function settlementEvent(string $atUtc, string $action, ?Client $client = null): \App\Models\ClientMonthSettlementEvent
@@ -529,7 +648,7 @@ final class ClientJournalTest extends TestCase
      */
     private function journal(string $query = ''): array
     {
-        $response = $this->actingAs($this->user)->get("/clients/{$this->client->id}/dziennik{$query}");
+        $response = $this->actingAs($this->user)->get("/clients/{$this->client->id}/journal{$query}");
         $response->assertOk();
 
         $props = $response->viewData('page')['props'];
@@ -538,7 +657,7 @@ final class ClientJournalTest extends TestCase
     }
 
     /**
-     * One list as "Starsze" asks for it: a partial reload of that prop alone.
+     * One list as Older asks for it: a partial reload of that prop alone.
      *
      * @param  array<string, string>  $query
      * @return array<string, mixed>
@@ -558,7 +677,7 @@ final class ClientJournalTest extends TestCase
                 Header::PARTIAL_COMPONENT => 'clients/show',
                 Header::PARTIAL_ONLY => $prop,
             ])
-            ->get("/clients/{$this->client->id}/dziennik?".http_build_query($query));
+            ->get("/clients/{$this->client->id}/journal?".http_build_query($query));
     }
 
     /** The user's previous visit, as the view row a past visit would have left. */

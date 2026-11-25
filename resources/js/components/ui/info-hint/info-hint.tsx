@@ -16,6 +16,14 @@ interface Props {
     side?: 'top' | 'bottom';
 }
 
+/** The open panel is named by its trigger and described by its text, unless the text only repeats the name. */
+export function hintLabelling(id: string, name: string, text: React.ReactNode): { 'aria-labelledby': string; 'aria-describedby'?: string } {
+    return {
+        'aria-labelledby': `${id}-trigger`,
+        ...(text === name ? {} : { 'aria-describedby': `${id}-text` }),
+    };
+}
+
 /**
  * An "i" affordance that holds explanatory copy next to the thing it explains.
  *
@@ -33,6 +41,9 @@ export function InfoHint({ children, label, trigger, side }: Props) {
     const hovering = React.useRef(false);
     const byHover = React.useRef(false);
     const closing = React.useRef<number | undefined>(undefined);
+    const id = React.useId();
+    const triggerLabel = (trigger?.props as { 'aria-label'?: unknown } | undefined)?.['aria-label'];
+    const name = typeof triggerLabel === 'string' ? triggerLabel : (label ?? t('More information'));
 
     React.useEffect(() => () => window.clearTimeout(closing.current), []);
 
@@ -59,6 +70,7 @@ export function InfoHint({ children, label, trigger, side }: Props) {
         >
             <PopoverTrigger
                 asChild
+                id={`${id}-trigger`}
                 onPointerEnter={hover(true)}
                 onPointerLeave={hover(false)}
                 // A click under a hovering mouse would toggle the panel hover just opened.
@@ -80,13 +92,14 @@ export function InfoHint({ children, label, trigger, side }: Props) {
                 align="start"
                 side={side}
                 className={styles.content}
+                {...hintLabelling(id, name, children)}
                 onPointerEnter={hover(true)}
                 onPointerLeave={hover(false)}
                 // Opened by a passing mouse, the panel leaves focus where the person is typing, on the way in and out.
                 onOpenAutoFocus={(event) => byHover.current && event.preventDefault()}
                 onCloseAutoFocus={(event) => byHover.current && event.preventDefault()}
             >
-                {children}
+                <div id={`${id}-text`}>{children}</div>
             </PopoverContent>
         </Popover>
     );

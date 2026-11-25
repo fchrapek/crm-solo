@@ -48,7 +48,7 @@ function assigneeLabel(value: ListCard['assignees'][number], t: T): string {
             : (value.label ?? '');
 }
 
-/** Klienci: the statuses as pills with their counts, then one menu pill per further filter. A page change starts over at the first page. */
+/** Clients: the statuses as pills with their counts, then one menu pill per further filter. A page change starts over at the first page. */
 /** An account that has no client yet: the list gives way to the first step. */
 export function noClients(counts: Record<string, number> | undefined): boolean {
     return counts !== undefined && Object.values(counts).every((count) => count === 0);
@@ -125,7 +125,7 @@ const tabUrl = (clientId: number, tab: ClientTab) => clients.show({ client: clie
 export function clientToken(client: PlaceClient, tab: ClientTab, t: T): PlaceToken {
     return {
         label: client.short_name,
-        href: tabUrl(client.id, 'przeglad'),
+        href: tabUrl(client.id, 'overview'),
         switcher: (trigger) => <ClientSwitcher clientId={client.id} tab={tab} tabLabel={t(CLIENT_TAB_LABEL[tab])} trigger={trigger} />,
     };
 }
@@ -133,31 +133,35 @@ export function clientToken(client: PlaceClient, tab: ClientTab, t: T): PlaceTok
 export interface ClientPlaceProps {
     client: ClientHeaderData;
     tab: ClientTab;
-    /** Rozliczenia of a retainer client: the month the screen shows. */
+    /** Billing of a retainer client: the month the screen shows. */
     billing_month?: { period: string };
+    /** Journal's sub-view: `relationship` adds it as a third level. */
+    journal_view?: string | null;
 }
 
 /**
- * A client tab: the client, then the tab; the tabs are the pills. Rozliczenia adds the month it shows as a third level,
- * and its tab then leads back to the month the client owes next. An account with billing off has no Rozliczenia.
+ * A client tab: the client, then the tab; the tabs are the pills. Billing adds the month it shows as a third level,
+ * and its tab then leads back to the month the client owes next. An account with billing off has no Billing.
  */
-export function clientPlace({ client, tab, billing_month: month }: ClientPlaceProps, { t, locale }: PlaceContext): Place {
-    const shown = tab === 'rozliczenia' && month !== undefined ? month.period : null;
+export function clientPlace({ client, tab, billing_month: month, journal_view: view }: ClientPlaceProps, { t, locale }: PlaceContext): Place {
+    const shown = tab === 'billing' && month !== undefined ? month.period : null;
 
     return {
         tokens:
-            shown !== null
-                ? [
-                      clientToken(client, tab, t),
-                      { label: t(CLIENT_TAB_LABEL[tab]), href: tabUrl(client.id, tab) },
-                      { label: capitalize(monthName(shown, locale)) },
-                  ]
-                : [clientToken(client, tab, t), { label: t(CLIENT_TAB_LABEL[tab]) }],
-        pills: CLIENT_TABS.filter((key) => key !== 'rozliczenia' || client.billing !== false).map((key) => ({
+            tab === 'journal' && view === 'relationship'
+                ? [clientToken(client, tab, t), { label: t(CLIENT_TAB_LABEL[tab]), href: tabUrl(client.id, tab) }, { label: t('Relationship') }]
+                : shown !== null
+                  ? [
+                        clientToken(client, tab, t),
+                        { label: t(CLIENT_TAB_LABEL[tab]), href: tabUrl(client.id, tab) },
+                        { label: capitalize(monthName(shown, locale)) },
+                    ]
+                  : [clientToken(client, tab, t), { label: t(CLIENT_TAB_LABEL[tab]) }],
+        pills: CLIENT_TABS.filter((key) => key !== 'billing' || client.billing !== false).map((key) => ({
             label: t(CLIENT_TAB_LABEL[key]),
             href: tabUrl(client.id, key),
             active: key === tab,
-            ...(key === 'zadania' && client.open_tasks_count > 0 ? { count: client.open_tasks_count } : {}),
+            ...(key === 'tasks' && client.open_tasks_count > 0 ? { count: client.open_tasks_count } : {}),
         })),
     };
 }
@@ -170,16 +174,16 @@ export interface ProjectPlaceProps {
     open_tasks_count: number;
 }
 
-/** A project page: the client, Zadania, the project; the pills are the client's projects, and Wszystkie leads back to Zadania. */
+/** A project page: the client, Tasks, the project; the pills are the client's projects, and All leads back to Tasks. */
 export function projectPlace({ client, project, projects, open_tasks_count }: ProjectPlaceProps, { t }: PlaceContext): Place {
     return {
         tokens: [
-            clientToken(client, 'zadania', t),
-            { label: t(CLIENT_TAB_LABEL.zadania), href: tabUrl(client.id, 'zadania') },
+            clientToken(client, 'tasks', t),
+            { label: t(CLIENT_TAB_LABEL.tasks), href: tabUrl(client.id, 'tasks') },
             { label: project.name },
         ],
         pills: [
-            { label: t('All'), href: tabUrl(client.id, 'zadania'), count: open_tasks_count },
+            { label: t('All'), href: tabUrl(client.id, 'tasks'), count: open_tasks_count },
             ...projects.map((row) => ({
                 label: row.name,
                 href: projectBoard.show({ client: client.id, project: row.id }).url,

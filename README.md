@@ -11,8 +11,8 @@ client's state and a task's brief, start and stop timers, log time, tick tasks
 and write notes, and every write lands in the web UI at once.
 
 A public demo with fictional data runs at
-[demo.crm-solo.com](https://demo.crm-solo.com). It reseeds every night, so
-anything you change there is temporary.
+[demo.crm-solo.com](https://demo.crm-solo.com). It reseeds every night, and within
+the hour once somebody changes it, so anything you change there is temporary.
 
 ## Stack
 

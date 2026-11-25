@@ -7,7 +7,7 @@ const noop = () => {};
 
 /** Figma: A2f / Queue row in the timer's side column (Surface=Timer). */
 const meta = {
-    title: 'Zadania/Queue row',
+    title: 'Tasks/Queue row',
     component: TaskRow,
     args: { kind: 'queue', task: pick, onComplete: noop, onUncomplete: noop },
     globals: { day: 'timer' },

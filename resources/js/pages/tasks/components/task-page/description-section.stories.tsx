@@ -4,7 +4,7 @@ import { mainColumn } from './story-columns';
 import { task, trelloTask } from './story-fixtures';
 
 const meta = {
-    title: 'Zadania/Zadanie/Opis',
+    title: 'Tasks/Task/Description',
     component: DescriptionSection,
     decorators: [mainColumn],
     args: { task },
@@ -20,7 +20,7 @@ export const FromTrello: Story = { args: { task: trelloTask } };
 
 export const Empty: Story = { args: { task: { ...task, description: null, description_markdown: '' } } };
 
-/** Below 768 px a long description is clamped to four lines behind Więcej; the page shows it whole from 768 px. */
+/** Below 768 px a long description is clamped to four lines behind More; the page shows it whole from 768 px. */
 export const LongOnPhone: Story = {
     args: {
         task: {
@@ -30,5 +30,5 @@ export const LongOnPhone: Story = {
     },
 };
 
-/** A card with no description keeps Edytuj w Trello as its only action. */
+/** A card with no description keeps Edit in Trello as its only action. */
 export const EmptyFromTrello: Story = { args: { task: { ...trelloTask, description: null, description_markdown: '' } } };

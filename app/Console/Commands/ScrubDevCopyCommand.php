@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Console\Attributes\AccountScope;
+use App\Models\LeadIntake;
 use Illuminate\Console\Command;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -115,6 +116,8 @@ final class ScrubDevCopyCommand extends Command
             }
         }
         DB::table('integrations')->update(['is_enabled' => false, 'api_key' => null]);
+        DB::table('intake_forms')->update(['is_active' => false, 'turnstile_secret' => null, 'webhook_secret_hash' => null]);
+        DB::table('lead_intakes')->where('notice_state', LeadIntake::WAITING)->update(['notice_state' => LeadIntake::SKIPPED]);
     }
 
     private function assertOnlyAccountLeft(int $keep): void

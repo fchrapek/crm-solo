@@ -9,7 +9,7 @@ const SRC: Record<DogPose, string> = {
     wow: '/images/helper/dog-wow.png',
 };
 
-/** The dog's still picture: the rail logo, and the helper before its 3D model loads or where it cannot run. */
+/** The dog's still picture: the helper before its 3D model loads or where it cannot run. */
 export function DogStill({ size, pose = 'cool' }: { size: number; pose?: DogPose }) {
     return <img src={SRC[pose]} width={size} height={size} alt="" draggable={false} data-pose={pose} />;
 }

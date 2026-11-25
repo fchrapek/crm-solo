@@ -3,16 +3,19 @@ import { Link } from '@inertiajs/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SearchHints, SearchResults, useSearch, type SearchPlace } from '../command-palette';
-import type { PlaceFilter, PlaceToken } from './place';
+import { useLinkPrefetch } from '../link-prefetch';
 import styles from './command-bar.module.css';
+import type { PlaceFilter, PlaceToken } from './place';
 
 /** Figma: Token. One level of the place; a level above the current one is a link to it, and a level with siblings to switch between opens its switcher. */
 export function Token({ label, href, switcher }: PlaceToken) {
+    const prefetch = useLinkPrefetch();
+
     if (switcher !== undefined) {
         return (
             <>
                 {switcher(
-                    <button type="button" className={styles.token}>
+                    <button type="button" className={styles.token} title={label}>
                         {label}
                     </button>,
                 )}
@@ -21,11 +24,11 @@ export function Token({ label, href, switcher }: PlaceToken) {
     }
 
     return href === undefined ? (
-        <span className={styles.token} aria-current="page">
+        <span className={styles.token} aria-current="page" title={label}>
             {label}
         </span>
     ) : (
-        <Link href={href} className={styles.token}>
+        <Link href={href} prefetch={prefetch(href)} className={styles.token} title={label}>
             {label}
         </Link>
     );
@@ -58,11 +61,15 @@ export function CommandBar({ tokens = [], filter, places }: { tokens?: PlaceToke
 
     return (
         <div className={styles.wrap} data-open={open ? '' : undefined} data-placed={placed ? '' : undefined}>
-            <div className={styles.bar} role="search" onClick={(event) => {
+            <div
+                className={styles.bar}
+                role="search"
+                onClick={(event) => {
                     const target = event.target as Element;
                     // A switcher's panel is a portal: its clicks reach here through React, not through the bar.
                     if (event.currentTarget.contains(target) && target.closest('a, button') === null) onOpen();
-                }}>
+                }}
+            >
                 <Icon name="search" size={24} className={styles.glass} />
                 {placed && (
                     <nav className={styles.tokens} aria-label={t('You are here')}>
@@ -86,7 +93,11 @@ export function CommandBar({ tokens = [], filter, places }: { tokens?: PlaceToke
                     onChange={(event) => search.setQuery(event.target.value)}
                     onFocus={() => setOpen(true)}
                     onBlur={() => search.close()}
-                    onKeyDown={search.onKeyDown}
+                    onKeyDown={(event) => {
+                        // The panel and its close button go before the browser picks the next stop, or it picks one that is about to vanish.
+                        if (event.key === 'Tab') setOpen(false);
+                        else search.onKeyDown(event);
+                    }}
                 />
                 {open ? (
                     <button

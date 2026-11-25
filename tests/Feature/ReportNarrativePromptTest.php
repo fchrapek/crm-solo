@@ -8,14 +8,18 @@ use App\Models\Account;
 use App\Models\Client;
 use App\Models\Setting;
 use App\Services\AI\AIProviderInterface;
+use App\Services\AI\ClaudeProvider;
+use App\Services\AI\OpenAIProvider;
 use App\Services\Reports\Composers\AiNarrativeComposer;
 use App\Services\Reports\Composers\StructuredListComposer;
 use App\Services\Reports\NarrativePromptResolver;
 use App\Services\Reports\ReportDataAggregator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use LogicException;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -123,6 +127,28 @@ final class ReportNarrativePromptTest extends TestCase
 
         $this->assertSame($this->app->make(StructuredListComposer::class)->compose($this->context()), $body);
         Log::shouldHaveReceived('error')->once();
+    }
+
+    public function test_the_public_demo_never_reaches_a_model_even_with_a_key_installed(): void
+    {
+        config(['app.demo' => true, 'services.openai.api_key' => 'sk-installed', 'services.anthropic.api_key' => 'sk-installed']);
+        Http::fake();
+        Log::spy();
+
+        $body = $this->app->make(AiNarrativeComposer::class)->compose($this->context());
+
+        $this->assertSame($this->app->make(StructuredListComposer::class)->compose($this->context()), $body);
+        foreach ([OpenAIProvider::class, ClaudeProvider::class] as $provider) {
+            try {
+                $this->app->make($provider)->chat('system', [['role' => 'user', 'content' => 'hello']]);
+                $this->fail("{$provider} answered on the demo.");
+            } catch (RuntimeException $refused) {
+                $this->assertStringContainsString('public demo', $refused->getMessage());
+            }
+        }
+        Http::assertNothingSent();
+        Log::shouldNotHaveReceived('warning');
+        Log::shouldNotHaveReceived('error');
     }
 
     public function test_a_missing_shipped_prompt_still_generates_a_report(): void

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Http\Controllers\IntakeController;
+use App\Http\Middleware\GuardIntakeRequests;
+use App\Http\Middleware\ThrottleRefusedIntake;
 use App\Models\AgentToken;
 use App\Models\Client;
 use App\Models\ClientBilledMonth;
@@ -18,7 +21,9 @@ use App\Models\ClientSummaryEmail;
 use App\Models\Contact;
 use App\Models\DayPick;
 use App\Models\InfaktDraftRequest;
+use App\Models\IntakeForm;
 use App\Models\Lead;
+use App\Models\LeadIntake;
 use App\Models\LeadStageEvent;
 use App\Models\MessageRule;
 use App\Models\MessageTemplate;
@@ -36,17 +41,26 @@ use App\Services\Agent\AgentWriteRecorder;
 use App\Services\Agent\OwnerIdentityResolver;
 use App\Services\AI\AIProviderInterface;
 use App\Services\AI\AIServiceManager;
+use App\Services\Messaging\Sender\DnsHostResolver;
+use App\Services\Messaging\Sender\HostResolver;
+use App\Services\Messaging\Sender\SenderTransportFactory;
+use App\Services\Messaging\Sender\SmtpSenderTransportFactory;
 use App\Services\Reports\Composers\AiNarrativeComposer;
 use App\Services\Reports\Composers\StructuredListComposer;
 use App\Services\Reports\ReportComposerRegistry;
 use App\Services\TaskSources\Providers\TrelloTaskSourceProvider;
 use App\Services\TaskSources\TaskSourceRegistry;
+use App\Support\DemoRows;
 use App\Support\DemoWriteBudget;
+use App\Support\SecretInput;
+use App\Support\StdinSecretInput;
 use App\Support\UploadLimits;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
@@ -79,6 +93,10 @@ final class AppServiceProvider extends ServiceProvider
         // Scoped: an Octane request or a queued job never inherits another's open agent call.
         $this->app->scoped(AgentCallContext::class);
 
+        $this->app->bind(HostResolver::class, DnsHostResolver::class);
+        $this->app->bind(SenderTransportFactory::class, SmtpSenderTransportFactory::class);
+        $this->app->bind(SecretInput::class, StdinSecretInput::class);
+
         $this->app->singleton(ReportComposerRegistry::class, function ($app): ReportComposerRegistry {
             $registry = new ReportComposerRegistry;
             // AiNarrativeComposer is the default — most reports want prose.
@@ -106,6 +124,12 @@ final class AppServiceProvider extends ServiceProvider
         // only the demo and a fictional-data staging stack (their own reset path) may wipe.
         DB::prohibitDestructiveCommands(self::wipesForbidden());
 
+        // Before any model boots, so a refused delete has run none of the model's own hooks.
+        foreach (DemoRows::KEPT as $kept) {
+            Event::listen("eloquent.deleting: {$kept}", fn (Model $record) => DemoRows::guardDelete($record));
+        }
+        Event::listen('eloquent.creating: *', fn (string $event, array $records) => DemoRows::guardCreate($records[0]));
+
         // Behind Cloudflare/Traefik, TLS terminates at the edge and the proxy
         // forwards over http, so Laravel generates http:// URLs. That makes the
         // post-login 302 point at http://<host> while the page origin is https,
@@ -126,6 +150,34 @@ final class AppServiceProvider extends ServiceProvider
             Limit::perHour((int) config('waitlist.per_hour'))->by('waitlist-h|'.$request->ip()),
         ]);
 
+        // Before the sign-in form is read, so the Turnstile check behind it cannot be asked for at request speed.
+        RateLimiter::for('sign-in', fn (Request $request): array => [
+            Limit::perMinute(10)->by('sign-in-m|'.GuardIntakeRequests::clientKey($request->ip())),
+            Limit::perHour(60)->by('sign-in-h|'.GuardIntakeRequests::clientKey($request->ip())),
+        ]);
+
+        // Website forms: one IP's posts to one form; the per-IP total, the daily quota and a webhook's own budget live in the guard and the controller.
+        RateLimiter::for('intake', function (Request $request): array {
+            $intakeForm = $request->attributes->get(GuardIntakeRequests::FORM);
+            if ($request->headers->has('Authorization')) {
+                if ($intakeForm?->webhookSecretMatches((string) IntakeController::bearer($request)) === true) {
+                    return [];
+                }
+                // The form limit answers a wrong secret and lets the right one through, so its 429 is a refusal too.
+                $request->attributes->set(ThrottleRefusedIntake::WRONG_SECRET, true);
+            }
+
+            $form = $intakeForm?->id ?? 0;
+            $client = GuardIntakeRequests::clientKey($request->ip());
+
+            return [
+                Limit::perMinute((int) config('intake.per_minute'))->by("intake-m|{$form}|{$client}"),
+                Limit::perHour((int) config('intake.per_hour'))->by("intake-h|{$form}|{$client}"),
+            ];
+        });
+
+        RateLimiter::for('client-views', fn (Request $request): Limit => Limit::perMinute(120)->by('client-views|'.$request->user()?->id.'|'.$request->ip()));
+
         // Profile saves check the current password, so they get a per-user budget against guessing it.
         RateLimiter::for('password-change', fn (Request $request): Limit => Limit::perMinute(5)->by('pw|'.$request->user()?->id));
 
@@ -138,7 +190,7 @@ final class AppServiceProvider extends ServiceProvider
         RateLimiter::for('agent', fn (Request $request): Limit => Limit::perMinute((int) config('agent.per_minute'))
             ->by('agent|'.($request->attributes->get('agent_token_id') ?? $request->ip())));
 
-        foreach ([TimeEntry::class, ClientLifecycleEvent::class, Task::class, TaskBrief::class, Lead::class, LeadStageEvent::class, MonthCloseRun::class, MonthCloseStep::class, Project::class, Client::class, Contact::class, DayPick::class, ClientReport::class, ClientReportRevision::class, ClientMonthClosure::class, ClientMonthSettlementEvent::class, ClientRetainer::class, ClientBilledMonth::class, TaskBilledMonth::class, InfaktDraftRequest::class, ClientSummaryEmail::class, MessageTemplate::class, MessageRule::class, ClientFieldDefinition::class] as $model) {
+        foreach ([TimeEntry::class, ClientLifecycleEvent::class, Task::class, TaskBrief::class, Lead::class, LeadStageEvent::class, MonthCloseRun::class, MonthCloseStep::class, Project::class, Client::class, Contact::class, DayPick::class, ClientReport::class, ClientReportRevision::class, ClientMonthClosure::class, ClientMonthSettlementEvent::class, ClientRetainer::class, ClientBilledMonth::class, TaskBilledMonth::class, InfaktDraftRequest::class, ClientSummaryEmail::class, MessageTemplate::class, MessageRule::class, ClientFieldDefinition::class, IntakeForm::class, LeadIntake::class] as $model) {
             $model::observe(AgentWriteRecorder::class);
         }
     }

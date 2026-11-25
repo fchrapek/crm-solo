@@ -11,7 +11,7 @@ use App\Services\Agent\ReferenceException;
 use App\Services\Agent\ReportEditor;
 use Illuminate\Console\Command;
 
-/** Agent verb: a draft report for one client's month, as Generate on the client's Rozliczenia tab. A second report for the month is refused. */
+/** Agent verb: a draft report for one client's month, as Generate on the client's Billing tab. A second report for the month is refused. */
 #[AccountScope(AccountScope::ACTING)]
 final class CrmReportCreate extends Command
 {

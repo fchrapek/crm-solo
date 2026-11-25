@@ -80,14 +80,14 @@ const PERIOD_LABEL: Record<string, string> = {
 
 const KEEP = { preserveState: true, preserveScroll: true, replace: true };
 
-/** Net unless the URL asks for gross (`?kwoty=brutto`): the server sends both, so the choice is the page's own. */
+/** Net unless the URL asks for gross (`?amounts=gross`): the server sends both, so the choice is the page's own. */
 export function metricOf(url: string): Metric {
-    return new URLSearchParams(url.split('?')[1] ?? '').get('kwoty') === 'brutto' ? 'gross' : 'net';
+    return new URLSearchParams(url.split('?')[1] ?? '').get('amounts') === 'gross' ? 'gross' : 'net';
 }
 
 export function revenueUrl(filters: Pick<Filters, 'period' | 'basis'>, metric: Metric): string {
     return revenue.index({
-        query: { period: filters.period, ...(filters.basis === 'cash' ? { basis: 'cash' } : {}), ...(metric === 'gross' ? { kwoty: 'brutto' } : {}) },
+        query: { period: filters.period, ...(filters.basis === 'cash' ? { basis: 'cash' } : {}), ...(metric === 'gross' ? { amounts: 'gross' } : {}) },
     }).url;
 }
 
@@ -108,7 +108,7 @@ export function trendBars(trend: TrendPoint[], metric: Metric): { month: string;
     return trend.map((point) => ({ month: point.month, value: point[metric], share: top > 0 ? point[metric] / top : 0 }));
 }
 
-/** Figma: Przychody (1095:48739, phone 1095:49147). Invoiced or paid revenue of a period from the Infakt mirror: the total, its concentration, the months and the clients. */
+/** Figma: Revenue (1095:48739, phone 1095:49147). Invoiced or paid revenue of a period from the Infakt mirror: the total, its concentration, the months and the clients. */
 export default function Index() {
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);
@@ -287,7 +287,7 @@ export default function Index() {
                                                 <ListTableCell kind="title">
                                                     {row.client_id !== null ? (
                                                         <Link
-                                                            href={clients.show({ client: row.client_id, tab: 'rozliczenia' }).url}
+                                                            href={clients.show({ client: row.client_id, tab: 'billing' }).url}
                                                             className={styles.plainLink}
                                                         >
                                                             {row.name}

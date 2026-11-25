@@ -29,6 +29,7 @@
     justify-content: space-between;
     gap: var(--role-space-12);
     min-height: 28px;
+    line-height: 20px;
 }
 
 .list > .header {
@@ -44,13 +45,14 @@
 
 .label {
     margin: 0;
-    font: 400 var(--solo-heading-group) / 1.3 var(--solo-font-text);
+    font: 400 var(--solo-heading-group) / 20px var(--solo-font-text);
 }
 
+/* whole-pixel lines, so the rules under a header, a note or a group heading land on a pixel instead of between two */
 .count,
 .headerEnd {
     color: var(--role-text-secondary);
-    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    font: 400 var(--solo-text-meta) / 18px var(--solo-font-text);
 }
 
 .timer :is(.count, .headerEnd) {
@@ -71,6 +73,7 @@
     gap: var(--role-space-12);
     min-height: 28px;
     padding: var(--role-space-32) var(--role-space-12) var(--role-space-8);
+    line-height: 20px;
 }
 
 /* the same rule as between rows, so a group reads as a list that starts under its name */
@@ -112,12 +115,48 @@
     min-width: 0;
 }
 
+/* a group that folds: the whole heading start is the button */
+.groupToggle {
+    display: inline-flex;
+    gap: var(--role-space-8);
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    text-align: start;
+}
+
+.groupToggle .groupNote {
+    margin-left: 0;
+}
+
+.groupToggle svg {
+    color: var(--role-text-secondary);
+}
+
+.groupToggle .groupCaret {
+    transition: transform var(--motion-base) var(--ease-standard);
+}
+
+.groupToggle .groupCaret[data-open] {
+    transform: rotate(180deg);
+}
+
+.groupToggle:focus-visible {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--role-radius-xs);
+}
+
 /* inline, so the note follows the last word of a label that wraps */
 .groupLabel {
     display: inline;
     margin: 0;
     color: var(--role-text-primary);
-    font: 400 var(--solo-heading-group) / 1.3 var(--solo-font-text);
+    font: 400 var(--solo-heading-group) / 20px var(--solo-font-text);
     overflow-wrap: anywhere;
 }
 
@@ -133,7 +172,7 @@
 .groupNote,
 .groupEnd {
     color: var(--role-text-secondary);
-    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    font: 400 var(--solo-text-meta) / 20px var(--solo-font-text);
 }
 
 .groupNote,
@@ -142,8 +181,15 @@
     white-space: nowrap;
 }
 
+/* two sizes on one line: set by their line tops, so the line stays 20 px instead of growing by a baseline offset */
+.groupLabel,
+.groupNote,
 .groupCurrent {
-    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    vertical-align: top;
+}
+
+.groupCurrent {
+    font: 400 var(--solo-text-meta) / 20px var(--solo-font-text);
 }
 
 .groupEnd {
@@ -153,7 +199,8 @@
 }
 
 /* the heading's own line is the first row's rule */
-.group + .rows > :first-child::before {
+.group + .rows > :first-child::before,
+.group + [data-fold] .rows > :first-child::before {
     content: none;
 }
 
@@ -183,6 +230,10 @@
     padding: var(--role-space-12);
 }
 
+.list > .actions[data-apart] {
+    padding-top: var(--role-space-24);
+}
+
 .grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -197,10 +248,67 @@
     min-width: 0;
 }
 
+/* a reflowing grid reads its columns as one below 1100 px, each slot at its own place */
+.grid[data-reflow] > .stack {
+    display: contents;
+}
+
+.slot:empty {
+    display: none;
+}
+
+.grid[data-reflow] .slot[data-order='1'] {
+    order: 1;
+}
+
+.grid[data-reflow] .slot[data-order='2'] {
+    order: 2;
+}
+
+.grid[data-reflow] .slot[data-order='3'] {
+    order: 3;
+}
+
+.grid[data-reflow] .slot[data-order='4'] {
+    order: 4;
+}
+
+.grid[data-reflow] .slot[data-order='5'] {
+    order: 5;
+}
+
+.grid[data-reflow] .slot[data-order='6'] {
+    order: 6;
+}
+
+.grid[data-reflow] .slot[data-order='7'] {
+    order: 7;
+}
+
+.grid[data-reflow] .slot[data-order='8'] {
+    order: 8;
+}
+
+.grid[data-reflow] .slot[data-order='9'] {
+    order: 9;
+}
+
+.grid[data-reflow] .slot[data-order='10'] {
+    order: 10;
+}
+
+.grid[data-reflow] .slot[data-order='11'] {
+    order: 11;
+}
+
+.grid[data-reflow] .slot[data-order='12'] {
+    order: 12;
+}
+
 .note {
     margin: 0;
     color: var(--role-text-secondary);
-    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    font: 400 var(--solo-text-meta) / 18px var(--solo-font-text);
 }
 
 /* a plain tile's children stretch unless they are buttons */
@@ -232,5 +340,46 @@
 @media (min-width: 1100px) {
     .grid {
         grid-template-columns: minmax(0, 1fr) 380px;
+    }
+
+    .grid[data-reflow] > .stack {
+        display: flex;
+    }
+
+    .grid[data-reflow] .slot[data-order] {
+        order: 0;
+    }
+
+    /* a side taller than the screen scrolls by itself, so its end is never out of reach */
+    .grid:not([data-reflow], [data-phone-order], [data-static-side]) > aside {
+        position: sticky;
+        top: var(--shell-margin);
+        max-height: calc(100dvh - 2 * var(--shell-margin));
+        overflow-y: auto;
+    }
+
+    /* the last row is flexible, so a side taller than main grows it alone and the tail stays under main */
+    .grid[data-phone-order] {
+        grid-template-rows: auto auto 1fr;
+    }
+
+    .grid[data-phone-order] > [data-place='lead'] {
+        grid-area: 1 / 2;
+    }
+
+    .grid[data-phone-order] > [data-place='main'] {
+        grid-area: 1 / 1 / 3;
+    }
+
+    .grid[data-phone-order] > [data-place='side'] {
+        grid-area: 2 / 2 / 4;
+    }
+
+    .grid[data-phone-order]:not(:has(> [data-place='lead'])) > [data-place='side'] {
+        grid-row: 1 / 4;
+    }
+
+    .grid[data-phone-order] > [data-place='tail'] {
+        grid-area: 3 / 1;
     }
 }

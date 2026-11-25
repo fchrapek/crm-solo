@@ -314,7 +314,9 @@ Both composers emit, in order:
    sentences each on what was done and what it gives the client; unfinished
    work says so.
 2. `clients.report_baseline_markdown` verbatim (it carries its own `###`
-   sections).
+   sections), only while the account has Zakres bazowy raportu on
+   (`accounts.settings.report_baseline`, `ReportContext::reportBaselineMarkdown()`
+   returns null otherwise, so a report never carries a text the owner cannot see).
 3. `## Podsumowanie rozliczeniowe` (or "Billing summary"): the only place a
    balance appears.
 
@@ -356,7 +358,7 @@ but nothing in the UI calls it; the flag is saved through the task form.
 Money and hours on the page format through `useFormatters()` in
 `resources/js/lib/format.ts`.
 
-The client record's Rozliczenia tab shows one month at a time, the one in the URL (`?miesiac=YYYY-MM`; without it,
+The client record's Rozliczenia tab shows one month at a time, the one in the URL (`?month=YYYY-MM`; without it,
 or for a month that has not started, the active month): the month is the third place token and a row of pills beside
 the title. `ClientBillingQuery` sends `billing_month` for it: `figures` (exactly `BilledTime::figures()`, what the
 billed time dialog reads), `report` (with `needs_recalculation`), `invoices` (booked in the month, sale date first),
@@ -372,7 +374,7 @@ same window; its pills reload that prop alone.
 
 The client record's Rozliczenia tab (`ClientBillingQuery`) reads its rows from
 `HoursBank::ledgerPage()` twelve months at a time, so only the shown months have
-their figures read; "Starsze" reloads only `billing_ledger` with `?miesiace=N`
+their figures read; "Starsze" reloads only `billing_ledger` with `?ledger=N`
 and the rows are appended, closure-only months included, until the last page
 ends on the entry row. A client with nothing to settle in the month in progress
 (no retainer, report or closure) gets no row for it. The rows are closed months, governing report months and the active

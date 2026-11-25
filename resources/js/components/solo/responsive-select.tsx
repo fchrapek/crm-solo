@@ -1,4 +1,5 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { fullText } from '@/lib/plain-text';
 import { Icon } from '@/components/ui/icon';
 import { type ReactNode, useState } from 'react';
 import { BottomSheet } from './bottom-sheet';
@@ -36,7 +37,7 @@ export function ResponsiveSelect({ label, value, onValueChange, options, disable
     if (wide) {
         return (
             <Select value={value} onValueChange={onValueChange} disabled={disabled}>
-                <SelectTrigger look="solo" title={typeof selected?.label === 'string' ? selected.label : undefined} {...control}>
+                <SelectTrigger look="solo" {...control}>
                     <SelectValue placeholder={placeholder} />
                 </SelectTrigger>
                 <SelectContent>
@@ -64,7 +65,7 @@ export function ResponsiveSelect({ label, value, onValueChange, options, disable
                     // The field label alone would name the button, so the choice is read after it, as the combobox does.
                     aria-labelledby={`${labelId(control.id)} ${control.id}-value`}
                 >
-                    <span className={styles.selectValue} id={`${control.id}-value`}>
+                    <span className={styles.selectValue} id={`${control.id}-value`} title={fullText(selected?.label ?? placeholder)}>
                         {selected?.label ?? placeholder}
                     </span>
                     <Icon name="chevron-down" size={16} />

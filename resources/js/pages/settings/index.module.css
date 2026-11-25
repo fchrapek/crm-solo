@@ -1,4 +1,4 @@
-/* Figma: Ustawienia. Phone first: /settings is the list of sections; from 768 px it is Konto, and the tabs are the shell's pills. */
+/* Figma: Settings. Phone first: /settings is the list of sections; from 768 px it is Account, and the tabs are the shell's pills. */
 .page,
 .hub {
     display: flex;

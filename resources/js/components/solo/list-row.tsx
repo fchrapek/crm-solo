@@ -1,4 +1,5 @@
 import { Link, type InertiaLinkProps } from '@inertiajs/react';
+import { fullText } from '@/lib/plain-text';
 import { Icon } from '@/components/ui/icon';
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +18,7 @@ export interface ListRowMarks {
 interface ListRowContent {
     title: ReactNode;
     sub?: ReactNode;
-    /** Default is a record row (16 px), large a Lista client row (17 px). */
+    /** Default is a record row (16 px), large a List client row (17 px). */
     size?: 'default' | 'large';
     leading?: ReactNode;
     value?: ReactNode;
@@ -93,7 +94,7 @@ function ListRowBody({ title, sub, leading, value, trailing, marks = {}, titleHr
             {leading !== undefined && <span className={styles.listLeading}>{leading}</span>}
             <span className={styles.listText} data-linked={titleHref !== undefined || undefined}>
                 <span className={styles.listTitleRow}>
-                    <span className={styles.listTitle}>
+                    <span className={styles.listTitle} title={fullText(title)}>
                         {titleHref !== undefined ? (
                             <Link href={titleHref} className={styles.listTitleLink}>
                                 {title}
@@ -107,12 +108,18 @@ function ListRowBody({ title, sub, leading, value, trailing, marks = {}, titleHr
                 </span>
                 {hasSub && (
                     <span className={styles.listSub}>
-                        {sub !== undefined && <span className={styles.listSubText}>{sub}</span>}
+                        {sub !== undefined && (
+                            <span className={styles.listSubText} title={fullText(sub)}>
+                                {sub}
+                            </span>
+                        )}
                         {marks.openMonth !== undefined && <span className={styles.listMark}>{marks.openMonth}</span>}
                         {marks.agent !== undefined && (
                             <span className={styles.listAgent}>
                                 <span className={styles.listAgentMark} aria-hidden="true" />
-                                <span className={styles.listAgentText}>{marks.agent}</span>
+                                <span className={styles.listAgentText} title={fullText(marks.agent)}>
+                                    {marks.agent}
+                                </span>
                             </span>
                         )}
                     </span>

@@ -1,0 +1,29 @@
+/* The fields stay mounted, so a refused one can take the focus; a folded body is inert and, once it has closed, hidden. */
+.body {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition:
+        grid-template-rows var(--motion-slow) var(--ease-standard),
+        opacity var(--motion-slow) var(--ease-standard),
+        transform var(--motion-slow) var(--ease-standard),
+        visibility 0s;
+}
+
+.body[data-closed] {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateY(-4px);
+    visibility: hidden;
+    transition-duration: var(--motion-slow-exit), var(--motion-slow-exit), var(--motion-slow-exit), 0s;
+    transition-timing-function: var(--ease-exit);
+    transition-delay: 0s, 0s, 0s, var(--motion-slow-exit);
+}
+
+/* 4 px of room on every side, given back by the margin, so a focus ring is not clipped; positioned, so it clips a positioned child too (a select's hidden native control) */
+.fold {
+    position: relative;
+    min-height: 0;
+    margin: -4px;
+    padding: 4px;
+    overflow: hidden;
+}

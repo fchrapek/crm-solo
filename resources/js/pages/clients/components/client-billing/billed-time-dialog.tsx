@@ -75,7 +75,7 @@ export function BilledTimeDialog({
 }: {
     clientId: number;
     period: string;
-    /** Opens straight on this task's figure (Zmień on a task of the month); a month that cannot change shows its list read only instead. */
+    /** Opens straight on this task's figure (Change on a task of the month); a month that cannot change shows its list read only instead. */
     task?: number | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;

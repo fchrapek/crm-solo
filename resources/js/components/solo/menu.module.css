@@ -10,10 +10,15 @@
     width: 300px;
     min-width: 0;
     max-width: calc(100vw - 2 * var(--solo-space-4));
-    /* a filter menu with many groups scrolls inside the room the popover has */
-    max-height: var(--radix-popover-content-available-height, none);
+    /* a long menu scrolls inside the room it has, which already leaves out the phone's bottom bars (menuCollisionPadding) */
+    max-height: max(var(--radix-popover-content-available-height, var(--radix-dropdown-menu-content-available-height, 100dvh)), 200px);
     overflow-y: auto;
-    padding: var(--solo-space-4);
+    padding: var(--solo-space-2) var(--solo-space-4);
+}
+
+/* a row's hover band reaches 8 px into the padding, so text that opens the menu takes the other 8 px itself */
+:global([data-day]) .box:not(.fill) > :first-child:is(.head, .groupLabel, .fill, [data-slot='dropdown-menu-label']) {
+    padding-top: var(--solo-space-2);
 }
 
 :global([data-day]) .box .row {
@@ -130,4 +135,44 @@
     :global([data-day]) .box .row:last-child {
         border-bottom-color: var(--solo-menu-rule, var(--solo-rule));
     }
+}
+
+/* a labelled set of choices inside a menu: a quiet label, then chips side by side (the days a pick can move to) */
+:global([data-day]) .box .groupLabel {
+    margin: 0;
+    padding: var(--solo-space-2) 0 var(--solo-space-1);
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+:global([data-day]) .box .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--role-space-8);
+    padding-bottom: var(--solo-space-2);
+    border-bottom: 1px solid var(--solo-menu-rule, var(--solo-rule));
+}
+
+:global([data-day]) .box .row.chip {
+    display: inline-flex;
+    flex: none;
+    justify-content: flex-start;
+    min-height: 36px;
+    margin: 0;
+    padding: 0 var(--role-space-12);
+    border-bottom: 0;
+    border-radius: var(--role-radius-sm);
+    background: var(--role-hover);
+    font: 600 var(--solo-text-meta) / 1 var(--solo-font-text);
+}
+
+:global([data-day]) .box .row.chip:is(:focus-visible, [data-highlighted], :hover) {
+    background: var(--role-rule);
+    text-decoration: none;
+}
+
+:global([data-day]) .box .row.chip .value {
+    color: var(--role-text-secondary);
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
 }

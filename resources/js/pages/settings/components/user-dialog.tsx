@@ -12,6 +12,13 @@ export type UserDialogMode = { kind: 'profile'; user: Me & { owner: boolean } } 
 
 const EMPTY = { first_name: '', last_name: '', email: '', password: '', current_password: '' };
 
+/** Which editing session a mode opens: a new object for the same user, as a polled page passes, keeps the draft. */
+export function dialogSession(mode: UserDialogMode | null): string | null {
+    if (mode === null) return null;
+
+    return mode.kind === 'create' ? 'create' : `${mode.kind}:${mode.user.id}`;
+}
+
 /** The profile (own account), a new user and another user's edit: one form, a dialog from 768 px and a sheet below. */
 export function UserDialog({ mode, onClose, onRemove }: { mode: UserDialogMode | null; onClose: () => void; onRemove: (user: AccountUser) => void }) {
     const { t } = useTranslation();
@@ -20,9 +27,11 @@ export function UserDialog({ mode, onClose, onRemove }: { mode: UserDialogMode |
     const [processing, setProcessing] = useState(false);
 
     const [shown, setShown] = useState(mode);
-    if (mode !== shown) {
-        setShown(mode);
+    const [session, setSession] = useState(() => dialogSession(mode));
+    if (dialogSession(mode) !== session) {
+        setSession(dialogSession(mode));
         if (mode !== null) {
+            setShown(mode);
             const user = mode.kind === 'create' ? null : mode.user;
             setDraft({ ...EMPTY, first_name: user?.first_name ?? '', last_name: user?.last_name ?? '', email: user?.email ?? '' });
             setErrors({});
@@ -60,7 +69,7 @@ export function UserDialog({ mode, onClose, onRemove }: { mode: UserDialogMode |
         router.put(users.update(current.user.id).url, { ...names, owner: current.user.owner, ...password }, options);
     }
 
-    const title = creating ? t('New user') : current?.kind === 'profile' ? t('Edit profile') : t('Edit user');
+    const title = creating ? t('New user') : current?.kind === 'profile' ? t('My profile') : t('Edit user');
 
     return (
         <ResponsiveDialog

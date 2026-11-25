@@ -49,7 +49,7 @@ final class BilledTimeEndpointsTest extends TestCase
     {
         $before = $this->entryRows();
         $url = "/clients/{$this->client->id}/billed/2026-09/tasks/{$this->task->id}";
-        $from = "/clients/{$this->client->id}/rozliczenia";
+        $from = "/clients/{$this->client->id}/billing";
 
         $this->actingAs($this->user)->from($from)->put($url, ['hours' => 2.5, 'note' => 'Testy ręczne'])
             ->assertRedirect($from)->assertSessionHas('success', 'Task billed: 2.5 h, September 2026 in total: 2.5 h.');
@@ -116,7 +116,7 @@ final class BilledTimeEndpointsTest extends TestCase
     {
         $this->actingAs($this->user)->put("/clients/{$this->client->id}/billed/2026-09/tasks/{$this->task->id}", ['hours' => 2.5]);
 
-        $props = $this->actingAs($this->user)->get("/clients/{$this->client->id}/rozliczenia")->assertOk()->viewData('page')['props'];
+        $props = $this->actingAs($this->user)->get("/clients/{$this->client->id}/billing")->assertOk()->viewData('page')['props'];
         $billing = is_callable($props['billing']) ? $props['billing']() : $props['billing'];
         $this->assertArrayNotHasKey('billed_time', $billing);
         $september = collect($props['billing_ledger']['rows'])->firstWhere('period', '2026-09');
@@ -130,7 +130,7 @@ final class BilledTimeEndpointsTest extends TestCase
         $order = $this->account->clients()->create(['name' => 'Kawiarnia', 'currency' => 'PLN']);
         $this->entry('2026-09-10 08:00:00', 70, client: $order);
 
-        $billing = $this->actingAs($this->user)->get("/clients/{$order->id}/rozliczenia")->assertOk()->viewData('page')['props']['billing'];
+        $billing = $this->actingAs($this->user)->get("/clients/{$order->id}/billing")->assertOk()->viewData('page')['props']['billing'];
         $billing = is_callable($billing) ? $billing() : $billing;
 
         $this->assertSame('order', $billing['mode']);

@@ -64,6 +64,7 @@ final class ClientListTest extends TestCase
                     'is_archived' => false,
                     'is_pinned' => false,
                     'agent_live' => false,
+                    'agent_minutes' => null,
                     'hours' => ['period' => '2026-10', 'behind' => false, 'has_retainer' => true, 'used' => 14, 'available' => 10, 'remaining' => -4, 'logged' => 14],
                 ])
                 ->where('clients.data.1.name', 'Kawiarnia Testowa')
@@ -154,7 +155,7 @@ final class ClientListTest extends TestCase
             );
     }
 
-    public function test_untyped_clients_have_their_own_filter_so_wszyscy_is_the_sum_of_the_rows(): void
+    public function test_untyped_clients_have_their_own_filter_so_all_clients_is_the_sum_of_the_rows(): void
     {
         $this->client('Abonament Przykładowy', cooperation: 'retainer');
         $this->client('Bez typu A Przykładowy');
@@ -293,6 +294,25 @@ final class ClientListTest extends TestCase
                 ->where('clients.data.2.name', 'A Cichy Przykładowy')
                 ->where('clients.data.3.name', 'C Osoba Przykładowa')
                 ->where('clients.data.3.agent_live', false)
+            );
+    }
+
+    public function test_a_running_agent_reports_the_minutes_since_its_oldest_open_entry_and_a_person_timer_none(): void
+    {
+        $agent = $this->client('Agent Przykładowy');
+        $this->running($agent, via: 'mcp');
+        $later = $this->running($agent, via: 'cli');
+        $later->forceFill(['start_time' => now()->subMinutes(5)])->save();
+        $person = $this->client('Osoba Przykładowa');
+        $this->running($person, via: null);
+
+        $this->actingAs($this->user)
+            ->get('/clients')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('clients.data.0.name', 'Agent Przykładowy')
+                ->where('clients.data.0.agent_minutes', 20)
+                ->where('clients.data.1.name', 'Osoba Przykładowa')
+                ->where('clients.data.1.agent_minutes', null)
             );
     }
 

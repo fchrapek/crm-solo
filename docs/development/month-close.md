@@ -50,7 +50,7 @@ from `month-close:tick` / the MCP tool alike. It records `completed_via`
 and who acts next, the hours to close for a retainer client with no checklist left, or the day it finished (all
 steps moved and the hours month closed). The place is Zamknięcie miesiąca and the month; the pills are the month
 before and after, never past the month in progress nor before June 2026. A second row of pills filters the list by
-who acts next, hours left to close and finished clients (`?pokaz=ty|agent|godziny|zakonczone`, read by the page
+who acts next, hours left to close and finished clients (`?filter=you|agent|hours|finished`, read by the page
 from the rows it already has). `/month-close/{client}?period=` is the client's card (Figma 1094:34969): the steps
 per site, then the client's own, with the hours close and the client's report mode, type and SSH alias beside them;
 its pills are the month's clients with their progress (`clients`). The report and the invoice step also link to the
@@ -75,7 +75,7 @@ inactive on the sale date and the draft is refused.
 ## Summary email
 
 For a `summary_email` client the deliverable is the month's summary email,
-drafted from an email template (Ustawienia · Wiadomości e-mail; one is the
+drafted from an email template (Ustawienia · Wiadomości, Szablony e-mail; one is the
 default for new drafts) and sent from the CRM on the owner's click
 (`/clients/{client}/summary-emails/{period}`, owner only, behind
 `feature:billing`). On the client's card the step row says the email's state

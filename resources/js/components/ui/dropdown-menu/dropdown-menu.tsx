@@ -2,7 +2,7 @@ import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react';
 import * as React from 'react';
 
-import { menuBoxClass, menuRowClass } from '@/components/solo/menu';
+import { menuBoxClass, menuCollisionPadding, menuRowClass, readMenuFloor } from '@/components/solo/menu';
 import { useInSoloSurface, useSoloPortalSurface } from '@/components/solo/surface';
 import { cn } from '@/lib/utils';
 import styles from './dropdown-menu.module.css';
@@ -22,7 +22,7 @@ function DropdownMenuTrigger({ ...props }: React.ComponentProps<typeof DropdownM
 }
 
 /** On a Solo screen every menu is Figma's Menu / Actions, with Menu / Row items. */
-function DropdownMenuContent({ className, sideOffset = 4, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+function DropdownMenuContent({ className, sideOffset = 4, collisionPadding, ...props }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
     const container = useSoloPortalSurface();
     const inSolo = useInSoloSurface();
 
@@ -31,6 +31,7 @@ function DropdownMenuContent({ className, sideOffset = 4, ...props }: React.Comp
             <DropdownMenuPrimitive.Content
                 data-slot="dropdown-menu-content"
                 sideOffset={sideOffset}
+                collisionPadding={inSolo ? menuCollisionPadding(collisionPadding, readMenuFloor) : collisionPadding}
                 className={cn(styles.content, inSolo && menuBoxClass, className)}
                 {...props}
             />

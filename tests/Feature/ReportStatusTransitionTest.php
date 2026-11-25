@@ -275,7 +275,7 @@ final class ReportStatusTransitionTest extends TestCase
         $this->transition($report, 'mark-sent');
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/rozliczenia")
+            ->get("/clients/{$this->client->id}/billing")
             ->assertInertia(fn (Assert $page) => $page
                 ->where('billing_ledger.rows.0.status', 'sent')
                 ->where('billing_ledger.rows.0.sent_on', '2026-10-04'));

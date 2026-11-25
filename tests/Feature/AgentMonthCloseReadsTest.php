@@ -22,7 +22,7 @@ use Tests\Feature\Settlement\SettlementFixtures;
 use Tests\TestCase;
 
 /**
- * Agents read the month close the way the pages show it: the worklist, a client's reports with the Rozliczenia
+ * Agents read the month close the way the pages show it: the worklist, a client's reports with the Billing
  * figures, and what closing a month would freeze. Every read stays inside the acting account and writes nothing.
  */
 final class AgentMonthCloseReadsTest extends TestCase
@@ -109,13 +109,13 @@ final class AgentMonthCloseReadsTest extends TestCase
         );
     }
 
-    public function test_report_hours_equal_the_rozliczenia_row_for_its_month(): void
+    public function test_report_hours_equal_the_billing_row_for_its_month(): void
     {
         $this->report('2026-08', opening: 0, contracted: 30, actual: 34, status: ClientReport::STATUS_SENT);
         $september = $this->report('2026-09', opening: -4, contracted: 30, actual: 12.5);
         $this->entry('2026-09-10 08:00:00', 600);
 
-        $rows = collect($this->actingAs($this->user)->get("/clients/{$this->client->id}/rozliczenia")->assertOk()->viewData('page')['props']['billing_ledger']['rows'])->keyBy('period');
+        $rows = collect($this->actingAs($this->user)->get("/clients/{$this->client->id}/billing")->assertOk()->viewData('page')['props']['billing_ledger']['rows'])->keyBy('period');
         [$exit, $byId] = $this->verb('crm:report', ['report' => (string) $september->id]);
         [, $byClient] = $this->verb('crm:report', ['report' => (string) $this->client->id, '--period' => '2026-09']);
         [$ok, $tool] = $this->tool(ReportTool::class, ['client' => 'Acme', 'period' => '2026-09']);

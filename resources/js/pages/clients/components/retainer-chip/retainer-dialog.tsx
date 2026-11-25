@@ -2,7 +2,9 @@ import { router } from '@inertiajs/react';
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { DateField } from '@/components/solo/date-field';
 import { fieldControl, SoloField, SoloFieldRow, SoloInput, SoloTextarea } from '@/components/solo/field';
+import { Fold } from '@/components/solo/fold';
 import { SectionAction, SectionHead, SoloButton } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
 import { ResponsiveSelect } from '@/components/solo/responsive-select';
@@ -95,7 +97,7 @@ export function retainerPayload(draft: Draft) {
     };
 }
 
-/** Figma: Dialog / Zmień abonament, a bottom sheet on phones. Overage goes to the hours bank and is never billed, so its stored rate is not shown. */
+/** Figma: Dialog / Change retainer, a bottom sheet on phones. Overage goes to the hours bank and is never billed, so its stored rate is not shown. */
 export function RetainerDialog({ open, onOpenChange, clientId, clientCurrency, retainers, activeIds, sheet = false }: Props) {
     const { t } = useTranslation();
     const f = useFormatters();
@@ -223,12 +225,11 @@ export function RetainerDialog({ open, onOpenChange, clientId, clientCurrency, r
                 </SoloField>
                 <SoloFieldRow>
                     <SoloField label={t('From')} htmlFor="retainer-from" error={errors.effective_from}>
-                        <SoloInput
+                        <DateField
                             {...fieldControl('retainer-from', errors.effective_from)}
-                            type="date"
+                            label={t('From')}
                             value={draft.effective_from}
-                            onChange={(e) => set('effective_from')(e.target.value)}
-                            required
+                            onChange={set('effective_from')}
                             disabled={processing}
                         />
                     </SoloField>
@@ -242,69 +243,71 @@ export function RetainerDialog({ open, onOpenChange, clientId, clientCurrency, r
                         />
                     </SoloField>
                 </SoloFieldRow>
-                <SectionAction
-                    className={styles.more}
-                    aria-expanded={more}
-                    aria-controls="retainer-more"
-                    onClick={() => setMore((current) => !current)}
-                >
-                    {t('Invoice details and notes')} {more ? '↑' : '↓'}
-                </SectionAction>
-                {more && (
-                    <div id="retainer-more" className={styles.moreFields}>
-                        <SoloField label={t('Position name')} htmlFor="retainer-label" error={errors.label}>
-                            <SoloInput
-                                {...fieldControl('retainer-label', errors.label)}
-                                value={draft.label}
-                                onChange={(e) => set('label')(e.target.value)}
-                                placeholder={t('e.g. example.com, dev hours')}
-                                maxLength={200}
-                                disabled={processing}
-                            />
-                        </SoloField>
-                        <SoloField label={t('Invoice line (with contact)')} htmlFor="retainer-desc" error={errors.description}>
-                            <SoloTextarea
-                                {...fieldControl('retainer-desc', errors.description)}
-                                value={draft.description}
-                                onChange={(e) => set('description')(e.target.value)}
-                                rows={2}
-                                placeholder={t('Falls back to the position name / client description')}
-                                disabled={processing}
-                            />
-                        </SoloField>
-                        <SoloFieldRow>
-                            <SoloField label={t('Invoice #')} htmlFor="retainer-group" error={errors.invoice_group}>
+                <div className={styles.moreGroup}>
+                    <SectionAction
+                        className={styles.more}
+                        aria-expanded={more}
+                        aria-controls="retainer-more"
+                        onClick={() => setMore((current) => !current)}
+                    >
+                        {t('Invoice details and notes')} {more ? '↑' : '↓'}
+                    </SectionAction>
+                    <Fold id="retainer-more" open={more}>
+                        <div className={styles.moreFields}>
+                            <SoloField label={t('Position name')} htmlFor="retainer-label" error={errors.label}>
                                 <SoloInput
-                                    {...fieldControl('retainer-group', errors.invoice_group)}
-                                    inputMode="numeric"
-                                    value={draft.invoice_group}
-                                    onChange={(e) => set('invoice_group')(e.target.value)}
+                                    {...fieldControl('retainer-label', errors.label)}
+                                    value={draft.label}
+                                    onChange={(e) => set('label')(e.target.value)}
+                                    placeholder={t('e.g. example.com, dev hours')}
+                                    maxLength={200}
                                     disabled={processing}
                                 />
                             </SoloField>
-                            <SoloField label={t('Currency')} htmlFor="retainer-currency" error={errors.currency}>
-                                <ResponsiveSelect
-                                    label={t('Currency')}
-                                    value={draft.currency}
-                                    onValueChange={set('currency')}
+                            <SoloField label={t('Invoice line (with contact)')} htmlFor="retainer-desc" error={errors.description}>
+                                <SoloTextarea
+                                    {...fieldControl('retainer-desc', errors.description)}
+                                    value={draft.description}
+                                    onChange={(e) => set('description')(e.target.value)}
+                                    rows={2}
+                                    placeholder={t('Falls back to the position name / client description')}
                                     disabled={processing}
-                                    control={fieldControl('retainer-currency', errors.currency)}
-                                    sheet={sheet}
-                                    options={['PLN', 'EUR', 'USD', 'GBP'].map((currency) => ({ value: currency, label: currency }))}
                                 />
                             </SoloField>
-                        </SoloFieldRow>
-                        <SoloField label={t('Notes')} htmlFor="retainer-notes" error={errors.notes}>
-                            <SoloTextarea
-                                {...fieldControl('retainer-notes', errors.notes)}
-                                value={draft.notes}
-                                onChange={(e) => set('notes')(e.target.value)}
-                                rows={2}
-                                disabled={processing}
-                            />
-                        </SoloField>
-                    </div>
-                )}
+                            <SoloFieldRow>
+                                <SoloField label={t('Invoice #')} htmlFor="retainer-group" error={errors.invoice_group}>
+                                    <SoloInput
+                                        {...fieldControl('retainer-group', errors.invoice_group)}
+                                        inputMode="numeric"
+                                        value={draft.invoice_group}
+                                        onChange={(e) => set('invoice_group')(e.target.value)}
+                                        disabled={processing}
+                                    />
+                                </SoloField>
+                                <SoloField label={t('Currency')} htmlFor="retainer-currency" error={errors.currency}>
+                                    <ResponsiveSelect
+                                        label={t('Currency')}
+                                        value={draft.currency}
+                                        onValueChange={set('currency')}
+                                        disabled={processing}
+                                        control={fieldControl('retainer-currency', errors.currency)}
+                                        sheet={sheet}
+                                        options={['PLN', 'EUR', 'USD', 'GBP'].map((currency) => ({ value: currency, label: currency }))}
+                                    />
+                                </SoloField>
+                            </SoloFieldRow>
+                            <SoloField label={t('Notes')} htmlFor="retainer-notes" error={errors.notes}>
+                                <SoloTextarea
+                                    {...fieldControl('retainer-notes', errors.notes)}
+                                    value={draft.notes}
+                                    onChange={(e) => set('notes')(e.target.value)}
+                                    rows={2}
+                                    disabled={processing}
+                                />
+                            </SoloField>
+                        </div>
+                    </Fold>
+                </div>
 
                 {retainers.length > 0 && (
                     <section className={styles.positions}>
@@ -363,7 +366,7 @@ export function RetainerDialog({ open, onOpenChange, clientId, clientCurrency, r
                 description={
                     confirmDelete?.label ||
                     confirmDelete?.description ||
-                    t('This abonament position will be removed. Past reports keep their snapshot.')
+                    t('This retainer position will be removed. Past reports keep their snapshot.')
                 }
                 confirmLabel={t('Delete')}
                 onConfirm={() => confirmDelete && doDelete(confirmDelete)}

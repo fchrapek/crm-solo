@@ -6,7 +6,7 @@
     height: 4px;
 }
 
-/* the phone block is the Godziny sheet's 4 px bar, the desktop block 6 px */
+/* the phone block is the Hours sheet's 4 px bar, the desktop block 6 px */
 .bar[data-size='block'] {
     width: 100%;
 }

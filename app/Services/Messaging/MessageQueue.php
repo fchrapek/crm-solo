@@ -9,7 +9,7 @@ use App\Models\OutboundMessage;
 use App\Support\LocalCalendar;
 use Illuminate\Database\Eloquent\Builder;
 
-/** Figma: SMS / Kolejka (607:5435): from today on soonest first, then everything earlier newest first, paged. */
+/** Figma: SMS / Queue (607:5435): from today on soonest first, then everything earlier newest first, paged. */
 final class MessageQueue
 {
     public const int PER_PAGE = 25;

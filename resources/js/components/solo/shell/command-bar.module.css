@@ -51,15 +51,18 @@
 }
 
 .token {
-    display: inline-flex;
-    align-items: center;
+    display: inline-block;
+    max-width: 32ch;
     height: 36px;
     padding: 0 var(--role-space-12);
+    overflow: hidden;
     border-radius: var(--role-radius-sm);
     background: var(--role-token);
     color: var(--role-token-text);
-    font: 600 var(--solo-text-control) / normal var(--solo-font-text);
+    /* one line the height of the token; a long name ends in an ellipsis so the field keeps its room */
+    font: 600 var(--solo-text-control) / 36px var(--solo-font-text);
     text-decoration: none;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 

@@ -30,7 +30,7 @@ export const WithActions: Story = {
 
 export const Archived: Story = { args: { note: 'Klient zarchiwizowany' } };
 
-/** Rozliczenia: the month as the title, how it stands as a line under it, and the months as pills beside it (under it on a phone). */
+/** Billing: the month as the title, how it stands as a line under it, and the months as pills beside it (under it on a phone). */
 export const WithAside: Story = {
     args: {
         title: 'Wrzesień',

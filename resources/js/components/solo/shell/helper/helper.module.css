@@ -1,18 +1,25 @@
 /*
- * Figma: Helper. Phone: a 56 px button that ends the page in the flow and scrolls with it, so it never covers a row. From
- * 768 px it floats 16 px from the bottom right, and its hint shows only while the dog is pointed at or focused.
+ * Figma: Helper (1173:44). Phone: a 56 px button fixed above the timer strip (above the tab bar without one); the page
+ * end is padded by its height. From 768 px the 112 px dog floats 16 px from the bottom right and its line shows only
+ * while the dog is pointed at or focused. Each device kind shows it only while the user's preference for it is on.
  */
 .helper {
+    position: fixed;
+    right: calc(var(--shell-margin) + env(safe-area-inset-right, 0px));
+    bottom: calc(var(--solo-tab-bar-height) + env(safe-area-inset-bottom, 0px) + var(--shell-dock) + var(--shell-strip) + var(--role-space-8));
+    z-index: var(--z-banner);
     display: flex;
     align-items: flex-end;
-    justify-content: flex-end;
-    gap: var(--role-space-4);
-    margin: var(--role-space-8) calc(var(--shell-margin) + env(safe-area-inset-right, 0px)) 0;
+    gap: var(--role-space-8);
     pointer-events: none;
 }
 
 .helper > * {
     pointer-events: auto;
+}
+
+.helper:not([data-phone]) {
+    display: none;
 }
 
 .dog {
@@ -39,13 +46,18 @@
     width: 56px;
     height: 56px;
     padding: 0;
-    border: var(--role-stroke-outline) solid var(--role-outline);
+    border: 0;
     border-radius: var(--role-radius-full);
-    background: var(--role-rail);
+    background: var(--role-tile);
+    box-shadow: var(--role-shadow);
     cursor: pointer;
 }
 
-.button:focus-visible {
+.button:focus-visible,
+.hintTopic:focus-visible,
+.topic:focus-visible,
+.back:focus-visible,
+.docs:focus-visible {
     outline: var(--role-stroke-focus) solid var(--role-focus-ring);
     outline-offset: 2px;
 }
@@ -55,213 +67,208 @@
     display: none;
 }
 
-.title {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--role-space-12);
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    background: var(--role-overlay);
 }
 
-.talk {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--role-space-12);
-    min-height: 0;
+.sheet {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: var(--z-modal);
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - var(--role-space-20));
     overflow-y: auto;
-}
-
-.said {
-    max-width: 280px;
-    margin: 0;
-    padding: 10px 14px;
-    border: var(--role-stroke-outline) solid var(--role-outline);
-    border-radius: var(--role-radius-md);
-    background: var(--role-rail);
+    padding: var(--role-space-8) var(--role-space-8) max(var(--role-space-24), env(safe-area-inset-bottom, 0px));
+    border-radius: var(--role-radius-xl) var(--role-radius-xl) 0 0;
+    background: var(--role-tile);
+    box-shadow: var(--role-shadow);
     color: var(--role-text-primary);
-    font: 400 var(--solo-text-control) / 1.25 var(--solo-font-text);
+    font-family: var(--solo-font-text);
 }
 
-.mine {
-    align-self: flex-end;
-    border-color: var(--role-button-primary);
-    background: var(--role-button-primary);
-    color: var(--role-button-primary-text);
+.sheet:focus {
+    outline: none;
 }
 
-.ideas {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--role-space-8);
-}
-
-.inert {
-    opacity: 0.55;
-    cursor: default;
-}
-
-.example {
+.panel {
     display: flex;
     flex-direction: column;
-    align-self: stretch;
-    gap: var(--role-space-8);
+    gap: var(--role-space-4);
 }
 
-.exampleLabel,
-.progress {
+.grip {
+    align-self: center;
+    width: 36px;
+    height: 4px;
+    margin-bottom: var(--role-space-8);
+    border-radius: 2px;
+    background: var(--role-rule);
+}
+
+.head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: var(--role-space-12);
+}
+
+.head[data-back] {
+    padding-left: var(--role-space-4);
+}
+
+.headDog {
+    display: flex;
+    flex: none;
+}
+
+.title {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    font: 600 var(--solo-mobile-sheet-title) / 22px var(--solo-font-text);
+}
+
+.close {
+    margin-left: auto;
+}
+
+.intro,
+.topic,
+.back,
+.question,
+.answerText {
+    font-size: var(--solo-mobile-body);
+    line-height: 21px;
+}
+
+.intro {
+    margin: 0;
+    padding: 0 var(--role-space-12) var(--role-space-4);
     color: var(--role-text-secondary);
-    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
-}
-
-.progress {
     font-weight: 400;
-    letter-spacing: 0;
-    text-transform: none;
 }
 
-.cards,
-.steps {
+.topics {
     display: flex;
     flex-direction: column;
-    align-self: stretch;
-    gap: var(--role-space-8);
     margin: 0;
     padding: 0;
     list-style: none;
 }
 
-.card,
-.link,
-.steps {
-    border: var(--role-stroke-rule) solid var(--role-rule);
-    border-radius: var(--role-radius-md);
-    background: var(--role-tile);
-}
-
-.card,
-.link {
+.topic {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: var(--role-space-12);
-    padding: var(--role-space-12);
+    width: 100%;
+    min-height: var(--role-control);
+    padding: var(--role-space-8) var(--role-space-12);
+    border: 0;
+    border-radius: var(--role-radius-sm);
+    background: none;
+    color: var(--role-text-primary);
+    font-weight: 400;
+    text-align: left;
+    cursor: pointer;
 }
 
-.cardText {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+.topic:hover {
+    background: var(--role-page);
+}
+
+.topic svg {
+    flex: none;
+    color: var(--role-text-secondary);
+}
+
+.topicText {
+    flex: 1 1 auto;
     min-width: 0;
 }
 
-.cardTitle,
-.link {
+.back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: var(--role-control);
+    padding: 0 var(--role-space-12) 0 var(--role-space-8);
+    border: 0;
+    border-radius: var(--role-radius-full);
+    background: none;
     color: var(--role-text-primary);
-    font: 600 var(--solo-text-control) / 1.3 var(--solo-font-text);
+    font-weight: 400;
+    cursor: pointer;
 }
 
-.cardReason,
-.note,
-.plain {
-    margin: 0;
-    color: var(--role-text-secondary);
-    font: 400 var(--solo-text-meta) / 1.35 var(--solo-font-text);
-}
-
-.link {
-    text-decoration: none;
-}
-
-.link:hover {
+.back:hover {
     background: var(--role-hover);
 }
 
-.link:focus-visible {
-    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
-    outline-offset: 2px;
-}
-
-.steps {
-    padding: var(--role-space-12);
-}
-
-.step {
+.answer {
     display: flex;
-    align-items: flex-start;
+    flex-direction: column;
     gap: var(--role-space-8);
-    color: var(--role-text-secondary);
-    font: 400 var(--solo-text-control) / 1.3 var(--solo-font-text);
+    padding: var(--role-space-4) var(--role-space-12) 0;
 }
 
-.step[data-state='done'] {
-    color: var(--role-text-primary);
-}
-
-.step[data-state='current'] {
-    color: var(--role-text-primary);
+.question {
+    margin: 0;
     font-weight: 600;
 }
 
-.step svg {
-    flex: none;
+.answerText {
+    margin: 0;
+    font-weight: 400;
 }
 
-.field {
+.action {
     display: flex;
-    flex: none;
+    padding: var(--role-space-8) var(--role-space-12) 0;
+}
+
+.docs {
+    display: inline-flex;
+    align-self: flex-start;
     align-items: center;
-    gap: var(--role-space-8);
-    margin-top: var(--role-space-12);
-    padding: 4px 4px 4px 18px;
-    border: var(--role-stroke-rule) solid var(--role-rule);
-    border-radius: var(--role-radius-full);
-    background: var(--role-tile);
-}
-
-.input {
-    flex: 1 1 auto;
-    min-width: 0;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--role-text-primary);
-    font: 400 var(--solo-text-control) / normal var(--solo-font-text);
-}
-
-.input::placeholder {
+    gap: var(--role-space-4);
+    padding: var(--role-space-8) var(--role-space-12) var(--role-space-4);
     color: var(--role-text-secondary);
-    opacity: 1;
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    text-decoration: none;
 }
 
-.send {
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: var(--role-radius-full);
-    background: var(--role-page);
-    color: var(--role-text-secondary);
+.docs:hover {
+    text-decoration: underline;
 }
 
 @media (min-width: 768px) {
     .helper {
-        position: fixed;
         right: var(--role-space-16);
         bottom: var(--role-space-16);
         z-index: var(--z-40);
-        margin: 0;
+    }
+
+    .helper:not([data-desktop]) {
+        display: none;
+    }
+
+    .helper[data-desktop] {
+        display: flex;
     }
 
     .button {
-        width: 112px;
-        height: 112px;
-        border: 0;
+        width: var(--shell-dog);
+        height: var(--shell-dog);
         background: none;
+        box-shadow: none;
     }
 
-    .phoneDog {
+    .phoneDog,
+    .grip,
+    .headDog {
         display: none;
     }
 
@@ -279,53 +286,64 @@
         order: -1;
         flex-direction: column;
         align-items: flex-start;
-        gap: var(--role-space-12);
+        gap: var(--role-space-8);
         width: 296px;
         padding: var(--role-space-16) 18px;
-        border: var(--role-stroke-outline) solid var(--role-outline);
-        border-radius: var(--role-radius-lg);
-        background: var(--role-rail);
-        color: var(--role-text-primary);
-    }
-
-    /* bridges the gap to the dog, so the pointer can travel to the hint's button without the hint closing */
-    .hint::after {
-        position: absolute;
-        inset: 0 auto 0 100%;
-        width: var(--role-space-4);
-        content: '';
-    }
-
-    .hintText {
-        margin: 0;
-        font: 400 var(--solo-text-control) / 1.25 var(--solo-font-text);
-    }
-
-    .window {
-        position: absolute;
-        right: 0;
-        bottom: calc(100% + var(--role-space-8));
-        display: flex;
-        flex-direction: column;
-        width: 380px;
-        max-height: min(620px, 100dvh - 120px);
-        padding: var(--role-space-16);
-        border: var(--role-stroke-outline) solid var(--role-outline);
         border-radius: var(--role-radius-lg);
         background: var(--role-tile);
         box-shadow: var(--role-shadow);
         color: var(--role-text-primary);
     }
 
-    .head {
-        display: flex;
-        flex: none;
+    /* bridges the gap to the dog, so the pointer can travel to the line's link without the line closing */
+    .hint::after {
+        position: absolute;
+        inset: 0 auto 0 100%;
+        width: var(--role-space-8);
+        content: '';
+    }
+
+    .hintText {
+        margin: 0;
+        font: 400 var(--solo-text-control) / normal var(--solo-font-text);
+    }
+
+    .hintTopic {
+        display: inline-flex;
         align-items: center;
-        gap: var(--role-space-12);
+        gap: var(--role-space-4);
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--role-text-primary);
+        font: 600 var(--solo-text-control) / normal var(--solo-font-text);
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .overlay {
+        background: none;
+    }
+
+    .sheet {
+        inset-inline: auto var(--role-space-16);
+        bottom: calc(var(--role-space-16) + var(--shell-dog) + var(--role-space-8));
+        width: 360px;
+        max-height: calc(100dvh - var(--shell-dog) - var(--role-space-16) * 3);
+        padding: var(--role-space-12) var(--role-space-8);
+        border-radius: var(--role-radius-xl);
+    }
+
+    .title,
+    .question {
         font: 600 var(--solo-text-row) / 1.35 var(--solo-font-text);
     }
 
-    .head .title {
-        flex: 1 1 auto;
+    .intro,
+    .topic,
+    .back,
+    .answerText {
+        font-size: var(--solo-text-control);
+        line-height: normal;
     }
 }

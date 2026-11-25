@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\DayAddRequest;
 use App\Models\Integration;
 use Illuminate\Support\Facades\Schedule;
 
@@ -11,9 +12,11 @@ use Illuminate\Support\Facades\Schedule;
 // so connecting an integration starts its sync without a deploy.
 $integrationConfigured = fn (string $provider): Closure => fn (): bool => Integration::query()->where('provider', $provider)->exists();
 
-// demo:reset rebuilds the database; it runs only under DEMO_MODE, so the demo heals overnight.
+// demo:reset rebuilds the database; it runs only under DEMO_MODE. Nightly so the seeded days follow the calendar,
+// and every hour once a visitor has changed something, so nobody meets another visitor's leftovers for long.
 if (config('app.demo')) {
     Schedule::command('demo:reset')->dailyAt('03:30');
+    Schedule::command('demo:reset --if-changed')->hourly();
 }
 
 // Integrations are not part of the public demo, so nothing there pulls from a third party.
@@ -24,7 +27,11 @@ if (! config('app.demo')) {
     Schedule::command('kiwwwi:sync-leads')->everyFifteenMinutes()->withoutOverlapping(10)->when(fn (): bool => config('services.kiwwwi.leads.app_password') !== null);
     Schedule::command('infakt:sync-invoices')->dailyAt('03:00')->when($integrationConfigured('infakt'));
     Schedule::command('messages:dispatch')->everyMinute()->withoutOverlapping(5);
+    Schedule::command('lead-intake:notify-pending')->everyFiveMinutes()->withoutOverlapping(10);
 }
+// A replay of the day's add field needs its request for days at most; older ones go.
+Schedule::command('model:prune', ['--model' => [DayAddRequest::class]])->dailyAt('04:00');
+
 // Local installs dump nightly; a hosted stack opts in with BACKUP_SCHEDULE_AT (UTC, the scheduler's zone) and ships the dumps off the box itself.
 $backupAt = config('backup.schedule_at') ?: (app()->isLocal() ? '02:00' : null);
 if (is_string($backupAt)) {

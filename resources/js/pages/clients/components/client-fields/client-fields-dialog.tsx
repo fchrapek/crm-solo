@@ -21,7 +21,7 @@ const draftOf = (card: ClientCard): Draft => ({
 
 const same = (a: string | string[], b: string | string[]) => JSON.stringify(a) === JSON.stringify(b);
 
-/** Figma: Dialog / Pola klienta · Edytuj (601:21054). Every active field, the assignee and the opt-out; only what changed is sent. */
+/** Figma: Dialog / Client fields · Edit (601:21054). Every active field, the assignee and the opt-out; only what changed is sent. */
 export function ClientFieldsDialog({
     clientId,
     card,

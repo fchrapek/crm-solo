@@ -31,15 +31,15 @@ describe('the place of the report page', () => {
     const props = { client: { id: 7, name: 'Pracownia Mebli sp. z o.o.', short_name: 'Pracownia Mebli' }, report: { id: 9, period_start: '2026-09-01' } } as never;
     const place = (url: string) => ReportEdit.place(props, { t, url, locale: 'pl' });
 
-    test('the tokens are the client, the month and Raport, and the month leads to its Rozliczenia', () => {
+    test('the tokens are the client, the month and Report, and the month leads to its Billing tab', () => {
         expect(place('/clients/7/reports/9').tokens.map((token) => [token.label, 'href' in token ? token.href : undefined])).toEqual([
-            ['Pracownia Mebli', '/clients/7/przeglad'],
-            ['Wrzesień', '/clients/7/rozliczenia?miesiac=2026-09'],
+            ['Pracownia Mebli', '/clients/7/overview'],
+            ['Wrzesień', '/clients/7/billing?month=2026-09'],
             ['Raport', undefined],
         ]);
     });
 
-    test('Podgląd and Edytuj are the pills, and the URL says which one the page is on', () => {
+    test('Preview and Edit are the pills, and the URL says which one the page is on', () => {
         expect(place('/clients/7/reports/9').pills.map((pill) => [pill.label, pill.href, pill.active])).toEqual([
             ['Podgląd', '/clients/7/reports/9', true],
             ['Edytuj', '/clients/7/reports/9?edycja=1', false],

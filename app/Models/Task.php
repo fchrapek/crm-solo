@@ -126,7 +126,7 @@ final class Task extends Model
         return $this->hasMany(TaskAttachment::class)->orderBy('id');
     }
 
-    /** Links added in the CRM, shown with the files under Zasoby. */
+    /** Links added in the CRM, shown with the files under Resources. */
     public function links(): HasMany
     {
         return $this->hasMany(TaskLink::class)->orderBy('id');
@@ -192,6 +192,12 @@ final class Task extends Model
     public function hasTrelloCard(): bool
     {
         return $this->trello_card_id !== null;
+    }
+
+    /** Open and on the Doing or Testing list. */
+    public function isInProgress(): bool
+    {
+        return ! $this->isDone() && in_array($this->list_name, [TrelloListMapper::LANE_DOING, TrelloListMapper::LANE_TESTING], true);
     }
 
     /** Done for the owner: ticked in the CRM, or completed on its board unless filed in a skipped column (scopeWork). */

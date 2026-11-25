@@ -47,7 +47,7 @@ const REPORT_LABEL = { report: 'PDF report', summary_email: 'Summary email', non
 
 const resolved = (steps: Step[]) => steps.filter((step) => step.state !== 'pending').length;
 
-/** Where a step's work is looked at: the report and the invoices both live on the month's Rozliczenia. */
+/** Where a step's work is looked at: the report and the invoices both live on the month's Billing. */
 export function stepLink(step: Pick<Step, 'key'>, clientId: number, period: string, t: TFunction): { label: string; href: string } | null {
     if (step.key === 'report') {
         return { label: t('Report'), href: monthUrl(clientId, period) };
@@ -70,7 +70,7 @@ export function settlementChip(settlement: Settlement, locale: string, t: TFunct
         : { status: 'waiting', label: t('close {{month}} first', { month: monthName(settlement.active_period, locale) }) };
 }
 
-/** Figma: Zamknięcie miesiąca · karta klienta (1094:34969, phone 1094:35188): the steps per site, the client's own, then the hours. */
+/** Figma: Month close · client card (1094:34969, phone 1094:35188): the steps per site, the client's own, then the hours. */
 export default function Show() {
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);
@@ -194,7 +194,7 @@ interface EmailRow {
     clientName: string;
 }
 
-/** A checklist step: the checkbox is done, Pomiń skips, Przywróć brings a skipped step back; the report and the invoice step also lead to their work. */
+/** A checklist step: the checkbox is done, Skip skips, Restore brings a skipped step back; the report and the invoice step also lead to their work. */
 export function StepRow({ step, clientId, period, email, rule = true }: { step: Step; clientId: number; period: string; email?: EmailRow; rule?: boolean }) {
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);

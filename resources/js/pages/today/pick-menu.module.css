@@ -1,0 +1,16 @@
+.anchor {
+    display: inline-flex;
+}
+
+/* the calendar as the menu's second step: the way back, then what the step is for */
+.head {
+    display: flex;
+    align-items: center;
+    gap: var(--role-space-4);
+}
+
+.heading {
+    margin: 0;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}

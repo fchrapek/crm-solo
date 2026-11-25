@@ -39,7 +39,7 @@ export function closeSettingsPayload(details: Pick<ClientDetails, 'type' | 'name
 }
 
 /**
- * Figma: Zamknięcie miesiąca · Edytuj (579:11685). The type and the deliverable go through their own endpoints, so a client
+ * Figma: Month close · Edit (579:11685). The type and the deliverable go through their own endpoints, so a client
  * newly typed into the close is included as it is from anywhere else; the rest is the client update.
  */
 export function MonthCloseDialog({

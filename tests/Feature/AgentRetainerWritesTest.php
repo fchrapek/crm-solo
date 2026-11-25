@@ -15,7 +15,7 @@ use Tests\Feature\Settlement\SettlementFixtures;
 use Tests\TestCase;
 
 /**
- * Agents change abonament positions through the same service as the abonament
+ * Agents change retainer positions through the same service as the retainer
  * dialog: only the fields given change, a month already owed or closed keeps
  * its terms, nothing is deleted, and it takes write:billing.
  */

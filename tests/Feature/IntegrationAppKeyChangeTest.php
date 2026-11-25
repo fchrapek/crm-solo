@@ -66,7 +66,7 @@ final class IntegrationAppKeyChangeTest extends TestCase
         $this->assertFalse($underB->isConfigured());
 
         $this->actingAs($this->user)
-            ->get('/settings/integracje')
+            ->get('/settings/integrations')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('integrations.1.provider', 'trello')

@@ -2,8 +2,9 @@ import { router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { FormInput, FormLabel, FormMessage } from '@/components/form';
-import { Button } from '@/components/ui/button';
+import { FormLabel, FormMessage } from '@/components/form';
+import { SoloInput } from '@/components/solo/field';
+import { SoloButton } from '@/components/solo/primitives';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -100,7 +101,7 @@ export function RepositoryFormDialog({ open, onOpenChange, projectId, initial, o
                         <FormLabel htmlFor="repo-name" error={errors.name}>
                             {t('Name')}
                         </FormLabel>
-                        <FormInput
+                        <SoloInput
                             id="repo-name"
                             type="text"
                             value={name}
@@ -109,7 +110,7 @@ export function RepositoryFormDialog({ open, onOpenChange, projectId, initial, o
                             autoFocus
                             maxLength={255}
                             disabled={processing}
-                            error={errors.name}
+                            aria-invalid={errors.name ? true : undefined}
                             placeholder="my-site"
                         />
                         <FormMessage error={errors.name} />
@@ -119,14 +120,14 @@ export function RepositoryFormDialog({ open, onOpenChange, projectId, initial, o
                         <FormLabel htmlFor="repo-local-path" error={errors.local_path}>
                             {t('Local path')}
                         </FormLabel>
-                        <FormInput
+                        <SoloInput
                             id="repo-local-path"
                             type="text"
                             value={localPath}
                             onChange={(e) => setLocalPath(e.target.value)}
                             maxLength={500}
                             disabled={processing}
-                            error={errors.local_path}
+                            aria-invalid={errors.local_path ? true : undefined}
                             placeholder="/Users/you/Sites/my-site"
                         />
                         <FormMessage error={errors.local_path} />
@@ -136,14 +137,14 @@ export function RepositoryFormDialog({ open, onOpenChange, projectId, initial, o
                         <FormLabel htmlFor="repo-remote-url" error={errors.remote_url}>
                             {t('Remote URL')}
                         </FormLabel>
-                        <FormInput
+                        <SoloInput
                             id="repo-remote-url"
                             type="text"
                             value={remoteUrl}
                             onChange={(e) => setRemoteUrl(e.target.value)}
                             maxLength={500}
                             disabled={processing}
-                            error={errors.remote_url}
+                            aria-invalid={errors.remote_url ? true : undefined}
                             placeholder="https://github.com/you/my-site"
                         />
                         <FormMessage error={errors.remote_url} />
@@ -154,7 +155,7 @@ export function RepositoryFormDialog({ open, onOpenChange, projectId, initial, o
                             {t('Provider')}
                         </FormLabel>
                         <Select value={provider} onValueChange={(v) => setProvider(v as Provider)} disabled={processing}>
-                            <SelectTrigger id="repo-provider">
+                            <SelectTrigger look="solo" id="repo-provider">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -169,12 +170,12 @@ export function RepositoryFormDialog({ open, onOpenChange, projectId, initial, o
                     </div>
 
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={processing}>
+                        <SoloButton variant="pill" type="button" onClick={() => onOpenChange(false)} disabled={processing}>
                             {t('Cancel')}
-                        </Button>
-                        <Button type="submit" disabled={processing || !name.trim()}>
+                        </SoloButton>
+                        <SoloButton variant="ink" size="md" type="submit" disabled={processing || !name.trim()}>
                             {processing ? t('Saving…') : t('Save')}
-                        </Button>
+                        </SoloButton>
                     </DialogFooter>
                 </form>
             </DialogContent>

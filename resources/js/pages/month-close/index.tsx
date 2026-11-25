@@ -16,28 +16,16 @@ import { useTranslation } from 'react-i18next';
 import { hoursNumber, localeOf } from '../clients/components/client-list/format';
 import { CloseMonthDialog } from '../clients/components/month-settlement';
 import styles from './index.module.css';
-import { invoiceDrafts, monthLabel, stepLabel, type Settlement } from './steps';
+import { closeListUrl, FILTERS, filterOf, matchesFilter, owesHours, type CloseFilter, type CloseRow } from './filters';
+import { invoiceDrafts, monthLabel, stepLabel } from './steps';
 
-export interface CloseRow {
-    client: { id: number; name: string };
-    total: number;
-    resolved: number;
-    next: { key: string; owner: 'you' | 'agent' } | null;
-    sites: number;
-    invoice: 'pending' | 'done' | 'skipped' | null;
-    settlement: Settlement | null;
-    finished_on: string | null;
-}
+export { closeListUrl, filterOf, matchesFilter, type CloseFilter, type CloseRow } from './filters';
 
 interface MonthCloseProps extends SharedData {
     period: string;
     months: string[];
     clients: CloseRow[];
 }
-
-export const FILTERS = ['all', 'you', 'agent', 'hours', 'finished'] as const;
-
-export type CloseFilter = (typeof FILTERS)[number];
 
 const FILTER_LABEL: Record<CloseFilter, string> = {
     all: 'close_filter_all',
@@ -46,38 +34,6 @@ const FILTER_LABEL: Record<CloseFilter, string> = {
     hours: 'close_filter_hours',
     finished: 'close_filter_finished',
 };
-
-const FILTER_SLUG: Record<CloseFilter, string | null> = { all: null, you: 'ty', agent: 'agent', hours: 'godziny', finished: 'zakonczone' };
-
-/** A row whose checklist is done and whose hours month still waits for its close. */
-const owesHours = (row: CloseRow) => row.next === null && row.settlement !== null && row.settlement.state !== 'closed';
-
-/** Which rows a filter keeps: whose step is next, the hours left to close, or the clients that are through. */
-export function matchesFilter(row: CloseRow, filter: CloseFilter): boolean {
-    switch (filter) {
-        case 'all':
-            return true;
-        case 'finished':
-            return row.finished_on !== null;
-        case 'hours':
-            return row.finished_on === null && owesHours(row);
-        default:
-            return row.finished_on === null && row.next?.owner === filter;
-    }
-}
-
-/** The filter the URL names (`?pokaz=`); anything else shows everyone. */
-export function filterOf(url: string): CloseFilter {
-    const slug = new URLSearchParams(url.split('?')[1] ?? '').get('pokaz');
-
-    return FILTERS.find((filter) => FILTER_SLUG[filter] === slug) ?? 'all';
-}
-
-export function closeListUrl(period: string, filter: CloseFilter = 'all'): string {
-    const slug = FILTER_SLUG[filter];
-
-    return monthClose.index({ query: { period, ...(slug !== null ? { pokaz: slug } : {}) } }).url;
-}
 
 /** The filter pills with their counts; each is a link, so the choice survives a reload. */
 export function filterPills(rows: CloseRow[], period: string, current: CloseFilter, t: TFunction): PlaceLinkPill[] {
@@ -90,7 +46,7 @@ export function filterPills(rows: CloseRow[], period: string, current: CloseFilt
     }));
 }
 
-/** Figma: Zamknięcie miesiąca · lista (1094:34610, phone 1094:34789): one row per client, its steps one click away. */
+/** Figma: Month close · list (1094:34610, phone 1094:34789): one row per client, its steps one click away. */
 export default function Index() {
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);
@@ -234,7 +190,7 @@ export function CloseClientRow({ row, period, rule = true }: { row: CloseRow; pe
     );
 }
 
-/** Zamknij miesiąc: the same confirm dialog as Przegląd and Rozliczenia. */
+/** Close the month: the same confirm dialog as Overview and Billing. */
 export function CloseMonthAction({ clientId, period, primary = false }: { clientId: number; period: string; primary?: boolean }) {
     const { t } = useTranslation();
     const [open, setOpen] = useState(false);
@@ -256,7 +212,7 @@ export function CloseMonthAction({ clientId, period, primary = false }: { client
     );
 }
 
-/** The month before, this one and the one after as the pills; the list keeps its place under Zamknięcie miesiąca. */
+/** The month before, this one and the one after as the pills; the list keeps its place under Month close. */
 export function monthPills(months: string[], period: string, locale: string): PlaceLinkPill[] {
     return months.map((month) => ({ label: monthLabel(month, locale), href: closeListUrl(month), active: month === period }));
 }

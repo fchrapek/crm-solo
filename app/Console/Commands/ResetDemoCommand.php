@@ -6,9 +6,11 @@ namespace App\Console\Commands;
 
 use App\Console\Attributes\AccountScope;
 use App\Models\Account;
+use App\Support\DemoWriteBudget;
 use Database\Seeders\DemoSeeder;
 use FilesystemIterator;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use RecursiveDirectoryIterator;
@@ -16,6 +18,7 @@ use RecursiveIteratorIterator;
 use RuntimeException;
 use SplFileInfo;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Input\InputOption;
 use Throwable;
 
 #[AccountScope(AccountScope::OPERATOR)]
@@ -33,6 +36,36 @@ final class ResetDemoCommand extends Command
             return self::FAILURE;
         }
 
+        // One reset at a time, whoever asks: either schedule, a deploy or a person.
+        $lock = Cache::lock('demo-reset', 900);
+        if (! $lock->get()) {
+            $this->info('Another reset is running.');
+
+            return self::SUCCESS;
+        }
+
+        try {
+            // Asked first, so a write that lands during the rebuild marks the demo again.
+            $changed = DemoWriteBudget::takeChanged();
+            if ($this->option('if-changed') && ! $changed) {
+                $this->info('No visitor has changed the demo since the last reset.');
+
+                return self::SUCCESS;
+            }
+
+            return $this->rebuild();
+        } finally {
+            $lock->release();
+        }
+    }
+
+    protected function configure(): void
+    {
+        $this->addOption('if-changed', null, InputOption::VALUE_NONE, 'Do nothing unless a visitor has written something since the last reset');
+    }
+
+    private function rebuild(): int
+    {
         // A DEMO_MODE flag set by mistake on a real install must not cost it
         // its data or its files: every account here has to be a demo account.
         $refusal = $this->databaseRefusal();
@@ -43,22 +76,40 @@ final class ResetDemoCommand extends Command
         }
 
         try {
-            foreach ($this->purgeTargets() as $directory) {
-                $this->purge($directory);
-            }
+            $targets = $this->purgeTargets();
         } catch (RuntimeException $e) {
             $this->error("demo:reset refused: {$e->getMessage()}");
 
             return self::FAILURE;
         }
 
-        $this->call('migrate:fresh', [
-            '--seed' => true,
-            '--seeder' => DemoSeeder::class,
-            '--force' => true,
-        ]);
+        // From here a failure is one the next hour may not meet again, so the demo is marked for another try.
+        try {
+            foreach ($targets as $directory) {
+                $this->purge($directory);
+            }
 
-        return self::SUCCESS;
+            $status = $this->call('migrate:fresh', [
+                '--seed' => true,
+                '--seeder' => DemoSeeder::class,
+                '--force' => true,
+            ]);
+        } catch (RuntimeException $e) {
+            DemoWriteBudget::markChanged();
+            $this->error("demo:reset did not finish: {$e->getMessage()}");
+
+            return self::FAILURE;
+        } catch (Throwable $e) {
+            DemoWriteBudget::markChanged();
+
+            throw $e;
+        }
+
+        if ($status !== self::SUCCESS) {
+            DemoWriteBudget::markChanged();
+        }
+
+        return $status;
     }
 
     private function databaseRefusal(): ?string

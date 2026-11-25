@@ -134,7 +134,7 @@ final class TrelloListMapper
     }
 
     /**
-     * The ids of a board's lists whose names the owner skips (Ustawienia · Integracje · Trello).
+     * The ids of a board's lists whose names the owner skips (Settings · Integrations · Trello).
      *
      * @param  array<int, array{id?: string, name?: string}>  $trelloLists
      * @param  array<mixed>  $skippedNames

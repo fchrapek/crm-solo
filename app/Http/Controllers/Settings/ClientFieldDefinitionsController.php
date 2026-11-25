@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Validation\Rule;
 
-/** Ustawienia / Pola klienta: add a field or change one, through the service the verbs use. */
+/** Settings / Client fields: add a field or change one, through the service the verbs use. */
 final class ClientFieldDefinitionsController extends Controller
 {
     public function update(Request $request, string $key, ClientFieldDefinitions $definitions): RedirectResponse

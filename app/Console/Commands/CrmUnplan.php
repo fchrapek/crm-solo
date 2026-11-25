@@ -28,7 +28,7 @@ final class CrmUnplan extends Command
         $account = $this->actingIdentity()->account->id;
 
         try {
-            $result = $plans->unplan($account, (string) $this->argument('task'), $plans->day($this->option('day')));
+            $result = $plans->unplan($account, (string) $this->argument('task'), $plans->day($this->option('day'), existing: true));
         } catch (ReferenceException $e) {
             return $this->referenceFailure($e);
         } catch (AgentRefusal $e) {

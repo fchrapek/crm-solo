@@ -33,7 +33,7 @@ function Reason({ message }: { message: MessageRow }) {
 }
 
 describe('MessageList', () => {
-    test('a failed text reads nieudana on an ink dot, says why on a line of its own and offers Wyślij ponownie where Anuluj sits', () => {
+    test('a failed text reads failed on an ink dot, says why on a line of its own and offers Send again where Cancel sits', () => {
         const html = renderToStaticMarkup(<MessageList rows={[row({ id: 2, status: 'failed', error: 'SMSAPI 13: Invalid phone number' })]} />);
 
         expect(html).toContain('data-status="failed"');
@@ -44,14 +44,14 @@ describe('MessageList', () => {
         expect(html).not.toContain('>Anuluj<');
     });
 
-    test('a scheduled text keeps Anuluj and has nothing to send again', () => {
+    test('a scheduled text keeps Cancel and has nothing to send again', () => {
         const html = renderToStaticMarkup(<MessageList rows={[row({})]} />);
 
         expect(html).toContain('>Anuluj<');
         expect(html).not.toContain('Wyślij ponownie');
     });
 
-    test('a member reads the queue without Anuluj or Wyślij ponownie', () => {
+    test('a member reads the queue without Cancel or Send again', () => {
         const html = renderToStaticMarkup(<MessageList manage={false} rows={[row({}), row({ id: 2, status: 'failed', error: 'x' })]} />);
 
         expect(html).not.toContain('>Anuluj<');

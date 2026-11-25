@@ -28,7 +28,7 @@ interface Props {
 
 const DAY = 1440;
 
-/** Figma: Ustawienia · Wiadomości SMS (1091:20933, phone 1091:21234). How messages go out, the templates, the rules. */
+/** Figma: Settings · Wiadomości (1557:345386), the SMS tiles: how messages go out, the templates, the rules. */
 export function SmsTab({ sending, templates, rules, fields }: Props) {
     const { t } = useTranslation();
     const [sendingOpen, setSendingOpen] = useState(false);
@@ -42,7 +42,7 @@ export function SmsTab({ sending, templates, rules, fields }: Props) {
     return (
         <>
             <Tile kind="plain">
-                <TileHeader label={t('Sending')} end={<TileButton onClick={() => setSendingOpen(true)}>{t('Edit')}</TileButton>} />
+                <TileHeader label={t('SMS sending')} end={<TileButton onClick={() => setSendingOpen(true)}>{t('Edit')}</TileButton>} />
                 <dl className={styles.kv}>
                     <KvRow layout="tile" label={t('Sent through')}>
                         {provider}
@@ -76,7 +76,7 @@ export function SmsTab({ sending, templates, rules, fields }: Props) {
 
             <Tile kind="list">
                 <TileHeader
-                    label={t('Templates')}
+                    label={t('SMS templates')}
                     count={templates.length}
                     end={<TileButton onClick={() => setTemplate('new')}>{t('New template')}</TileButton>}
                 />
@@ -101,7 +101,7 @@ export function SmsTab({ sending, templates, rules, fields }: Props) {
 
             <Tile kind="list">
                 <TileHeader
-                    label={t('Rules')}
+                    label={t('SMS rules')}
                     count={rules.length}
                     end={templates.length > 0 ? <TileButton onClick={() => setRule('new')}>{t('New rule')}</TileButton> : undefined}
                 />
@@ -138,7 +138,7 @@ export function SmsTab({ sending, templates, rules, fields }: Props) {
     );
 }
 
-/** Figma: Kolejka SMS. The way from the settings to the queue. */
+/** Figma: SMS queue. The way from the settings to the queue. */
 export function QueueTile() {
     const { t } = useTranslation();
 
@@ -263,7 +263,7 @@ function SendingDialog({ open, sending, onClose }: { open: boolean; sending: Sen
                 />
                 {!sending.smsapi_connected && (
                     <p className={styles.fieldNote}>
-                        {t('Connect SMSAPI first.')} <SectionLink href={settings.show('integracje').url}>{t('Integrations')} →</SectionLink>
+                        {t('Connect SMSAPI first.')} <SectionLink href={settings.show('integrations').url}>{t('Integrations')} →</SectionLink>
                     </p>
                 )}
             </SoloField>
@@ -325,7 +325,7 @@ interface Preview {
     unicode: boolean;
 }
 
-/** Figma: Dialog / Szablon SMS (599:19578), sheet 600:1371. The text, the placeholders to insert, and the text as a client gets it. */
+/** Figma: Dialog / SMS template (599:19578), sheet 600:1371. The text, the placeholders to insert, and the text as a client gets it. */
 function TemplateDialog({
     template,
     fields,
@@ -550,7 +550,7 @@ type RuleDraft = {
     enabled: boolean;
 };
 
-/** Figma: Dialog / Reguła SMS (599:19634), sheet 600:1643. When a template goes out. */
+/** Figma: Dialog / SMS rule (599:19634), sheet 600:1643. When a template goes out. */
 function RuleDialog({
     rule,
     templates,

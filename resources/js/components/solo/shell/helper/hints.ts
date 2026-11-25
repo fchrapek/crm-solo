@@ -1,30 +1,20 @@
 import { hoursText } from '@/lib/hours-text';
-import clients from '@/routes/clients';
+import { type CloseRow, matchesFilter } from '@/pages/month-close/filters';
 import { type PlaceContext } from '../place';
 import { type DogPose } from '../dog-still';
-
-export type HelperWindowKind = 'plan' | 'report' | 'client';
+import { record } from './topics';
 
 export interface HelperHint {
-    /** One line. */
+    /** One line, computed from the page's own props. */
     text: string;
-    /** The label of the one action; it opens the helper's window. */
-    action: string;
+    /** The topic the line leads to; its question is the line's link. */
+    topic: string;
     /** A warning: the dog is surprised instead of looking at the line. */
     warning?: boolean;
 }
 
-export interface HelperLink {
-    label: string;
-    href: string;
-}
-
 export interface HelperScene {
-    /** The example window the dog opens on this screen. */
-    window: HelperWindowKind;
     hint: HelperHint | null;
-    /** Places the "what is going on" window links to. */
-    links: HelperLink[];
     /** A screen whose own content shows the dog large. */
     hidden?: boolean;
 }
@@ -36,60 +26,38 @@ export interface HelperContext {
 
 type SceneResolver = (props: Record<string, unknown>, context: HelperContext) => Partial<HelperScene>;
 
-const record = (value: unknown): Record<string, unknown> => (typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {});
-
-const clientLinks = (id: number, { t }: HelperContext): HelperLink[] => [
-    { label: t('Tasks'), href: clients.show({ client: id, tab: 'zadania' }).url },
-    { label: t('Billing'), href: clients.show({ client: id, tab: 'rozliczenia' }).url },
-    { label: t('Journal'), href: clients.show({ client: id, tab: 'dziennik' }).url },
-];
-
-/** One scene per screen, by Inertia page name. A page adds its line here; a page without one shows the dog alone. */
+/** One scene per screen, by Inertia page name: a line only where the page's data has a fact worth saying. */
 const SCENES: Record<string, SceneResolver> = {
     'today/index': (props, { t }) => {
         const free = Number(props.maxPicks ?? 0) - (Array.isArray(props.picks) ? props.picks.length : 0);
 
-        return {
-            window: 'plan',
-            hint: props.state === 'paper' && free > 0 ? { text: t('{{count}} free slots left for today. Suggest tasks?', { count: free }), action: t('Suggest') } : null,
-        };
+        return { hint: props.state === 'paper' && free > 0 ? { text: t('{{count}} free slots left for today.', { count: free }), topic: 'today-picks' } : null };
     },
-    'clients/index': (props, { t }) => ({
-        window: 'report',
-        hidden: Object.values(record(props.stage_counts)).every((count) => count === 0) && props.stage_counts !== undefined,
-        hint: { text: t('helper_hint_clients'), action: t('Show the preview') },
+    'clients/index': (props) => ({
+        hidden: props.stage_counts !== undefined && Object.values(record(props.stage_counts)).every((count) => count === 0),
     }),
-    'clients/show': (props, context) => {
-        const { t, locale } = context;
-        const client = record(props.client);
-        const name = String(client.short_name ?? '');
-        const links = typeof client.id === 'number' ? clientLinks(client.id, context) : [];
-
-        if (props.tab === 'rozliczenia') {
-            return { window: 'report', links, hint: { text: t('helper_hint_billing'), action: t('Show the preview') } };
-        }
-
+    'clients/show': (props, { t, locale }) => {
         const remaining = record(record(props.overview).hours).remaining;
 
-        if (typeof remaining === 'number' && remaining < 0) {
-            return {
-                window: 'report',
-                links,
-                hint: { text: t('helper_hint_client_over', { name, hours: hoursText(-remaining, locale) }), action: t('Show the preview'), warning: true },
-            };
-        }
-
-        return { window: 'client', links, hint: { text: t('helper_hint_client', { name }), action: t('Show the preview') } };
+        return typeof remaining === 'number' && remaining < 0
+            ? {
+                  hint: {
+                      text: t('helper_hint_client_over', { name: String(record(props.client).short_name ?? ''), hours: hoursText(-remaining, locale) }),
+                      topic: 'hours-left',
+                      warning: true,
+                  },
+              }
+            : {};
     },
-    'tasks/show': (_props, { t }) => ({ window: 'plan', hint: { text: t('helper_hint_task'), action: t('Show the preview') } }),
+    'month-close/index': (props, { t }) => {
+        const waiting = (Array.isArray(props.clients) ? (props.clients as CloseRow[]) : []).filter((row) => matchesFilter(row, 'you')).length;
+
+        return { hint: waiting > 0 ? { text: t('{{count}} clients are waiting for you.', { count: waiting }), topic: 'month-close-who' } : null };
+    },
 };
 
 export function helperScene(page: string, props: Record<string, unknown>, context: HelperContext): HelperScene {
-    return { window: 'plan', hint: null, links: [], ...SCENES[page]?.(props, context) };
-}
-
-export function helperHint(page: string, props: Record<string, unknown>, context: HelperContext): HelperHint | null {
-    return helperScene(page, props, context).hint;
+    return { hint: null, ...SCENES[page]?.(props, context) };
 }
 
 /** What the closed dog does: surprised at a warning, looking at its line while the line shows, otherwise the sunglasses (it follows the pointer). */
@@ -98,14 +66,21 @@ export function helperPose(hint: HelperHint | null, lineShown: boolean): DogPose
 }
 
 export interface HelperState {
-    shown: HelperWindowKind | null;
-    /** The page whose line was already used or dismissed. */
-    seen: string | null;
+    /** The page URL the state belongs to; on another URL the helper starts closed, its line unused. */
+    url: string | null;
+    open: boolean;
+    /** The answer shown, or null for the list of topics. */
+    topic: string | null;
 }
 
-export const HELPER_CLOSED: HelperState = { shown: null, seen: null };
+export const HELPER_CLOSED: HelperState = { url: null, open: false, topic: null };
 
-/** Opening a window, switching to another and closing all use up the page's line: it shows once per visit. */
-export function helperShow(_state: HelperState, action: { page: string; show: HelperWindowKind | null }): HelperState {
-    return { shown: action.show, seen: action.page };
+/** The state on this URL: anything kept from another page is dropped, so a visit starts with the dog closed. */
+export function helperHere(state: HelperState, url: string): HelperState {
+    return state.url === url ? state : HELPER_CLOSED;
+}
+
+/** Opening uses up the page's line: it shows once per visit, until the dog is first opened. */
+export function hintShown(state: HelperState, url: string): boolean {
+    return helperHere(state, url).url === null;
 }

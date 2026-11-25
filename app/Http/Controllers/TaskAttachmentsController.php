@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Task;
 use App\Models\TaskAttachment;
+use App\Support\DemoRows;
 use App\Support\TaskAttachmentTypes;
 use App\Support\UploadLimits;
 use Illuminate\Http\JsonResponse;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Throwable;
 
 /**
  * Manages user-uploaded files attached to tasks — QA screenshots, PDF specs,
@@ -56,11 +58,14 @@ final class TaskAttachmentsController extends Controller
                 'required',
                 'file',
                 'max:'.UploadLimits::maxKilobytes(self::MAX_FILE_KB),
-                'extensions:'.implode(',', TaskAttachmentTypes::EXTENSIONS),
-                'mimetypes:'.implode(',', TaskAttachmentTypes::MIMETYPES),
+                'extensions:'.implode(',', UploadLimits::extensions(TaskAttachmentTypes::EXTENSIONS)),
+                'mimetypes:'.implode(',', UploadLimits::mimetypes(TaskAttachmentTypes::MIMETYPES)),
             ],
             'label' => ['nullable', 'string', 'max:200'],
         ]);
+
+        // Asked before the file is stored, so a full demo leaves no file without a row.
+        DemoRows::guardCreate(new TaskAttachment);
 
         $file = $validated['file'];
         $mime = $file->getMimeType() ?? 'application/octet-stream';
@@ -75,14 +80,20 @@ final class TaskAttachmentsController extends Controller
             $filename
         );
 
-        $attachment = TaskAttachment::create([
-            'task_id' => $task->id,
-            'file_path' => $relativePath,
-            'original_name' => $file->getClientOriginalName(),
-            'mime' => $mime,
-            'size' => $file->getSize(),
-            'label' => $validated['label'] ?? null,
-        ]);
+        try {
+            $attachment = TaskAttachment::create([
+                'task_id' => $task->id,
+                'file_path' => $relativePath,
+                'original_name' => $file->getClientOriginalName(),
+                'mime' => $mime,
+                'size' => $file->getSize(),
+                'label' => $validated['label'] ?? null,
+            ]);
+        } catch (Throwable $e) {
+            Storage::disk('local')->delete($relativePath);
+
+            throw $e;
+        }
 
         return response()->json($this->serialize($attachment), 201);
     }
@@ -121,8 +132,9 @@ final class TaskAttachmentsController extends Controller
     {
         $this->authorizeAttachment($attachment);
 
-        Storage::disk('local')->delete($attachment->file_path);
+        // The row first: a delete that is refused keeps its file.
         $attachment->delete();
+        Storage::disk('local')->delete($attachment->file_path);
 
         return response()->json(['ok' => true]);
     }

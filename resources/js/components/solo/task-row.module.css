@@ -305,7 +305,7 @@
     }
 }
 
-/* Figma A2f / List row (Wszystkie zadania, Propozycje): 44 px, the title wins, the meta capped on phones, one action */
+/* Figma A2f / List row (All tasks, Suggestions): 44 px, the title wins, the meta capped on phones, one action */
 .compact {
     --row-pad: 11px;
 

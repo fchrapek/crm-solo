@@ -48,7 +48,7 @@ export function briefFieldLabel(field: BriefField, t: TFunction): string {
 
 const TASK_FIELD = ['name', 'description', 'due', 'list', 'project', 'archive', 'priority', 'parent', 'reportable'] as const;
 
-/** About four lines on a phone; a longer description is clamped there behind Więcej. */
+/** About four lines on a phone; a longer description is clamped there behind More. */
 const LONG_CHARS = 200;
 const LONG_LINES = 4;
 
@@ -61,7 +61,7 @@ export function dueText(day: string, today: string, locale: string, t: TFunction
     return t('due {{date}}', { date: shortDate(day, locale, Number(today.slice(0, 4))) });
 }
 
-/** What "Kopiuj dla agenta" puts on the clipboard: the task's id and the verb that opens it. */
+/** What Copy for the agent puts on the clipboard: the task's id and the verb that opens it. */
 export function agentPrompt(taskId: number, t: TFunction): string {
     return t('Work on task {{id}} from CRM Solo (crm task {{id}})', { id: taskId });
 }

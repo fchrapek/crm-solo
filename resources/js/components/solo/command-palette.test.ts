@@ -9,13 +9,13 @@ describe('the palette rows', () => {
         { group: 'tasks', total: 1, items: [item(9)] },
     ];
 
-    test('each group lists its items, then pokaż więcej with what is left, in the order the keys walk', () => {
+    test('each group lists its items, then Show more with what is left, in the order the keys walk', () => {
         const rows = paletteRows(groups, {});
 
         expect(rows.map((row) => (row.kind === 'item' ? row.item.id : `more ${row.left}`))).toEqual([1, 2, 3, 4, 5, 'more 2', 9]);
     });
 
-    test('a group loaded in full shows all its items and no pokaż więcej', () => {
+    test('a group loaded in full shows all its items and no Show more', () => {
         const rows = paletteRows(groups, { clients: [1, 2, 3, 4, 5, 6, 7].map(item) });
 
         expect(rows.filter((row) => row.group === 'clients').map((row) => row.kind)).toEqual(Array(7).fill('item'));

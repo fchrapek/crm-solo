@@ -1,4 +1,5 @@
-import { fieldControl, SoloField, SoloFieldRow, SoloInput } from '@/components/solo/field';
+import { DateField } from '@/components/solo/date-field';
+import { fieldControl, SoloField, SoloFieldRow } from '@/components/solo/field';
 import { SoloButton } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
 import { ResponsiveSelect } from '@/components/solo/responsive-select';
@@ -30,7 +31,7 @@ export function monthRange(period: string): { start: string; end: string } {
     return { start: `${period}-01`, end: `${period}-${String(last).padStart(2, '0')}` };
 }
 
-/** Figma: Generuj raport. A month's draft from its tasks and time; the server takes whole months only and says so on other dates. */
+/** Figma: Generate report. A month's draft from its tasks and time; the server takes whole months only and says so on other dates. */
 export function GenerateReportDialog({ open, onOpenChange, clientId, composers, period }: Props) {
     const { t } = useTranslation();
     const [range, setRange] = useState(() => monthRange(period));
@@ -91,22 +92,20 @@ export function GenerateReportDialog({ open, onOpenChange, clientId, composers, 
             </SoloField>
             <SoloFieldRow>
                 <SoloField label={t('From')} htmlFor="report-start" error={errors.period_start}>
-                    <SoloInput
+                    <DateField
                         {...fieldControl('report-start', errors.period_start)}
-                        type="date"
+                        label={t('From')}
                         value={range.start}
-                        onChange={(event) => setRange((current) => ({ ...current, start: event.target.value }))}
-                        required
+                        onChange={(start) => setRange((current) => ({ ...current, start }))}
                         disabled={processing}
                     />
                 </SoloField>
                 <SoloField label={t('To')} htmlFor="report-end" error={errors.period_end}>
-                    <SoloInput
+                    <DateField
                         {...fieldControl('report-end', errors.period_end)}
-                        type="date"
+                        label={t('To')}
                         value={range.end}
-                        onChange={(event) => setRange((current) => ({ ...current, end: event.target.value }))}
-                        required
+                        onChange={(end) => setRange((current) => ({ ...current, end }))}
                         disabled={processing}
                     />
                 </SoloField>

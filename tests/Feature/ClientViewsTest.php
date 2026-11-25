@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\ClientsController;
 use App\Models\Account;
 use App\Models\Client;
 use App\Models\ClientLifecycleEvent;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Sleep;
+use Illuminate\Testing\TestResponse;
 use Inertia\Support\Header;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Tests\TestCase;
@@ -101,7 +103,7 @@ final class ClientViewsTest extends TestCase
 
         $this->assertSame(1, $this->overview()['journal']['count']);
         $this->travelTo(Carbon::parse('2026-10-08 08:10:00', 'UTC'));
-        $this->actingAs($this->user)->get("/clients/{$this->client->id}/zadania")->assertOk();
+        $this->open('tasks');
         $this->travelTo(Carbon::parse('2026-10-08 08:20:00', 'UTC'));
 
         $this->assertSame(['since' => '2026-10-05', 'since_today' => false, 'count' => 1], $this->overview()['journal']);
@@ -142,7 +144,8 @@ final class ClientViewsTest extends TestCase
         $this->assertSame(1, $this->overview()['journal']['count']);
 
         $this->travelTo(Carbon::parse('2026-10-05 10:05:01', 'UTC'));
-        $response = $this->actingAs($this->user)->withSession($stale)->get("/clients/{$this->client->id}/przeglad");
+        $response = $this->actingAs($this->user)->withSession($stale)->get("/clients/{$this->client->id}/overview");
+        $this->actingAs($this->user)->withSession($stale)->postJson("/clients/{$this->client->id}/view", $this->readNow())->assertNoContent();
 
         $this->assertSame(1, $response->viewData('page')['props']['overview']['journal']['count']);
         $this->assertSame('2026-10-05 10:05:01', $this->viewedAt($this->user));
@@ -202,7 +205,8 @@ final class ClientViewsTest extends TestCase
         $this->travelTo(Carbon::parse('2026-10-06 08:00:00', 'UTC'));
         $this->entry('2026-10-01 08:00:00');
 
-        $response = $this->actingAs($colleague)->get("/clients/{$this->client->id}/przeglad");
+        $response = $this->actingAs($colleague)->get("/clients/{$this->client->id}/overview");
+        $this->actingAs($colleague)->postJson("/clients/{$this->client->id}/view", $this->readNow())->assertNoContent();
 
         $this->assertSame(['since' => '2026-09-29', 'since_today' => false, 'count' => 1], $response->viewData('page')['props']['overview']['journal']);
         $this->assertSame('2026-10-05 10:00:00', $this->viewedAt($this->user));
@@ -218,28 +222,122 @@ final class ClientViewsTest extends TestCase
                 Header::PARTIAL_COMPONENT => 'clients/show',
                 Header::PARTIAL_ONLY => 'tasks',
             ])
-            ->get("/clients/{$this->client->id}/zadania")
+            ->get("/clients/{$this->client->id}/tasks")
             ->assertOk();
 
         $this->assertSame(0, ClientView::query()->count());
     }
 
-    public function test_a_hover_prefetch_records_nothing_and_the_click_records_the_visit(): void
+    public function test_a_hover_prefetch_records_nothing_and_the_page_shown_from_the_cache_reports_the_visit(): void
     {
         $this->entry('2026-10-01 08:00:00');
-        $inertia = [Header::INERTIA => 'true', Header::VERSION => (string) app(\App\Http\Middleware\HandleInertiaRequests::class)->version(request())];
 
-        $prefetch = $this->actingAs($this->user)->withHeaders([...$inertia, 'Purpose' => 'prefetch'])->get("/clients/{$this->client->id}/przeglad");
+        $prefetch = $this->actingAs($this->user)->withHeaders([...$this->inertia(), 'Purpose' => 'prefetch'])->get("/clients/{$this->client->id}/overview");
         $prefetch->assertOk();
         $this->assertSame(1, $prefetch->json('props.overview.journal.count'));
         $this->assertSame(0, ClientView::query()->count());
 
-        $click = $this->flushHeaders()->actingAs($this->user)->withHeaders($inertia)->get("/clients/{$this->client->id}/przeglad");
-        $this->assertSame(1, $click->json('props.overview.journal.count'));
+        $this->travelTo(Carbon::parse('2026-10-05 10:00:05', 'UTC'));
+        $this->flushHeaders()->actingAs($this->user)->postJson("/clients/{$this->client->id}/view", $this->readNow())->assertNoContent();
+        $this->assertSame('2026-10-05 10:00:05', $this->viewedAt($this->user));
+
+        $this->travelTo(Carbon::parse('2026-10-06 09:00:00', 'UTC'));
+        $this->assertSame(0, $this->overview()['journal']['count']);
+    }
+
+    public function test_the_view_is_recorded_as_of_when_the_shown_page_was_read_so_later_activity_stays_new(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-04 09:00:00', 'UTC'));
+        $this->overview();
+
+        $this->travelTo(Carbon::parse('2026-10-05 10:00:00', 'UTC'));
+        $prefetch = $this->actingAs($this->user)->withHeaders([...$this->inertia(), 'Purpose' => 'prefetch'])->get("/clients/{$this->client->id}/overview");
+        $readAt = $prefetch->json('props.read_at');
+        $this->assertSame(Carbon::parse('2026-10-05 10:00:00', 'UTC')->getTimestamp(), $readAt);
+        $this->event('2026-10-05 10:00:05');
+
+        $this->travelTo(Carbon::parse('2026-10-05 10:00:10', 'UTC'));
+        $this->flushHeaders()->actingAs($this->user)->postJson("/clients/{$this->client->id}/view", ['read_at' => $readAt])->assertNoContent();
         $this->assertSame('2026-10-05 10:00:00', $this->viewedAt($this->user));
 
-        $this->flushHeaders()->travelTo(Carbon::parse('2026-10-06 09:00:00', 'UTC'));
-        $this->assertSame(0, $this->overview()['journal']['count']);
+        $this->travelTo(Carbon::parse('2026-10-06 09:00:00', 'UTC'));
+        $this->assertSame(1, $this->overview()['journal']['count']);
+    }
+
+    public function test_a_report_names_when_its_page_was_read_and_never_runs_ahead_of_the_server(): void
+    {
+        $url = "/clients/{$this->client->id}/view";
+        $now = Carbon::now('UTC')->getTimestamp();
+
+        $this->actingAs($this->user)->postJson($url)->assertUnprocessable()->assertJsonValidationErrors('read_at');
+        $this->actingAs($this->user)->postJson($url, ['read_at' => $now + ClientViews::READ_AT_SKEW_SECONDS + 1])->assertUnprocessable();
+        $this->actingAs($this->user)->postJson($url, ['read_at' => $this->client->created_at->getTimestamp() - 1])->assertUnprocessable();
+        $this->assertSame(0, ClientView::query()->count());
+
+        $this->actingAs($this->user)->postJson($url, ['read_at' => $now + ClientViews::READ_AT_SKEW_SECONDS])->assertNoContent();
+        $this->assertSame('2026-10-05 10:01:00', $this->viewedAt($this->user));
+    }
+
+    public function test_a_page_restored_from_history_long_after_its_reading_still_reports_it(): void
+    {
+        $url = "/clients/{$this->client->id}/view";
+
+        $this->actingAs($this->user)->postJson($url, ['read_at' => Carbon::parse('2026-10-05 07:00:00', 'UTC')->getTimestamp()])->assertNoContent();
+        $this->assertSame('2026-10-05 07:00:00', $this->viewedAt($this->user));
+
+        $this->actingAs($this->user)->postJson($url, ['read_at' => Carbon::parse('2026-10-05 08:30:00', 'UTC')->getTimestamp()])->assertNoContent();
+        $this->actingAs($this->user)->postJson($url, ['read_at' => Carbon::parse('2026-10-05 07:30:00', 'UTC')->getTimestamp()])->assertNoContent();
+        $this->assertSame('2026-10-05 08:30:00', $this->viewedAt($this->user), 'an older reading after a newer one changes nothing');
+    }
+
+    public function test_an_older_reading_never_moves_the_view_back(): void
+    {
+        $this->overview();
+        $this->travelTo(Carbon::parse('2026-10-05 10:05:00', 'UTC'));
+
+        $this->actingAs($this->user)->postJson("/clients/{$this->client->id}/view", ['read_at' => Carbon::parse('2026-10-05 09:58:00', 'UTC')->getTimestamp()])->assertNoContent();
+
+        $this->assertSame('2026-10-05 10:00:00', $this->viewedAt($this->user));
+    }
+
+    public function test_opening_a_tab_reads_and_only_the_page_report_records_the_view(): void
+    {
+        foreach (ClientsController::TABS as $tab) {
+            $this->actingAs($this->user)->get("/clients/{$this->client->id}/{$tab}")->assertOk();
+            $this->actingAs($this->user)->withHeaders($this->inertia())->get("/clients/{$this->client->id}/{$tab}")->assertOk();
+            $this->flushHeaders();
+        }
+        $this->assertSame(0, ClientView::query()->count());
+
+        $this->actingAs($this->user)->postJson("/clients/{$this->client->id}/view", $this->readNow())->assertNoContent();
+
+        $this->assertSame(1, ClientView::query()->count());
+        $this->assertSame('2026-10-05 10:00:00', $this->viewedAt($this->user));
+    }
+
+    public function test_the_report_answers_without_a_redirect_and_needs_a_signed_in_user(): void
+    {
+        $this->postJson("/clients/{$this->client->id}/view", $this->readNow())->assertUnauthorized();
+        $this->assertSame(0, ClientView::query()->count());
+
+        $this->actingAs($this->user)->post("/clients/{$this->client->id}/view", $this->readNow())->assertNoContent();
+        $this->assertSame(1, ClientView::query()->count());
+    }
+
+    public function test_the_report_has_its_own_budget_and_leaves_the_demo_write_budget_alone(): void
+    {
+        config(['app.demo' => true, 'app.demo_writes.per_minute' => 2]);
+
+        for ($i = 0; $i < 3; $i++) {
+            $this->actingAs($this->user)->postJson("/clients/{$this->client->id}/view", $this->readNow())->assertNoContent();
+        }
+        $this->actingAs($this->user)->putJson("/clients/{$this->client->id}/pin", ['pinned' => true])->assertRedirect();
+
+        config(['app.demo' => false]);
+        for ($i = 3; $i < 120; $i++) {
+            $this->actingAs($this->user)->postJson("/clients/{$this->client->id}/view", $this->readNow())->assertNoContent();
+        }
+        $this->actingAs($this->user)->postJson("/clients/{$this->client->id}/view", $this->readNow())->assertTooManyRequests();
     }
 
     public function test_agents_and_the_agent_context_never_record_a_view(): void
@@ -263,9 +361,10 @@ final class ClientViewsTest extends TestCase
         $other = Account::create(['name' => 'Other']);
         $stranger = $other->clients()->create(['name' => 'Pracownia Testowa', 'currency' => 'PLN']);
 
-        foreach (['przeglad', 'dziennik', 'zadania'] as $tab) {
+        foreach (['overview', 'journal', 'tasks'] as $tab) {
             $this->actingAs($this->user)->get("/clients/{$stranger->id}/{$tab}")->assertNotFound();
         }
+        $this->actingAs($this->user)->postJson("/clients/{$stranger->id}/view", $this->readNow())->assertNotFound();
         $this->assertSame(0, ClientView::query()->count());
 
         $this->expectException(NotFoundHttpException::class);
@@ -277,10 +376,31 @@ final class ClientViewsTest extends TestCase
      */
     private function overview(): array
     {
-        $response = $this->actingAs($this->user)->get("/clients/{$this->client->id}/przeglad");
-        $response->assertOk();
+        $response = $this->open('overview');
 
         return $response->viewData('page')['props']['overview'];
+    }
+
+    /** What the browser does: the page, then the page's report of its opening, as of when the page was read. */
+    private function open(string $tab): TestResponse
+    {
+        $response = $this->actingAs($this->user)->get("/clients/{$this->client->id}/{$tab}");
+        $response->assertOk();
+        $this->actingAs($this->user)->postJson("/clients/{$this->client->id}/view", ['read_at' => $response->viewData('page')['props']['read_at']])->assertNoContent();
+
+        return $response;
+    }
+
+    /** @return array{read_at: int} */
+    private function readNow(): array
+    {
+        return ['read_at' => Carbon::now('UTC')->getTimestamp()];
+    }
+
+    /** @return array<string, string> */
+    private function inertia(): array
+    {
+        return [Header::INERTIA => 'true', Header::VERSION => (string) app(\App\Http\Middleware\HandleInertiaRequests::class)->version(request())];
     }
 
     private function viewedAt(User $user): ?string

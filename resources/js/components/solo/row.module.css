@@ -1,8 +1,16 @@
+.row,
+.item {
+    /* the mark and the "more" glyph carry their own inset inside the 44 px target, so they stand closer: the mark one step, the "more" two */
+    --row-gap: var(--role-space-12);
+    --row-gap-near: var(--role-space-8);
+    --row-gap-more: var(--role-space-4);
+}
+
 .row {
     position: relative;
     display: flex;
     align-items: center;
-    gap: var(--role-space-12);
+    gap: var(--row-gap);
     min-height: 64px;
     padding: var(--role-space-8) var(--role-space-12);
     border-radius: var(--role-radius-sm);
@@ -19,9 +27,19 @@
     background: var(--role-rule);
 }
 
+/* the selection is a band inside the row, lower than the row itself, so two selected rows do not read as one block */
 .row[data-selected] {
-    background: var(--role-selection);
+    isolation: isolate;
     color: var(--role-selection-text);
+}
+
+.row[data-selected]::after {
+    content: '';
+    position: absolute;
+    inset: var(--role-space-8) 0;
+    z-index: -1;
+    border-radius: var(--role-radius-sm);
+    background: var(--role-selection);
 }
 
 .row[data-selected]::before,
@@ -36,14 +54,38 @@
     overflow-wrap: anywhere;
 }
 
+/* the title with its phone context line under it */
+.lead {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.lead > .title {
+    flex: none;
+}
+
+.context {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+    overflow-wrap: anywhere;
+}
+
+.row[data-selected] .context {
+    color: inherit;
+}
+
 .link {
     color: inherit;
     text-decoration: none;
 }
 
-.link:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
+@media (hover: hover) {
+    .row:not([data-selected]) .link:hover {
+        color: var(--role-text-secondary);
+    }
 }
 
 .link:focus-visible,
@@ -53,24 +95,32 @@
     border-radius: var(--role-radius-xs);
 }
 
-.done .title {
-    color: var(--role-text-secondary);
+/* the selected row is filled with the ring's own colour */
+.row[data-selected] .link:focus-visible {
+    outline-color: var(--role-selection-text);
 }
 
-/* a 20 px mark with a 44 px target, pulled back so the mark keeps the row's 12 px inset */
+/* a 20 px mark with a 44 px target, pulled back so the mark keeps the row's 12 px inset; it lies over the title's first pixels, so it stays on top */
 .check {
+    position: relative;
+    z-index: 1;
     display: flex;
     flex: none;
     align-items: center;
     justify-content: center;
     width: 44px;
     height: 44px;
-    margin: 0 calc(-1 * var(--role-space-12));
+    margin: 0 calc(var(--row-gap-near) - var(--row-gap) - var(--role-space-12)) 0 calc(-1 * var(--role-space-12));
     padding: 0;
     border: 0;
     background: none;
     color: inherit;
     cursor: pointer;
+}
+
+/* the glyph is drawn with its lower half filled; the mark fills the left one */
+.check[data-progress] svg {
+    transform: rotate(90deg);
 }
 
 .check:disabled {
@@ -92,6 +142,24 @@
     color: var(--role-text-over);
 }
 
+.time[data-tone='quiet'] {
+    color: var(--role-text-secondary);
+}
+
+.time[data-running] {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--role-radius-full);
+    background: var(--role-tile-timer);
+}
+
 .meta {
     flex: none;
     max-width: 45%;
@@ -104,6 +172,35 @@
 
 .row[data-selected] :is(.meta, .time) {
     color: inherit;
+}
+
+/* names that share the meta, such as client and project: each gets an equal share of a tight row before either is cut */
+.parts {
+    display: grid;
+    grid-auto-columns: minmax(0, max-content);
+    grid-auto-flow: column;
+    justify-content: end;
+}
+
+.part {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sep {
+    white-space: pre;
+}
+
+.more {
+    display: flex;
+    flex: none;
+    margin-inline-start: calc(var(--row-gap-more) - var(--row-gap));
+}
+
+/* the timer's target overhangs its disc by 6 px on a phone, so the two targets never overlap */
+[data-size='row'] + .more {
+    margin-inline-start: calc(var(--row-gap-more) - var(--row-gap) + 6px);
 }
 
 .wide {
@@ -124,19 +221,189 @@
     padding-bottom: var(--role-space-4);
 }
 
+/* A row with details: the row is its head and the item under it carries the line above, so the pairs sit inside the group the next row's line closes. */
+.item {
+    position: relative;
+    list-style: none;
+}
+
+/* the open head gives up 8 px below, its content staying where it was */
+.item[data-open] > .row {
+    min-height: 56px;
+    padding-block: var(--role-space-8) 0;
+}
+
+/* a row with details keeps its title to two lines on a phone; the whole title is its tooltip and the link's name */
+.item .title:not(:has(> .link[data-cut])),
+.item .titleText {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* the link holds the clamp, so its focus ring is drawn whole */
+.link[data-cut] {
+    display: inline-flex;
+    max-width: 100%;
+    vertical-align: top;
+}
+
+/* the gaps around the chevron are 24 px between visible edges: its glyph sits 23 px and 11 px inside the phone's 44 px target, 11 px inside the 32 px one */
+.toggle {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex: none;
+    align-items: center;
+    width: 44px;
+    height: 44px;
+    margin-inline: calc(var(--role-space-24) - var(--row-gap) - 23px) calc(var(--role-space-24) - var(--row-gap) - 11px);
+    padding: 0 0 0 var(--role-space-20);
+    border: 0;
+    border-radius: var(--role-radius-xs);
+    background: none;
+    color: var(--role-text-primary);
+    cursor: pointer;
+}
+
+/* the hover is a 32 px disc around the glyph, which stands off centre in the phone's target */
+.toggle::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: calc(var(--role-space-20) + 8px);
+    z-index: -1;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--role-radius-full);
+    translate: -50% -50%;
+}
+
+@media (hover: hover) {
+    .toggle:hover::before {
+        background: var(--role-hover);
+    }
+}
+
+.toggle:focus-visible {
+    outline: none;
+}
+
+.toggle:focus-visible::before {
+    outline: var(--role-stroke-focus) solid var(--role-focus-ring);
+    outline-offset: calc(-1 * var(--role-stroke-focus));
+}
+
+/* a quiet button has no edge of its own, so its label is the visible edge, a control inset inside the box */
+.toggle + [data-look='quiet'] {
+    margin-inline-start: calc(-1 * var(--role-control-inset));
+}
+
+.caret {
+    transition: transform var(--motion-base) var(--ease-standard);
+}
+
+.caret[data-open] {
+    transform: rotate(180deg);
+}
+
+/* no fill and no box: label over value from the title's left edge, 16 px above the next row's line; every detail keeps its column, so the rows of a list line up */
+.details {
+    --detail-columns: none;
+
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--role-space-8) var(--role-space-24);
+    margin: 0;
+    padding: 0 var(--role-space-12) var(--role-space-16);
+}
+
+.details[data-checked] {
+    padding-inline-start: calc(44px - var(--role-space-12) + var(--row-gap-near));
+}
+
+/* a phone flows the shown pairs two to a line; from 768 px each keeps the column of its place in the list */
+.detail {
+    --detail-column: auto;
+
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.detail[data-wide] {
+    grid-column: 1 / -1;
+}
+
+/* a step under the row: the value at the end meta's size, the label at the small label's */
+.detail dt {
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-label) / 16px var(--solo-font-text);
+}
+
+.detail dd {
+    margin: 0;
+    overflow: hidden;
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-meta) / 18px var(--solo-font-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.detail[data-wide] dd {
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
 @media (min-width: 768px) {
+    .row,
+    .item {
+        --row-gap: var(--role-space-16);
+        --row-gap-near: var(--role-space-12);
+        --row-gap-more: var(--role-space-8);
+    }
+
     .row {
-        gap: var(--role-space-16);
         padding-block: 0;
     }
 
-    /* one line each: the meta is cut first, down to a few letters, and only then the title */
     .title {
         flex: 1 1 auto;
         min-width: 34%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+
+    /* from 768 px the end meta says it, so the lead is the title alone */
+    .lead {
+        display: contents;
+    }
+
+    .lead > .title {
+        flex: 1 1 auto;
+    }
+
+    .context {
+        display: none;
+    }
+
+    /* beside end meta the title takes half the row at most and the meta the rest */
+    .row:not([data-wrap]):has(> .meta) .title {
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: 50%;
+    }
+
+    .row:not([data-wrap]):has(> .meta) .title + * {
+        margin-inline-start: auto;
+    }
+
+    .row:not([data-wrap]):has(> .meta) .lead + * {
+        margin-inline-start: auto;
     }
 
     .row[data-wrap] {
@@ -148,7 +415,7 @@
         white-space: normal;
     }
 
-    /* the shrink factor is large enough that the title's share of a squeeze stays under a layout unit */
+    /* the meta gives way first, down to a few letters, and only then the title; the factor keeps the title's share of a squeeze under a layout unit */
     .meta {
         flex: 0 100000 auto;
         min-width: 5ch;
@@ -163,13 +430,52 @@
         display: block;
     }
 
-    .row[data-stack] {
+    .row[data-stack='phone'] {
         flex-wrap: nowrap;
     }
 
-    .end {
+    .row[data-stack='phone'] > .end {
         flex: none;
         flex-wrap: nowrap;
         padding-bottom: 0;
+    }
+
+    /* the link cuts its own text, so the title keeps the link's focus ring whole */
+    .item .title:has(> .link[data-cut]) {
+        overflow: visible;
+    }
+
+    .item .title:not(:has(> .link[data-cut])),
+    .item .titleText {
+        display: block;
+        -webkit-line-clamp: none;
+        line-clamp: none;
+    }
+
+    .details {
+        grid-template-columns: var(--detail-columns);
+    }
+
+    .detail {
+        grid-column: var(--detail-column);
+    }
+
+    .titleText {
+        text-overflow: ellipsis;
+    }
+
+    .toggle {
+        width: 32px;
+        height: 32px;
+        margin-inline: calc(var(--role-space-24) - var(--row-gap) - 11px);
+        padding: 0 var(--role-space-8);
+    }
+
+    .toggle::before {
+        left: 50%;
+    }
+
+    [data-size='row'] + .more {
+        margin-inline-start: calc(var(--row-gap-more) - var(--row-gap));
     }
 }

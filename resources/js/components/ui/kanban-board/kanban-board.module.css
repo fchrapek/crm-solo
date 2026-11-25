@@ -1,4 +1,4 @@
-/* Figma: Leady · Kanban. Lanes of a fixed readable width scroll sideways on a phone; from 768 px they share the row and scroll only when they no longer fit. */
+/* Figma: Leads · Kanban. Lanes of a fixed readable width scroll sideways on a phone; from 768 px they share the row and scroll only when they no longer fit. */
 .board {
     display: flex;
     align-items: flex-start;

@@ -10,7 +10,7 @@ const t = i18next.t.bind(i18next) as (key: string, options?: Record<string, unkn
 const filters = { period: 'last_12_months', basis: 'accrual', from: '2025-11-01', to: '2026-10-31' };
 
 describe('the place of Przychody', () => {
-    test('the tokens are Przychody and the period, and the periods are the pills', () => {
+    test('the tokens are Revenue and the period, and the periods are the pills', () => {
         const place = Index.place({ filters } as never, { t, url: '/revenue?period=last_12_months', locale: 'pl' });
 
         expect(place.tokens.map((token) => [token.label, 'href' in token ? token.href : undefined])).toEqual([
@@ -28,7 +28,7 @@ describe('the place of Przychody', () => {
     test('a period pill keeps the basis and the amounts the page is on', () => {
         const pills = periodPills({ period: 'ytd', basis: 'cash' }, 'gross', t);
 
-        expect(pills[0].href).toBe('/revenue?period=this_month&basis=cash&kwoty=brutto');
+        expect(pills[0].href).toBe('/revenue?period=this_month&basis=cash&amounts=gross');
         expect(periodPills({ period: 'ytd', basis: 'accrual' }, 'net', t)[0].href).toBe('/revenue?period=this_month');
     });
 });
@@ -37,7 +37,7 @@ describe('the amounts of the page', () => {
     test('net unless the URL asks for gross', () => {
         expect(metricOf('/revenue')).toBe('net');
         expect(metricOf(revenueUrl(filters, 'gross'))).toBe('gross');
-        expect(metricOf('/revenue?kwoty=netto')).toBe('net');
+        expect(metricOf('/revenue?amounts=net')).toBe('net');
     });
 
     test('a change against the period before reads with its sign, and nothing to compare with reads as nothing', () => {

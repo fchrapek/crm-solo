@@ -340,7 +340,7 @@ final class TrelloOnboardingTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->user)
-            ->from("/clients/{$client->id}/dane")
+            ->from("/clients/{$client->id}/details")
             ->post("/projects/{$target->id}/connect-trello", [
                 'mode' => 'link',
                 'trello_board_id' => 'b_taken',
@@ -410,6 +410,31 @@ final class TrelloOnboardingTest extends TestCase
         $this->assertSame('Client A', $boards->firstWhere('id', 'b_taken')['linked_client_name']);
         $this->assertSame('orphan', $boards->firstWhere('id', 'b_orphan')['linked_status']);
         $this->assertSame('Acme', $boards->firstWhere('id', 'b_workspace')['workspace']);
+    }
+
+    public function test_an_orphan_keeps_its_board_and_tasks_when_the_board_is_not_visible_to_link(): void
+    {
+        Http::fake([
+            'api.trello.com/1/members/me/boards*' => Http::response([]),
+        ]);
+
+        $client = Client::create(['account_id' => $this->account->id, 'name' => 'C']);
+        $orphan = \App\Models\Project::create([
+            'account_id' => $this->account->id,
+            'client_id' => null,
+            'name' => 'Orphan board',
+            'trello_board_id' => 'b_gone',
+        ]);
+        $task = \App\Models\Task::create(['project_id' => $orphan->id, 'name' => 'Pre-existing task', 'list_name' => 'Inbox']);
+        $target = \App\Models\Project::create(['account_id' => $this->account->id, 'client_id' => $client->id, 'name' => 'Target']);
+
+        $this->actingAs($this->user)
+            ->post("/projects/{$target->id}/connect-trello", ['mode' => 'link', 'trello_board_id' => 'b_gone'])
+            ->assertSessionHasErrors('trello');
+
+        $this->assertSame('b_gone', $orphan->fresh()?->trello_board_id);
+        $this->assertSame($orphan->id, $task->fresh()->project_id);
+        $this->assertNull($target->fresh()->trello_board_id);
     }
 
     public function test_link_existing_board_adopts_orphan_project(): void

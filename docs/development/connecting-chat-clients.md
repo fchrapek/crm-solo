@@ -119,6 +119,8 @@ It can: read the day's attention list and the plan for today and tomorrow, list 
 
 It can draft, edit, regenerate, finalize, mark sent and reopen a report when its token has `write:reports`, and says what it will write before it does. It cannot: close or reopen a month (the owner does that in the app for now), issue or send an invoice (with `write:invoice-drafts` it creates Infakt drafts only, from the retainer or as a copy of the last invoice, and shows the draft first), or do anything the CRM itself cannot do. With `write:billing` it can add, change and end a client's abonament positions, under the same rules as the abonament dialog. It is the same set of actions the CLI has, reached a different way.
 
+Website forms: it can list the account's forms with their notice counts and show the mail sender that sends lead notices (`intake_forms`, `mail_sender`). With `write:intake`, granted by name only (the `write` shorthand leaves it out, since it can change where lead notices go), it can create a form, change its name, pipeline, source, origins, notify-to address or switch, and send failed lead notices again (`intake_form_create`, `intake_form_edit`, `lead_intake_retry`). It never sees or sets a secret: the forms' Turnstile and webhook secrets and the sender's password show only as set or not, and you set them on the server with the commands in `hosting.md`.
+
 Four behaviours worth knowing, because they look like quirks and are not:
 
 - **Times are local.** Saying "log 30 minutes ending 15:30" means half past three where you are. The CRM stores UTC internally and converts.
@@ -136,7 +138,7 @@ Once the CRM runs on a server (say `https://app.example.test`), the local server
 
 **What you need, once per Mac**
 
-1. The agent token, issued by the owner in Ustawienia · Agenci (or on the server with `php artisan agent-tokens:issue`), saved as `~/.config/crm-solo/agent.token`. It is shown once when issued. `chmod 600` the file; the tools refuse it otherwise.
+1. The agent token, issued by the owner in Ustawienia · Integracje, Tokeny agentów (or on the server with `php artisan agent-tokens:issue`), saved as `~/.config/crm-solo/agent.token`. It is shown once when issued. `chmod 600` the file; the tools refuse it otherwise.
 2. The Access service token, saved as `~/.config/crm-solo/remote.headers`, also `chmod 600`:
 
    ```

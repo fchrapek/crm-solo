@@ -70,7 +70,7 @@
 
 .group.segmented .item[data-state="on"],
 .group.segmented .item[aria-current] {
-  background: var(--solo-seg-on, var(--solo-field-bg));
+  background: var(--solo-seg-on, var(--role-tile));
   color: var(--solo-seg-on-fg, var(--solo-fg));
   font-weight: 600;
   box-shadow: none;
@@ -80,6 +80,11 @@
   box-shadow: none;
   outline: 2px solid var(--solo-fg);
   outline-offset: 2px;
+}
+
+/* a segment that cannot be picked while its form is saving */
+.group.segmented .item:disabled {
+  cursor: default;
 }
 
 /* a segment that is a link (the phone day trail) */

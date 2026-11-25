@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Account;
 use App\Models\Client;
 use App\Models\ClientReport;
@@ -19,6 +20,7 @@ use App\Services\Reports\ReportComposerRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Inertia\Support\Header;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -61,16 +63,16 @@ final class ClientBillingTest extends TestCase
     public function test_only_the_billing_tab_computes_the_billing(): void
     {
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/rozliczenia")
+            ->get("/clients/{$this->client->id}/billing")
             ->assertInertia(fn (Assert $page) => $page
                 ->component('clients/show')
-                ->where('tab', 'rozliczenia')
+                ->where('tab', 'billing')
                 ->has('billing_ledger.rows')
                 ->has('billing.retainer')
                 ->has('billing.invoices'));
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/przeglad")
+            ->get("/clients/{$this->client->id}/overview")
             ->assertInertia(fn (Assert $page) => $page->missing('billing'));
     }
 
@@ -204,6 +206,21 @@ final class ClientBillingTest extends TestCase
         $this->assertSame(['report_id' => $oldest->id, 'period' => '2025-09', 'status' => 'finalized'], $billing['waiting_report']);
     }
 
+    public function test_the_month_menu_lists_every_whole_month_of_the_bank_beyond_the_ledger_page_newest_first(): void
+    {
+        foreach (range(0, 13) as $offset) {
+            $this->report(Carbon::parse('2025-08-01')->addMonths($offset)->format('Y-m'), ClientReport::STATUS_SENT, sentAt: '2026-10-01 08:00:00');
+        }
+
+        $billing = $this->billing();
+
+        $this->assertCount(12, $billing['ledger']['rows']);
+        $this->assertSame(
+            ['2026-10', ...array_reverse(array_map(fn (int $offset): string => Carbon::parse('2025-08-01')->addMonths($offset)->format('Y-m'), range(0, 13)))],
+            $billing['months'],
+        );
+    }
+
     public function test_without_a_report_or_a_retainer_the_bank_is_empty_and_has_no_opening_balance_to_change(): void
     {
         $billing = $this->billing();
@@ -222,9 +239,9 @@ final class ClientBillingTest extends TestCase
         $this->assertSame(['report_id' => $september->id, 'value' => 2.0, 'version' => $september->version()], $this->billing()['opening_balance']);
 
         $this->actingAs($this->user)
-            ->from("/clients/{$this->client->id}/rozliczenia")
+            ->from("/clients/{$this->client->id}/billing")
             ->patch("/clients/{$this->client->id}/reports/{$september->id}/opening-balance", ['opening_balance_hours' => -4])
-            ->assertRedirect("/clients/{$this->client->id}/rozliczenia");
+            ->assertRedirect("/clients/{$this->client->id}/billing");
 
         $row = $this->billing()['ledger']['rows'][0];
         $this->assertSame(-4.0, $row['opening']);
@@ -241,9 +258,9 @@ final class ClientBillingTest extends TestCase
         $september->update(['body_markdown' => "## Podsumowanie rozliczeniowe\n\n- edited elsewhere"]);
 
         $this->actingAs($this->user)
-            ->from("/clients/{$this->client->id}/rozliczenia")
+            ->from("/clients/{$this->client->id}/billing")
             ->patch("/clients/{$this->client->id}/reports/{$september->id}/opening-balance", ['opening_balance_hours' => -4, 'version' => $target['version']])
-            ->assertRedirect("/clients/{$this->client->id}/rozliczenia")
+            ->assertRedirect("/clients/{$this->client->id}/billing")
             ->assertSessionHas('error');
 
         $this->assertSame(2.0, (float) $september->fresh()->opening_balance_hours);
@@ -261,11 +278,22 @@ final class ClientBillingTest extends TestCase
             }
         });
 
-        $target = $this->billing()['opening_balance'];
-        $this->assertSame(2.0, $target['value']);
+        // Only the billing prop, so the change lands right after the read under test and not after the header's.
+        $target = $this->actingAs($this->user)
+            ->withHeaders([
+                Header::INERTIA => 'true',
+                Header::VERSION => (string) app(HandleInertiaRequests::class)->version(request()),
+                Header::PARTIAL_COMPONENT => 'clients/show',
+                Header::PARTIAL_ONLY => 'billing',
+            ])
+            ->get("/clients/{$this->client->id}/billing")
+            ->assertOk()
+            ->json('props.billing.opening_balance');
+        $this->flushHeaders();
+        $this->assertSame(2.0, (float) $target['value']);
 
         $this->actingAs($this->user)
-            ->from("/clients/{$this->client->id}/rozliczenia")
+            ->from("/clients/{$this->client->id}/billing")
             ->patch("/clients/{$this->client->id}/reports/{$september->id}/opening-balance", ['opening_balance_hours' => 3, 'version' => $target['version']])
             ->assertSessionHas('error');
 
@@ -354,7 +382,7 @@ final class ClientBillingTest extends TestCase
         $this->assertSame([$this->dormant->id], array_column($billing['retainer']['positions'], 'id'));
         $this->assertSame([], $billing['invoices']['rows']);
 
-        $this->actingAs($this->user)->get("/clients/{$foreign->id}/rozliczenia")->assertNotFound();
+        $this->actingAs($this->user)->get("/clients/{$foreign->id}/billing")->assertNotFound();
         $this->actingAs($this->user)
             ->patch("/clients/{$this->client->id}/reports/{$foreignReport->id}/opening-balance", ['opening_balance_hours' => 5])
             ->assertNotFound();
@@ -364,7 +392,7 @@ final class ClientBillingTest extends TestCase
         $this->assertNull($foreignReport->fresh()->opening_balance_hours);
     }
 
-    public function test_rozliczenia_and_dane_send_the_same_props_and_queries_whatever_the_phone_asks_for(): void
+    public function test_billing_and_details_send_the_same_props_and_queries_whatever_the_phone_asks_for(): void
     {
         ClientRetainer::create(['account_id' => $this->account->id, 'client_id' => $this->client->id, 'monthly_hours' => 10, 'effective_from' => '2026-01-01']);
         $this->report('2026-09', ClientReport::STATUS_DRAFT, contracted: 10, actual: 4);
@@ -373,7 +401,7 @@ final class ClientBillingTest extends TestCase
         $iphone = ['User-Agent' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148'];
         $desktop = ['User-Agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15'];
 
-        foreach (['rozliczenia', 'dane'] as $tab) {
+        foreach (['billing', 'details'] as $tab) {
             $url = "/clients/{$this->client->id}/{$tab}";
             $this->actingAs($this->user)->get($url)->assertOk();
 
@@ -393,7 +421,7 @@ final class ClientBillingTest extends TestCase
         $this->entry($task, '2026-09-12 08:00:00', 30);
 
         foreach (['2026-08' => 1.5, '2026-09' => 0.5] as $period => $hours) {
-            $month = $this->props("/clients/{$this->client->id}/rozliczenia?miesiac={$period}")['billing_month'];
+            $month = $this->props("/clients/{$this->client->id}/billing?month={$period}")['billing_month'];
 
             $this->assertSame($period, $month['period']);
             $this->assertSame($period, $month['figures']['period']);
@@ -407,7 +435,7 @@ final class ClientBillingTest extends TestCase
     {
         $this->retainer(8);
 
-        $this->assertSame(app(HoursBank::class)->settlement($this->client)->activePeriod, $this->props("/clients/{$this->client->id}/rozliczenia")['billing_month']['period']);
+        $this->assertSame(app(HoursBank::class)->settlement($this->client)->activePeriod, $this->props("/clients/{$this->client->id}/billing")['billing_month']['period']);
     }
 
     public function test_a_month_that_has_not_started_or_is_no_month_falls_back_to_the_active_one(): void
@@ -416,9 +444,9 @@ final class ClientBillingTest extends TestCase
         $active = app(HoursBank::class)->settlement($this->client)->activePeriod;
 
         foreach (['2026-11', '2026-13', 'wrzesien', ''] as $month) {
-            $this->assertSame($active, $this->props("/clients/{$this->client->id}/rozliczenia?miesiac={$month}")['billing_month']['period']);
+            $this->assertSame($active, $this->props("/clients/{$this->client->id}/billing?month={$month}")['billing_month']['period']);
         }
-        $this->assertSame('2026-10', $this->props("/clients/{$this->client->id}/rozliczenia?miesiac=2026-10")['billing_month']['period']);
+        $this->assertSame('2026-10', $this->props("/clients/{$this->client->id}/billing?month=2026-10")['billing_month']['period']);
     }
 
     public function test_the_month_carries_its_report_its_invoices_and_its_checklist(): void
@@ -431,7 +459,7 @@ final class ClientBillingTest extends TestCase
         $this->invoice('2/09/2026', 'paid', '2026-09-20', null);
         $this->client->update(['month_close_type' => 'gig', 'include_in_month_close' => true]);
 
-        $month = $this->props("/clients/{$this->client->id}/rozliczenia?miesiac=2026-09")['billing_month'];
+        $month = $this->props("/clients/{$this->client->id}/billing?month=2026-09")['billing_month'];
 
         $this->assertSame($report->id, $month['report']['id']);
         $this->assertSame('draft', $month['report']['status']);
@@ -440,7 +468,7 @@ final class ClientBillingTest extends TestCase
         $this->assertSame(['done' => 0, 'total' => count(\App\Models\MonthCloseRun::stepTemplateFor($this->client->refresh()))], $month['checklist']);
         $this->assertSame([['key' => 'structured_list', 'label' => app(StructuredListComposer::class)->label()]], $month['composers']);
 
-        $august = $this->props("/clients/{$this->client->id}/rozliczenia?miesiac=2026-08")['billing_month'];
+        $august = $this->props("/clients/{$this->client->id}/billing?month=2026-08")['billing_month'];
         $this->assertNull($august['report']);
         $this->assertNull($august['checklist']);
         $this->assertSame(['1/08/2026'], array_column($august['invoices'], 'number'));
@@ -453,7 +481,7 @@ final class ClientBillingTest extends TestCase
         $run = \App\Models\MonthCloseRun::startFor($this->client->refresh(), '2026-08');
         $run->steps()->first()->update(['state' => \App\Models\MonthCloseStep::STATE_DONE]);
 
-        $this->assertSame(['done' => 1, 'total' => $run->steps()->count()], $this->props("/clients/{$this->client->id}/rozliczenia?miesiac=2026-08")['billing_month']['checklist']);
+        $this->assertSame(['done' => 1, 'total' => $run->steps()->count()], $this->props("/clients/{$this->client->id}/billing?month=2026-08")['billing_month']['checklist']);
     }
 
     public function test_an_order_client_has_no_month_but_keeps_the_whole_invoice_list(): void
@@ -461,7 +489,7 @@ final class ClientBillingTest extends TestCase
         $this->dormant->delete();
         $this->invoice('1/09/2026', 'paid', '2026-09-05', null);
 
-        $props = $this->props("/clients/{$this->client->id}/rozliczenia?miesiac=2026-09");
+        $props = $this->props("/clients/{$this->client->id}/billing?month=2026-09");
 
         $this->assertSame('order', $props['billing']['mode']);
         $this->assertArrayNotHasKey('billing_month', $props);
@@ -473,7 +501,7 @@ final class ClientBillingTest extends TestCase
         $other = Account::create(['name' => 'Other']);
         $foreign = $other->clients()->create(['name' => 'Obcy', 'currency' => 'PLN']);
 
-        $this->actingAs($this->user)->get("/clients/{$foreign->id}/rozliczenia?miesiac=2026-09")->assertNotFound();
+        $this->actingAs($this->user)->get("/clients/{$foreign->id}/billing?month=2026-09")->assertNotFound();
     }
 
     /** @return array<string, mixed> */
@@ -488,7 +516,7 @@ final class ClientBillingTest extends TestCase
     /** @return array<string, mixed> */
     private function billing(): array
     {
-        $response = $this->actingAs($this->user)->get("/clients/{$this->client->id}/rozliczenia");
+        $response = $this->actingAs($this->user)->get("/clients/{$this->client->id}/billing");
         $response->assertOk();
 
         $props = $response->viewData('page')['props'];

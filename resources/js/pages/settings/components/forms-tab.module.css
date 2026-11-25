@@ -1,0 +1,46 @@
+/* Settings · Forms: the form page's fields, the endpoint with its copy, the allowed sites and the snippets. */
+
+.form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-16);
+}
+
+.endpoint,
+.field,
+.origins {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-8);
+}
+
+.copyRow {
+    display: flex;
+    align-items: center;
+    gap: var(--role-space-12);
+}
+
+.url {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-sub) / 1.4 var(--solo-font-text);
+    overflow-wrap: anywhere;
+}
+
+.code {
+    margin: 0;
+    padding: var(--role-space-12) var(--role-space-16);
+    overflow-x: auto;
+    border-radius: var(--role-radius-sm);
+    background: var(--role-hover);
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-meta) / 1.45 var(--solo-font-text);
+    white-space: pre;
+}
+
+.error {
+    margin: 0;
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}

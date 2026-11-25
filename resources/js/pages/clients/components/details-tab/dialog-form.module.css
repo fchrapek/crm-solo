@@ -3,7 +3,7 @@
     justify-content: flex-end;
 }
 
-/* Usuń kontakt: the text action at the footer's start (desktop), at the end of the sheet's fields (phones) */
+/* Delete contact: the text action at the footer's start (desktop), at the end of the sheet's fields (phones) */
 .start {
     margin-right: auto;
 }
@@ -19,7 +19,7 @@
     padding-top: var(--solo-space-3);
 }
 
-/* A private person has no NIP and reads Imię i nazwisko on phones (Figma 347:5033); from 768 px the dialog is unchanged */
+/* A private person has no NIP and reads Full name on phones (Figma 347:5033); from 768 px the dialog is unchanged */
 .wideOnly,
 div.wideField {
     display: none;

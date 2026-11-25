@@ -32,7 +32,7 @@ const rows = [
 ];
 
 describe('the place of the month close', () => {
-    test('the list is Zamknięcie miesiąca and its month, with the months around it as pills', () => {
+    test('the list is Month close and its month, with the months around it as pills', () => {
         const place = Index.place({ period: '2026-09', months: ['2026-08', '2026-09', '2026-10'] } as never, context);
 
         expect(place.tokens.map((token) => [token.label, 'href' in token ? token.href : undefined])).toEqual([
@@ -84,9 +84,9 @@ describe('the filters of the list', () => {
 
     test('the filter travels in the URL, and anything else shows everyone', () => {
         expect(filterOf(closeListUrl('2026-09', 'you'))).toBe('you');
-        expect(closeListUrl('2026-09', 'hours')).toBe('/month-close?period=2026-09&pokaz=godziny');
+        expect(closeListUrl('2026-09', 'hours')).toBe('/month-close?period=2026-09&filter=hours');
         expect(closeListUrl('2026-09')).toBe('/month-close?period=2026-09');
-        expect(filterOf('/month-close?pokaz=cokolwiek')).toBe('all');
+        expect(filterOf('/month-close?filter=anything')).toBe('all');
     });
 
     test('the pills carry their counts and keep the page where it is', () => {
@@ -104,9 +104,9 @@ describe('the filters of the list', () => {
 });
 
 describe('the card of a client', () => {
-    test('the report and the invoice step lead to the month on Rozliczenia; other steps lead nowhere', () => {
-        expect(stepLink({ key: 'report' }, 7, '2026-09', t)).toEqual({ label: 'Raport', href: '/clients/7/rozliczenia?miesiac=2026-09' });
-        expect(stepLink({ key: 'draft_invoice' }, 7, '2026-09', t)).toEqual({ label: 'Faktury', href: '/clients/7/rozliczenia?miesiac=2026-09' });
+    test('the report and the invoice step lead to the month on Billing; other steps lead nowhere', () => {
+        expect(stepLink({ key: 'report' }, 7, '2026-09', t)).toEqual({ label: 'Raport', href: '/clients/7/billing?month=2026-09' });
+        expect(stepLink({ key: 'draft_invoice' }, 7, '2026-09', t)).toEqual({ label: 'Faktury', href: '/clients/7/billing?month=2026-09' });
         expect(stepLink({ key: 'wp_updates' }, 7, '2026-09', t)).toBeNull();
         expect(stepLink({ key: 'summary_email' }, 7, '2026-09', t)).toBeNull();
     });

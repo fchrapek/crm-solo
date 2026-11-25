@@ -112,7 +112,7 @@ function blank(brief: TaskBriefData): Record<BriefField, string> {
 }
 
 /**
- * Figma: Zadanie, the Brief dla agenta tile (1094:40618; empty 1094:41102): the four fields, written by agents and by
+ * Figma: Task, the Brief for the agent tile (1094:40618; empty 1094:41102): the four fields, written by agents and by
  * the owner in the dialog, and who changed them last.
  */
 export function BriefSection({

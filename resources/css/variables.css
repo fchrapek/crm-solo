@@ -180,7 +180,6 @@
    * ======================================== */
     --font-family-sans:
         'Spline Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-    --font-family-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
     /* Display face for headings — themes swap this independently of body text,
    * which is where most of a theme's personality lives. */
@@ -266,19 +265,17 @@
     --shadow-inner: inset 0 2px 4px 0 hsl(0 0% 0% / 0.05);
 
     /* ========================================
-   * Transitions
+   * Motion: which element takes which token is in docs/development/theming.md, Motion
    * ======================================== */
-    --duration-75: 75ms;
-    --duration-100: 100ms;
-    --duration-150: 150ms;
-    --duration-200: 200ms;
-    --duration-300: 300ms;
-    --duration-500: 500ms;
+    --motion-fast: 120ms;
+    --motion-base: 160ms;
+    --motion-slow: 200ms;
+    --motion-fast-exit: calc(var(--motion-fast) * 0.75);
+    --motion-base-exit: calc(var(--motion-base) * 0.75);
+    --motion-slow-exit: calc(var(--motion-slow) * 0.75);
 
-    --ease-linear: linear;
-    --ease-in: cubic-bezier(0.4, 0, 1, 1);
-    --ease-out: cubic-bezier(0, 0, 0.2, 1);
-    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 
     /* ========================================
    * Z-Index
@@ -308,6 +305,14 @@
     --sidebar-width: 16rem;
     --sidebar-width-icon: 3rem;
     --header-height: 3.5rem;
+}
+
+/* Reduced motion stops what moves; a colour still fades. */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --motion-base: 0ms;
+        --motion-slow: 0ms;
+    }
 }
 
 /* ========================================

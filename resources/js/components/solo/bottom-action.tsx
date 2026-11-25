@@ -6,7 +6,7 @@ interface BottomActionProps {
     children: ReactNode;
     /** A small action that sits above the main one on phones, after it on desktop. */
     secondary?: ReactNode;
-    /** For a page whose desktop already shows the action elsewhere (a section head's Nowe zadanie). */
+    /** For a page whose desktop already shows the action elsewhere (a section head's New task). */
     phoneOnly?: boolean;
 }
 

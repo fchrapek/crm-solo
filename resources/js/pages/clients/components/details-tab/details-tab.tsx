@@ -1,29 +1,26 @@
 import { destroy, restore } from '@/actions/App/Http/Controllers/ClientsController';
-import { MarkdownView } from '@/components/markdown-view';
-import { ActionMenuItem } from '@/components/solo/action-menu';
+import { ActionMenu, ActionMenuHeading, ActionMenuItem } from '@/components/solo/action-menu';
 import { type ClientHeaderData, useInHeaderMenu } from '@/components/solo/client-header';
+import { DangerZone } from '@/components/solo/danger-zone';
 import { fieldControl, SoloField, SoloTextarea } from '@/components/solo/field';
+import { IconButton } from '@/components/solo/icon-button';
 import { KvRow } from '@/components/solo/kv-row';
 import { SoloButton, SoloButtonLink, touchTargetClass } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
 import { Row } from '@/components/solo/row';
 import { SegmentedControl } from '@/components/solo/segmented-control';
 import { Tile, TileGrid, TileHeader, TileInset, TileNote, TileRows, TileStack } from '@/components/solo/tile';
-import { Checkbox } from '@/components/ui/checkbox';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Icon } from '@/components/ui/icon';
 import { fullDate, shortDate } from '@/lib/dates';
 import { localeOf } from '@/lib/hours-text';
 import { LIFECYCLE_STAGES, lifecycleStageLabelKey } from '@/lib/lifecycle-stage';
 import clients, { transitionStage } from '@/routes/clients';
 import contactRoutes from '@/routes/contacts';
-import projectBoard from '@/routes/project-board';
 import { type LifecycleStage } from '@/types';
 import { router } from '@inertiajs/react';
 import { type FormEvent, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type ClientCard, ClientFieldsDialog, type FieldEvent, FieldHistory } from '../client-fields';
-import { ProjectFormDialog } from '../project-form-dialog';
+import { type ClientCard, ClientFieldsDialog } from '../client-fields';
 import { BaselineDialog } from './baseline-dialog';
 import { ClientDetailsDialog } from './client-details-dialog';
 import { ContactDialog } from './contact-dialog';
@@ -34,7 +31,7 @@ import { addressLine, cooperationLine, taxIdLine } from './format';
 import { MONTH_CLOSE_LABEL, MonthCloseDialog, REPORT_MODE_LABEL } from './month-close-dialog';
 import type { ClientContactRow, ClientDetails, ClientDocumentRow, ClientStage, DetailsProject } from './types';
 
-export type DetailsDialog = 'details' | 'contact' | 'month-close' | 'baseline' | 'archive' | 'delete' | 'fields' | 'stage' | 'project' | null;
+export type DetailsDialog = 'details' | 'contact' | 'month-close' | 'baseline' | 'archive' | 'fields' | 'stage' | null;
 
 /** A tile's own button, which says it opens a dialog. */
 function TileEdit({ onClick, children }: { onClick: () => void; children: ReactNode }) {
@@ -46,9 +43,9 @@ function TileEdit({ onClick, children }: { onClick: () => void; children: ReactN
 }
 
 /**
- * Figma: Klient · Dane (1093:30852, phone 1093:31255). Everything the record holds about the client: the company or
- * the person, the relationship stage, contacts, the account's own fields, projects, the month close and, beside
- * them, documents, the field history and what ends the cooperation.
+ * Figma 11A: Client · Details (1427:19499, phone 1427:19921). The company or the person, contacts, the account's own
+ * fields and the danger zone; beside them the stage, the month close while its module is on and used, and documents.
+ * The DOM follows the phone's one column, so the Tab order is the phone's on every width.
  */
 export function DetailsTab({
     client,
@@ -56,8 +53,6 @@ export function DetailsTab({
     contacts,
     documents = [],
     card = null,
-    fieldHistory = [],
-    fieldHistoryCount = fieldHistory.length,
     stage = null,
     projects = [],
     owner = false,
@@ -69,12 +64,9 @@ export function DetailsTab({
     contacts: ClientContactRow[];
     documents?: ClientDocumentRow[];
     card?: ClientCard | null;
-    fieldHistory?: FieldEvent[];
-    /** Every change; fieldHistory holds the latest few. */
-    fieldHistoryCount?: number;
     stage?: ClientStage | null;
     projects?: DetailsProject[];
-    /** Archiving, restoring and deleting a client are the account owner's. */
+    /** Archiving and restoring a client are the account owner's. */
     owner?: boolean;
     dialog: DetailsDialog;
     onDialogChange: (dialog: DetailsDialog) => void;
@@ -89,7 +81,7 @@ export function DetailsTab({
     const individual = details.type === 'individual';
     const billing = client.billing !== false;
     const connected = projects.filter((project) => !project.is_private).length;
-    const [deleteContacts, setDeleteContacts] = useState(false);
+    const monthCloseTile = details.modules.month_close && details.month_close_type !== null;
     const reach = (
         <>
             <KvRow layout="tile" label={t('Phone')} tone={details.phone ? undefined : 'muted'}>
@@ -115,8 +107,30 @@ export function DetailsTab({
     const edit = <TileEdit onClick={open('details')}>{t('Edit')}</TileEdit>;
 
     return (
-        <TileGrid>
-            <TileStack>
+        <TileGrid phoneOrder>
+            {stage !== null && (
+                <TileStack place="lead">
+                    <Tile kind="plain">
+                        <TileHeader label={t('Relationship stage')} end={<TileEdit onClick={open('stage')}>{t('Change stage')}</TileEdit>} />
+                        <dl className={styles.list}>
+                            <KvRow layout="tile" label={t('Stage')}>
+                                {t(lifecycleStageLabelKey(stage.stage))}
+                            </KvRow>
+                            {stage.since !== null && (
+                                <KvRow layout="tile" label={t('Stage since')}>
+                                    {fullDate(stage.since, locale)}
+                                </KvRow>
+                            )}
+                            {billing && stage.retainer_from !== null && (
+                                <KvRow layout="tile" label={t('Retainer since')}>
+                                    {shortDate(stage.retainer_from, locale)}
+                                </KvRow>
+                            )}
+                        </dl>
+                    </Tile>
+                </TileStack>
+            )}
+            <TileStack place="main">
                 <Tile kind="plain">
                     <TileHeader label={individual ? t('Individual') : t('Company')} end={edit} />
                     <dl className={styles.list}>
@@ -154,7 +168,7 @@ export function DetailsTab({
                                 {cooperation || notSet}
                             </KvRow>
                         )}
-                        {billing && details.hourly_rate !== null && (
+                        {billing && details.cooperation_type === 'hourly' && details.hourly_rate !== null && (
                             <KvRow layout="tile" label={t('Rate')}>
                                 {t('{{amount}} net / h', { amount: money(details.hourly_rate, details.currency, locale) })}
                             </KvRow>
@@ -180,26 +194,6 @@ export function DetailsTab({
                     <Tile kind="plain">
                         <TileHeader label={t('Contact details')} end={edit} />
                         <dl className={styles.list}>{reach}</dl>
-                    </Tile>
-                )}
-                {stage !== null && (
-                    <Tile kind="plain">
-                        <TileHeader label={t('Relationship stage')} end={<TileEdit onClick={open('stage')}>{t('Change stage')}</TileEdit>} />
-                        <dl className={styles.list}>
-                            <KvRow layout="tile" label={t('Stage')}>
-                                {t(lifecycleStageLabelKey(stage.stage))}
-                            </KvRow>
-                            {stage.since !== null && (
-                                <KvRow layout="tile" label={t('Stage since')}>
-                                    {fullDate(stage.since, locale)}
-                                </KvRow>
-                            )}
-                            {billing && stage.retainer_from !== null && (
-                                <KvRow layout="tile" label={t('Retainer since')}>
-                                    {shortDate(stage.retainer_from, locale)}
-                                </KvRow>
-                            )}
-                        </dl>
                     </Tile>
                 )}
                 <Tile kind="list">
@@ -249,7 +243,18 @@ export function DetailsTab({
                         <TileHeader
                             label={t('Client fields')}
                             count={card.fields.filter((field) => !field.archived).length}
-                            end={<TileEdit onClick={open('fields')}>{t('Edit')}</TileEdit>}
+                            end={
+                                <span className={styles.headerActions}>
+                                    <SoloButtonLink
+                                        href={clients.show({ client: client.id, tab: 'journal' }).url}
+                                        variant="quiet"
+                                        size="control"
+                                    >
+                                        {t('Change history')}
+                                    </SoloButtonLink>
+                                    <TileEdit onClick={open('fields')}>{t('Edit')}</TileEdit>
+                                </span>
+                            }
                         />
                         <dl className={styles.list}>
                             <KvRow layout="tile" label={t('Assignee')} tone={card.assignee ? undefined : 'muted'}>
@@ -279,40 +284,9 @@ export function DetailsTab({
                         </dl>
                     </Tile>
                 )}
-                <Tile kind="list">
-                    <TileHeader
-                        label={t('Projects and repositories')}
-                        count={projects.length}
-                        end={<TileEdit onClick={open('project')}>{t('New project')}</TileEdit>}
-                    />
-                    {projects.length === 0 ? (
-                        <TileInset>
-                            <TileNote>{t('No projects yet.')}</TileNote>
-                        </TileInset>
-                    ) : (
-                        <TileRows>
-                            {projects.map((project, index) => (
-                                <Row
-                                    key={project.id}
-                                    rule={index > 0}
-                                    title={project.name}
-                                    wideMeta={projectFacts(project, billing, t)}
-                                    action={
-                                        <SoloButtonLink
-                                            href={projectBoard.show({ client: client.id, project: project.id })}
-                                            variant="secondary"
-                                            size="control"
-                                            aria-label={`${t('Open')}: ${project.name}`}
-                                        >
-                                            {t('Open')}
-                                        </SoloButtonLink>
-                                    }
-                                />
-                            ))}
-                        </TileRows>
-                    )}
-                </Tile>
-                {billing && (
+            </TileStack>
+            <TileStack as="aside" place="side">
+                {monthCloseTile && (
                     <Tile kind="plain">
                         <TileHeader label={t('Month close')} end={<TileEdit onClick={open('month-close')}>{t('Edit')}</TileEdit>} />
                         <dl className={styles.list}>
@@ -334,65 +308,27 @@ export function DetailsTab({
                         </dl>
                     </Tile>
                 )}
-                {billing && (
-                    <Tile kind="plain">
-                        <TileHeader label={t('Report baseline')} end={<TileEdit onClick={open('baseline')}>{t('Edit')}</TileEdit>} />
-                        {details.report_baseline_markdown ? (
-                            <div className={styles.baseline} data-fill="">
-                                <MarkdownView>{details.report_baseline_markdown}</MarkdownView>
-                            </div>
-                        ) : (
-                            <TileNote>{t('Not set')}</TileNote>
-                        )}
-                    </Tile>
-                )}
-            </TileStack>
-            <TileStack as="aside">
                 <DocumentsSection clientId={client.id} documents={documents} />
-                {card !== null && (
-                    <Tile kind="plain">
-                        <TileHeader
-                            label={t('Field history')}
-                            count={fieldHistoryCount}
-                            end={
-                                <SoloButtonLink href={clients.show({ client: client.id, tab: 'dziennik' }).url} variant="secondary" size="control">
-                                    {t('Journal')}
-                                </SoloButtonLink>
-                            }
-                        />
-                        <div data-fill="">
-                            <FieldHistory events={fieldHistory} />
-                        </div>
-                    </Tile>
-                )}
-                {owner && (
-                    <Tile kind="list">
-                        <TileHeader label={t('Client name')} />
-                        <TileRows>
-                            <Row
-                                rule={false}
-                                title={details.archived ? t('Restore client') : t('Archive client')}
-                                action={<TileEdit onClick={open('archive')}>{details.archived ? t('Restore') : t('Archive')}</TileEdit>}
-                            />
-                            {!details.archived && (
-                                <Row title={t('Delete client')} action={<TileEdit onClick={open('delete')}>{t('Delete')}</TileEdit>} />
-                            )}
-                        </TileRows>
-                    </Tile>
-                )}
             </TileStack>
+            {owner && (
+                <TileStack place="tail">
+                    <DangerZone
+                        label={t('Danger zone')}
+                        title={details.archived ? t('Restore from the archive') : t('Archive client')}
+                        description={details.archived ? t('danger_restore_client') : t('danger_archive_client')}
+                        action={details.archived ? t('Restore') : t('Archive')}
+                        onAction={open('archive')}
+                    />
+                </TileStack>
+            )}
             <ClientDetailsDialog clientId={client.id} details={details} open={dialog === 'details'} onOpenChange={toggle('details')} />
             <ContactDialog clientId={client.id} open={dialog === 'contact'} onOpenChange={toggle('contact')} />
             <MonthCloseDialog clientId={client.id} details={details} open={dialog === 'month-close'} onOpenChange={toggle('month-close')} />
-            <BaselineDialog
-                clientId={client.id}
-                baseline={details.report_baseline_markdown}
-                open={dialog === 'baseline'}
-                onOpenChange={toggle('baseline')}
-            />
+            {details.modules.report_baseline && (
+                <BaselineDialog clientId={client.id} baseline={null} open={dialog === 'baseline'} onOpenChange={toggle('baseline')} />
+            )}
             {card !== null && <ClientFieldsDialog clientId={client.id} card={card} open={dialog === 'fields'} onOpenChange={toggle('fields')} />}
             {stage !== null && <StageDialog clientId={client.id} current={stage.stage} open={dialog === 'stage'} onOpenChange={toggle('stage')} />}
-            <ProjectFormDialog open={dialog === 'project'} onOpenChange={toggle('project')} clientId={client.id} />
             <ConfirmDialog
                 open={dialog === 'archive'}
                 onOpenChange={toggle('archive')}
@@ -406,43 +342,12 @@ export function DetailsTab({
                 variant={details.archived ? 'default' : 'destructive'}
                 onConfirm={() => (details.archived ? router.put(restore(client.id).url) : router.delete(destroy(client.id).url))}
             />
-            <ConfirmDialog
-                open={dialog === 'delete'}
-                onOpenChange={toggle('delete')}
-                title={t('Delete client?')}
-                description={t(
-                    'The client leaves the list and the month close. Its tasks, time and history are kept, and an owner can restore it from the archived clients.',
-                )}
-                confirmLabel={t('Delete')}
-                variant="destructive"
-                onConfirm={() =>
-                    router.delete(destroy(client.id).url, { data: deleteContacts && contacts.length > 0 ? { delete_contacts: true } : {} })
-                }
-            >
-                {contacts.length > 0 && (
-                    <label className={styles.check}>
-                        <Checkbox checked={deleteContacts} onCheckedChange={(checked) => setDeleteContacts(checked === true)} />
-                        <span>{t('Also delete {{count}} connected contact', { count: contacts.length })}</span>
-                    </label>
-                )}
-            </ConfirmDialog>
         </TileGrid>
     );
 }
 
-/** "Trello · w zamknięciu · 1 repozytorium": what stands behind a project, in a few words. */
-export function projectFacts(project: DetailsProject, billing: boolean, t: (key: string, options?: Record<string, unknown>) => string): string {
-    return [
-        project.is_private ? t('private') : 'Trello',
-        billing && project.include_in_month_close ? t('in the close') : null,
-        project.repositories > 0 ? t('repository_count', { count: project.repositories }) : t('no repository'),
-    ]
-        .filter(Boolean)
-        .join(' · ');
-}
-
-/** Figma: Zmień etap relacji. The stage and an optional note; the change lands in the journal. */
-function StageDialog({
+/** Figma: Change lifecycle stage. The stage and an optional note; the change lands in the journal. */
+export function StageDialog({
     clientId,
     current,
     open,
@@ -533,27 +438,37 @@ function money(amount: number, currency: string, locale: string): string {
 
 export type DetailsAction = Exclude<DetailsDialog, null>;
 
-/** The phone "more" menu: the two things added or edited most; from 768 px every tile has its own button. */
-export function detailsActionOrder(inMenu: boolean): DetailsAction[] {
-    return inMenu ? ['details', 'contact'] : [];
+/** The ⋯ menu's module entries: only modules the account has on, and only what the client does not use yet. */
+export function moduleActions(details: Pick<ClientDetails, 'modules' | 'month_close_type' | 'has_report_baseline'>): DetailsAction[] {
+    return [
+        ...(details.modules.month_close && details.month_close_type === null ? (['month-close'] as const) : []),
+        ...(details.modules.report_baseline && !details.has_report_baseline ? (['baseline'] as const) : []),
+    ];
 }
 
-export function DetailsActions({ details, onOpen }: { details: ClientDetails; onOpen: (action: DetailsAction) => void }) {
+/** Figma 11A (1427:20350, phone 1427:20483): the ⋯ menu of Dane, the modules a client can join, then the client itself. */
+export function DetailsActions({ details, owner, onOpen }: { details: ClientDetails; owner: boolean; onOpen: (action: DetailsAction) => void }) {
     const { t } = useTranslation();
-
-    return (
+    const inMenu = useInHeaderMenu();
+    const modules = moduleActions(details);
+    const items = (
         <>
-            {detailsActionOrder(useInHeaderMenu()).map((action) =>
-                action === 'details' ? (
-                    <ActionMenuItem key="details" icon={<Icon name="pencil" size={16} />} onSelect={() => onOpen('details')}>
-                        {details.type === 'individual' ? t('Edit details') : t('Edit company data')}
-                    </ActionMenuItem>
-                ) : (
-                    <ActionMenuItem key="contact" icon={<Icon name="plus" size={16} />} onSelect={() => onOpen('contact')}>
-                        {t('New contact')}
-                    </ActionMenuItem>
-                ),
+            {modules.length > 0 && <ActionMenuHeading>{t('Modules')}</ActionMenuHeading>}
+            {modules.map((action) => (
+                <ActionMenuItem key={action} onSelect={() => onOpen(action)}>
+                    {action === 'month-close' ? t('Add to the month close') : t('Turn on the report baseline')}
+                </ActionMenuItem>
+            ))}
+            <ActionMenuHeading>{t('menu_heading_client')}</ActionMenuHeading>
+            <ActionMenuItem onSelect={() => onOpen('details')}>
+                {details.type === 'individual' ? t('Edit details') : t('Edit company data')}
+            </ActionMenuItem>
+            {inMenu && <ActionMenuItem onSelect={() => onOpen('contact')}>{t('New contact')}</ActionMenuItem>}
+            {owner && (
+                <ActionMenuItem onSelect={() => onOpen('archive')}>{details.archived ? t('Restore client') : t('Archive client')}</ActionMenuItem>
             )}
         </>
     );
+
+    return inMenu ? items : <ActionMenu trigger={<IconButton icon="more" look="outline" label={t('More actions')} />}>{items}</ActionMenu>;
 }

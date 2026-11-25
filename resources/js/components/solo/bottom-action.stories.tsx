@@ -26,7 +26,7 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-/** Surface=Paper: Plan jutro's Zapisz plan. */
+/** Surface=Paper: Plan tomorrow's Save the plan. */
 export const Paper: Story = {};
 
 export const PaperWithSecondary: Story = {
@@ -51,13 +51,13 @@ export const Timer: Story = {
     },
 };
 
-/** Surface=Done: Zamknij dzień. */
+/** Surface=Done: Close the day. */
 export const Done: Story = {
     globals: { day: 'done' },
     args: { children: <SoloButton size="md">Zamknij dzień</SoloButton> },
 };
 
-/** Surface=Done after the close: Zaplanuj jutro, with Otwórz dzień ponownie above it. */
+/** Surface=Done after the close: Plan tomorrow, with Reopen the day above it. */
 export const DoneWithSecondary: Story = {
     globals: { day: 'done' },
     args: {

@@ -39,7 +39,7 @@ export interface FacetOption<T> {
     count: number;
 }
 
-/** Klienci for an account with its own fields: the overview columns, the assignee and choice field filters, the SMS line. */
+/** Clients for an account with its own fields: the overview columns, the assignee and choice field filters, the SMS line. */
 export interface ListCard {
     billing: boolean;
     filters: { assignee: AssigneeFilter | null; f: Record<string, string> };
@@ -58,7 +58,7 @@ export const STAGE_LABEL: Record<ListStage, string> = {
     archived: 'Archived clients',
 };
 
-/** What Wyczyść in the phone filter puts back; the search stays. */
+/** What Clear in the phone filter puts back; the search stays. */
 export const CLEAR_FILTERS = { stage: 'active', cooperation_type: null } as const;
 
 /** The Status segments of the phone filter; archived is offered on desktop only. */
@@ -84,7 +84,7 @@ export interface CooperationOption {
     active: boolean;
 }
 
-/** Wszyscy, then every type that has clients or is the current filter; a hidden type counts 0, so Wszyscy is the sum of the rows. */
+/** All clients, then every type that has clients or is the current filter; a hidden type counts 0, so All clients is the sum of the rows. */
 export function cooperationOptions(counts: CooperationCounts, current: CooperationFilter | null): CooperationOption[] {
     return [
         { value: null, label: 'All clients', count: counts.all, active: current === null },

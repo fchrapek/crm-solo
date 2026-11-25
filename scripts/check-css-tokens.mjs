@@ -10,6 +10,7 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { hardCodedMotion } from './motion-tokens.mjs';
 import { offSystemWidthQueries } from './solo-breakpoints.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -157,4 +158,21 @@ if (breakpointFails > 0) {
     process.exit(1);
 }
 
-console.log(`Token contract OK — ${files.length} CSS files checked, no hardcoded colours, accents readable, Solo breakpoints mobile first.`);
+/*
+ * Fifth contract: every transition and animation in every stylesheet takes its duration and easing from the motion
+ * tokens (scripts/motion-tokens.mjs), so reduced motion and a change of timing reach all of them at once.
+ */
+let motionFails = 0;
+for (const file of files.filter((path) => path.endsWith('.css'))) {
+    for (const failure of hardCodedMotion(readFileSync(file, 'utf8'))) {
+        console.error(`${file.replace(ROOT, '')}: ${failure} — use var(--motion-*) and var(--ease-*) from variables.css`);
+        motionFails++;
+    }
+}
+
+if (motionFails > 0) {
+    console.error(`\n${motionFails} transition${motionFails === 1 ? '' : 's'} with a written duration or easing.`);
+    process.exit(1);
+}
+
+console.log(`Token contract OK — ${files.length} CSS files checked, no hardcoded colours, accents readable, Solo breakpoints mobile first, motion from the tokens.`);

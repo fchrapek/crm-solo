@@ -9,14 +9,16 @@ final class AmbiguousReferenceException extends ReferenceException
     public readonly int $total;
 
     /**
-     * @param  list<array{id: int, name: string, context: string|null}>  $candidates  the first matches, best first
+     * @param  list<array{id: int|string, name: string, context: string|null}>  $candidates  the first matches, best first
      * @param  int|null  $total  how many records matched in all; more than the candidates when the list is cut
+     * @param  string  $retryWith  what to call again with, for records whose id is not a number
      */
     public function __construct(
         string $entity,
         string $needle,
         public readonly array $candidates,
         ?int $total = null,
+        string $retryWith = 'the numeric id',
     ) {
         $this->total = $total ?? count($candidates);
         $shown = $this->total > count($candidates) ? ' Showing '.count($candidates)." of {$this->total} matches; narrow the name or use an id." : '';
@@ -24,7 +26,7 @@ final class AmbiguousReferenceException extends ReferenceException
         parent::__construct(
             $entity,
             $needle,
-            "Ambiguous {$entity} \"{$needle}\" — call again with the numeric id.{$shown}",
+            "Ambiguous {$entity} \"{$needle}\" — call again with {$retryWith}.{$shown}",
         );
     }
 

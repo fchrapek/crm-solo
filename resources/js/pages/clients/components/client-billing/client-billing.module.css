@@ -1,4 +1,4 @@
-/* Figma: Klient · Rozliczenia. The tiles, rows and tables are parts; only what sits inside a tile is styled here. */
+/* Figma: Client · Billing. The tiles, rows and tables are parts; only what sits inside a tile is styled here. */
 
 /* the number tiles: two across, one row from 1100 px */
 .stats {
@@ -12,6 +12,65 @@
 
 .stats > * {
     flex: 1 1 calc(50% - var(--role-space-12));
+}
+
+/* Month status: how the month stands under its name, stacked on a phone, one wrapping line from 768 px */
+.status {
+    display: flex;
+    flex-direction: column;
+    gap: var(--role-space-12);
+}
+
+.statusLine {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--role-space-8);
+}
+
+.statusNote {
+    margin: 0;
+    color: var(--role-text-secondary);
+    font: 400 var(--solo-text-meta) / 1.4 var(--solo-font-text);
+}
+
+.statusButton {
+    align-self: stretch;
+}
+
+/* Copy all: a quiet action whose label lines up with the rows' titles */
+.copyAll {
+    display: flex;
+}
+
+.baselineRows {
+    margin: 0;
+    padding: 0;
+}
+
+.baselineRows > li {
+    padding-inline: 0;
+}
+
+.baselineRows > li::before {
+    inset-inline: 0;
+}
+
+.baselineText {
+    color: var(--role-text-primary);
+    font: 400 var(--solo-text-control) / 1.4 var(--solo-font-text);
+}
+
+/* a section heading reads as the rows' title on the tile, never as a page heading */
+.baselineText :is(h1, h2, h3, h4, h5, h6) {
+    margin: var(--role-space-12) 0 var(--role-space-4);
+    font: 600 var(--solo-text-row) / 1.35 var(--solo-font-text);
+    letter-spacing: 0;
+}
+
+.baselineText > :first-child,
+.baselineText > * > :first-child {
+    margin-top: 0;
 }
 
 .pillsLabel {
@@ -37,7 +96,7 @@
     font: 600 var(--solo-text-row) / 1.35 var(--solo-font-text);
 }
 
-/* Razem: the sum under the month's tasks */
+/* Total: the sum under the month's tasks */
 .total::before {
     height: var(--role-stroke-outline);
 }
@@ -224,6 +283,16 @@
         display: inline;
     }
 
+    .statusLine {
+        flex-flow: row wrap;
+        align-items: center;
+        gap: var(--role-space-8) var(--role-space-12);
+    }
+
+    .statusButton {
+        align-self: auto;
+    }
+
     .filters {
         flex-direction: row;
         flex-wrap: wrap;
@@ -262,24 +331,6 @@
 }
 
 @media (min-width: 1100px) {
-    /* the two columns end together: the Miesiąc tile takes what the side column has left and keeps its buttons at its end */
-    .level {
-        align-items: stretch;
-    }
-
-    .fill {
-        flex: 1 1 auto;
-    }
-
-    .atEnd {
-        margin-top: auto;
-    }
-
-    .ledger dd {
-        flex: none;
-        white-space: nowrap;
-    }
-
     .stats {
         --solo-display-stat: 58px;
 

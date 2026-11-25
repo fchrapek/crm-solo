@@ -15,12 +15,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
-/** The project page: the Zadania lanes narrowed to one project, inside the owner's account. */
+/** The project page: the Tasks lanes narrowed to one project, inside the owner's account. */
 final class ProjectPageTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_the_page_lists_only_this_projects_open_tasks_in_the_zadania_lanes(): void
+    public function test_the_page_lists_only_this_projects_open_tasks_in_the_tasks_lanes(): void
     {
         $account = Account::factory()->create();
         $user = User::factory()->create(['account_id' => $account->id, 'owner' => true]);
@@ -40,7 +40,7 @@ final class ProjectPageTest extends TestCase
                 ->where('tasks.lanes.0.key', 'doing')
                 ->where('tasks.lanes.0.count', 1)
                 ->where('tasks.lanes.0.rows.0.name', 'Lightbox')
-                ->where('tasks.projects', [['id' => $site->id, 'name' => 'Galeria', 'open' => 1, 'is_private' => true]]));
+                ->where('tasks.projects', [['id' => $site->id, 'name' => 'Galeria', 'open' => 1, 'is_private' => true, 'in_month_close' => false, 'repositories' => 0]]));
     }
 
     public function test_the_page_knows_the_clients_projects_with_their_open_tasks_for_its_pills(): void
@@ -62,8 +62,8 @@ final class ProjectPageTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->where('open_tasks_count', 3)
                 ->where('projects', fn ($projects) => collect($projects)->where('name', '!=', 'General')->values()->all() === [
-                    ['id' => $site->id, 'name' => 'Galeria', 'open' => 1, 'is_private' => true],
-                    ['id' => $shop->id, 'name' => 'Sklep', 'open' => 2, 'is_private' => false],
+                    ['id' => $site->id, 'name' => 'Galeria', 'open' => 1, 'is_private' => true, 'in_month_close' => false, 'repositories' => 0],
+                    ['id' => $shop->id, 'name' => 'Sklep', 'open' => 2, 'is_private' => false, 'in_month_close' => false, 'repositories' => 0],
                 ])
                 ->where('tasks.done.count', 0));
     }

@@ -4,7 +4,7 @@ import { clock, task, trelloTask } from './story-fixtures';
 import { TaskMeta } from './task-header';
 
 const meta = {
-    title: 'Zadania/Task meta',
+    title: 'Tasks/Task meta',
     component: TaskMeta,
     decorators: [mainColumn],
     args: { task, today: clock.today, locale: 'pl' },

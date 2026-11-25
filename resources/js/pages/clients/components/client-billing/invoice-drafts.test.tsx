@@ -4,8 +4,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { initReactI18next } from 'react-i18next';
 
 import pl from '../../../../../../lang/pl.json';
-import { groupChip, groupHint, groupTitle, MonthInvoices } from './invoice-drafts';
-import type { BillingInvoice, InvoiceDraftGroup, InvoiceDrafts } from './types';
+import { groupChip, groupHint, groupTitle, InvoiceDraftsTile } from './invoice-drafts';
+import { InvoiceList, invoiceListHint } from './invoice-list';
+import type { BillingInvoice, BillingInvoiceList, InvoiceDraftGroup, InvoiceDrafts } from './types';
 
 await i18next.use(initReactI18next).init({ lng: 'pl', resources: { pl: { translation: pl } }, interpolation: { escapeValue: false } });
 
@@ -28,20 +29,24 @@ const drafts: InvoiceDrafts = {
 };
 
 const t = i18next.t.bind(i18next);
-const textOf = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/[\u00a0\u202f]/g, ' ').replace(/\s+/g, ' ');
-const render = (value: InvoiceDrafts | null, invoices: BillingInvoice[] = []) =>
-    textOf(
-        renderToStaticMarkup(
-            <MonthInvoices clientId={7} clientName="Pracownia Mebli" period="2026-09" drafts={value} invoices={invoices} locale="pl-PL" />,
-        ),
-    );
+const textOf = (html: string) =>
+    html
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/[\u00a0\u202f]/g, ' ')
+        .replace(/\s+/g, ' ');
+const render = (value: InvoiceDrafts) =>
+    textOf(renderToStaticMarkup(<InvoiceDraftsTile clientId={7} clientName="Pracownia Mebli" drafts={value} locale="pl-PL" />));
 
-describe('Faktury za miesiąc', () => {
-    test('the Figma state: a copyable row with its amount, a row that needs a pick, and Kopiuj wszystkie', () => {
+describe('Do wystawienia za miesiąc', () => {
+    test('the Figma state: a copyable row with its amount, a row that needs a pick, and Copy all counting the ready ones', () => {
         const text = render(drafts);
 
-        expect(text).toContain('Faktury za wrzesień');
-        expect(text).toContain('Kopiuj wszystkie');
+        expect(text).toContain('Do wystawienia za wrzesień 2');
+        expect(text).toContain('Kopiuj wszystkie (1)');
+        expect(text).not.toContain('kwoty netto');
+        expect(t('drafts_hint', { month: 'wrzesień' })).toBe(
+            'Kwoty netto. Kopia faktury dostaje daty za wrzesień i trafia do Infaktu jako szkic; wystawiasz ją tam.',
+        );
         expect(text).toContain('Strona WWW meble-przykladowe.test');
         expect(text).toContain('1 920,00 zł');
         expect(text).toContain('Kopiuj fakturę');
@@ -81,7 +86,7 @@ describe('Faktury za miesiąc', () => {
     });
 
     test('a group without projects is named by its number', () => {
-        expect(groupTitle(group({ projects: [] , group: 3 }), t)).toBe('Faktura 3');
+        expect(groupTitle(group({ projects: [], group: 3 }), t)).toBe('Faktura 3');
     });
 
     test('a group that is not an action says so in its chip: a draft on the way, one to check, no invoice to copy', () => {
@@ -96,7 +101,34 @@ describe('Faktury za miesiąc', () => {
         expect(text).not.toContain('Wybierz fakturę');
     });
 
-    test('a month no draft is made for lists the invoices booked in it, with nothing to copy', () => {
+    test('every group keeps its state and buttons under its name, on every width', () => {
+        const html = renderToStaticMarkup(<InvoiceDraftsTile clientId={7} clientName="Pracownia Mebli" drafts={drafts} locale="pl-PL" />);
+
+        expect(html.match(/data-stack="always"/g)?.length).toBe(2);
+    });
+});
+
+describe("the month's own invoices in Faktury · Infakt", () => {
+    const list: BillingInvoiceList = {
+        rows: [],
+        total: 0,
+        truncated: false,
+        filters: { year: 2025, month: null, years: [2026, 2025] },
+        revenue: null,
+    };
+    const renderList = (invoices: BillingInvoice[], drafting = false) =>
+        renderToStaticMarkup(
+            <InvoiceList
+                clientId={7}
+                period="2026-09"
+                month={{ period: '2026-09', invoices, drafting }}
+                list={list}
+                thisYear={2026}
+                locale="pl-PL"
+            />,
+        );
+
+    test("the invoices booked in the month stand over the filters whatever year the list shows, marked as the month's", () => {
         const invoice: BillingInvoice = {
             id: 4,
             number: '4/08/2026',
@@ -111,11 +143,26 @@ describe('Faktury za miesiąc', () => {
             overdue: false,
             external_url: 'https://app.infakt.test/faktury/4',
         };
-        const text = render(null, [invoice]);
+        const html = renderList([invoice]);
+        const text = textOf(html);
 
-        expect(text).toContain('Faktury za wrzesień 1');
-        expect(text).toContain('4/08/2026 1 920,00 zł opłacona 12.08');
-        expect(text).not.toContain('Kopiuj');
-        expect(render(null)).toContain('Brak faktur za ten miesiąc.');
+        expect(text).toContain('Za wrzesień · 1 faktura, zaksięgowana we wrześniu');
+        expect(text).toContain('4/08/2026 opłacona 12.08 03.08 1 920,00 zł');
+        expect(text.indexOf('Za wrzesień')).toBeLessThan(text.indexOf('Ostatnie 12 miesięcy'));
+        expect(html.match(/aria-current="true"/g)?.length).toBe(1);
+        expect(textOf(renderList([invoice, { ...invoice, id: 5, number: '5/09/2026' }]))).toContain(
+            'Za wrzesień · 2 faktury, zaksięgowane we wrześniu',
+        );
+    });
+
+    test('a month without an invoice shows it as a quiet status, the explanation and the pointer to its groups in the (i)', () => {
+        expect(textOf(renderList([]))).toContain('Brak faktury za wrzesień');
+        expect(textOf(renderList([], true))).toContain('Brak faktury za wrzesień');
+        expect(textOf(renderList([]))).not.toContain('nie ma faktury');
+        expect(invoiceListHint({ period: '2026-09', invoices: [], drafting: false }, 'pl-PL', t)).toBe('Kwoty netto. Wrzesień nie ma faktury.');
+        expect(invoiceListHint({ period: '2026-09', invoices: [], drafting: true }, 'pl-PL', t)).toBe(
+            'Kwoty netto. Wrzesień nie ma jeszcze faktury. Grupy do wystawienia są przy Raporcie.',
+        );
+        expect(invoiceListHint(null, 'pl-PL', t)).toBe('Kwoty netto.');
     });
 });

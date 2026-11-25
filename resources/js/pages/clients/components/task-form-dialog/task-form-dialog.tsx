@@ -2,7 +2,8 @@ import { router } from '@inertiajs/react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { FieldError, fieldControl, SoloField, SoloFieldRow, SoloInput } from '@/components/solo/field';
+import { DateField } from '@/components/solo/date-field';
+import { fieldControl, FieldError, SoloField, SoloFieldRow, SoloInput } from '@/components/solo/field';
 import { SoloButton } from '@/components/solo/primitives';
 import { ResponsiveDialog } from '@/components/solo/responsive-dialog';
 import { ResponsiveSelect } from '@/components/solo/responsive-select';
@@ -59,6 +60,8 @@ function valuesFrom(initial?: Partial<TaskDialogValues>): TaskDialogValues {
 export interface TaskParentOption {
     id: number;
     name: string;
+    /** On a list that spans projects: a parent sits in the task's own project. */
+    project_id?: number;
 }
 
 interface Props {
@@ -68,13 +71,13 @@ interface Props {
     initial?: Partial<TaskDialogValues>;
     parentOptions?: TaskParentOption[];
     mode: 'create' | 'edit';
-    /** A create from a page that spans projects picks one; with a single project there is nothing to pick. */
+    /** A create from a page that spans projects picks one; an edit may move the task to another of them. With a single project there is nothing to pick. */
     projects?: { id: number; name: string }[];
     /** Below 768 px the same form opens in a Solo bottom sheet (Solo pages only). */
     sheet?: boolean;
 }
 
-/** Figma: Nowe zadanie, dialog 770:56871, sheet 747:18916. */
+/** Figma: New task, dialog 770:56871, sheet 747:18916. */
 
 export function TaskFormDialog({ open, onOpenChange, projectId, initial, parentOptions = [], mode, projects = [], sheet = false }: Props) {
     const { t } = useTranslation();
@@ -82,7 +85,8 @@ export function TaskFormDialog({ open, onOpenChange, projectId, initial, parentO
     const [errors, setErrors] = useState<Partial<Record<keyof TaskDialogValues, string>>>({});
     const [pickedProjectId, setPickedProjectId] = useState<number | undefined>();
     const [processing, setProcessing] = useState(false);
-    const targetProjectId = projectId ?? pickedProjectId ?? projects[0]?.id;
+    const targetProjectId = pickedProjectId ?? projectId ?? projects[0]?.id;
+    const moving = mode === 'edit' && projectId !== undefined && targetProjectId !== projectId;
 
     // The draft resets when the dialog opens; fresh props while it is open, a validation response included, keep it.
     const [wasOpen, setWasOpen] = useState(open);
@@ -107,6 +111,7 @@ export function TaskFormDialog({ open, onOpenChange, projectId, initial, parentO
             priority: values.priority || null,
             parent_task_id: values.parent_task_id ?? null,
             is_reportable: values.is_reportable ?? false,
+            ...(moving ? { project_id: targetProjectId } : {}),
         };
 
         const onError = (errs: Record<string, string>) => {
@@ -158,12 +163,15 @@ export function TaskFormDialog({ open, onOpenChange, projectId, initial, parentO
                 </>
             )}
         >
-            {mode === 'create' && projectId === undefined && projects.length > 1 && (
-                <SoloField label={t('Project')} htmlFor="task-project">
+            {(mode === 'create' ? projectId === undefined : projectId !== undefined) && projects.length > 1 && (
+                <SoloField label={t('Project')} htmlFor="task-project" error={(errors as Record<string, string | undefined>).project_id}>
                     <ResponsiveSelect
                         label={t('Project')}
                         value={String(targetProjectId)}
-                        onValueChange={(v) => setPickedProjectId(Number(v))}
+                        onValueChange={(v) => {
+                            setPickedProjectId(Number(v));
+                            setValues((current) => ({ ...current, parent_task_id: null }));
+                        }}
                         disabled={processing}
                         sheet={sheet}
                         control={fieldControl('task-project')}
@@ -208,7 +216,12 @@ export function TaskFormDialog({ open, onOpenChange, projectId, initial, parentO
                         options={[
                             { value: NONE, label: t('No parent') },
                             ...parentOptions
-                                .filter((option) => option.id !== values.id)
+                                .filter(
+                                    (option) =>
+                                        option.id !== values.id &&
+                                        (option.project_id === undefined || option.project_id === targetProjectId) &&
+                                        !moving,
+                                )
                                 .map((option) => ({ value: String(option.id), label: option.name })),
                         ]}
                     />
@@ -246,11 +259,12 @@ export function TaskFormDialog({ open, onOpenChange, projectId, initial, parentO
                 </SoloField>
 
                 <SoloField label={t('Due date')} htmlFor="task-due" error={errors.due_date}>
-                    <SoloInput
+                    <DateField
                         {...fieldControl('task-due', errors.due_date)}
-                        type="date"
-                        value={values.due_date}
-                        onChange={(e) => setValues({ ...values, due_date: e.target.value })}
+                        label={t('Due date')}
+                        value={values.due_date ?? ''}
+                        onChange={(due_date) => setValues({ ...values, due_date })}
+                        clearable
                         disabled={processing}
                     />
                 </SoloField>
@@ -268,9 +282,7 @@ export function TaskFormDialog({ open, onOpenChange, projectId, initial, parentO
                     />
                 </label>
                 <p className={styles.reportableHint}>
-                    {t(
-                        'Off by default. Baseline retainer activities (monitoring, backups, updates) are covered by the baseline scope and stay off.',
-                    )}
+                    {t('Off by default. Baseline retainer activities (monitoring, backups, updates) are covered by the baseline scope and stay off.')}
                 </p>
             </div>
             <FieldError htmlFor="task-reportable" error={errors.is_reportable} />

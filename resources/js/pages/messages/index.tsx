@@ -3,6 +3,7 @@ import { Poster, SoloButtonLink } from '@/components/solo/primitives';
 import { Row } from '@/components/solo/row';
 import { type Place, type PlaceContext, type PlaceResolver } from '@/components/solo/shell/place';
 import { SoloSurface } from '@/components/solo/surface';
+import { isOwner } from '@/components/solo/tab-bar';
 import { GroupHeading, Tile, TileInset, TileNote } from '@/components/solo/tile';
 import { InfoHint } from '@/components/ui/info-hint';
 import { shortDate } from '@/lib/dates';
@@ -45,7 +46,7 @@ const queueUrl = ({ status, search, client }: QueueFilters) =>
     messages.index({ query: { ...(status ? { status } : {}), ...(search.trim() ? { search: search.trim() } : {}), ...(client ? { client } : {}) } })
         .url;
 
-/** The queue is reached from Klienci: its token is SMS, the statuses are its pills and the command bar narrows it by client or text. */
+/** The queue is reached from Clients: its token is SMS, the statuses are its pills and the command bar narrows it by client or text. */
 export function queuePlace({ filters, messages: list }: Pick<QueueProps, 'filters' | 'messages'>, { t }: PlaceContext): Place {
     return {
         tokens: [{ label: 'SMS' }],
@@ -59,13 +60,29 @@ export function queuePlace({ filters, messages: list }: Pick<QueueProps, 'filter
     };
 }
 
-/** Figma: SMS · kolejka (1094:43607, phone 1094:43868). Today, tomorrow and later soonest first, then everything earlier. */
+/** The queue's title, with the way to its settings for the owner: a member cannot open Settings. */
+export function QueueHead({ owner }: { owner: boolean }) {
+    const { t } = useTranslation();
+
+    return (
+        <header className={styles.head}>
+            <Poster>SMS</Poster>
+            {owner && (
+                <SoloButtonLink href={settings.show('messages').url} variant="secondary" size="control">
+                    {t('SMS settings')}
+                </SoloButtonLink>
+            )}
+        </header>
+    );
+}
+
+/** Figma: SMS · queue (1094:43607, phone 1094:43868). Today, tomorrow and later soonest first, then everything earlier. */
 export default function MessagesIndex() {
     const props = usePage<SharedData & QueueProps>().props;
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);
     const { filters } = props;
-    const manage = Boolean(props.auth.user?.owner);
+    const manage = isOwner(props.auth.user);
 
     const rows = props.messages.data;
     const groups = [
@@ -81,12 +98,7 @@ export default function MessagesIndex() {
         <SoloSurface day="paper">
             <Head title="SMS" />
             <main className={styles.page}>
-                <header className={styles.head}>
-                    <Poster>SMS</Poster>
-                    <SoloButtonLink href={settings.show('sms').url} variant="secondary" size="control">
-                        {t('SMS settings')}
-                    </SoloButtonLink>
-                </header>
+                <QueueHead owner={manage} />
                 <p className={styles.note}>
                     {simulator ? t('Simulator: nothing is sent') : t('Sending')} ·{' '}
                     {t('quiet hours {{from}} to {{to}}', { from: props.sending.quiet_from, to: props.sending.quiet_to })}{' '}

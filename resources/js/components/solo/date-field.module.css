@@ -1,0 +1,17 @@
+.field {
+    display: block;
+    cursor: pointer;
+    text-align: start;
+}
+
+.field[data-empty] {
+    color: var(--role-text-secondary);
+}
+
+.field:disabled {
+    cursor: default;
+}
+
+.clear {
+    align-self: flex-start;
+}

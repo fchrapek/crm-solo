@@ -12,68 +12,36 @@
   outline: none;
 }
 
-.content[data-state="open"] {
-  animation: fadeIn var(--duration-150) var(--ease-out), zoomIn var(--duration-150) var(--ease-out);
-}
-
-.content[data-state="closed"] {
-  animation: fadeOut var(--duration-150) var(--ease-in), zoomOut var(--duration-150) var(--ease-in);
-}
-
 .content[data-side="bottom"] {
-  animation: fadeIn var(--duration-150) var(--ease-out), slideFromTop var(--duration-150) var(--ease-out);
+  --pop-from: translateY(-4px);
 }
 
 .content[data-side="top"] {
-  animation: fadeIn var(--duration-150) var(--ease-out), slideFromBottom var(--duration-150) var(--ease-out);
+  --pop-from: translateY(4px);
 }
 
 .content[data-side="left"] {
-  animation: fadeIn var(--duration-150) var(--ease-out), slideFromRight var(--duration-150) var(--ease-out);
+  --pop-from: translateX(4px);
 }
 
 .content[data-side="right"] {
-  animation: fadeIn var(--duration-150) var(--ease-out), slideFromLeft var(--duration-150) var(--ease-out);
+  --pop-from: translateX(-4px);
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.content[data-state="open"] {
+  animation: popIn var(--motion-base) var(--ease-standard);
 }
 
-@keyframes fadeOut {
-  from { opacity: 1; }
-  to { opacity: 0; }
+.content[data-state="closed"] {
+  animation: popOut var(--motion-base-exit) var(--ease-exit);
 }
 
-@keyframes zoomIn {
-  from { transform: scale(0.95); }
-  to { transform: scale(1); }
+@keyframes popIn {
+  from { opacity: 0; transform: var(--pop-from, none); }
 }
 
-@keyframes zoomOut {
-  from { transform: scale(1); }
-  to { transform: scale(0.95); }
-}
-
-@keyframes slideFromTop {
-  from { transform: translateY(-0.5rem); }
-  to { transform: translateY(0); }
-}
-
-@keyframes slideFromBottom {
-  from { transform: translateY(0.5rem); }
-  to { transform: translateY(0); }
-}
-
-@keyframes slideFromLeft {
-  from { transform: translateX(-0.5rem); }
-  to { transform: translateX(0); }
-}
-
-@keyframes slideFromRight {
-  from { transform: translateX(0.5rem); }
-  to { transform: translateX(0); }
+@keyframes popOut {
+  to { opacity: 0; transform: var(--pop-from, none); }
 }
 
 /* Solo: under a Solo page the portal container is a [data-day] surface (components/solo/surface.tsx) */

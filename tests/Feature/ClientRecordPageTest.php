@@ -57,8 +57,8 @@ final class ClientRecordPageTest extends TestCase
     public static function tabs(): array
     {
         return array_combine(
-            ['przeglad', 'zadania', 'dziennik', 'rozliczenia', 'dane'],
-            [['przeglad'], ['zadania'], ['dziennik'], ['rozliczenia'], ['dane']],
+            ['overview', 'tasks', 'journal', 'billing', 'details'],
+            [['overview'], ['tasks'], ['journal'], ['billing'], ['details']],
         );
     }
 
@@ -66,7 +66,7 @@ final class ClientRecordPageTest extends TestCase
     {
         $this->actingAs($this->user)
             ->get("/clients/{$this->client->id}")
-            ->assertRedirect("/clients/{$this->client->id}/przeglad");
+            ->assertRedirect("/clients/{$this->client->id}/overview");
     }
 
     #[DataProvider('tabs')]
@@ -91,29 +91,29 @@ final class ClientRecordPageTest extends TestCase
         $this->actingAs($this->user)->get("/clients/{$this->client->id}/Dane")->assertNotFound();
     }
 
-    public function test_the_old_edit_address_opens_the_record_and_the_old_create_address_opens_the_dialog_on_klienci(): void
+    public function test_the_old_edit_address_opens_the_record_and_the_old_create_address_opens_the_dialog_on_clients(): void
     {
         $this->actingAs($this->user)
             ->get("/clients/{$this->client->id}/edit")
-            ->assertRedirect("/clients/{$this->client->id}/przeglad");
+            ->assertRedirect("/clients/{$this->client->id}/overview");
 
         $this->actingAs($this->user)
             ->get("/clients/{$this->client->id}/edit?invoice_year=all")
-            ->assertRedirect("/clients/{$this->client->id}/przeglad");
+            ->assertRedirect("/clients/{$this->client->id}/overview");
 
         $this->actingAs($this->user)
             ->get('/clients/create')
-            ->assertRedirect('/clients?nowy=1');
+            ->assertRedirect('/clients?new=1');
     }
 
     public function test_the_record_tabs_carry_what_the_documents_and_settings_page_held(): void
     {
         $props = fn (string $tab): array => $this->actingAs($this->user)->get("/clients/{$this->client->id}/{$tab}")->assertOk()->viewData('page')['props'];
 
-        $this->assertArrayHasKey('billing_invoices', $props('rozliczenia'));
-        $this->assertEmpty(array_diff(['details', 'projects', 'documents', 'contacts', 'stage'], array_keys($props('dane'))));
-        $this->assertEmpty(array_diff(['journal', 'journal_work', 'journal_notes'], array_keys($props('dziennik'))));
-        $this->assertArrayHasKey('projects', $props('zadania')['tasks']);
+        $this->assertArrayHasKey('billing_invoices', $props('billing'));
+        $this->assertEmpty(array_diff(['details', 'projects', 'documents', 'contacts', 'stage'], array_keys($props('details'))));
+        $this->assertEmpty(array_diff(['journal', 'journal_work', 'journal_notes'], array_keys($props('journal'))));
+        $this->assertArrayHasKey('projects', $props('tasks')['tasks']);
     }
 
     public function test_another_accounts_client_has_no_old_edit_address(): void
@@ -150,9 +150,9 @@ final class ClientRecordPageTest extends TestCase
     public function test_a_contact_cannot_be_added_to_another_accounts_client(): void
     {
         $this->actingAs($this->user)
-            ->from("/clients/{$this->client->id}/dane")
+            ->from("/clients/{$this->client->id}/details")
             ->post('/contacts', ['client_id' => $this->stranger->id, 'first_name' => 'Sneaky', 'last_name' => 'Contact'])
-            ->assertRedirect("/clients/{$this->client->id}/dane")
+            ->assertRedirect("/clients/{$this->client->id}/details")
             ->assertSessionHasErrors('client_id');
 
         $this->assertSame(0, Contact::withTrashed()->where('first_name', 'Sneaky')->count());
@@ -161,9 +161,9 @@ final class ClientRecordPageTest extends TestCase
     public function test_an_invalid_nip_is_refused_and_nothing_changes(): void
     {
         $this->actingAs($this->user)
-            ->from("/clients/{$this->client->id}/dane")
+            ->from("/clients/{$this->client->id}/details")
             ->put("/clients/{$this->client->id}", ['type' => 'business', 'name' => 'Renamed', 'tax_id' => '1234567884'])
-            ->assertRedirect("/clients/{$this->client->id}/dane")
+            ->assertRedirect("/clients/{$this->client->id}/details")
             ->assertSessionHasErrors('tax_id');
 
         $client = $this->client->fresh();
@@ -178,7 +178,7 @@ final class ClientRecordPageTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/dane")
+            ->get("/clients/{$this->client->id}/details")
             ->assertInertia(fn (Assert $page) => $page
                 ->where('details.notes', 'Woli telefon rano.')
                 ->where('details.region', 'mazowieckie')
@@ -190,7 +190,7 @@ final class ClientRecordPageTest extends TestCase
         $this->client->delete();
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/dane")
+            ->get("/clients/{$this->client->id}/details")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('clients/show')
@@ -201,13 +201,13 @@ final class ClientRecordPageTest extends TestCase
 
     public function test_a_guest_is_sent_to_login(): void
     {
-        $this->get("/clients/{$this->client->id}/dane")->assertRedirect('/login');
+        $this->get("/clients/{$this->client->id}/details")->assertRedirect('/login');
     }
 
     public function test_the_data_tab_carries_the_company_record_and_the_infakt_id(): void
     {
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/dane")
+            ->get("/clients/{$this->client->id}/details")
             ->assertInertia(fn (Assert $page) => $page
                 ->where('details.type', 'business')
                 ->where('details.name', 'Pracownia Testowa Sp. z o.o.')
@@ -232,7 +232,7 @@ final class ClientRecordPageTest extends TestCase
         \App\Models\Repository::create(['project_id' => $board->id, 'name' => 'sklep', 'local_path' => '/Users/test/dev/sklep', 'provider' => 'local']);
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/dane")
+            ->get("/clients/{$this->client->id}/details")
             ->assertInertia(fn (Assert $page) => $page
                 ->where('stage.stage', 'paused')
                 ->where('projects', fn ($projects) => collect($projects)->where('name', '!=', 'General')->values()->all() === [
@@ -247,7 +247,7 @@ final class ClientRecordPageTest extends TestCase
         $this->client->update(['external_ids' => ['infakt_synced' => ['name' => 'x']]]);
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/dane")
+            ->get("/clients/{$this->client->id}/details")
             ->assertInertia(fn (Assert $page) => $page->where('details.infakt_id', null));
     }
 
@@ -260,7 +260,7 @@ final class ClientRecordPageTest extends TestCase
         Contact::create(['account_id' => $this->stranger->account_id, 'client_id' => $this->stranger->id, 'first_name' => 'Secret', 'last_name' => 'Person']);
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/dane")
+            ->get("/clients/{$this->client->id}/details")
             ->assertInertia(fn (Assert $page) => $page
                 ->has('contacts', 2)
                 ->where('contacts.0.name', 'Adam Abacki')
@@ -274,7 +274,7 @@ final class ClientRecordPageTest extends TestCase
     public function test_only_the_active_tab_computes_its_props(): void
     {
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/przeglad")
+            ->get("/clients/{$this->client->id}/overview")
             ->assertInertia(fn (Assert $page) => $page
                 ->missing('details')
                 ->missing('contacts')
@@ -289,20 +289,20 @@ final class ClientRecordPageTest extends TestCase
         Task::create(['project_id' => $project->id, 'name' => 'Done', 'source' => 'manual', 'list_name' => 'To-Do', 'finished_at' => now()]);
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/dane")
+            ->get("/clients/{$this->client->id}/details")
             ->assertInertia(fn (Assert $page) => $page->where('client.open_tasks_count', 2));
     }
 
     public function test_the_header_says_whether_the_client_is_pinned_on_the_list(): void
     {
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/przeglad")
+            ->get("/clients/{$this->client->id}/overview")
             ->assertInertia(fn (Assert $page) => $page->where('client.is_pinned', false));
 
         $this->client->update(['is_pinned' => true]);
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/przeglad")
+            ->get("/clients/{$this->client->id}/overview")
             ->assertInertia(fn (Assert $page) => $page->where('client.is_pinned', true));
     }
 
@@ -315,13 +315,13 @@ final class ClientRecordPageTest extends TestCase
         $person = TimeEntry::startFor($task);
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/dane")
+            ->get("/clients/{$this->client->id}/details")
             ->assertInertia(fn (Assert $page) => $page->where('client.live_agent_minutes', null));
 
         $person->forceFill(['start_time' => now()->subMinutes(14), 'actor_via' => 'cli'])->save();
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/dane")
+            ->get("/clients/{$this->client->id}/details")
             ->assertInertia(fn (Assert $page) => $page->where('client.live_agent_minutes', 14));
     }
 
@@ -330,13 +330,13 @@ final class ClientRecordPageTest extends TestCase
         $response = $this->actingAs($this->user)->post('/clients', ['type' => 'business', 'name' => 'Fresh Co']);
 
         $client = Client::where('name', 'Fresh Co')->firstOrFail();
-        $response->assertRedirect("/clients/{$client->id}/dane");
+        $response->assertRedirect("/clients/{$client->id}/details");
     }
 
     public function test_editing_the_company_section_keeps_the_fields_it_does_not_send(): void
     {
         $this->actingAs($this->user)
-            ->from("/clients/{$this->client->id}/dane")
+            ->from("/clients/{$this->client->id}/details")
             ->put("/clients/{$this->client->id}", [
                 'type' => 'business',
                 'name' => 'Pracownia Testowa S.A.',
@@ -349,7 +349,7 @@ final class ClientRecordPageTest extends TestCase
                 'phone' => '',
                 'cooperation_type' => 'hourly',
             ])
-            ->assertRedirect("/clients/{$this->client->id}/dane")
+            ->assertRedirect("/clients/{$this->client->id}/details")
             ->assertSessionHasNoErrors();
 
         $client = $this->client->fresh();
@@ -364,7 +364,7 @@ final class ClientRecordPageTest extends TestCase
     public function test_editing_the_company_section_without_a_type_is_refused(): void
     {
         $this->actingAs($this->user)
-            ->from("/clients/{$this->client->id}/dane")
+            ->from("/clients/{$this->client->id}/details")
             ->put("/clients/{$this->client->id}", ['name' => 'No Type'])
             ->assertSessionHasErrors('type');
     }
@@ -372,19 +372,19 @@ final class ClientRecordPageTest extends TestCase
     public function test_a_contact_added_from_the_record_returns_to_the_record(): void
     {
         $this->actingAs($this->user)
-            ->from("/clients/{$this->client->id}/dane")
+            ->from("/clients/{$this->client->id}/details")
             ->post('/contacts', [
                 'client_id' => $this->client->id,
                 'first_name' => 'Tomasz',
                 'last_name' => 'Testowy',
                 'emails' => ['tomasz@example.test'],
             ])
-            ->assertRedirect("/clients/{$this->client->id}/dane");
+            ->assertRedirect("/clients/{$this->client->id}/details");
 
         $this->assertSame(1, $this->client->contacts()->count());
     }
 
-    public function test_a_contact_added_on_kontakty_returns_to_the_list(): void
+    public function test_a_contact_added_on_contacts_returns_to_the_list(): void
     {
         $this->actingAs($this->user)
             ->from('/contacts?search=nowak')
@@ -405,14 +405,14 @@ final class ClientRecordPageTest extends TestCase
 
         $first = $this->actingAs($this->user)->post("/leads/{$lead->id}/convert");
         $client = Client::where('name', 'Won Co')->firstOrFail();
-        $first->assertRedirect("/clients/{$client->id}/dane");
+        $first->assertRedirect("/clients/{$client->id}/details");
 
         $this->actingAs($this->user)
             ->post("/leads/{$lead->id}/convert")
-            ->assertRedirect("/clients/{$client->id}/przeglad");
+            ->assertRedirect("/clients/{$client->id}/overview");
     }
 
-    public function test_dane_carries_the_month_close_and_report_settings_and_the_documents_the_old_page_held(): void
+    public function test_details_carries_the_month_close_settings_and_the_documents_but_not_the_report_baseline_that_moved_to_billing(): void
     {
         $this->client->update([
             'month_close_type' => 'maintenance',
@@ -426,12 +426,12 @@ final class ClientRecordPageTest extends TestCase
         ]);
 
         $this->actingAs($this->user)
-            ->get("/clients/{$this->client->id}/dane")
+            ->get("/clients/{$this->client->id}/details")
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('details.ssh_config', 'meble-prod')
                 ->where('details.maintenance_invoice_description', 'Utrzymanie strony')
-                ->where('details.report_baseline_markdown', 'Kopie zapasowe')
+                ->missing('details.report_baseline_markdown')
                 ->where('details.include_in_month_close', true)
                 ->where('details.segment', 'smb')
                 ->where('details.hourly_rate', 165)

@@ -18,6 +18,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Tests\Feature\Concerns\CallsAgentSurfaces;
+use Tests\Feature\Concerns\TimesOutThePlanLock;
 use Tests\TestCase;
 
 /**
@@ -28,6 +29,7 @@ final class AgentDayPlanTest extends TestCase
 {
     use CallsAgentSurfaces;
     use RefreshDatabase;
+    use TimesOutThePlanLock;
 
     private Account $account;
 
@@ -79,17 +81,19 @@ final class AgentDayPlanTest extends TestCase
         $this->assertSame('2026-10-08', $today['plan']['date']);
     }
 
-    public function test_a_day_holds_at_most_five_picks(): void
+    public function test_a_sixth_pick_lands_and_the_plan_carries_a_warning(): void
     {
         foreach (range(1, 5) as $n) {
-            $this->verb('crm:plan', ['task' => (string) $this->task("Task {$n}")->id, '--day' => 'tomorrow']);
+            [, $fifth] = $this->verb('crm:plan', ['task' => (string) $this->task("Task {$n}")->id, '--day' => 'tomorrow']);
         }
+        $this->assertNull($fifth['plan']['warning']);
 
         [$exit, $out] = $this->verb('crm:plan', ['task' => (string) $this->task('Sixth')->id, '--day' => 'tomorrow']);
 
-        $this->assertSame([1, 'invalid_argument'], [$exit, $out['error']]);
-        $this->assertCount(5, $out['plan']['picks']);
-        $this->assertSame(5, DayPick::query()->count());
+        $this->assertSame(0, $exit);
+        $this->assertCount(6, $out['plan']['picks']);
+        $this->assertSame('The day holds 6 picks, more than 5.', $out['plan']['warning']);
+        $this->assertSame(6, DayPick::query()->count());
     }
 
     public function test_a_closed_day_takes_no_change_but_tomorrow_still_does(): void
@@ -108,6 +112,22 @@ final class AgentDayPlanTest extends TestCase
         $this->assertSame(1, DayPick::query()->whereDate('date', '2026-10-07')->count());
     }
 
+    public function test_a_plan_change_while_another_holds_the_plan_is_refused_to_be_sent_again(): void
+    {
+        $picked = $this->task('Picked');
+        $this->verb('crm:plan', ['task' => (string) $picked->id]);
+        $this->planLockTimesOut();
+
+        [$exit, $plan] = $this->verb('crm:plan', ['task' => (string) $picked->id, '--day' => 'tomorrow']);
+        [, $unplan] = $this->tool(DayUnplanTool::class, ['task' => (string) $picked->id]);
+
+        $this->assertSame(1, $exit);
+        foreach ([$plan, $unplan] as $refusal) {
+            $this->assertSame(['refused', 'The plan is being changed. Try again.', true], [$refusal['error'], $refusal['message'], $refusal['retry']]);
+        }
+        $this->assertSame(['2026-10-07'], DayPick::query()->live()->get()->map(fn (DayPick $pick) => $pick->date->toDateString())->all());
+    }
+
     public function test_plans_reach_from_today_to_the_end_of_next_week(): void
     {
         $task = $this->task('Later');
@@ -117,6 +137,19 @@ final class AgentDayPlanTest extends TestCase
         [$exit, $out] = $this->verb('crm:plan', ['task' => (string) $task->id, '--day' => '2026-10-18']);
         $this->assertSame(0, $exit);
         $this->assertSame(['2026-10-18', '2026-10-18'], [$out['plan']['date'], $out['plan']['day']]);
+    }
+
+    public function test_unplan_removes_a_pick_moved_past_next_week(): void
+    {
+        $task = $this->task('Far');
+        $this->actingAs($this->owner)->post('/day/picks', ['task_id' => $task->id, 'date' => '2026-10-07']);
+        $this->actingAs($this->owner)->post('/day/picks', ['task_id' => $task->id, 'date' => '2026-11-20'])->assertSessionHasNoErrors();
+
+        [$exit, $out] = $this->verb('crm:unplan', ['task' => (string) $task->id, '--day' => '2026-11-20']);
+
+        $this->assertSame([0, $task->id], [$exit, $out['task_id']]);
+        $this->assertSame(0, DayPick::live()->count());
+        $this->assertSame('invalid_argument', $this->verb('crm:plan', ['task' => (string) $this->task('New')->id, '--day' => '2026-11-20'])[1]['error']);
     }
 
     public function test_only_open_tasks_of_the_acting_account_are_planned(): void

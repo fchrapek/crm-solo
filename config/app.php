@@ -146,6 +146,28 @@ return [
         'per_minute' => (int) env('DEMO_WRITES_PER_MINUTE', 30),
         'per_hour' => (int) env('DEMO_WRITES_PER_HOUR', 200),
         'max_text_kb' => (int) env('DEMO_WRITE_MAX_TEXT_KB', 16),
+        // All visitors together, so many addresses cannot each spend a full budget.
+        'total_per_hour' => (int) env('DEMO_WRITES_TOTAL_PER_HOUR', 2000),
+    ],
+
+    // Rows a visitor may add to one table past the seeded ones (App\Support\DemoRows). The tables named
+    // here are written by an action of their own accord (a history line, a revision, a new client's first project), so they get more room.
+    'demo_rows' => [
+        'per_table' => (int) env('DEMO_ROWS_PER_TABLE', 20),
+        'tables' => [
+            'client_billed_months' => 100,
+            'client_field_events' => 100,
+            'client_lifecycle_events' => 100,
+            'client_month_settlement_events' => 100,
+            'client_report_revisions' => 100,
+            'day_add_requests' => 100,
+            'day_picks' => 100,
+            'lead_stage_events' => 100,
+            'month_close_steps' => 100,
+            'projects' => 40,
+            'task_billed_months' => 100,
+            'time_entries' => 100,
+        ],
     ],
 
     /*

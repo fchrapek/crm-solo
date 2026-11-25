@@ -24,7 +24,7 @@ final readonly class HoursBankLedgerRow
     ) {}
 
     /**
-     * The hours a Rozliczenia row shows: the bank's month for a whole month, else the report's own snapshot.
+     * The hours a Billing row shows: the bank's month for a whole month, else the report's own snapshot.
      *
      * @return array{contracted: ?float, used: float, available: float, opening: float, forfeited: float, closing: float, change: float}
      */

@@ -37,7 +37,7 @@ const WHAT: Record<string, string> = { infakt: 'Invoices and clients', smsapi: '
 
 const CHIP: Record<State, ChipStatus> = { connected: 'done', off: 'waiting', none: 'open' };
 
-/** Figma: Ustawienia · Integracje (1091:30364, phone 1091:30683). One tile per connection; its form lives in Konfiguruj. */
+/** Figma: Settings · Integrations (1091:30364, phone 1091:30683). One tile per connection; its form lives in Configure. */
 export function IntegrationsTab({ integrations: rows, demo, today }: { integrations: IntegrationRow[]; demo: boolean; today: string }) {
     const { t } = useTranslation();
     const stamp = useStampLabel(today);
@@ -128,7 +128,7 @@ export function IntegrationsTab({ integrations: rows, demo, today }: { integrati
     );
 }
 
-/** Figma: Z konfiguracji serwera. Values set on the server (.env), shown as set or not, never as values. */
+/** Figma: From the server configuration. Values set on the server (.env), shown as set or not, never as values. */
 export function ServerTile({ server }: { server: ServerConfig }) {
     const { t } = useTranslation();
     const forms = server.kiwwwi_forms;
@@ -150,7 +150,7 @@ export function ServerTile({ server }: { server: ServerConfig }) {
     );
 }
 
-/** Konfiguruj: credentials (blank keeps the stored value), on or off, the last error and unlinked clients, and Odłącz. */
+/** Configure: credentials (blank keeps the stored value), on or off, the last error and unlinked clients, and Disconnect. */
 function IntegrationDialog({
     integration,
     onClose,

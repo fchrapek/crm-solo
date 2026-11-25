@@ -2,22 +2,22 @@ import { Chip } from '@/components/solo/chip';
 import { type ClientHeaderData } from '@/components/solo/client-header';
 import { RecordFrame } from '@/components/solo/record-frame';
 import { Pills } from '@/components/solo/shell/pills';
-import { TileGrid, TileStack } from '@/components/solo/tile';
+import { TileGrid, TileSlot, TileStack } from '@/components/solo/tile';
 import { capitalize, monthName } from '@/lib/dates';
 import clientReports from '@/routes/client-reports';
 import { router } from '@inertiajs/react';
-import { useState } from 'react';
+import { type ComponentProps, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { localeOf } from '../client-list/format';
 import { CloseMonthDialog, ReopenMonthDialog } from '../month-settlement';
 import { RetainerDialog } from '../retainer-chip';
 import { BilledTimeDialog } from './billed-time-dialog';
 import styles from './client-billing.module.css';
-import { monthNote, monthPills } from './format';
-import { MonthInvoices } from './invoice-drafts';
+import { monthPills } from './format';
+import { InvoiceDraftsTile } from './invoice-drafts';
 import { InvoiceList } from './invoice-list';
 import { LedgerTile } from './ledger-tile';
-import { EmailTile, MonthStats, MonthTasks, MonthTile, ReportTile, RetainerTile } from './month-tiles';
+import { BaselineTile, EmailTile, MonthStats, MonthStatus, MonthTasks, ReportTile, RetainerTile } from './month-tiles';
 import { OpeningBalanceDialog } from './opening-balance-dialog';
 import { OrderMonths, orderNote, OrderReports, OrderStats, OrderTile } from './order-billing';
 import type { SummaryEmails } from './summary-emails';
@@ -35,9 +35,38 @@ export function monthRow(ledger: BillingLedger, period: string): LedgerRow | und
     return ledger.rows.find((row) => row.whole_month && row.period === period);
 }
 
-/** The month still open behind the one in progress, to name while the running month is shown. */
-export function monthBehind(settlement: RetainerBilling['settlement']): string | null {
-    return settlement.open_behind ? settlement.active_period : null;
+/** What Reopen the month reopens: the month shown when its closure is the latest, else the latest closed month of the bank's rows. */
+export function reopenTargetOf(month: BillingMonth, ledger: BillingLedger): ReopenTarget | null {
+    const own = month.settlement;
+    if (own.closure_id !== null) {
+        return {
+            period: month.period,
+            closure_id: own.closure_id,
+            used: month.figures.used,
+            closing: month.figures.closing,
+            refusal: own.reopen_refusal,
+            blocker: own.reopen_blocker,
+        };
+    }
+    const row = ledger.rows.find((candidate) => candidate.closure_id !== null);
+
+    return row !== undefined && row.closure_id !== null
+        ? {
+              period: row.period,
+              closure_id: row.closure_id,
+              used: row.used,
+              closing: row.closing,
+              refusal: row.reopen_refusal,
+              blocker: row.reopen_blocker,
+          }
+        : null;
+}
+
+type ReopenTarget = ComponentProps<typeof ReopenMonthDialog>['target'];
+
+/** An earlier month still open, which closes before the month shown. */
+export function monthEarlier(settlement: RetainerBilling['settlement'], period: string): string | null {
+    return settlement.active_period < period ? settlement.active_period : null;
 }
 
 interface FrameProps {
@@ -48,8 +77,8 @@ interface FrameProps {
 }
 
 /**
- * Figma: Klient · Rozliczenia, the head. The month shown is the poster with how it stands under it, and the months are
- * a row of pills beside it; an order's head is the order.
+ * Figma: Client · Billing, the head. The month shown is the poster and the months are a row of pills beside it; how
+ * the month stands is the tab's first line (MonthStatus). An order's head is the order.
  */
 export function BillingFrame({ client, billing, ledger, month }: FrameProps) {
     const { t, i18n } = useTranslation();
@@ -65,6 +94,7 @@ export function BillingFrame({ client, billing, ledger, month }: FrameProps) {
             <RecordFrame
                 title={billing.mode === 'order' ? t('Order') : client.short_name}
                 titleAttr={client.name}
+                titleSize={billing.mode === 'order' ? 'heading' : 'record'}
                 chip={chip}
                 noteKind="line"
                 note={[archived, billing.mode === 'order' ? orderNote(billing.order, locale, t) : null].filter(Boolean).join(' · ') || undefined}
@@ -79,11 +109,11 @@ export function BillingFrame({ client, billing, ledger, month }: FrameProps) {
             title={capitalize(monthName(month.period, locale))}
             chip={chip}
             noteKind="line"
-            note={[archived, monthNote(month, current, monthBehind(billing.settlement), locale, t)].filter(Boolean).join(' · ')}
+            note={archived ?? undefined}
             aside={
                 <>
                     <span className={styles.pillsLabel}>{t('Month')}</span>
-                    <Pills items={monthPills(ledger.rows, month.period, current, client.id, locale, t)} label={t('Months')} />
+                    <Pills items={monthPills(billing.months, month.period, current, client.id, locale, t)} label={t('Months')} />
                 </>
             }
         />
@@ -93,8 +123,9 @@ export function BillingFrame({ client, billing, ledger, month }: FrameProps) {
 type Dialog = 'retainer' | 'opening' | 'close' | 'reopen' | null;
 
 /**
- * Figma: Klient · Rozliczenia (1087:4031, phone 1087:4619; an order 1091:17551). One month at a time, the one in the
- * URL: its figures, tasks, report, invoices and settlement, then the bank across months and every invoice.
+ * Figma: Client · Billing (8C, 1449:21288, phone 1449:25206; an order 1091:17551). One month at a time, the one in
+ * the URL: its state and figures, then two columns, the tasks, the bank and every invoice beside the report, the
+ * invoices to draft, the retainer, the email and the report baseline. A phone has one column in its own order.
  */
 export function ClientBillingTab({
     clientId,
@@ -143,15 +174,22 @@ export function ClientBillingTab({
         return (
             <TileStack>
                 <OrderStats order={billing.order} locale={locale} />
-                <TileGrid>
+                <TileGrid stickySide={false}>
                     <TileStack>
                         <OrderTile clientId={clientId} order={billing.order} currency={billing.currency} locale={locale} />
-                        <OrderReports clientId={clientId} reports={billing.reports} period={billing.report_period} composers={billing.composers} locale={locale} />
+                        <OrderReports
+                            clientId={clientId}
+                            reports={billing.reports}
+                            period={billing.report_period}
+                            composers={billing.composers}
+                            locale={locale}
+                        />
                     </TileStack>
                     <TileStack as="aside">
                         {billing.billed_months.length > 0 && (
                             <OrderMonths months={billing.billed_months} locale={locale} onOpen={(period) => setBilled({ period, task: null })} />
                         )}
+                        {billing.report_baseline !== null && <BaselineTile clientId={clientId} baseline={billing.report_baseline} />}
                     </TileStack>
                 </TileGrid>
                 {invoices !== undefined && <InvoiceList clientId={clientId} period={null} list={invoices} thisYear={thisYear} locale={locale} />}
@@ -167,77 +205,112 @@ export function ClientBillingTab({
     const figures = month.figures;
     const current = billing.settlement.current_period;
     const running = month.period === current;
-    const row = monthRow(ledger, month.period);
     const openingRow = openingRowOf(billing, ledger);
-    const reopenRow = ledger.rows.find((candidate) => candidate.closure_id !== null);
+    const reopenTarget = reopenTargetOf(month, ledger);
     const drafts = billing.invoice_drafts !== null && billing.invoice_drafts.period === month.period ? billing.invoice_drafts : null;
-    // What locks the month's figures can be reopened from here: the latest closure, or the report on its own page.
-    const reopenLocked =
-        figures.closure_id !== null && figures.closure_id === reopenRow?.closure_id
-            ? () => setDialog('reopen')
-            : figures.closure_id === null && figures.refusal_code === 'not_a_draft' && month.report !== null
-              ? () => router.visit(clientReports.edit([clientId, month.report?.id ?? 0]).url)
-              : undefined;
+    const bank = figures.has_retainer || ledger.rows.length > 0;
+    // A closed month reopens from its line under the name; a report that locks the month goes back to a draft on its own page.
+    const reopenReport =
+        figures.closure_id === null && figures.refusal_code === 'not_a_draft' && month.report !== null
+            ? () => router.visit(clientReports.edit([clientId, month.report?.id ?? 0]).url)
+            : undefined;
 
     return (
         <TileStack>
-            <MonthStats month={month} running={running} locale={locale} />
-            <TileGrid className={styles.level}>
-                <TileStack>
-                    <MonthTasks month={month} locale={locale} onChange={(task) => setBilled({ period: month.period, task: task.task_id })} onReopen={reopenLocked} />
-                    <MonthInvoices clientId={clientId} clientName={clientName} period={month.period} drafts={drafts} invoices={month.invoices} locale={locale} />
-                    <RetainerTile retainer={billing.retainer} locale={locale} onChange={() => setDialog('retainer')} />
-                </TileStack>
-                <TileStack as="aside">
-                    {(emails === null || month.report !== null) && <ReportTile clientId={clientId} month={month} running={running} locale={locale} />}
-                    {emails !== null && (
-                        <EmailTile
-                            clientId={clientId}
-                            clientName={clientName}
-                            period={month.period}
-                            state={emails[month.period]}
-                            due={!running && !figures.closed}
-                            locale={locale}
-                        />
-                    )}
-                    <MonthTile
-                        clientId={clientId}
-                        month={month}
-                        row={row}
-                        running={running}
-                        behind={running ? monthBehind(billing.settlement) : null}
-                        locale={locale}
-                        onClose={() => setDialog('close')}
-                        onReopen={() => setDialog('reopen')}
-                    />
-                </TileStack>
-            </TileGrid>
-            <LedgerTile
+            <MonthStatus
                 clientId={clientId}
-                ledger={ledger}
-                cap={billing.cap}
-                shown={month.period}
-                openingReportId={openingRow !== undefined ? openingRow.report_id : null}
-                emails={emails}
+                month={month}
+                running={running}
+                current={current}
+                earlier={monthEarlier(billing.settlement, month.period)}
                 locale={locale}
-                onOpening={() => setDialog('opening')}
+                onClose={() => setDialog('close')}
                 onReopen={() => setDialog('reopen')}
             />
-            {invoices !== undefined && <InvoiceList clientId={clientId} period={month.period} list={invoices} thisYear={thisYear} locale={locale} />}
+            <MonthStats month={month} running={running} locale={locale} />
+            <TileGrid reflow stickySide={false}>
+                <TileStack>
+                    <TileSlot order={1}>
+                        <MonthTasks
+                            month={month}
+                            locale={locale}
+                            onChange={(task) => setBilled({ period: month.period, task: task.task_id })}
+                            onReopen={reopenReport}
+                        />
+                    </TileSlot>
+                    {bank && (
+                        <TileSlot order={4}>
+                            <LedgerTile
+                                clientId={clientId}
+                                ledger={ledger}
+                                cap={billing.cap}
+                                shown={month.period}
+                                openingReportId={openingRow !== undefined ? openingRow.report_id : null}
+                                emails={emails}
+                                locale={locale}
+                                onOpening={() => setDialog('opening')}
+                                onReopen={() => setDialog('reopen')}
+                            />
+                        </TileSlot>
+                    )}
+                    {invoices !== undefined && (
+                        <TileSlot order={5}>
+                            <InvoiceList
+                                clientId={clientId}
+                                period={month.period}
+                                month={{ period: month.period, invoices: month.invoices, drafting: drafts !== null }}
+                                list={invoices}
+                                thisYear={thisYear}
+                                locale={locale}
+                            />
+                        </TileSlot>
+                    )}
+                </TileStack>
+                <TileStack as="aside">
+                    {(emails === null || month.report !== null) && (
+                        <TileSlot order={2}>
+                            <ReportTile clientId={clientId} month={month} running={running} locale={locale} />
+                        </TileSlot>
+                    )}
+                    {drafts !== null && (
+                        <TileSlot order={3}>
+                            <InvoiceDraftsTile clientId={clientId} clientName={clientName} drafts={drafts} locale={locale} />
+                        </TileSlot>
+                    )}
+                    <TileSlot order={6}>
+                        <RetainerTile retainer={billing.retainer} locale={locale} onChange={() => setDialog('retainer')} />
+                    </TileSlot>
+                    {emails !== null && (
+                        <TileSlot order={7}>
+                            <EmailTile
+                                clientId={clientId}
+                                clientName={clientName}
+                                period={month.period}
+                                state={emails[month.period]}
+                                due={!running && !figures.closed}
+                                locale={locale}
+                            />
+                        </TileSlot>
+                    )}
+                    {billing.report_baseline !== null && (
+                        <TileSlot order={8}>
+                            <BaselineTile clientId={clientId} baseline={billing.report_baseline} />
+                        </TileSlot>
+                    )}
+                </TileStack>
+            </TileGrid>
             {billedDialog}
-            <CloseMonthDialog clientId={clientId} period={month.period} open={dialog === 'close'} onOpenChange={(open) => setDialog(open ? 'close' : null)} />
-            {reopenRow !== undefined && reopenRow.closure_id !== null && (
+            <CloseMonthDialog
+                clientId={clientId}
+                period={month.period}
+                open={dialog === 'close'}
+                onOpenChange={(open) => setDialog(open ? 'close' : null)}
+            />
+            {reopenTarget !== null && (
                 <ReopenMonthDialog
                     clientId={clientId}
                     clientName={clientName}
-                    target={{
-                        period: reopenRow.period,
-                        closure_id: reopenRow.closure_id,
-                        used: reopenRow.used,
-                        closing: reopenRow.closing,
-                        refusal: reopenRow.reopen_refusal,
-                        blocker: reopenRow.reopen_blocker,
-                    }}
+                    target={reopenTarget}
                     open={dialog === 'reopen'}
                     onOpenChange={(open) => setDialog(open ? 'reopen' : null)}
                 />

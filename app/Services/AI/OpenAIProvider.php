@@ -20,6 +20,10 @@ final class OpenAIProvider implements AIProviderInterface
 
     public function chatWithTools(string $systemPrompt, array $messages, array $tools, array $options = []): array
     {
+        if (config('app.demo')) {
+            throw new RuntimeException('No model is called from the public demo.');
+        }
+
         $apiKey = config('services.openai.api_key');
 
         if (! $apiKey) {

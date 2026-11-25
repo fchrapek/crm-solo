@@ -35,6 +35,7 @@ export default function ShellLayout({ children, place }: ShellLayoutProps) {
 
     const { tokens = [], pills = [], pillsFrom, filter } = place?.(page.props as never, { t, url: page.url, locale: i18n.language }) ?? {};
     const timer = page.props.timer ?? null;
+    const timers = page.props.timers ?? [];
     // Screens the rail has no item for stay one search away.
     const places = [
         { label: t('Leads'), url: leads.index().url },
@@ -59,9 +60,16 @@ export default function ShellLayout({ children, place }: ShellLayoutProps) {
                 <div className={styles.content}>{children}</div>
             </div>
             <SoloScope>
-                {timer && <TimerStrip timer={timer} />}
+                {timer && <TimerStrip timer={timer} timers={timers} />}
                 <TabBar />
-                <Helper page={page.component} props={page.props} />
+                <Helper
+                    page={page.component}
+                    url={page.url}
+                    props={page.props}
+                    docsUrl={page.props.docsUrl}
+                    desktop={page.props.auth.user.helper?.desktop ?? true}
+                    phone={page.props.auth.user.helper?.phone ?? false}
+                />
             </SoloScope>
             <FlashMessages toaster={<SoloToaster />} />
         </div>

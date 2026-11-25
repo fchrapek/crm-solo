@@ -28,6 +28,14 @@ describe('ClientHeader', () => {
         expect(html).not.toContain('<a ');
     });
 
+    test('the name is set like a task title: a name past 60 characters steps down, and every line shows', () => {
+        const long = 'Przedsiębiorstwo Wielobranżowe Żółć Gęślą Jaźń Spółka z ograniczoną odpowiedzialnością';
+        const stepped = renderToStaticMarkup(<ClientHeader client={{ ...client, name: long, short_name: long }} />);
+
+        expect(renderToStaticMarkup(<ClientHeader client={client} />)).not.toContain('data-long');
+        expect(stepped).toMatch(new RegExp(`<h1 class="[^"]*" title="${long}" data-long="">${long}</h1>`));
+    });
+
     test('the header carries no stage pill; an archived client keeps its marker', () => {
         const withStage = { ...client, lifecycle_stage: 'active' };
         const html = renderToStaticMarkup(<ClientHeader client={withStage} />);

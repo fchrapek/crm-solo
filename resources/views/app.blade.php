@@ -32,7 +32,8 @@
 
         <title inertia>{{ config('app.name', 'Laravel') }}</title>
 
-        <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+        <link rel="icon" type="image/png" sizes="32x32" href="/pwa/favicon-32.png">
+        <link rel="icon" type="image/png" sizes="64x64" href="/pwa/favicon-64.png">
         <link rel="manifest" href="/pwa/manifest.webmanifest">
         <link rel="apple-touch-icon" href="/pwa/icon-180.png">
         <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F0EEE9">

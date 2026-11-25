@@ -19,7 +19,7 @@ import type { ClientDocumentRow } from './types';
 
 const CATEGORY_LABEL: Record<string, string> = { umowa: 'Contract', podpowierzenie: 'Sub-processing', rodo: 'GDPR', oferta: 'Offer', inne: 'Other' };
 
-/** Figma: Tile / list · Dokumenty. The name opens the file; the menu opens or deletes it; Dodaj uploads one file with its category. */
+/** Figma: Tile / list · Documents. The name opens the file; the menu opens or deletes it; Add uploads one file with its category. */
 export function DocumentsSection({ clientId, documents }: { clientId: number; documents: ClientDocumentRow[] }) {
     const { t, i18n } = useTranslation();
     const locale = localeOf(i18n.language);

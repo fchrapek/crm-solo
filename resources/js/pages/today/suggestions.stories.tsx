@@ -2,11 +2,11 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Suggestions } from './plan';
 import { suggestions } from './story-fixtures';
 
-/** Figma: Jutro, Propozycje: rows with Na jutro, then the way to the full list. */
+/** Figma: Tomorrow, Suggestions: rows with For tomorrow, then the way to the full list. */
 const meta = {
-    title: 'Dziś/Propozycje',
+    title: 'Today/Suggestions',
     component: Suggestions,
-    args: { date: '2026-10-24', suggestions: { tasks: suggestions, leftover: 1, open: 23 } },
+    args: { date: '2026-10-24', list: '/all-tasks?for=tomorrow', suggestions: { tasks: suggestions, leftover: 1, open: 23 } },
     decorators: [
         (Story) => (
             <div style={{ maxWidth: 380 }}>

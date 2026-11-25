@@ -67,7 +67,7 @@ final class ProjectsTest extends TestCase
         ]);
 
         $this->actingAs($this->user)
-            ->get("/clients/{$client->id}/zadania")
+            ->get("/clients/{$client->id}/tasks")
             ->assertInertia(fn (Assert $assert) => $assert
                 ->component('clients/show')
                 ->has('tasks.projects', 2)
@@ -86,7 +86,7 @@ final class ProjectsTest extends TestCase
         ]);
 
         $this->actingAs($this->user)
-            ->get("/clients/{$client->id}/zadania")
+            ->get("/clients/{$client->id}/tasks")
             ->assertInertia(fn (Assert $assert) => $assert
                 ->has('tasks.projects', 1)
                 ->where('tasks.projects.0.name', 'General')
@@ -150,7 +150,7 @@ final class ProjectsTest extends TestCase
             ]);
 
         $client = Client::where('name', 'Acme Co')->firstOrFail();
-        $response->assertRedirect("/clients/{$client->id}/dane");
+        $response->assertRedirect("/clients/{$client->id}/details");
         $this->assertSame(1, $client->projects()->whereNull('trello_board_id')->where('name', 'General')->count());
     }
 

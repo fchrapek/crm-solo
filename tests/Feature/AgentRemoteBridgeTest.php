@@ -90,7 +90,7 @@ final class AgentRemoteBridgeTest extends TestCase
         $this->assertSame(hash('sha256', explode('|', $plain[1], 2)[1]), $token->token);
         $this->assertStringNotContainsString(explode('|', $plain[1], 2)[1], (string) json_encode($token->getAttributes()));
         $this->assertSame($this->account->id, $token->account_id);
-        $this->assertSame(AgentAbilities::ALL, $token->abilities);
+        $this->assertSame(array_values(array_diff(AgentAbilities::ALL, AgentAbilities::EXPLICIT_ONLY)), $token->abilities, 'write grants every group but the explicit-only ones');
         $this->assertTrue($token->expires_at->isSameDay(now()->addDays(90)));
 
         Artisan::call('agent-tokens:list');
@@ -522,19 +522,39 @@ final class AgentRemoteBridgeTest extends TestCase
 
     public function test_a_token_file_is_never_written_through_a_symlink(): void
     {
-        $dir = sys_get_temp_dir().'/crm-token-'.bin2hex(random_bytes(4));
-        mkdir($dir);
-        symlink($dir.'/elsewhere', $dir.'/agent.token');
+        $this->assertTokenFileRefused(function (string $dir): void {
+            symlink($dir.'/elsewhere', $dir.'/agent.token');
+        });
+
+        $this->assertTokenFileRefused(function (string $dir): void {
+            file_put_contents($dir.'/elsewhere', 'kept');
+            symlink($dir.'/elsewhere', $dir.'/agent.token');
+        });
+    }
+
+    public function test_an_existing_token_file_is_never_overwritten(): void
+    {
+        $this->assertTokenFileRefused(function (string $dir): void {
+            file_put_contents($dir.'/agent.token', 'kept');
+        });
+    }
+
+    public function test_a_token_file_is_a_private_regular_file_whatever_the_umask(): void
+    {
+        $file = sys_get_temp_dir().'/crm-token-'.bin2hex(random_bytes(4));
+        $umask = umask(0);
 
         try {
-            $this->assertSame(1, Artisan::call('agent-tokens:issue', ['user' => (string) $this->owner->id, 'name' => 'file', '--to-file' => $dir.'/agent.token']));
+            $this->assertSame(0, Artisan::call('agent-tokens:issue', ['user' => (string) $this->owner->id, 'name' => 'file', '--to-file' => $file]));
 
-            $this->assertFileDoesNotExist($dir.'/elsewhere');
-            $this->assertSame(0, AgentToken::query()->whereNull('revoked_at')->count(), 'no live token is left behind');
+            $this->assertSame(0, umask(), 'the caller umask is restored');
+            $stat = lstat($file);
+            $this->assertSame(0100600, $stat['mode']);
+            $this->assertSame(1, $stat['nlink']);
+            $this->assertSame(posix_geteuid(), $stat['uid']);
         } finally {
-            @unlink($dir.'/agent.token');
-            @unlink($dir.'/elsewhere');
-            @rmdir($dir);
+            umask($umask);
+            @unlink($file);
         }
     }
 
@@ -648,6 +668,41 @@ final class AgentRemoteBridgeTest extends TestCase
     /**
      * @param  list<string>  $abilities
      */
+    /** @param callable(string): void $plant puts something at $dir/agent.token before the issue */
+    private function assertTokenFileRefused(callable $plant): void
+    {
+        $dir = sys_get_temp_dir().'/crm-token-'.bin2hex(random_bytes(4));
+        mkdir($dir);
+        $plant($dir);
+        $before = $this->listing($dir);
+
+        try {
+            $this->assertSame(1, Artisan::call('agent-tokens:issue', ['user' => (string) $this->owner->id, 'name' => 'file', '--to-file' => $dir.'/agent.token']));
+
+            $this->assertStringContainsString('exists or cannot be created', Artisan::output());
+            $this->assertSame($before, $this->listing($dir), 'nothing at the path or behind it changed');
+            $this->assertSame(0, AgentToken::query()->whereNull('revoked_at')->count(), 'no live token is left behind');
+        } finally {
+            @unlink($dir.'/agent.token');
+            @unlink($dir.'/elsewhere');
+            @rmdir($dir);
+        }
+    }
+
+    /** @return array<string, string> */
+    private function listing(string $dir): array
+    {
+        clearstatcache();
+        $entries = [];
+        foreach (array_diff((array) scandir($dir), ['.', '..']) as $name) {
+            $path = $dir.'/'.$name;
+            $entries[$name] = is_link($path) ? 'link to '.readlink($path) : 'file '.file_get_contents($path);
+        }
+        ksort($entries);
+
+        return $entries;
+    }
+
     private function token(array $abilities = [AgentAbilities::READ], ?User $user = null, ?Carbon $expires = null, string $name = 'agent'): string
     {
         $user ??= $this->owner;

@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
- * Klienci for an account with its own fields (Figma 606:4373): the overview
+ * Clients for an account with its own fields (Figma 606:4373): the overview
  * fields as columns, filters by assignee and by any choice field, each facet
  * counted with the other filters applied, and the SMS line above the table.
  */

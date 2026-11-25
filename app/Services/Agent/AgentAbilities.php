@@ -14,9 +14,14 @@ use App\Console\Commands\CrmClientFields;
 use App\Console\Commands\CrmClientFieldSet;
 use App\Console\Commands\CrmClients;
 use App\Console\Commands\CrmClientSmsOptOut;
+use App\Console\Commands\CrmIntakeFormCreate;
+use App\Console\Commands\CrmIntakeFormEdit;
+use App\Console\Commands\CrmIntakeForms;
 use App\Console\Commands\CrmInvoiceDraft;
 use App\Console\Commands\CrmLeadCapture;
+use App\Console\Commands\CrmLeadIntakeRetry;
 use App\Console\Commands\CrmLeadStage;
+use App\Console\Commands\CrmMailSender;
 use App\Console\Commands\CrmMessageCancel;
 use App\Console\Commands\CrmMessagePreview;
 use App\Console\Commands\CrmMessageResend;
@@ -53,6 +58,9 @@ use App\Console\Commands\CrmTimerStart;
 use App\Console\Commands\CrmTimerStop;
 use App\Console\Commands\CrmTimeSplit;
 use App\Console\Commands\CrmToday;
+use App\Console\Commands\CrmTrelloBoardCreate;
+use App\Console\Commands\CrmTrelloBoardLink;
+use App\Console\Commands\CrmTrelloLinks;
 use App\Console\Commands\CrmUnplan;
 use App\Console\Commands\LogTimeCommand;
 use App\Console\Commands\MonthCloseTick;
@@ -89,10 +97,19 @@ final class AgentAbilities
     /** Closing and reopening a month, billing settings, retainers and billed time. */
     public const string BILLING = 'write:billing';
 
+    /** Linking a project to a Trello board; making a new board also writes to Trello. */
+    public const string TRELLO = 'write:trello';
+
+    /** Website forms' non-secret settings and the lead notice retry; no secret ever passes through an agent. */
+    public const string INTAKE = 'write:intake';
+
+    /** Granted only by name, never by the write shorthand: notify_to decides where visitors' details go. */
+    public const array EXPLICIT_ONLY = [self::INTAKE];
+
     /** Shorthand at issue time for every write group; it is never stored. */
     public const string WRITE = 'write';
 
-    public const array ALL = [self::READ, self::NOTES, self::TASKS, self::TIME, self::LEADS, self::MONTH_CLOSE, self::CLIENTS, self::MESSAGES, self::REPORTS, self::INVOICE_DRAFTS, self::BILLING];
+    public const array ALL = [self::READ, self::NOTES, self::TASKS, self::TIME, self::LEADS, self::MONTH_CLOSE, self::CLIENTS, self::MESSAGES, self::REPORTS, self::INVOICE_DRAFTS, self::BILLING, self::TRELLO, self::INTAKE];
 
     /**
      * Remote verb => [artisan command, write ability or null for read-only].
@@ -151,6 +168,14 @@ final class AgentAbilities
         'retainer-end' => ['crm:retainer-end', self::BILLING],
         'billed' => ['crm:billed', null],
         'task-billed' => ['crm:task-billed', self::BILLING],
+        'trello-links' => ['crm:trello-links', null],
+        'trello-board-create' => ['crm:trello-board-create', self::TRELLO],
+        'trello-board-link' => ['crm:trello-board-link', self::TRELLO],
+        'intake-forms' => ['crm:intake-forms', null],
+        'intake-form-create' => ['crm:intake-form-create', self::INTAKE],
+        'intake-form-edit' => ['crm:intake-form-edit', self::INTAKE],
+        'mail-sender' => ['crm:mail-sender', null],
+        'lead-intake-retry' => ['crm:lead-intake-retry', self::INTAKE],
     ];
 
     /** Artisan name => the command class, so the endpoint builds only the command it runs. */
@@ -207,6 +232,14 @@ final class AgentAbilities
         'crm:retainer-end' => CrmRetainerEnd::class,
         'crm:billed' => CrmBilled::class,
         'crm:task-billed' => CrmTaskBilled::class,
+        'crm:trello-links' => CrmTrelloLinks::class,
+        'crm:trello-board-create' => CrmTrelloBoardCreate::class,
+        'crm:trello-board-link' => CrmTrelloBoardLink::class,
+        'crm:intake-forms' => CrmIntakeForms::class,
+        'crm:intake-form-create' => CrmIntakeFormCreate::class,
+        'crm:intake-form-edit' => CrmIntakeFormEdit::class,
+        'crm:mail-sender' => CrmMailSender::class,
+        'crm:lead-intake-retry' => CrmLeadIntakeRetry::class,
     ];
 
     /** MCP tool name => write ability or null for read-only. */
@@ -265,6 +298,14 @@ final class AgentAbilities
         'billed_time' => null,
         'task_billed' => null,
         'task_billed_set' => self::BILLING,
+        'trello_links' => null,
+        'trello_board_create' => self::TRELLO,
+        'trello_board_link' => self::TRELLO,
+        'intake_forms' => null,
+        'intake_form_create' => self::INTAKE,
+        'intake_form_edit' => self::INTAKE,
+        'mail_sender' => null,
+        'lead_intake_retry' => self::INTAKE,
     ];
 
     /**
@@ -327,6 +368,14 @@ final class AgentAbilities
         'billed_time' => 'billed',
         'task_billed' => 'task-billed',
         'task_billed_set' => 'task-billed',
+        'trello_links' => 'trello-links',
+        'trello_board_create' => 'trello-board-create',
+        'trello_board_link' => 'trello-board-link',
+        'intake_forms' => 'intake-forms',
+        'intake_form_create' => 'intake-form-create',
+        'intake_form_edit' => 'intake-form-edit',
+        'mail_sender' => 'mail-sender',
+        'lead_intake_retry' => 'lead-intake-retry',
     ];
 
     /** task-billed with none of these only prints the task's two values, so it is a read. */
@@ -350,7 +399,7 @@ final class AgentAbilities
         foreach ($requested as $ability) {
             $ability = mb_trim($ability);
             if ($ability === self::WRITE) {
-                array_push($out, ...array_diff(self::ALL, [self::READ]));
+                array_push($out, ...array_diff(self::ALL, [self::READ], self::EXPLICIT_ONLY));
 
                 continue;
             }

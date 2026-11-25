@@ -15,7 +15,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
-/** The confirm dialog's preview and what Przegląd shows of a month left open. */
+/** The confirm dialog's preview and what Overview shows of a month left open. */
 final class SettlementDialogTest extends TestCase
 {
     use RefreshDatabase;
@@ -42,7 +42,7 @@ final class SettlementDialogTest extends TestCase
         $this->assertSame(app(MonthSettlement::class)->preview($this->client, '2026-09')['hash'], $preview['hash']);
 
         $this->actingAs($this->user)
-            ->from("/clients/{$this->client->id}/przeglad")
+            ->from("/clients/{$this->client->id}/overview")
             ->post("/clients/{$this->client->id}/months/2026-09/close", ['preview_hash' => $preview['hash']])
             ->assertSessionHas('settlement', ['action' => 'closed', 'period' => '2026-09', 'closing' => -11.5, 'next' => '2026-10', 'recalculate' => null]);
     }
@@ -66,7 +66,7 @@ final class SettlementDialogTest extends TestCase
         $this->actingAs($this->user)->getJson("/clients/{$this->client->id}/months/2026-13/close")->assertNotFound();
     }
 
-    public function test_przeglad_shows_the_open_month_behind_and_moves_on_once_it_is_closed(): void
+    public function test_overview_shows_the_open_month_behind_and_moves_on_once_it_is_closed(): void
     {
         $this->entry('2026-09-10 08:00:00', 12 * 60);
         $this->entry('2026-10-02 08:00:00', 60);
@@ -84,7 +84,7 @@ final class SettlementDialogTest extends TestCase
             ->where('overview.settlement.open_behind', false));
     }
 
-    public function test_przeglad_leaves_a_closed_month_even_while_its_report_still_waits(): void
+    public function test_overview_leaves_a_closed_month_even_while_its_report_still_waits(): void
     {
         $this->report('2026-09', opening: 0, contracted: 30, actual: 20, backed: true);
         $this->settle('2026-09');
@@ -96,7 +96,7 @@ final class SettlementDialogTest extends TestCase
 
     private function overview(Closure $assert): void
     {
-        $this->actingAs($this->user)->get("/clients/{$this->client->id}/przeglad")->assertInertia(fn (Assert $page) => $assert($page));
+        $this->actingAs($this->user)->get("/clients/{$this->client->id}/overview")->assertInertia(fn (Assert $page) => $assert($page));
     }
 
     private function settle(string $period): ClientMonthClosure

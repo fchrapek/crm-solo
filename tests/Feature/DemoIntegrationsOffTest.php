@@ -76,7 +76,6 @@ final class DemoIntegrationsOffTest extends TestCase
     public static function absentRoutes(): array
     {
         return [
-            'integration edit form' => ['get', '/integrations/trello', []],
             'save credentials' => ['put', '/integrations/trello', ['is_enabled' => true, 'api_key' => 'visitor-token', 'trello_api_key' => 'visitor-app-key']],
             'save Infakt credentials' => ['put', '/integrations/infakt', ['is_enabled' => true, 'api_key' => 'visitor-token']],
             'sync Trello' => ['post', '/integrations/trello/sync', []],
@@ -127,9 +126,14 @@ final class DemoIntegrationsOffTest extends TestCase
         $this->assertEquals($settingsBefore, $this->linked->fresh()->settings, 'the list mapping is untouched');
     }
 
+    public function test_the_old_integration_edit_url_lands_on_the_tab_that_says_they_are_absent(): void
+    {
+        $this->get('/integrations/trello')->assertStatus(301)->assertHeader('Location', '/settings/integrations');
+    }
+
     public function test_the_integrations_page_says_they_are_not_part_of_the_demo_and_lists_nothing(): void
     {
-        $this->actingAs($this->owner)->get('/settings/integracje')
+        $this->actingAs($this->owner)->get('/settings/integrations')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('settings/index')
@@ -146,7 +150,7 @@ final class DemoIntegrationsOffTest extends TestCase
                 'X-Inertia-Partial-Component' => 'settings/index',
                 'X-Inertia-Partial-Data' => 'integrations',
             ])
-            ->get('/settings/integracje')
+            ->get('/settings/integrations')
             ->assertOk()
             ->assertJsonPath('props.integrations', []);
     }
@@ -209,7 +213,7 @@ final class DemoIntegrationsOffTest extends TestCase
     {
         config(['app.demo' => false]);
 
-        $this->actingAs($this->owner)->get('/settings/integracje')
+        $this->actingAs($this->owner)->get('/settings/integrations')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page->component('settings/index')->where('demo', false)->has('integrations', 3));
     }

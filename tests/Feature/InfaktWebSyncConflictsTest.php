@@ -58,7 +58,7 @@ final class InfaktWebSyncConflictsTest extends TestCase
                 && str_contains($message, "Infakt client 303 (NIP 5260000000) matches CRM client #{$linked->id}"))
             ->assertSessionMissing('success');
 
-        $this->actingAs($this->user)->get('/settings/integracje')
+        $this->actingAs($this->user)->get('/settings/integrations')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('integrations.0.provider', 'infakt')

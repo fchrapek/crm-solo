@@ -11,6 +11,10 @@
 /public/build
 /public/hot
 /storybook-static
+/user-docs/node_modules
+/user-docs/dist
+/user-docs/.astro
+/user-docs/.wrangler
 /public/storage
 /resources/js/actions
 /resources/js/routes

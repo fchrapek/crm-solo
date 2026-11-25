@@ -16,9 +16,9 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Kontakty: the list, with create and edit as a dialog over it. `?kontakt=new`
- * opens the empty form and `?kontakt={id}` that contact, which is how the old
- * create and edit URLs and the Klient Dane rows arrive.
+ * Contacts: the list, with create and edit as a dialog over it. `?contact=new`
+ * opens the empty form and `?contact={id}` that contact, which is how the old
+ * create and edit URLs and the Client Details rows arrive.
  */
 final class ContactsController extends Controller
 {
@@ -26,7 +26,7 @@ final class ContactsController extends Controller
     {
         $account = Auth::user()->account;
         $search = mb_trim((string) Request::input('search', ''));
-        $opened = (string) Request::input('kontakt', '');
+        $opened = (string) Request::input('contact', '');
         $trashed = Request::input('trashed') === 'with' ? 'with' : null;
 
         return Inertia::render('contacts/index', [
@@ -54,7 +54,7 @@ final class ContactsController extends Controller
 
     public function create(): RedirectResponse
     {
-        return Redirect::route('contacts.index', ['kontakt' => 'new']);
+        return Redirect::route('contacts.index', ['contact' => 'new']);
     }
 
     public function store(ContactRequest $request): RedirectResponse
@@ -66,7 +66,7 @@ final class ContactsController extends Controller
 
     public function edit(Contact $contact): RedirectResponse
     {
-        return Redirect::route('contacts.index', ['kontakt' => $contact->id]);
+        return Redirect::route('contacts.index', ['contact' => $contact->id]);
     }
 
     public function update(Contact $contact, ContactRequest $request): RedirectResponse

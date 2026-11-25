@@ -237,20 +237,20 @@ final class ContactsTest extends TestCase
             ->assertInertia(fn (Assert $assert) => $assert->where('clients', [['id' => $this->user->account->clients()->first()->id, 'name' => 'Example Client']])->where('opened', null));
     }
 
-    public function test_kontakt_opens_the_form_for_a_new_or_an_existing_contact_of_the_account(): void
+    public function test_the_contact_parameter_opens_the_form_for_a_new_or_an_existing_contact_of_the_account(): void
     {
         $contact = $this->user->account->contacts()->firstWhere('first_name', 'Lynn');
         $contact->delete();
 
-        $this->actingAs($this->user)->get('/contacts?kontakt=new')->assertInertia(fn (Assert $assert) => $assert->where('opened', 'new'));
-        $this->actingAs($this->user)->get("/contacts?kontakt={$contact->id}")
+        $this->actingAs($this->user)->get('/contacts?contact=new')->assertInertia(fn (Assert $assert) => $assert->where('opened', 'new'));
+        $this->actingAs($this->user)->get("/contacts?contact={$contact->id}")
             ->assertInertia(fn (Assert $assert) => $assert
                 ->where('opened.id', $contact->id)
                 ->where('opened.address', '199 Connelly Turnpike')
                 ->whereNot('opened.deleted_at', null));
 
         $foreign = Account::create(['name' => 'Other'])->contacts()->create(['first_name' => 'Not', 'last_name' => 'Yours']);
-        $this->actingAs($this->user)->get("/contacts?kontakt={$foreign->id}")->assertNotFound();
+        $this->actingAs($this->user)->get("/contacts?contact={$foreign->id}")->assertNotFound();
     }
 
     public function test_the_old_create_and_edit_urls_open_the_form_on_the_list(): void
@@ -258,8 +258,8 @@ final class ContactsTest extends TestCase
         $contact = $this->user->account->contacts()->firstWhere('first_name', 'Martin');
         $foreign = Account::create(['name' => 'Other'])->contacts()->create(['first_name' => 'Not', 'last_name' => 'Yours']);
 
-        $this->actingAs($this->user)->get('/contacts/create')->assertRedirect('/contacts?kontakt=new');
-        $this->actingAs($this->user)->get("/contacts/{$contact->id}/edit")->assertRedirect("/contacts?kontakt={$contact->id}");
+        $this->actingAs($this->user)->get('/contacts/create')->assertRedirect('/contacts?contact=new');
+        $this->actingAs($this->user)->get("/contacts/{$contact->id}/edit")->assertRedirect("/contacts?contact={$contact->id}");
         $this->actingAs($this->user)->get("/contacts/{$foreign->id}/edit")->assertNotFound();
     }
 
